@@ -84,22 +84,44 @@ Sitio web funcional con catálogo de productos, personalizador visual y carrito 
 #### RF-004: Personalizador de Productos
 - **Prioridad:** Alta
 - **Descripción:** Editor visual para personalizar prendas con diseños propios
+- **Estado:** ✅ IMPLEMENTADO
 - **Criterios de aceptación:**
-  - Selector de tipo de producto (camiseta, hoodie)
-  - Selector de color de prenda (mínimo 6 colores)
-  - Toggle entre vista frontal y trasera
-  - Definición de zonas de estampado según tipo de producto
-  - Carga de imagen desde dispositivo
-  - Una imagen por zona (reemplaza si ya existe)
-  - Controles de ajuste por diseño:
-    - Escala/tamaño
+  - ✅ Selector de tipo de producto (6 tipos: camiseta, hoodie, gorra, botella, taza, almohada)
+  - ✅ Selector de color de prenda (8 colores base)
+  - ✅ Selector de talla con guía de tallas interactiva
+  - ✅ Escalado visual del producto según talla seleccionada (factores 0.85-1.22)
+  - ✅ Toggle entre vista frontal y trasera
+  - ✅ Sistema de zonas de impresión por tipo de producto (14 zonas diferentes):
+    - **Camiseta**: 8 zonas (front-regular, front-large, back-large, back-neck, back-center, chest, left-sleeve, right-sleeve)
+    - **Hoodie**: 5 zonas (front-large, back-large, chest, left-sleeve, right-sleeve)
+    - **Gorra**: 1 zona (front)
+    - **Botella**: 1 zona (around)
+    - **Taza**: 1 zona (around)
+    - **Almohada**: 1 zona (front)
+  - ✅ Selector de zona de impresión activa con indicadores visuales
+  - ✅ Vista automática según zona seleccionada (front/back/side)
+  - ✅ Carga de imagen desde dispositivo (PNG, JPG, max 2MB)
+  - ✅ Una imagen por zona (reemplaza si ya existe, reset del input)
+  - ✅ Controles de ajuste por diseño:
+    - Escala/tamaño con límites por zona
     - Rotación (0-360°)
     - Posición horizontal
     - Posición vertical
-  - Preview en tiempo real en canvas
-  - Visualización realista de la prenda (con sombras, costuras, detalles)
-  - Botón "Agregar al Carrito" (guarda diseño personalizado)
-  - Contador de diseños aplicados (frente/espalda)
+    - Opacidad (0-1)
+  - ✅ Preview en tiempo real en canvas HTML5 (600x600px)
+  - ✅ Visualización realista de la prenda con:
+    - Piezas separadas (cuerpo + mangas)
+    - Sombras y degradados
+    - Costuras detalladas
+    - Diferentes perspectivas
+  - ✅ Indicador visual de zona seleccionada (rectángulo semi-transparente con esquinas decorativas)
+  - ✅ Selector de cantidad (1-99 unidades)
+  - ✅ Botón "Agregar al Carrito" (guarda diseño personalizado)
+  - ✅ Contador de zonas con diseño aplicado
+  - ✅ Cálculo automático de precio personalización ($2 por zona)
+  - ✅ Export de preview como imagen PNG
+
+**Ver documentación completa:** [PRODUCT_SYSTEM.md](PRODUCT_SYSTEM.md)
 
 #### RF-005: Carrito de Compras (Simulado)
 - **Prioridad:** Alta

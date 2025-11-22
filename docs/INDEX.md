@@ -201,6 +201,40 @@
 
 ---
 
+### 8. [PRODUCT_SYSTEM.md](PRODUCT_SYSTEM.md)
+**Sistema completo de productos y personalización**
+
+**Contenido:**
+- Tipos de productos implementados (6 tipos)
+- Sistema de zonas de impresión (14 zonas diferentes)
+- Configuración detallada por producto
+- Sistema de tallas con escalado visual
+- Tablas de medidas completas
+- Sistema de colores
+- Flujo de personalización paso a paso
+- Modelo de datos (Design, CustomizedProduct)
+- Integración con carrito
+- Componentes del sistema
+- Referencias técnicas y APIs
+
+**Cuándo leer:**
+- Al trabajar con el personalizador
+- Para entender zonas de impresión
+- Al agregar nuevos productos
+- Para consultar tablas de tallas
+- Al modificar el sistema de canvas
+
+**Tiempo de lectura:** 25-30 minutos
+
+**Secciones clave:**
+- [Tipos de Productos](PRODUCT_SYSTEM.md#2-tipos-de-productos)
+- [Sistema de Zonas](PRODUCT_SYSTEM.md#3-sistema-de-zonas-de-impresión)
+- [Sistema de Tallas](PRODUCT_SYSTEM.md#4-sistema-de-tallas)
+- [Modelo de Datos](PRODUCT_SYSTEM.md#8-modelo-de-datos)
+- [APIs Principales](PRODUCT_SYSTEM.md#132-apis-principales)
+
+---
+
 ## 🔍 Guías de Búsqueda Rápida
 
 ### "¿Cómo implemento...?"
@@ -213,6 +247,9 @@
 | ¿Cuál es el flujo de personalización? | [USER_FLOWS.md](USER_FLOWS.md) | 3. Flujo de Personalización |
 | ¿Qué features van en Fase 1? | [REQUIREMENTS.md](REQUIREMENTS.md) | Fase 1: MVP |
 | ¿Cuánto tiempo toma cada fase? | [ROADMAP.md](ROADMAP.md) | Todas las fases |
+| ¿Cómo funcionan las zonas de impresión? | [PRODUCT_SYSTEM.md](PRODUCT_SYSTEM.md) | 3. Sistema de Zonas |
+| ¿Qué tallas tiene cada producto? | [PRODUCT_SYSTEM.md](PRODUCT_SYSTEM.md) | 4. Sistema de Tallas |
+| ¿Cómo agregar un nuevo producto? | [PRODUCT_SYSTEM.md](PRODUCT_SYSTEM.md) | 11. Mejores Prácticas |
 
 ### "¿Qué hace...?"
 
@@ -222,6 +259,8 @@
 | ¿Qué hace la tabla custom_designs? | [DATABASE_SCHEMA.md](DATABASE_SCHEMA.md) | custom_designs |
 | ¿Qué es window.isNativeApp? | [ARCHITECTURE.md](ARCHITECTURE.md) | 4.1 Protocolo de Mensajes |
 | ¿Qué pasa cuando el usuario sube una imagen? | [USER_FLOWS.md](USER_FLOWS.md) | Flujo de Personalización |
+| ¿Qué son las PrintZones? | [PRODUCT_SYSTEM.md](PRODUCT_SYSTEM.md) | 3.1 Tipos de Zonas |
+| ¿Qué es el factor de escala (scale)? | [PRODUCT_SYSTEM.md](PRODUCT_SYSTEM.md) | 4.2 Sistema de Escalado |
 
 ### "¿Cuándo...?"
 
@@ -241,8 +280,9 @@
 **Lectura esencial:**
 1. [ARCHITECTURE.md](ARCHITECTURE.md) - Estructura de carpetas y componentes
 2. [REQUIREMENTS.md](REQUIREMENTS.md) - Requerimientos funcionales Fase 1
-3. [USER_FLOWS.md](USER_FLOWS.md) - Flujos de usuario
-4. [ROADMAP.md](ROADMAP.md) - Tareas semana a semana
+3. [PRODUCT_SYSTEM.md](PRODUCT_SYSTEM.md) - Sistema de productos y zonas
+4. [USER_FLOWS.md](USER_FLOWS.md) - Flujos de usuario
+5. [ROADMAP.md](ROADMAP.md) - Tareas semana a semana
 
 **Lectura recomendada:**
 - [DATABASE_SCHEMA.md](DATABASE_SCHEMA.md) - Para entender modelo de datos
@@ -300,7 +340,8 @@ docs/
 ├── DATABASE_SCHEMA.md        # 🗄️ Diagrama de base de datos
 ├── USER_FLOWS.md             # 🔄 Diagramas de flujo
 ├── ARCHITECTURE.md           # 🏗️ Arquitectura del sistema
-└── ROADMAP.md                # 🗺️ Plan de desarrollo
+├── ROADMAP.md                # 🗺️ Plan de desarrollo
+└── PRODUCT_SYSTEM.md         # 📦 Sistema de productos y personalización
 
 ../README.md                  # 🏠 README principal del proyecto
 ```
