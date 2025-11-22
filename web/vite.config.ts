@@ -8,4 +8,18 @@ export default defineConfig({
     host: true, // Permite acceso desde la red local
     port: 5174,
   },
+  build: {
+    outDir: 'dist',
+    sourcemap: false,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
+          'icons': ['lucide-react']
+        }
+      }
+    },
+    chunkSizeWarningLimit: 1000,
+  },
+  base: '/',
 })

@@ -1,4 +1,5 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import type { ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect } from 'react';
 import type { Product, ProductSortOption } from '../types/product';
 import { mockProducts } from '../data/mockProducts';
 import type { FilterValues } from '../components/products/ProductFilters';

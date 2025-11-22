@@ -533,7 +533,7 @@ export class CanvasService {
   /**
    * Dibujar gorra
    */
-  private drawCap(ctx: CanvasRenderingContext2D, width: number, height: number, color: string, view: 'front' | 'back'): void {
+  private drawCap(ctx: CanvasRenderingContext2D, width: number, height: number, color: string, _view: 'front' | 'back'): void {
     const centerX = width / 2;
     const centerY = height / 2;
 
@@ -563,7 +563,7 @@ export class CanvasService {
   /**
    * Dibujar botella
    */
-  private drawBottle(ctx: CanvasRenderingContext2D, width: number, height: number, color: string, view: 'front' | 'back'): void {
+  private drawBottle(ctx: CanvasRenderingContext2D, width: number, height: number, color: string, _view: 'front' | 'back'): void {
     const centerX = width / 2;
     const centerY = height / 2;
 
@@ -633,7 +633,7 @@ export class CanvasService {
   /**
    * Dibujar almohada
    */
-  private drawPillow(ctx: CanvasRenderingContext2D, width: number, height: number, color: string, view: 'front' | 'back'): void {
+  private drawPillow(ctx: CanvasRenderingContext2D, width: number, height: number, color: string, _view: 'front' | 'back'): void {
     const centerX = width / 2;
     const centerY = height / 2;
 
@@ -722,7 +722,7 @@ export class CanvasService {
   /**
    * Dibujar zona de impresión seleccionada (guía visual)
    */
-  private drawPrintZone(ctx: CanvasRenderingContext2D, width: number, height: number, view: 'front' | 'back' | 'side', zone: PrintZoneConfig): void {
+  private drawPrintZone(ctx: CanvasRenderingContext2D, _width: number, _height: number, _view: 'front' | 'back' | 'side', zone: PrintZoneConfig): void {
     ctx.save();
 
     const { x: zoneX, y: zoneY } = zone.position;

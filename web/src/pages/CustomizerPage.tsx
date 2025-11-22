@@ -82,7 +82,7 @@ export const CustomizerPage = () => {
     if (currentView === 'front' && !selectedZone.includes('front') && !selectedZone.includes('sleeve')) {
       setSelectedZone('front-regular');
     } else if (currentView === 'back' && !selectedZone.includes('back')) {
-      setSelectedZone('back-regular');
+      setSelectedZone('back-large');
     }
   }, [currentView]);
 

@@ -1,5 +1,5 @@
 import { Upload, Image as ImageIcon } from 'lucide-react';
-import { useRef, ChangeEvent } from 'react';
+import { useRef, type ChangeEvent } from 'react';
 
 interface ImageUploaderProps {
   onImageUpload: (imageData: string) => void;
