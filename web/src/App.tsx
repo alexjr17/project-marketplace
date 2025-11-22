@@ -1,6 +1,7 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { Layout } from './components/layout/Layout';
 import { ProductsProvider } from './context/ProductsContext';
+import { CartProvider } from './context/CartContext';
 import { HomePage } from './pages/HomePage';
 import { CatalogPage } from './pages/CatalogPage';
 import { CustomizerPage } from './pages/CustomizerPage';
@@ -12,16 +13,18 @@ function App() {
   return (
     <Router>
       <ProductsProvider>
-        <Layout>
-          <Routes>
-            <Route path="/" element={<HomePage />} />
-            <Route path="/catalog" element={<CatalogPage />} />
-            <Route path="/customize" element={<CustomizerPage />} />
-            <Route path="/cart" element={<CartPage />} />
-            <Route path="/admin-panel" element={<AdminPage />} />
-            <Route path="*" element={<NotFoundPage />} />
-          </Routes>
-        </Layout>
+        <CartProvider>
+          <Layout>
+            <Routes>
+              <Route path="/" element={<HomePage />} />
+              <Route path="/catalog" element={<CatalogPage />} />
+              <Route path="/customize" element={<CustomizerPage />} />
+              <Route path="/cart" element={<CartPage />} />
+              <Route path="/admin-panel" element={<AdminPage />} />
+              <Route path="*" element={<NotFoundPage />} />
+            </Routes>
+          </Layout>
+        </CartProvider>
       </ProductsProvider>
     </Router>
   );

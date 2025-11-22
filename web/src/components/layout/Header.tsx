@@ -1,9 +1,11 @@
 import { Link, useLocation } from 'react-router-dom';
 import { ShoppingCart, Search, Home, Package, Palette, User, Shirt } from 'lucide-react';
 import { useState } from 'react';
+import { useCart } from '../../context/CartContext';
 
 export const Header = () => {
   const location = useLocation();
+  const { cart } = useCart();
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearchDesktop, setShowSearchDesktop] = useState(false);
 
@@ -137,9 +139,11 @@ export const Header = () => {
                   }`}
                   strokeWidth={isActive('/cart') ? 2.5 : 2}
                 />
-                <span className="absolute -top-1 -right-1 bg-gradient-to-r from-pink-500 to-amber-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center shadow-md">
-                  0
-                </span>
+                {cart.totalItems > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-gradient-to-r from-pink-500 to-amber-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center shadow-md">
+                    {cart.totalItems}
+                  </span>
+                )}
               </Link>
 
               {/* Profile Icon */}
@@ -225,9 +229,11 @@ export const Header = () => {
               strokeWidth={isActive('/cart') ? 2.5 : 2}
             />
             <span className="text-xs font-semibold">Carrito</span>
-            <span className="absolute top-1 right-2 bg-pink-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center shadow-md">
-              0
-            </span>
+            {cart.totalItems > 0 && (
+              <span className="absolute top-1 right-2 bg-pink-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center shadow-md">
+                {cart.totalItems}
+              </span>
+            )}
           </Link>
 
           {/* Perfil */}

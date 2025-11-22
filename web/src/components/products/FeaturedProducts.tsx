@@ -2,16 +2,23 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowRight } from 'lucide-react';
 import { ProductCard } from './ProductCard';
 import { getProducts } from '../../data/mockProducts';
+import { useCart } from '../../context/CartContext';
 import type { Product } from '../../types/product';
 
 export const FeaturedProducts = () => {
   const navigate = useNavigate();
+  const { addStandardProduct } = useCart();
   const featuredProducts = getProducts({ featured: true, limit: 4 });
 
   const handleAddToCart = (product: Product) => {
-    // TODO: Implementar lógica de agregar al carrito
-    console.log('Agregar al carrito:', product.name);
-    alert(`${product.name} agregado al carrito (funcionalidad pendiente)`);
+    // Agregar con opciones por defecto (primer color y talla)
+    const defaultColor = product.colors[0]?.hex || '#FFFFFF';
+    const defaultSize = product.sizes[0] || 'M';
+
+    addStandardProduct(product, defaultColor, defaultSize, 1);
+
+    // TODO: Mostrar toast de confirmación
+    alert(`${product.name} agregado al carrito!`);
   };
 
   const handleCustomize = (product: Product) => {

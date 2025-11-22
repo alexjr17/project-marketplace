@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Search } from 'lucide-react';
 import { useProducts } from '../context/ProductsContext';
+import { useCart } from '../context/CartContext';
 import { ProductGrid } from '../components/products/ProductGrid';
 import { ProductFilters, type FilterValues } from '../components/products/ProductFilters';
 import { ProductSort } from '../components/products/ProductSort';
@@ -8,6 +9,7 @@ import type { Product } from '../types/product';
 
 export const CatalogPage = () => {
   const { filteredProducts, setFilters, sortOption, setSortOption, isLoading } = useProducts();
+  const { addStandardProduct } = useCart();
   const [searchQuery, setSearchQuery] = useState('');
 
   // Filter by search query
@@ -24,9 +26,14 @@ export const CatalogPage = () => {
   };
 
   const handleAddToCart = (product: Product) => {
-    // TODO: Implementar lógica de agregar al carrito
-    console.log('Agregar al carrito:', product.name);
-    alert(`${product.name} agregado al carrito (funcionalidad pendiente)`);
+    // Agregar con opciones por defecto
+    const defaultColor = product.colors[0]?.hex || '#FFFFFF';
+    const defaultSize = product.sizes[0] || 'M';
+
+    addStandardProduct(product, defaultColor, defaultSize, 1);
+
+    // TODO: Mostrar toast de confirmación
+    alert(`${product.name} agregado al carrito!`);
   };
 
   return (
