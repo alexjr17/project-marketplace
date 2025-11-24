@@ -13,16 +13,43 @@ interface ProductsContextType {
   setFilters: (filters: FilterValues) => void;
   setSortOption: (option: ProductSortOption) => void;
   getProductById: (id: string) => Product | undefined;
+  addProduct: (product: Omit<Product, 'id' | 'createdAt' | 'updatedAt'>) => void;
+  updateProduct: (id: string, updates: Partial<Omit<Product, 'id' | 'createdAt'>>) => void;
+  deleteProduct: (id: string) => void;
 }
 
 const ProductsContext = createContext<ProductsContextType | undefined>(undefined);
 
+const STORAGE_KEY = 'marketplace_products';
+
 export const ProductsProvider = ({ children }: { children: ReactNode }) => {
-  const [products] = useState<Product[]>(mockProducts);
-  const [filteredProducts, setFilteredProducts] = useState<Product[]>(mockProducts);
+  // Initialize products from localStorage or use mockProducts
+  const [products, setProducts] = useState<Product[]>(() => {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored);
+        // Convert date strings back to Date objects
+        return parsed.map((p: any) => ({
+          ...p,
+          createdAt: new Date(p.createdAt),
+          updatedAt: new Date(p.updatedAt),
+        }));
+      } catch (e) {
+        console.error('Error loading products from localStorage:', e);
+      }
+    }
+    return mockProducts;
+  });
+  const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
   const [filters, setFilters] = useState<FilterValues>({});
   const [sortOption, setSortOption] = useState<ProductSortOption>('newest');
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Save products to localStorage whenever they change
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(products));
+  }, [products]);
 
   // Apply filters and sorting
   useEffect(() => {
@@ -88,6 +115,30 @@ export const ProductsProvider = ({ children }: { children: ReactNode }) => {
     return products.find((p) => p.id === id);
   };
 
+  const addProduct = (productData: Omit<Product, 'id' | 'createdAt' | 'updatedAt'>) => {
+    const newProduct: Product = {
+      ...productData,
+      id: Date.now().toString(),
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    setProducts((prev) => [...prev, newProduct]);
+  };
+
+  const updateProduct = (id: string, updates: Partial<Omit<Product, 'id' | 'createdAt'>>) => {
+    setProducts((prev) =>
+      prev.map((p) =>
+        p.id === id
+          ? { ...p, ...updates, updatedAt: new Date() }
+          : p
+      )
+    );
+  };
+
+  const deleteProduct = (id: string) => {
+    setProducts((prev) => prev.filter((p) => p.id !== id));
+  };
+
   return (
     <ProductsContext.Provider
       value={{
@@ -99,6 +150,9 @@ export const ProductsProvider = ({ children }: { children: ReactNode }) => {
         setFilters,
         setSortOption,
         getProductById,
+        addProduct,
+        updateProduct,
+        deleteProduct,
       }}
     >
       {children}

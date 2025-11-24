@@ -71,19 +71,19 @@ export const CustomizedCartItem = ({ item, onUpdateQuantity, onRemove }: Customi
           <div className="flex items-center gap-2">
             <span className="text-gray-500">Diseños:</span>
             <span className="font-medium text-purple-700">
-              {customizedProduct.designs.length} zona{customizedProduct.designs.length > 1 ? 's' : ''}
+              {customizedProduct.designs?.length || 0} zona{(customizedProduct.designs?.length || 0) > 1 ? 's' : ''}
             </span>
           </div>
 
           <div className="flex items-center gap-2">
             <span className="text-gray-500">Precio base:</span>
-            <span className="text-gray-700">${customizedProduct.basePrice.toFixed(2)}</span>
+            <span className="text-gray-700">${(customizedProduct.basePrice || 0).toFixed(2)}</span>
           </div>
 
           <div className="flex items-center gap-2">
             <span className="text-gray-500">Personalización:</span>
             <span className="text-purple-700 font-medium">
-              +${customizedProduct.customizationPrice.toFixed(2)}
+              +${(customizedProduct.customizationPrice || 0).toFixed(2)}
             </span>
           </div>
         </div>
@@ -101,13 +101,13 @@ export const CustomizedCartItem = ({ item, onUpdateQuantity, onRemove }: Customi
 
         <div className="text-right">
           <p className="text-sm text-gray-500 mb-1">
-            ${item.price.toFixed(2)} c/u
+            ${(item.price || 0).toFixed(2)} c/u
           </p>
           <p className="text-xs text-purple-600 mb-2">
-            (${customizedProduct.basePrice.toFixed(2)} + ${customizedProduct.customizationPrice.toFixed(2)})
+            (${(customizedProduct.basePrice || 0).toFixed(2)} + ${(customizedProduct.customizationPrice || 0).toFixed(2)})
           </p>
           <p className="text-xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-pink-600">
-            ${item.subtotal.toFixed(2)}
+            ${(item.subtotal || 0).toFixed(2)}
           </p>
         </div>
 

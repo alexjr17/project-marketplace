@@ -1,15 +1,32 @@
 import { Link, useLocation } from 'react-router-dom';
-import { ShoppingCart, Search, Home, Package, Palette, User, Shirt } from 'lucide-react';
-import { useState } from 'react';
+import { ShoppingCart, Search, Home, Package, Palette, Shirt, User } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
 import { useCart } from '../../context/CartContext';
+import { useAuth } from '../../context/AuthContext';
+import { UserMenu } from '../auth/UserMenu';
+import { LoginModal } from '../auth/LoginModal';
+import { MobileUserMenu } from '../auth/MobileUserMenu';
 
 export const Header = () => {
   const location = useLocation();
   const { cart } = useCart();
+  const { isAuthenticated } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearchDesktop, setShowSearchDesktop] = useState(false);
+  const [showLoginModal, setShowLoginModal] = useState(false);
+  const [loginMode, setLoginMode] = useState<'login' | 'register'>('login');
+  const [showMobileUserMenu, setShowMobileUserMenu] = useState(false);
 
   const isActive = (path: string) => location.pathname === path;
+
+  const handleProfileClickMobile = () => {
+    if (isAuthenticated) {
+      setShowMobileUserMenu(!showMobileUserMenu);
+    } else {
+      setLoginMode('login');
+      setShowLoginModal(true);
+    }
+  };
 
   return (
     <>
@@ -146,24 +163,44 @@ export const Header = () => {
                 )}
               </Link>
 
-              {/* Profile Icon */}
-              <Link
-                to="/profile"
-                className={`p-2.5 rounded-lg transition-all group ${
-                  isActive('/profile') ? 'bg-violet-100' : 'hover:bg-gray-100'
-                }`}
-              >
-                <User
-                  className={`w-6 h-6 transition-colors ${
-                    isActive('/profile') ? 'text-violet-600' : 'text-gray-700 group-hover:text-violet-600'
-                  }`}
-                  strokeWidth={isActive('/profile') ? 2.5 : 2}
-                />
-              </Link>
+              {/* User Menu */}
+              <UserMenu
+                onLoginClick={() => {
+                  setLoginMode('login');
+                  setShowLoginModal(true);
+                }}
+                onRegisterClick={() => {
+                  setLoginMode('register');
+                  setShowLoginModal(true);
+                }}
+              />
             </div>
           </div>
         </div>
       </header>
+
+      {/* Login/Register Modal */}
+      <LoginModal
+        isOpen={showLoginModal}
+        onClose={() => setShowLoginModal(false)}
+        initialMode={loginMode}
+      />
+
+      {/* Mobile User Menu */}
+      <MobileUserMenu
+        isOpen={showMobileUserMenu}
+        onClose={() => setShowMobileUserMenu(false)}
+        onLoginClick={() => {
+          setShowMobileUserMenu(false);
+          setLoginMode('login');
+          setShowLoginModal(true);
+        }}
+        onRegisterClick={() => {
+          setShowMobileUserMenu(false);
+          setLoginMode('register');
+          setShowLoginModal(true);
+        }}
+      />
 
       {/* Bottom Navigation Bar - Solo Mobile */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200 shadow-lg pb-safe">
@@ -236,9 +273,9 @@ export const Header = () => {
             )}
           </Link>
 
-          {/* Perfil */}
-          <Link
-            to="/profile"
+          {/* Perfil - Mobile */}
+          <button
+            onClick={handleProfileClickMobile}
             className={`flex flex-col items-center justify-center gap-1 px-4 py-2 rounded-lg transition-all ${
               isActive('/profile')
                 ? 'text-violet-600'
@@ -250,7 +287,7 @@ export const Header = () => {
               strokeWidth={isActive('/profile') ? 2.5 : 2}
             />
             <span className="text-xs font-semibold">Perfil</span>
-          </Link>
+          </button>
         </div>
       </nav>
     </>
