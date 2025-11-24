@@ -9,7 +9,6 @@ import {
   Settings,
   Home,
   Menu,
-  X,
   User,
   LogOut,
   ChevronDown,

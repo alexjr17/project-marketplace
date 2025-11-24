@@ -17,7 +17,7 @@ import { Modal } from '../../components/shared/Modal';
 import { Button } from '../../components/shared/Button';
 import { Input } from '../../components/shared/Input';
 import type { Product } from '../../types/product';
-import { Settings, Trash2, Plus, Package, ArrowLeft, Search, ChevronLeft, ChevronRight, ArrowUpDown } from 'lucide-react';
+import { Settings, Plus, Package, ArrowLeft, Search, ChevronLeft, ChevronRight, ArrowUpDown } from 'lucide-react';
 
 type ViewMode = 'list' | 'add' | 'edit';
 

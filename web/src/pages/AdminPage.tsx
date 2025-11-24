@@ -58,8 +58,13 @@ export const AdminPage = () => {
         <div className="p-8">
           <div className="max-w-4xl mx-auto">
             <div className="bg-white rounded-lg shadow-sm p-6">
-              <h1 className="text-2xl font-bold text-gray-900 mb-6">Agregar Nuevo Producto</h1>
-              <ProductForm onSubmit={handleAddProduct} onCancel={cancelEdit} />
+              <div className="flex items-center justify-between mb-6">
+                <h1 className="text-2xl font-bold text-gray-900">Agregar Nuevo Producto</h1>
+                <Button variant="outline" onClick={cancelEdit}>
+                  Cancelar
+                </Button>
+              </div>
+              <ProductForm onSubmit={handleAddProduct} />
             </div>
           </div>
         </div>
@@ -73,8 +78,13 @@ export const AdminPage = () => {
         <div className="p-8">
           <div className="max-w-4xl mx-auto">
             <div className="bg-white rounded-lg shadow-sm p-6">
-              <h1 className="text-2xl font-bold text-gray-900 mb-6">Editar Producto</h1>
-              <ProductForm product={selectedProduct} onSubmit={handleEditProduct} onCancel={cancelEdit} />
+              <div className="flex items-center justify-between mb-6">
+                <h1 className="text-2xl font-bold text-gray-900">Editar Producto</h1>
+                <Button variant="outline" onClick={cancelEdit}>
+                  Cancelar
+                </Button>
+              </div>
+              <ProductForm product={selectedProduct} onSubmit={handleEditProduct} />
             </div>
           </div>
         </div>
