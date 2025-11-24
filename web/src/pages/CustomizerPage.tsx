@@ -366,7 +366,6 @@ export const CustomizerPage = () => {
                 design={designs.get(selectedZone) || null}
                 onUpdate={handleDesignUpdate}
                 onDelete={handleDesignDelete}
-                zoneConfig={availableZones.find(z => z.id === selectedZone)}
               />
             </div>
           </aside>

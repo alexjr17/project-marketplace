@@ -1,16 +1,14 @@
 import { useState, useEffect } from 'react';
 import { Move, Maximize2, RotateCw, Trash2, Link, Unlink } from 'lucide-react';
 import type { Design } from '../../types/design';
-import type { PrintZoneConfig } from '../../types/product';
 
 interface DesignControlsProps {
   design: Design | null;
   onUpdate: (updates: Partial<Design>) => void;
   onDelete: () => void;
-  zoneConfig?: PrintZoneConfig; // Configuración de la zona de impresión
 }
 
-export const DesignControls = ({ design, onUpdate, onDelete, zoneConfig }: DesignControlsProps) => {
+export const DesignControls = ({ design, onUpdate, onDelete }: DesignControlsProps) => {
   // Estado para mantener la proporción y la relación de aspecto
   const [keepAspectRatio, setKeepAspectRatio] = useState(true);
   const [aspectRatio, setAspectRatio] = useState<number>(1);
