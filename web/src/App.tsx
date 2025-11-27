@@ -12,6 +12,8 @@ import { HomePage } from './pages/HomePage';
 import { CatalogPage } from './pages/CatalogPage';
 import { CustomizerPage } from './pages/CustomizerPage';
 import { CartPage } from './pages/CartPage';
+import { CheckoutPage } from './pages/CheckoutPage';
+import { OrderConfirmationPage } from './pages/OrderConfirmationPage';
 import { ProfilePage } from './pages/ProfilePage';
 import { AdminLayout } from './components/admin/AdminLayout';
 import { DashboardPage } from './pages/admin/DashboardPage';
@@ -86,6 +88,8 @@ function App() {
                       <Route path="/catalog" element={<CatalogPage />} />
                       <Route path="/customize" element={<CustomizerPage />} />
                       <Route path="/cart" element={<CartPage />} />
+                      <Route path="/checkout" element={<CheckoutPage />} />
+                      <Route path="/order-confirmation/:orderNumber" element={<OrderConfirmationPage />} />
                       <Route path="/profile" element={<ProfilePage />} />
                       <Route path="*" element={<NotFoundPage />} />
                     </Routes>

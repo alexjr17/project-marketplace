@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, type ReactNode } from 'react';
-import type { Order, OrderStatus, StatusHistoryEntry, PaymentEvidence } from '../types/order';
+import type { Order, OrderStatus, StatusHistoryEntry, PaymentEvidence, PaymentMethod } from '../types/order';
 
 interface ChangeStatusParams {
   orderId: string;
@@ -9,6 +9,34 @@ interface ChangeStatusParams {
   trackingNumber?: string;
   trackingUrl?: string;
   cancellationReason?: string;
+}
+
+interface CreateOrderData {
+  customerName: string;
+  customerEmail: string;
+  customerPhone: string;
+  shippingAddress: string;
+  shippingCity: string;
+  shippingPostalCode?: string;
+  shippingNotes?: string;
+  paymentMethod: PaymentMethod;
+  items: {
+    productId: string;
+    productName: string;
+    productImage: string;
+    size: string;
+    color: string;
+    quantity: number;
+    unitPrice: number;
+    customization?: {
+      designFront?: string;
+      designBack?: string;
+    };
+  }[];
+  subtotal: number;
+  shippingCost: number;
+  discount: number;
+  total: number;
 }
 
 interface OrdersContextType {
@@ -21,6 +49,8 @@ interface OrdersContextType {
   addEvidenceToStatus: (orderId: string, historyEntryId: string, evidence: Omit<PaymentEvidence, 'id' | 'uploadedAt'>) => void;
   getOrdersByStatus: (status: OrderStatus) => Order[];
   getOrdersReadyToShip: () => Order[];
+  createOrder: (data: CreateOrderData) => Order;
+  getOrdersByUserEmail: (email: string) => Order[];
 }
 
 const OrdersContext = createContext<OrdersContextType | undefined>(undefined);
@@ -598,6 +628,59 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
     );
   };
 
+  const createOrder = (data: CreateOrderData): Order => {
+    const now = new Date();
+    const orderCount = orders.length + 1;
+    const orderNumber = `ORD-${now.getFullYear()}-${String(orderCount).padStart(3, '0')}`;
+    const orderId = `order-${Date.now()}`;
+
+    const newOrder: Order = {
+      id: orderId,
+      orderNumber,
+      userId: '', // Se asignará cuando haya autenticación
+      userName: data.customerName,
+      userEmail: data.customerEmail,
+      items: data.items.map((item, index) => ({
+        ...item,
+        id: `item-${orderId}-${index}`,
+      })),
+      subtotal: data.subtotal,
+      shippingCost: data.shippingCost,
+      discount: data.discount,
+      total: data.total,
+      status: 'pending',
+      paymentMethod: data.paymentMethod,
+      shipping: {
+        recipientName: data.customerName,
+        phone: data.customerPhone,
+        address: data.shippingAddress,
+        city: data.shippingCity,
+        postalCode: data.shippingPostalCode || '',
+        country: 'Colombia',
+        notes: data.shippingNotes,
+      },
+      statusHistory: [
+        {
+          id: `sh-${orderId}-1`,
+          fromStatus: null,
+          toStatus: 'pending',
+          changedBy: 'Sistema',
+          changedAt: now,
+          note: 'Pedido creado - Esperando confirmación de pago',
+        },
+      ],
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    setOrders((prev) => [newOrder, ...prev]);
+    return newOrder;
+  };
+
+  const getOrdersByUserEmail = (email: string): Order[] => {
+    return orders.filter((order) => order.userEmail.toLowerCase() === email.toLowerCase());
+  };
+
   return (
     <OrdersContext.Provider
       value={{
@@ -610,6 +693,8 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
         addEvidenceToStatus,
         getOrdersByStatus,
         getOrdersReadyToShip,
+        createOrder,
+        getOrdersByUserEmail,
       }}
     >
       {children}

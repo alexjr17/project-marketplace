@@ -94,7 +94,7 @@
 
 ## 📍 FASE 3: PEDIDOS + HISTORIAL DE ESTADOS
 
-**Estado:** 🟢 95% Completado
+**Estado:** 🟢 98% Completado
 **Objetivo:** Sistema simple de pedidos con registro de cambio de estados (sin pagos reales)
 
 ### Flujo del Pedido (Estados)
@@ -149,12 +149,13 @@
 ```
 
 ### Checkout (Frontend - Simple)
-- [ ] Página `CheckoutPage` básica:
-  - [ ] Resumen del carrito
-  - [ ] Formulario de datos del cliente (nombre, email, teléfono)
-  - [ ] Dirección de entrega (texto libre)
-  - [ ] Botón "Confirmar Pedido"
-- [ ] Página `OrderConfirmationPage` (número de pedido generado)
+- [x] Página `CheckoutPage` básica:
+  - [x] Resumen del carrito
+  - [x] Formulario de datos del cliente (nombre, email, teléfono)
+  - [x] Dirección de entrega (texto libre)
+  - [x] Selección de método de pago
+  - [x] Botón "Confirmar Pedido"
+- [x] Página `OrderConfirmationPage` (número de pedido generado)
 
 ### Módulo de Pedidos (Admin)
 - [x] Página `OrdersPage` - Lista de pedidos con tabla
@@ -176,7 +177,7 @@
 - [ ] Ver estado actual y timeline
 
 ### Entregables Fase 3
-- [ ] Checkout simple (sin pasarela de pago)
+- [x] Checkout simple (sin pasarela de pago)
 - [x] Sistema de pedidos con cambio de estados
 - [x] Timeline/historial de cada pedido
 - [x] Panel de gestión de pedidos para admin
@@ -350,7 +351,7 @@
 |------|--------|--------|----------|
 | 1 | MVP: Catálogo + Personalizador + Admin | 🟢 | 95% |
 | 2 | Usuarios + Autenticación + Roles | 🟢 | 90% |
-| 3 | Pedidos + Historial de Estados | 🟢 | 95% |
+| 3 | Pedidos + Historial de Estados | 🟢 | 98% |
 | 4 | Pagos + Facturación + Despachos | 🔮 | Futuro |
 | 5 | Notificaciones + Emails | ⚪ | 0% |
 | 6 | Configuración General | 🟢 | 85% |
@@ -362,9 +363,9 @@
 ## 🎯 PRÓXIMOS PASOS RECOMENDADOS
 
 ### Pendientes prioritarios:
-1. **Checkout** - Página de checkout para completar compras
-2. **Mis Pedidos** - Vista de pedidos para clientes
-3. **Notificaciones** - Emails transaccionales básicos
+1. **Mis Pedidos** - Vista de pedidos para clientes
+2. **Notificaciones** - Emails transaccionales básicos
+3. **Descargar diseños** - Descargar diseños para producción (PNG)
 
 ### Nota sobre localStorage vs Backend:
 Por ahora todo funciona con localStorage. Cuando el volumen de datos lo requiera, se implementará la Fase 7 (Backend + Base de datos).

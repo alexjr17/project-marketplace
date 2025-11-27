@@ -8,7 +8,7 @@ export const CartPage = () => {
   const { cart, removeItem, updateQuantity } = useCart();
 
   const handleCheckout = () => {
-    alert('El proceso de pago se implementará en la Fase 3.\n\n¡Gracias por probar el sistema!');
+    navigate('/checkout');
   };
 
   const handleContinueShopping = () => {
