@@ -161,6 +161,92 @@ const compressImage = (
   });
 };
 
+// Tamaño aproximado en bytes del contenido de un data URL.
+const dataUrlBytes = (dataUrl: string): number => {
+  const comma = dataUrl.indexOf(',');
+  const base64 = comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl;
+  return Math.floor((base64.length * 3) / 4);
+};
+
+// Garantiza que la imagen pese 10MB o menos: baja calidad (JPEG) y/o
+// dimensiones hasta lograrlo, conservando la mejor calidad posible.
+const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
+
+const compressToMaxSize = (
+  dataUrl: string,
+  maxBytes: number = MAX_IMAGE_BYTES
+): Promise<string> => {
+  return new Promise((resolve) => {
+    const inputBytes = dataUrlBytes(dataUrl);
+    if (inputBytes <= maxBytes) {
+      resolve(dataUrl);
+      return;
+    }
+
+    const img = new Image();
+    img.onload = () => {
+      // Detectar transparencia en una miniatura (rápido, no escanea la
+      // imagen completa que puede ser de muchos megapíxeles).
+      let transparent = false;
+      const pw = Math.max(1, Math.min(64, img.width));
+      const ph = Math.max(1, Math.round((pw * img.height) / img.width));
+      const probe = document.createElement('canvas');
+      probe.width = pw;
+      probe.height = ph;
+      const pctx = probe.getContext('2d');
+      if (pctx) {
+        pctx.drawImage(img, 0, 0, pw, ph);
+        try {
+          transparent = hasTransparency(pctx, pw, ph);
+        } catch {
+          transparent = true; // ante la duda, conservar PNG
+        }
+      }
+      const format = transparent ? 'image/png' : 'image/jpeg';
+
+      // Renderiza a una escala (0-1 sobre las dimensiones originales).
+      const render = (scale: number, quality?: number): string => {
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(img.width * scale));
+        canvas.height = Math.max(1, Math.round(img.height * scale));
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return dataUrl;
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        return canvas.toDataURL(format, quality);
+      };
+
+      let result: string;
+
+      if (!transparent) {
+        // JPEG: bajar calidad suele bastar sin reescalar.
+        result = render(1, 0.82);
+        if (dataUrlBytes(result) > maxBytes) {
+          result = render(1, 0.62);
+        }
+        // Si aún pesa, estimar la escala necesaria y afinar pocas veces.
+        let scale = 1;
+        for (let i = 0; i < 4 && dataUrlBytes(result) > maxBytes; i++) {
+          scale *= Math.sqrt(maxBytes / dataUrlBytes(result)) * 0.92;
+          result = render(scale, 0.62);
+        }
+      } else {
+        // PNG: el peso depende de los píxeles → estimar la escala de una
+        // y afinar un par de veces. Nunca se reencoda a tamaño completo.
+        let scale = Math.min(1, Math.sqrt(maxBytes / inputBytes) * 0.9);
+        result = render(scale);
+        for (let i = 0; i < 4 && dataUrlBytes(result) > maxBytes; i++) {
+          scale *= Math.sqrt(maxBytes / dataUrlBytes(result)) * 0.9;
+          result = render(scale);
+        }
+      }
+
+      resolve(result);
+    };
+    img.onerror = () => resolve(dataUrl);
+    img.src = dataUrl;
+  });
+};
+
 export const ImageUploader = ({ onImageUpload, isUploading = false }: ImageUploaderProps) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { settings } = useSettings();
@@ -182,9 +268,10 @@ export const ImageUploader = ({ onImageUpload, isUploading = false }: ImageUploa
       return;
     }
 
-    // Validar tamaño (máximo 10MB para originales de alta calidad)
-    if (file.size > 10 * 1024 * 1024) {
-      alert('La imagen es demasiado grande. Máximo 10MB');
+    // Tope de seguridad para no agotar la memoria del navegador con archivos
+    // absurdamente grandes. Lo que esté por debajo se comprime a 10MB o menos.
+    if (file.size > 40 * 1024 * 1024) {
+      alert('La imagen es demasiado grande. Máximo 40MB');
       return;
     }
 
@@ -196,15 +283,18 @@ export const ImageUploader = ({ onImageUpload, isUploading = false }: ImageUploa
       // Recortar espacio transparente de imágenes PNG
       const trimmedData = await trimTransparentPixels(rawData);
 
+      // Asegurar que la imagen original pese 10MB o menos.
+      const originalData = await compressToMaxSize(trimmedData);
+
       // Comprimir para preview (usando la imagen ya recortada)
-      const compressedData = await compressImage(trimmedData);
+      const compressedData = await compressImage(originalData);
 
       // Crear objeto con ambas versiones (ambas recortadas)
       const uploadData: ImageUploadData = {
         compressed: compressedData,
-        original: trimmedData, // Usar la versión recortada como original
+        original: originalData, // Versión de calidad, garantizada ≤ 10MB
         fileName: file.name,
-        fileSize: file.size,
+        fileSize: dataUrlBytes(originalData),
       };
 
       // Enviar la versión comprimida para el canvas, pero incluir datos completos

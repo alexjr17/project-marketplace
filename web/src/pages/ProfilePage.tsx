@@ -4,8 +4,11 @@ import { useRoles } from '../context/RolesContext';
 import { useSettings } from '../context/SettingsContext';
 import { Button } from '../components/shared/Button';
 import { Input } from '../components/shared/Input';
+import { AddressesSection } from '../components/profile/AddressesSection';
 import { useToast } from '../context/ToastContext';
-import { User, Mail, Calendar, Shield, Edit2, Save, X, CreditCard, MapPin, Phone, Building2, Loader2 } from 'lucide-react';
+import { User, Mail, Calendar, Shield, Edit2, Save, X, CreditCard, Phone, Loader2, MapPin } from 'lucide-react';
+
+type ProfileTab = 'general' | 'addresses';
 
 export const ProfilePage = () => {
   const { user, updateProfile, isAdmin, isSuperAdmin } = useAuth();
@@ -20,16 +23,14 @@ export const ProfilePage = () => {
     accent: '#f59e0b',
   };
   const gradientBgStyle = `linear-gradient(to bottom right, ${brandColors.primary}, ${brandColors.secondary}, ${brandColors.accent})`;
+
+  const [activeTab, setActiveTab] = useState<ProfileTab>('general');
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [formData, setFormData] = useState({
     name: user?.name || '',
     cedula: user?.profile?.cedula || '',
     phone: user?.profile?.phone || '',
-    address: user?.profile?.address || '',
-    city: user?.profile?.city || '',
-    postalCode: user?.profile?.postalCode || '',
-    country: user?.profile?.country || 'Colombia',
   });
 
   if (!user) {
@@ -53,10 +54,6 @@ export const ProfilePage = () => {
         name: formData.name,
         cedula: formData.cedula,
         phone: formData.phone,
-        address: formData.address,
-        city: formData.city,
-        postalCode: formData.postalCode,
-        country: formData.country,
       });
       toast.success('Perfil actualizado correctamente');
       setIsEditing(false);
@@ -72,13 +69,14 @@ export const ProfilePage = () => {
       name: user.name,
       cedula: user.profile?.cedula || '',
       phone: user.profile?.phone || '',
-      address: user.profile?.address || '',
-      city: user.profile?.city || '',
-      postalCode: user.profile?.postalCode || '',
-      country: user.profile?.country || 'Colombia',
     });
     setIsEditing(false);
   };
+
+  const tabs: { id: ProfileTab; label: string; icon: typeof User }[] = [
+    { id: 'general', label: 'Información General', icon: User },
+    { id: 'addresses', label: 'Direcciones', icon: MapPin },
+  ];
 
   return (
     <div className="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8">
@@ -115,248 +113,191 @@ export const ProfilePage = () => {
             </div>
           </div>
 
-          {/* Form Section */}
-          <div className="p-8">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-lg font-bold text-gray-900">Información Personal</h3>
-              {!isEditing && (
-                <Button
-                  onClick={() => setIsEditing(true)}
-                  variant="outline"
-                  className="flex items-center gap-2"
+          {/* Menú de pestañas */}
+          <div className="flex border-b border-gray-200 px-4 sm:px-8">
+            {tabs.map((tab) => {
+              const isActive = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className="flex items-center gap-2 px-4 py-4 text-sm font-medium border-b-2 -mb-px transition-colors"
+                  style={{
+                    borderColor: isActive ? brandColors.primary : 'transparent',
+                    color: isActive ? brandColors.primary : '#6b7280',
+                  }}
                 >
-                  <Edit2 className="w-4 h-4" />
-                  Editar
-                </Button>
-              )}
-            </div>
+                  <tab.icon className="w-4 h-4" />
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
 
-            <form onSubmit={handleSubmit} className="space-y-6">
-              {/* Nombre */}
-              <div>
-                <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
-                  <User className="w-4 h-4" />
-                  Nombre Completo
-                </label>
-                {isEditing ? (
-                  <Input
-                    type="text"
-                    value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    placeholder="Tu nombre completo"
-                    required
-                  />
-                ) : (
-                  <div className="px-4 py-3 bg-gray-50 rounded-lg text-gray-900 font-medium">
-                    {user.name}
-                  </div>
-                )}
-              </div>
-
-              {/* Email - Solo lectura */}
-              <div>
-                <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
-                  <Mail className="w-4 h-4" />
-                  Correo Electrónico
-                </label>
-                <div className="px-4 py-3 bg-gray-50 rounded-lg text-gray-900 font-medium">
-                  {user.email}
+          {/* Contenido de pestañas */}
+          <div className="p-8">
+            {activeTab === 'general' && (
+              <>
+                <div className="flex justify-between items-center mb-6">
+                  <h3 className="text-lg font-bold text-gray-900">Información Personal</h3>
+                  {!isEditing && (
+                    <Button
+                      onClick={() => setIsEditing(true)}
+                      variant="outline"
+                      className="flex items-center gap-2"
+                    >
+                      <Edit2 className="w-4 h-4" />
+                      Editar
+                    </Button>
+                  )}
                 </div>
-                <p className="text-xs text-gray-500 mt-1">El correo electrónico no se puede modificar</p>
-              </div>
 
-              {/* Cédula */}
-              <div>
-                <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
-                  <CreditCard className="w-4 h-4" />
-                  Cédula / Documento de Identidad
-                </label>
-                {isEditing ? (
-                  <Input
-                    type="text"
-                    value={formData.cedula}
-                    onChange={(e) => setFormData({ ...formData, cedula: e.target.value })}
-                    placeholder="Número de identificación"
-                  />
-                ) : (
-                  <div className="px-4 py-3 bg-gray-50 rounded-lg text-gray-900 font-medium">
-                    {user.profile?.cedula || 'No especificado'}
-                  </div>
-                )}
-              </div>
-
-              {/* Teléfono */}
-              <div>
-                <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
-                  <Phone className="w-4 h-4" />
-                  Teléfono
-                </label>
-                {isEditing ? (
-                  <Input
-                    type="tel"
-                    value={formData.phone}
-                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                    placeholder="+57 300 123 4567"
-                  />
-                ) : (
-                  <div className="px-4 py-3 bg-gray-50 rounded-lg text-gray-900 font-medium">
-                    {user.profile?.phone || 'No especificado'}
-                  </div>
-                )}
-              </div>
-
-              {/* Dirección de Envío */}
-              <div className="pt-4 border-t border-gray-200">
-                <h4 className="text-base font-bold text-gray-900 mb-4 flex items-center gap-2">
-                  <MapPin className="w-5 h-5" />
-                  Información de Envío
-                </h4>
-
-                <div className="space-y-6">
-                  {/* Dirección */}
+                <form onSubmit={handleSubmit} className="space-y-6">
+                  {/* Nombre */}
                   <div>
                     <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
-                      <Building2 className="w-4 h-4" />
-                      Dirección
+                      <User className="w-4 h-4" />
+                      Nombre Completo
                     </label>
                     {isEditing ? (
                       <Input
                         type="text"
-                        value={formData.address}
-                        onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                        placeholder="Calle, número, apartamento, etc."
+                        value={formData.name}
+                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                        placeholder="Tu nombre completo"
+                        required
                       />
                     ) : (
                       <div className="px-4 py-3 bg-gray-50 rounded-lg text-gray-900 font-medium">
-                        {user.profile?.address || 'No especificado'}
+                        {user.name}
                       </div>
                     )}
                   </div>
 
-                  {/* Ciudad y Código Postal */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="text-sm font-medium text-gray-700 mb-2 block">
-                        Ciudad
-                      </label>
-                      {isEditing ? (
-                        <Input
-                          type="text"
-                          value={formData.city}
-                          onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-                          placeholder="Ciudad"
-                        />
-                      ) : (
-                        <div className="px-4 py-3 bg-gray-50 rounded-lg text-gray-900 font-medium">
-                          {user.profile?.city || 'No especificado'}
-                        </div>
-                      )}
-                    </div>
-
-                    <div>
-                      <label className="text-sm font-medium text-gray-700 mb-2 block">
-                        Código Postal
-                      </label>
-                      {isEditing ? (
-                        <Input
-                          type="text"
-                          value={formData.postalCode}
-                          onChange={(e) => setFormData({ ...formData, postalCode: e.target.value })}
-                          placeholder="110111"
-                        />
-                      ) : (
-                        <div className="px-4 py-3 bg-gray-50 rounded-lg text-gray-900 font-medium">
-                          {user.profile?.postalCode || 'No especificado'}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* País */}
+                  {/* Email - Solo lectura */}
                   <div>
-                    <label className="text-sm font-medium text-gray-700 mb-2 block">
-                      País
+                    <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
+                      <Mail className="w-4 h-4" />
+                      Correo Electrónico
+                    </label>
+                    <div className="px-4 py-3 bg-gray-50 rounded-lg text-gray-900 font-medium">
+                      {user.email}
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">El correo electrónico no se puede modificar</p>
+                  </div>
+
+                  {/* Cédula */}
+                  <div>
+                    <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
+                      <CreditCard className="w-4 h-4" />
+                      Cédula / Documento de Identidad
                     </label>
                     {isEditing ? (
                       <Input
                         type="text"
-                        value={formData.country}
-                        onChange={(e) => setFormData({ ...formData, country: e.target.value })}
-                        placeholder="Colombia"
+                        value={formData.cedula}
+                        onChange={(e) => setFormData({ ...formData, cedula: e.target.value })}
+                        placeholder="Número de identificación"
                       />
                     ) : (
                       <div className="px-4 py-3 bg-gray-50 rounded-lg text-gray-900 font-medium">
-                        {user.profile?.country || 'Colombia'}
+                        {user.profile?.cedula || 'No especificado'}
                       </div>
                     )}
                   </div>
-                </div>
-              </div>
 
-              {/* Fecha de Creación */}
-              <div>
-                <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
-                  <Calendar className="w-4 h-4" />
-                  Miembro Desde
-                </label>
-                <div className="px-4 py-3 bg-gray-50 rounded-lg text-gray-900 font-medium">
-                  {new Date(user.createdAt).toLocaleDateString('es-ES', {
-                    year: 'numeric',
-                    month: 'long',
-                    day: 'numeric'
-                  })}
-                </div>
-              </div>
-
-              {/* Botones de Acción */}
-              {isEditing && (
-                <div className="flex gap-3 pt-4">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={handleCancel}
-                    disabled={isSaving}
-                    className="flex-1 flex items-center justify-center gap-2"
-                  >
-                    <X className="w-4 h-4" />
-                    Cancelar
-                  </Button>
-                  <Button
-                    type="submit"
-                    disabled={isSaving}
-                    className="flex-1 flex items-center justify-center gap-2"
-                  >
-                    {isSaving ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        Guardando...
-                      </>
+                  {/* Teléfono */}
+                  <div>
+                    <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
+                      <Phone className="w-4 h-4" />
+                      Teléfono
+                    </label>
+                    {isEditing ? (
+                      <Input
+                        type="tel"
+                        value={formData.phone}
+                        onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                        placeholder="+57 300 123 4567"
+                      />
                     ) : (
-                      <>
-                        <Save className="w-4 h-4" />
-                        Guardar Cambios
-                      </>
+                      <div className="px-4 py-3 bg-gray-50 rounded-lg text-gray-900 font-medium">
+                        {user.profile?.phone || 'No especificado'}
+                      </div>
                     )}
-                  </Button>
-                </div>
-              )}
-            </form>
+                  </div>
+
+                  {/* Fecha de Creación */}
+                  <div>
+                    <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
+                      <Calendar className="w-4 h-4" />
+                      Miembro Desde
+                    </label>
+                    <div className="px-4 py-3 bg-gray-50 rounded-lg text-gray-900 font-medium">
+                      {new Date(user.createdAt).toLocaleDateString('es-ES', {
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric'
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Botones de Acción */}
+                  {isEditing && (
+                    <div className="flex gap-3 pt-4">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={handleCancel}
+                        disabled={isSaving}
+                        className="flex-1 flex items-center justify-center gap-2"
+                      >
+                        <X className="w-4 h-4" />
+                        Cancelar
+                      </Button>
+                      <Button
+                        type="submit"
+                        disabled={isSaving}
+                        className="flex-1 flex items-center justify-center gap-2"
+                      >
+                        {isSaving ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            Guardando...
+                          </>
+                        ) : (
+                          <>
+                            <Save className="w-4 h-4" />
+                            Guardar Cambios
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  )}
+                </form>
+              </>
+            )}
+
+            {activeTab === 'addresses' && (
+              <AddressesSection brandColor={brandColors.primary} />
+            )}
           </div>
         </div>
 
         {/* Sección de Seguridad */}
-        <div className="mt-6 bg-white rounded-2xl shadow-sm p-8">
-          <h3 className="text-lg font-bold text-gray-900 mb-4">Seguridad</h3>
-          <div className="space-y-4">
-            <Button
-              variant="outline"
-              className="w-full sm:w-auto"
-              onClick={() => toast.info('Función de cambio de contraseña próximamente')}
-            >
-              Cambiar Contraseña
-            </Button>
+        {activeTab === 'general' && (
+          <div className="mt-6 bg-white rounded-2xl shadow-sm p-8">
+            <h3 className="text-lg font-bold text-gray-900 mb-4">Seguridad</h3>
+            <div className="space-y-4">
+              <Button
+                variant="outline"
+                className="w-full sm:w-auto"
+                onClick={() => toast.info('Función de cambio de contraseña próximamente')}
+              >
+                Cambiar Contraseña
+              </Button>
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );

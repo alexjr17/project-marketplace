@@ -58,6 +58,16 @@ class POSController extends Controller
         }
     }
 
+    /** GET /api/pos/products — lista paginada de productos para el POS. */
+    public function products(Request $request)
+    {
+        $page = max(1, (int) $request->query('page', 1));
+        $perPage = min(50, max(1, (int) $request->query('perPage', 12)));
+        $search = $request->query('search');
+
+        return $this->success($this->pos->browseProducts($page, $perPage, $search));
+    }
+
     /** POST /api/pos/calculate */
     public function calculate(Request $request)
     {

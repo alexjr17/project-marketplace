@@ -5,6 +5,7 @@ export { default as catalogsService } from './catalogs.service';
 export { default as settingsService } from './settings.service';
 export { default as ordersService } from './orders.service';
 export { default as usersService } from './users.service';
+export { default as addressesService } from './addresses.service';
 export { default as rolesService } from './roles.service';
 
 // Re-export types
@@ -33,6 +34,7 @@ export type {
   UsersFilters,
   UsersResponse,
 } from './users.service';
+export type { Address, AddressInput } from './addresses.service';
 export type {
   ApiRole,
   CreateRoleInput,

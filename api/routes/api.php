@@ -19,6 +19,7 @@ use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\POSController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\PurchaseOrderController;
+use App\Http\Controllers\PurchaseReturnController;
 use App\Http\Controllers\ReviewController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\SettingController;
@@ -392,7 +393,19 @@ Route::prefix('purchase-orders')->middleware('auth:sanctum')->group(function () 
     Route::put('{id}', [PurchaseOrderController::class, 'update'])->whereNumber('id')->middleware('permission:inventory.manage');
     Route::patch('{id}/status', [PurchaseOrderController::class, 'updateStatus'])->whereNumber('id')->middleware('permission:inventory.manage');
     Route::post('{id}/receive', [PurchaseOrderController::class, 'receive'])->whereNumber('id')->middleware('permission:inventory.manage');
-    Route::delete('{id}', [PurchaseOrderController::class, 'destroy'])->whereNumber('id')->middleware('permission:inventory.manage');
+    // Eliminar una orden de compra: solo el administrador (SuperAdmin).
+    Route::delete('{id}', [PurchaseOrderController::class, 'destroy'])->whereNumber('id')->middleware('admin');
+});
+
+// ==================== DEVOLUCIONES DE COMPRA ====================
+Route::prefix('purchase-returns')->middleware('auth:sanctum')->group(function () {
+    Route::get('stats', [PurchaseReturnController::class, 'stats'])->middleware('permission:inventory.view');
+    Route::get('generate-number', [PurchaseReturnController::class, 'generateNumber'])->middleware('permission:inventory.manage');
+    Route::get('returnable/{purchaseOrderId}', [PurchaseReturnController::class, 'returnableItems'])
+        ->whereNumber('purchaseOrderId')->middleware('permission:inventory.manage');
+    Route::get('/', [PurchaseReturnController::class, 'index'])->middleware('permission:inventory.view');
+    Route::get('{id}', [PurchaseReturnController::class, 'show'])->whereNumber('id')->middleware('permission:inventory.view');
+    Route::post('/', [PurchaseReturnController::class, 'store'])->middleware('permission:inventory.manage');
 });
 
 // ==================== LOTES DE INSUMO ====================
@@ -471,6 +484,11 @@ Route::prefix('inventory-conversions')->middleware('auth:sanctum')->group(functi
     });
 });
 
+// ==================== ENVÍOS ====================
+Route::prefix('shipping')->middleware(['auth:sanctum', 'admin'])->group(function () {
+    Route::post('sync-rates', [\App\Http\Controllers\ShippingController::class, 'syncRates']);
+});
+
 // ==================== SUBIDA DE IMÁGENES ====================
 Route::prefix('uploads')->group(function () {
     Route::get('optimize', [UploadController::class, 'getOptimizedUrl']);
@@ -506,6 +524,7 @@ Route::prefix('cash-registers')->middleware('auth:sanctum')->group(function () {
 Route::prefix('pos')->middleware('auth:sanctum')->group(function () {
     Route::post('scan', [POSController::class, 'scan'])->middleware('permission:pos.access,pos.create_sale');
     Route::post('search', [POSController::class, 'search'])->middleware('permission:pos.access,pos.create_sale');
+    Route::get('products', [POSController::class, 'products'])->middleware('permission:pos.access,pos.create_sale');
     Route::post('calculate', [POSController::class, 'calculate'])->middleware('permission:pos.access,pos.create_sale');
     Route::post('sale', [POSController::class, 'createSale'])->middleware('permission:pos.access,pos.create_sale');
     Route::post('sale/{id}/cancel', [POSController::class, 'cancelSale'])->whereNumber('id')->middleware('permission:pos.access,pos.cancel_sale');

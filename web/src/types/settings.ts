@@ -112,11 +112,12 @@ export const THEME_PRESETS = [
   },
 ];
 
-// Zona geografica simplificada (solo define areas)
+// Zona geografica: un departamento con las ciudades cubiertas.
 export interface ShippingZone {
   id: string;
   name: string;
-  cities: string[]; // Si esta vacio, aplica a cualquier ciudad no listada en otras zonas
+  department?: string; // Departamento de Colombia al que pertenece la zona
+  cities: string[];    // Municipios cubiertos dentro del departamento
   isActive: boolean;
 }
 
@@ -154,6 +155,145 @@ export interface ShippingOrigin {
   country: string;
 }
 
+// Cómo cotiza una transportadora:
+//  - 'table': tarifas por zona + peso definidas en el panel (sin internet)
+//  - 'api'  : conexión HTTP genérica a la API de la transportadora
+export type CarrierIntegrationType = 'table' | 'api';
+
+// Autenticación para conectarse a la API de una transportadora.
+export interface CarrierApiAuth {
+  type: 'none' | 'apiKey' | 'bearer' | 'basic';
+  // Para 'apiKey': dónde y con qué nombre se envía la credencial
+  keyLocation?: 'header' | 'query';
+  keyName?: string;  // ej. "Authorization", "X-Api-Key", "token"
+  keyValue?: string; // la credencial / token
+  // Para 'basic'
+  username?: string;
+  password?: string;
+}
+
+// Cómo leer la respuesta JSON de la API para extraer los datos que necesitamos.
+// Las rutas son dot-paths, admiten índices: "data.0.valorFlete".
+export interface CarrierApiResponseMapping {
+  costPath: string;     // ruta al costo del envío
+  daysPath?: string;    // ruta a los días estimados de entrega
+  errorPath?: string;   // ruta a un mensaje de error de la API
+  costIsString?: boolean; // true si el costo llega como texto ("12.500")
+}
+
+/**
+ * Conexión API genérica y parametrizable de una transportadora.
+ * Permite conectar Servientrega, Coordinadora, Interrapidísimo, etc.
+ * configurando endpoint, autenticación y mapeo de datos — sin tocar código.
+ */
+export interface CarrierApiConfig {
+  quoteUrl: string;           // endpoint de cotización
+  method: 'GET' | 'POST';
+  auth: CarrierApiAuth;
+  headers?: Record<string, string>; // headers fijos adicionales
+  /**
+   * Plantilla del request (JSON) con variables que se reemplazan en cada
+   * cotización. Variables disponibles:
+   *   {{origin.city}} {{origin.department}} {{origin.postalCode}}
+   *   {{destination.city}} {{destination.department}} {{destination.postalCode}}
+   *   {{weight}} {{declaredValue}} {{length}} {{width}} {{height}} {{units}}
+   */
+  requestTemplate: string;
+  responseMapping: CarrierApiResponseMapping;
+  timeoutMs?: number;         // tiempo máximo de espera (default 8000)
+}
+
+// Plantilla base de conexión para una transportadora o agregador.
+export interface CarrierConnectionPreset {
+  id: string;
+  label: string;
+  description: string;
+  config: CarrierApiConfig;
+}
+
+/**
+ * Plantillas base de conexión. Son PUNTOS DE PARTIDA, no conexiones listas:
+ * la URL real y las credenciales se obtienen al registrarse con la
+ * transportadora o el agregador, y los nombres de los campos se ajustan
+ * con SU documentación. Acelera el armado, no lo reemplaza.
+ */
+export const CARRIER_CONNECTION_PRESETS: CarrierConnectionPreset[] = [
+  {
+    id: 'custom',
+    label: 'No aplica',
+    description: 'Sin plantilla — configura la conexión manualmente.',
+    config: {
+      quoteUrl: '',
+      method: 'POST',
+      auth: { type: 'apiKey', keyLocation: 'header', keyName: 'Authorization', keyValue: '' },
+      headers: {},
+      requestTemplate: `{
+  "origen": "{{origin.city}}",
+  "destino": "{{destination.city}}",
+  "peso": "{{weight}}",
+  "valorDeclarado": "{{declaredValue}}"
+}`,
+      responseMapping: { costPath: 'data.valor', daysPath: 'data.dias', errorPath: 'message' },
+      timeoutMs: 8000,
+    },
+  },
+  {
+    id: 'envia',
+    label: 'Envía (envia.com)',
+    description:
+      'Cotizador de Envia.com. Trae la URL de PRODUCCIÓN; pega tu Bearer token del panel shipping.envia.com. Para sandbox usa api-test.envia.com con un token de ship-test.envia.com.',
+    config: {
+      quoteUrl: 'https://api.envia.com/ship/rate/',
+      method: 'POST',
+      auth: { type: 'bearer', keyValue: '' },
+      headers: { 'Content-Type': 'application/json' },
+      requestTemplate: `{
+  "origin": {
+    "country": "CO",
+    "state": "{{origin.stateCode}}",
+    "city": "{{origin.dane}}",
+    "postalCode": "{{origin.dane}}"
+  },
+  "destination": {
+    "country": "CO",
+    "state": "{{destination.stateCode}}",
+    "city": "{{destination.dane}}",
+    "postalCode": "{{destination.dane}}"
+  },
+  "packages": [
+    {
+      "content": "productos",
+      "amount": 1,
+      "type": "box",
+      "weight": "{{weight}}",
+      "weightUnit": "KG",
+      "lengthUnit": "CM",
+      "declaredValue": "{{declaredValue}}",
+      "dimensions": { "length": "{{length}}", "width": "{{width}}", "height": "{{height}}" }
+    }
+  ],
+  "shipment": { "type": 1, "carrier": "{{carrier}}" }
+}`,
+      responseMapping: {
+        costPath: 'data.0.totalPrice',
+        daysPath: 'data.0.deliveryDate.dateDifference',
+        errorPath: 'error.message',
+      },
+      timeoutMs: 20000,
+    },
+  },
+];
+
+// Registro de una sincronización de tarifas con la transportadora.
+export interface RateSyncRecord {
+  id: string;
+  syncedAt: string;                       // fecha ISO
+  source: 'api' | 'simulated' | 'mixed';  // de dónde salieron las tarifas
+  zonesUpdated: number;
+  rates: CarrierZoneRate[];               // foto de las tarifas aplicadas
+  note?: string;
+}
+
 export interface ShippingCarrier {
   id: string;
   name: string;
@@ -162,8 +302,17 @@ export interface ShippingCarrier {
   isActive: boolean;
   // Factor volumetrico de esta transportadora (usualmente 5000 aereo, 6000 terrestre)
   volumetricFactor: number;
-  // Tarifas por zona
+  // Cómo se cotiza esta transportadora. Si no está definido se asume 'table'.
+  integrationType?: CarrierIntegrationType;
+  // Conexión API (solo cuando integrationType === 'api').
+  apiConfig?: CarrierApiConfig;
+  // Código de la transportadora dentro de la API/agregador (ej. "serviEntrega",
+  // "tcc", "interRapidisimo"). Se inserta en la plantilla como {{carrier}}.
+  apiCarrierCode?: string;
+  // Tarifas por zona (modo 'table', o respaldo cuando la API falla).
   zoneRates: CarrierZoneRate[];
+  // Historial de sincronizaciones de tarifas (más reciente primero).
+  rateSyncHistory?: RateSyncRecord[];
 }
 
 export interface ShippingSettings {

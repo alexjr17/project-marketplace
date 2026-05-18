@@ -648,6 +648,16 @@ export const CustomizerPage = () => {
       console.log('[getCurrentTemplateImage] Sin zoneType, usando images.front');
     }
 
+    // Normalizar: si la imagen es una URL absoluta a /uploads (subida antes),
+    // se convierte a ruta relativa para servirla desde el mismo origen y
+    // poder procesarla en <canvas> sin problemas de CORS.
+    if (imageUrl) {
+      const uploadsIdx = imageUrl.indexOf('/uploads/');
+      if (uploadsIdx > 0 && /^https?:\/\//i.test(imageUrl)) {
+        imageUrl = imageUrl.slice(uploadsIdx);
+      }
+    }
+
     return imageUrl;
   }, [selectedTemplate, currentZoneType]);
 
@@ -1271,6 +1281,14 @@ export const CustomizerPage = () => {
             imageUrl = selectedTemplate.images.back || selectedTemplate.images.front;
           } else {
             imageUrl = selectedTemplate.images.front;
+          }
+        }
+
+        // Normalizar URL absoluta de /uploads a ruta relativa (mismo origen).
+        if (imageUrl) {
+          const uploadsIdx = imageUrl.indexOf('/uploads/');
+          if (uploadsIdx > 0 && /^https?:\/\//i.test(imageUrl)) {
+            imageUrl = imageUrl.slice(uploadsIdx);
           }
         }
 

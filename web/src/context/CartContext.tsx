@@ -244,9 +244,10 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
       try {
         const publicSettings = await settingsService.getPublicSettings();
 
-        // Obtener configuración de shipping
-        const shippingCost = publicSettings.shipping?.cost ?? DEFAULT_ORDER_CONFIG.shippingCost;
-        const freeShippingThreshold = publicSettings.shipping?.freeThreshold ?? DEFAULT_ORDER_CONFIG.freeShippingThreshold;
+        // El costo de envío exacto se calcula en el checkout según la zona
+        // destino. El carrito usa un estimado por defecto mientras tanto.
+        const shippingCost = DEFAULT_ORDER_CONFIG.shippingCost;
+        const freeShippingThreshold = DEFAULT_ORDER_CONFIG.freeShippingThreshold;
 
         // Obtener configuración de impuestos
         const taxEnabled = (publicSettings.tax as any)?.enabled ?? DEFAULT_ORDER_CONFIG.taxEnabled;

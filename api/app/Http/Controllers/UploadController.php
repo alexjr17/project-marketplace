@@ -63,7 +63,9 @@ class UploadController extends Controller
         file_put_contents($this->uploadDir($folder).'/'.$name, $bytes);
 
         return [
-            'url' => url($path),
+            // URL relativa: funciona en el mismo origen del frontend (vía
+            // proxy en desarrollo, mismo dominio en producción).
+            'url' => '/'.$path,
             'publicId' => $path,
             'width' => $info[0],
             'height' => $info[1],
@@ -181,7 +183,7 @@ class UploadController extends Controller
         }
 
         // El almacenamiento local no transforma; se devuelve la URL directa.
-        return $this->success(['url' => url($publicId)]);
+        return $this->success(['url' => '/'.ltrim($publicId, '/')]);
     }
 
     /** DELETE /api/uploads/{publicId} */

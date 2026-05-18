@@ -4,7 +4,7 @@ import type { TemplateSearchResult, TemplateZoneInfo } from '../../services/pos.
 import { applyColorToImage } from '../../utils/imageColorizer';
 import axios from 'axios';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
 
 const getAuthToken = () => {
   const authData = localStorage.getItem('marketplace_auth');

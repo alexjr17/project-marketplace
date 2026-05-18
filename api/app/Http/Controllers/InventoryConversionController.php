@@ -36,20 +36,7 @@ class InventoryConversionController extends Controller
             'approvedAt' => $c->approvedAt,
             'description' => $c->description,
             'notes' => $c->notes,
-            'inputItems' => $c->inputItems->map(fn ($i) => [
-                'id' => $i->id,
-                'inputVariantId' => $i->inputVariantId,
-                'inputCode' => $i->inputCode,
-                'inputName' => $i->inputName,
-                'variantSku' => $i->variantSku,
-                'colorName' => $i->colorName,
-                'sizeName' => $i->sizeName,
-                'unitOfMeasure' => $i->unitOfMeasure,
-                'unitCost' => (float) $i->unitCost,
-                'quantity' => (float) $i->quantity,
-                'totalCost' => (float) $i->totalCost,
-                'notes' => $i->notes,
-            ])->all(),
+            'inputItems' => $this->mapInputItems($c),
             'outputItems' => $c->outputItems->map(fn ($i) => [
                 'id' => $i->id,
                 'variantId' => $i->variantId,
@@ -75,6 +62,32 @@ class InventoryConversionController extends Controller
         }
 
         return $data;
+    }
+
+    /**
+     * Da formato a los ítems de entrada, incluyendo el stock disponible
+     * actual de cada variante de insumo (para saber si alcanza).
+     */
+    private function mapInputItems(InventoryConversion $c): array
+    {
+        $stockByVariant = InputVariant::whereIn('id', $c->inputItems->pluck('inputVariantId')->filter())
+            ->pluck('currentStock', 'id');
+
+        return $c->inputItems->map(fn ($i) => [
+            'id' => $i->id,
+            'inputVariantId' => $i->inputVariantId,
+            'inputCode' => $i->inputCode,
+            'inputName' => $i->inputName,
+            'variantSku' => $i->variantSku,
+            'colorName' => $i->colorName,
+            'sizeName' => $i->sizeName,
+            'unitOfMeasure' => $i->unitOfMeasure,
+            'unitCost' => (float) $i->unitCost,
+            'quantity' => (float) $i->quantity,
+            'totalCost' => (float) $i->totalCost,
+            'availableStock' => (float) ($stockByVariant[$i->inputVariantId] ?? 0),
+            'notes' => $i->notes,
+        ])->all();
     }
 
     /** Genera el siguiente número de conversión (CONV-AAAA-NNNN). */
@@ -580,12 +593,14 @@ class InventoryConversionController extends Controller
                 ]);
             }
 
+            $affectedProductIds = [];
             foreach ($conversion->outputItems as $item) {
                 $variant = ProductVariant::find($item->variantId);
                 $previousStock = $variant ? (int) $variant->stock : 0;
                 if ($variant) {
                     $variant->stock = $previousStock + (int) $item->quantity;
                     $variant->save();
+                    $affectedProductIds[$variant->productId] = true;
                 }
 
                 VariantMovement::create([
@@ -599,6 +614,14 @@ class InventoryConversionController extends Controller
                     'reason' => "Conversión desde insumos {$conversion->conversionNumber}",
                     'notes' => $item->notes,
                     'userId' => $user->id,
+                ]);
+            }
+
+            // Recalcula el stock agregado de cada producto afectado
+            // (la lista de productos muestra products.stock, no la suma de variantes).
+            foreach (array_keys($affectedProductIds) as $productId) {
+                Product::where('id', $productId)->update([
+                    'stock' => (int) ProductVariant::where('productId', $productId)->sum('stock'),
                 ]);
             }
 

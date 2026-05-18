@@ -221,6 +221,31 @@ export async function searchProductsAndTemplates(query: string): Promise<SearchR
   return response.data.data;
 }
 
+export interface BrowseProductsResponse {
+  results: SearchResult[];
+  page: number;
+  perPage: number;
+  total: number;
+  totalPages: number;
+}
+
+/**
+ * Lista paginada de productos y templates para el catálogo del POS.
+ */
+export async function browseProducts(
+  page: number = 1,
+  perPage: number = 12,
+  search: string = ''
+): Promise<BrowseProductsResponse> {
+  const response = await axios.get(`${API_URL}/pos/products`, {
+    params: { page, perPage, search: search || undefined },
+    headers: {
+      Authorization: `Bearer ${getAuthToken()}`,
+    },
+  });
+  return response.data.data;
+}
+
 /**
  * Calculate sale totals
  */

@@ -339,6 +339,18 @@ export default function InventoryConversionDetailPage() {
 
   const isEditable = conversion.status === 'DRAFT';
   const canSubmit = isEditable && conversion.inputItems.length > 0 && conversion.outputItems.length > 0;
+  // Totales por unidad (suma de cantidades), no el número de renglones.
+  const inputUnits = conversion.inputItems.reduce((s, i) => s + Number(i.quantity), 0);
+  const outputUnits = conversion.outputItems.reduce((s, i) => s + Number(i.quantity), 0);
+  // Mensaje que explica por qué aún no se puede enviar a aprobación.
+  const submitHint =
+    conversion.inputItems.length === 0 && conversion.outputItems.length === 0
+      ? 'Agrega al menos un insumo a consumir y un producto a generar.'
+      : conversion.inputItems.length === 0
+        ? 'Agrega al menos un insumo a consumir.'
+        : conversion.outputItems.length === 0
+          ? 'Agrega al menos un producto a generar.'
+          : '';
   const canApprove = conversion.status === 'PENDING';
   const canCancel = conversion.status !== 'APPROVED' && conversion.status !== 'CANCELLED';
   const canDelete = conversion.status === 'DRAFT' || conversion.status === 'CANCELLED';
@@ -384,9 +396,15 @@ export default function InventoryConversionDetailPage() {
         </div>
 
         {/* Actions */}
-        <div className="flex items-center gap-2">
-          {canSubmit && (
-            <Button variant="admin-orange" onClick={handleSubmit} disabled={saving}>
+        <div className="flex flex-col items-end gap-1.5">
+          <div className="flex items-center gap-2">
+          {isEditable && (
+            <Button
+              variant="admin-orange"
+              onClick={handleSubmit}
+              disabled={saving || !canSubmit}
+              title={canSubmit ? 'Enviar a aprobación' : submitHint}
+            >
               <Send className="w-4 h-4" />
               Enviar a Aprobación
             </Button>
@@ -421,6 +439,10 @@ export default function InventoryConversionDetailPage() {
               Eliminar
             </Button>
           )}
+          </div>
+          {isEditable && submitHint && (
+            <p className="text-xs text-amber-600">⚠ {submitHint}</p>
+          )}
         </div>
       </div>
 
@@ -433,16 +455,18 @@ export default function InventoryConversionDetailPage() {
           </p>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-4">
-          <p className="text-sm text-gray-500">Insumos</p>
+          <p className="text-sm text-gray-500">Insumos a consumir</p>
           <p className="text-lg font-medium text-orange-600">
-            {conversion.inputItems.length} items
+            {inputUnits} unidades
           </p>
+          <p className="text-xs text-gray-400">{conversion.inputItems.length} ítem(s)</p>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-4">
-          <p className="text-sm text-gray-500">Productos</p>
+          <p className="text-sm text-gray-500">Productos a generar</p>
           <p className="text-lg font-medium text-blue-600">
-            {conversion.outputItems.length} items
+            {outputUnits} unidades
           </p>
+          <p className="text-xs text-gray-400">{conversion.outputItems.length} ítem(s)</p>
         </div>
         {conversion.conversionType === 'MANUAL' && (
           <div className="bg-white rounded-xl border border-gray-200 p-4">
@@ -484,31 +508,59 @@ export default function InventoryConversionDetailPage() {
                 </p>
               </div>
             ) : (
-              conversion.inputItems.map((item) => (
-                <div key={item.id} className="p-4 flex items-center justify-between">
-                  <div>
-                    <p className="font-medium text-gray-900">{item.inputName}</p>
-                    <p className="text-sm text-gray-500">
-                      {item.inputCode} • {item.quantity} {item.unitOfMeasure}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    {conversion.conversionType === 'MANUAL' && (
-                      <p className="text-sm font-medium text-orange-600">
-                        {formatCurrency(item.totalCost)}
+              conversion.inputItems.map((item) => {
+                const variantLabel = [item.colorName, item.sizeName]
+                  .filter(Boolean)
+                  .join(' / ');
+                const insufficient =
+                  item.availableStock !== undefined &&
+                  item.availableStock < item.quantity;
+                return (
+                  <div key={item.id} className="p-4 flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-medium text-gray-900">
+                        {item.inputName}
+                        {variantLabel && (
+                          <span className="font-normal text-gray-500"> · {variantLabel}</span>
+                        )}
                       </p>
-                    )}
-                    {isEditable && conversion.conversionType === 'MANUAL' && (
-                      <button
-                        onClick={() => handleRemoveInput(item.id)}
-                        className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
-                    )}
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs mt-0.5">
+                        <span className="text-gray-500">{item.variantSku || item.inputCode}</span>
+                        <span className="text-gray-700">
+                          Requiere: {item.quantity} {item.unitOfMeasure}
+                        </span>
+                        {item.availableStock !== undefined && (
+                          <span
+                            className={
+                              insufficient
+                                ? 'font-medium text-red-600'
+                                : 'text-green-600'
+                            }
+                          >
+                            Disponible: {item.availableStock}
+                            {insufficient && ' — insuficiente'}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 flex-shrink-0">
+                      {conversion.conversionType === 'MANUAL' && (
+                        <p className="text-sm font-medium text-orange-600">
+                          {formatCurrency(item.totalCost)}
+                        </p>
+                      )}
+                      {isEditable && conversion.conversionType === 'MANUAL' && (
+                        <button
+                          onClick={() => handleRemoveInput(item.id)}
+                          className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
 

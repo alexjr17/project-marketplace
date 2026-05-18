@@ -16,6 +16,7 @@ export interface ConversionInputItem {
   unitCost: number;
   quantity: number;
   totalCost: number;
+  availableStock?: number;
   notes: string | null;
 }
 

@@ -106,7 +106,10 @@ class TemplateRecipeController extends Controller
 
     public function associatedInputIds(int $productId)
     {
-        return $this->success(ProductInput::where('productId', $productId)->pluck('inputId'));
+        // El frontend espera la forma cruda { inputIds: [...] }, no el envoltorio estándar.
+        return response()->json([
+            'inputIds' => ProductInput::where('productId', $productId)->pluck('inputId'),
+        ]);
     }
 
     public function associateInputs(Request $request, int $productId)
@@ -121,15 +124,18 @@ class TemplateRecipeController extends Controller
             return $this->error('El producto no es un template', 400);
         }
 
+        $inputIds = array_values(array_unique($data['inputIds']));
+
         ProductInput::where('productId', $productId)->delete();
-        foreach (array_unique($data['inputIds']) as $inputId) {
+        foreach ($inputIds as $inputId) {
             ProductInput::create(['productId' => $productId, 'inputId' => $inputId]);
         }
 
-        return $this->success(
-            ['created' => count(array_unique($data['inputIds']))],
-            count($data['inputIds']).' insumo(s) asociado(s) exitosamente'
-        );
+        // Forma cruda { created, message } esperada por el frontend.
+        return response()->json([
+            'created' => count($inputIds),
+            'message' => count($inputIds).' insumo(s) asociado(s) exitosamente',
+        ]);
     }
 
     public function destroySpecific(int $variantId, int $inputVariantId)

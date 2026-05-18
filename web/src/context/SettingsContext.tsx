@@ -68,146 +68,28 @@ const mockSettings: Settings = {
     useGradientHero: true,
   },
   shipping: {
-    // Direccion de origen de envio (desde donde salen los paquetes)
+    // Sin datos hardcodeados: la configuración real de envíos vive en la base
+    // de datos (key shipping_settings — ver ShippingSeeder). Esto es solo el
+    // estado inicial vacío mientras se cargan los datos del servidor.
     origin: {
-      companyName: 'StylePrint SAS',
-      contactName: 'Departamento de Envios',
-      phone: '+57 300 123 4567',
-      address: 'Calle 123 #45-67, Bodega 5',
-      city: 'Bogota',
-      state: 'Cundinamarca',
-      postalCode: '110111',
+      companyName: '',
+      contactName: '',
+      phone: '',
+      address: '',
+      city: '',
+      state: '',
+      postalCode: '',
       country: 'Colombia',
     },
-    // Zonas geograficas (sin tarifas, solo agrupacion)
-    zones: [
-      {
-        id: 'zone-1',
-        name: 'Bogota y alrededores',
-        cities: ['Bogota', 'Chia', 'Cota', 'Soacha', 'Zipaquira', 'Funza', 'Mosquera'],
-        isActive: true,
-      },
-      {
-        id: 'zone-2',
-        name: 'Principales ciudades',
-        cities: ['Medellin', 'Cali', 'Barranquilla', 'Cartagena', 'Bucaramanga', 'Pereira', 'Manizales'],
-        isActive: true,
-      },
-      {
-        id: 'zone-3',
-        name: 'Resto del pais',
-        cities: [], // Vacio = aplica a ciudades no listadas en otras zonas
-        isActive: true,
-      },
-    ],
-    // Transportadoras con sus tarifas por zona
-    carriers: [
-      {
-        id: 'carrier-1',
-        name: 'Servientrega',
-        code: 'SERVI',
-        trackingUrlTemplate: 'https://www.servientrega.com/wps/portal/rastreo-envio?guia={tracking}',
-        isActive: true,
-        volumetricFactor: 6000, // Factor terrestre
-        zoneRates: [
-          {
-            zoneId: 'zone-1',
-            baseCost: 8000,
-            costPerKg: 1500,
-            freeShippingThreshold: 150000,
-            estimatedDays: { min: 1, max: 2 },
-            maxWeight: 30,
-          },
-          {
-            zoneId: 'zone-2',
-            baseCost: 12000,
-            costPerKg: 2000,
-            freeShippingThreshold: 200000,
-            estimatedDays: { min: 2, max: 4 },
-            maxWeight: 25,
-          },
-          {
-            zoneId: 'zone-3',
-            baseCost: 18000,
-            costPerKg: 2500,
-            estimatedDays: { min: 4, max: 7 },
-            maxWeight: 20,
-          },
-        ],
-      },
-      {
-        id: 'carrier-2',
-        name: 'Coordinadora',
-        code: 'COORD',
-        trackingUrlTemplate: 'https://www.coordinadora.com/rastreo/?guia={tracking}',
-        isActive: true,
-        volumetricFactor: 5000, // Factor aereo (mas estricto)
-        zoneRates: [
-          {
-            zoneId: 'zone-1',
-            baseCost: 9000,
-            costPerKg: 1800,
-            freeShippingThreshold: 180000,
-            estimatedDays: { min: 1, max: 2 },
-            maxWeight: 25,
-          },
-          {
-            zoneId: 'zone-2',
-            baseCost: 14000,
-            costPerKg: 2200,
-            freeShippingThreshold: 220000,
-            estimatedDays: { min: 2, max: 3 },
-            maxWeight: 20,
-          },
-          {
-            zoneId: 'zone-3',
-            baseCost: 20000,
-            costPerKg: 2800,
-            estimatedDays: { min: 3, max: 5 },
-            maxWeight: 15,
-          },
-        ],
-      },
-      {
-        id: 'carrier-3',
-        name: 'Interrapidisimo',
-        code: 'INTER',
-        trackingUrlTemplate: 'https://www.interrapidisimo.com/rastreo/?guia={tracking}',
-        isActive: false,
-        volumetricFactor: 5000,
-        zoneRates: [
-          {
-            zoneId: 'zone-1',
-            baseCost: 7500,
-            costPerKg: 1400,
-            estimatedDays: { min: 1, max: 3 },
-            maxWeight: 30,
-          },
-          {
-            zoneId: 'zone-2',
-            baseCost: 11000,
-            costPerKg: 1900,
-            estimatedDays: { min: 3, max: 5 },
-            maxWeight: 25,
-          },
-          {
-            zoneId: 'zone-3',
-            baseCost: 16000,
-            costPerKg: 2400,
-            estimatedDays: { min: 5, max: 8 },
-            maxWeight: 20,
-          },
-        ],
-      },
-    ],
-    defaultCarrierId: 'carrier-1',
-    handlingTime: 2,
+    zones: [],
+    carriers: [],
+    handlingTime: 1,
     packageDefaults: {
-      defaultLength: 30, // cm
-      defaultWidth: 25, // cm
-      defaultHeight: 5, // cm (camiseta doblada)
-      defaultWeightPerItem: 0.25, // kg por camiseta
-      volumetricDivisor: 5000, // factor estandar para calculo interno
+      defaultLength: 30,
+      defaultWidth: 25,
+      defaultHeight: 5,
+      defaultWeightPerItem: 0.25,
+      volumetricDivisor: 5000,
     },
   },
   payment: {
@@ -530,6 +412,25 @@ interface SettingsContextType {
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
 
+/**
+ * Usa el valor traído del API solo si es un objeto con datos. Si la
+ * configuración nunca se guardó, el API devuelve un arreglo/objeto vacío;
+ * en ese caso se conservan los valores por defecto para no dejar el
+ * formulario sin las propiedades anidadas que espera (evita pantalla en
+ * blanco).
+ */
+function withFallback<T>(loaded: unknown, fallback: T): T {
+  if (
+    loaded &&
+    typeof loaded === 'object' &&
+    !Array.isArray(loaded) &&
+    Object.keys(loaded as object).length > 0
+  ) {
+    return loaded as T;
+  }
+  return fallback;
+}
+
 export const SettingsProvider = ({ children }: { children: ReactNode }) => {
   const [settings, setSettings] = useState<Settings>(mockSettings);
   const [isLoading, setIsLoading] = useState(true);
@@ -544,10 +445,12 @@ export const SettingsProvider = ({ children }: { children: ReactNode }) => {
         const publicSettings = await settingsService.getPublicSettings();
         setSettings((prev) => ({
           ...prev,
-          general: publicSettings.general || prev.general,
-          appearance: publicSettings.appearance || prev.appearance,
-          home: publicSettings.home || prev.home,
-          catalog: publicSettings.catalog || prev.catalog,
+          general: withFallback(publicSettings.general, prev.general),
+          appearance: withFallback(publicSettings.appearance, prev.appearance),
+          home: withFallback(publicSettings.home, prev.home),
+          catalog: withFallback(publicSettings.catalog, prev.catalog),
+          // El cliente también necesita la config de envíos para calcular el costo.
+          shipping: withFallback(publicSettings.shipping, prev.shipping),
         }));
       } catch (err) {
         console.error('Error loading public settings:', err);
@@ -575,7 +478,19 @@ export const SettingsProvider = ({ children }: { children: ReactNode }) => {
 
     try {
       const loadedSettings = await settingsService.loadAllSettings();
-      setSettings(loadedSettings);
+      // Cada sección que no tenga configuración guardada conserva el
+      // valor por defecto, para que el formulario siempre tenga datos.
+      setSettings((prev) => ({
+        ...prev,
+        general: withFallback(loadedSettings.general, prev.general),
+        appearance: withFallback(loadedSettings.appearance, prev.appearance),
+        shipping: withFallback(loadedSettings.shipping, prev.shipping),
+        payment: withFallback(loadedSettings.payment, prev.payment),
+        home: withFallback(loadedSettings.home, prev.home),
+        catalog: withFallback(loadedSettings.catalog, prev.catalog),
+        legal: withFallback(loadedSettings.legal, prev.legal),
+        updatedAt: new Date(),
+      }));
     } catch (err) {
       console.error('Error loading settings from API:', err);
       // Si falla, usar mockSettings como fallback

@@ -144,7 +144,8 @@ export default function TemplateRecipesPage() {
       const authData = localStorage.getItem('marketplace_auth');
       const token = authData ? JSON.parse(authData).token : '';
 
-      const response = await fetch('http://localhost:3001/api/template-recipes', {
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+      const response = await fetch(`${apiUrl}/template-recipes`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -181,8 +182,9 @@ export default function TemplateRecipesPage() {
       const token = authData ? JSON.parse(authData).token : '';
 
       // Use the specific endpoint to delete by composite key
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
       const response = await fetch(
-        `http://localhost:3001/api/template-recipes/variant/${variantId}/input/${inputVariantId}`,
+        `${apiUrl}/template-recipes/variant/${variantId}/input/${inputVariantId}`,
         {
           method: 'DELETE',
           headers: {

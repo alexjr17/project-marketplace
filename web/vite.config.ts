@@ -8,6 +8,15 @@ export default defineConfig({
     host: true, // Permite acceso desde la red local
     port: 5174,
     allowedHosts: true, // Permite acceso desde cualquier host (incluyendo IP local)
+    // Las imágenes subidas (/uploads) se sirven desde la API. El proxy las
+    // hace aparecer en el mismo origen que el frontend, para que el
+    // personalizador pueda procesarlas en <canvas> sin problemas de CORS.
+    proxy: {
+      '/uploads': {
+        target: 'http://api:8000',
+        changeOrigin: true,
+      },
+    },
     watch: {
       // Usar polling para Docker en Windows (detecta cambios de archivos)
       usePolling: true,

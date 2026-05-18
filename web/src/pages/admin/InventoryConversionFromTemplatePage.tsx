@@ -65,6 +65,9 @@ export default function InventoryConversionFromTemplatePage() {
   const [selectedTemplate, setSelectedTemplate] = useState<Product | null>(null);
   const [cellQuantities, setCellQuantities] = useState<Map<string, number>>(new Map());
 
+  // Insumos de la receta que NO se deben consumir (deseleccionados).
+  const [excludedInsumoIds, setExcludedInsumoIds] = useState<Set<number>>(new Set());
+
   // Search terms
   const [productSearch, setProductSearch] = useState('');
   const [templateSearch, setTemplateSearch] = useState('');
@@ -127,9 +130,9 @@ export default function InventoryConversionFromTemplatePage() {
       const token = authData ? JSON.parse(authData).token : '';
 
       // Load all recipes for this template
-      console.log('Fetching recipes from:', `http://localhost:3001/api/template-recipes/product/${templateId}`);
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
       const response = await fetch(
-        `http://localhost:3001/api/template-recipes/product/${templateId}`,
+        `${apiUrl}/template-recipes/product/${templateId}`,
         {
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -145,9 +148,9 @@ export default function InventoryConversionFromTemplatePage() {
         throw new Error('Error al cargar recetas');
       }
 
-      const recipes = await response.json();
-      console.log('Recipes received:', recipes);
-      console.log('Total recipes:', recipes.length);
+      // El API responde con el envoltorio { success, data: [...] }.
+      const json = await response.json();
+      const recipes: any[] = Array.isArray(json) ? json : (json?.data ?? []);
 
       // Group recipes by variantId
       const recipesByVariant = new Map<number, any[]>();
@@ -182,6 +185,40 @@ export default function InventoryConversionFromTemplatePage() {
       console.log('loadTemplateRecipes finished, setting loadingRecipes to false');
       setLoadingRecipes(false);
     }
+  };
+
+  // Insumos distintos que usa la receta de la plantilla seleccionada.
+  const recipeInsumos = useMemo(() => {
+    const map = new Map<number, { inputId: number; name: string; code: string; lines: number }>();
+    const variants = (selectedTemplate as any)?.variants || [];
+    for (const variant of variants) {
+      for (const recipe of variant.templateRecipes || []) {
+        const input = recipe?.inputVariant?.input;
+        if (!input) continue;
+        if (!map.has(input.id)) {
+          map.set(input.id, { inputId: input.id, name: input.name, code: input.code, lines: 0 });
+        }
+        map.get(input.id)!.lines++;
+      }
+    }
+    return Array.from(map.values());
+  }, [selectedTemplate]);
+
+  // Al cambiar de plantilla, todos los insumos quedan seleccionados.
+  useEffect(() => {
+    setExcludedInsumoIds(new Set());
+  }, [selectedTemplate?.id]);
+
+  const toggleInsumo = (inputId: number) => {
+    setExcludedInsumoIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(inputId)) {
+        next.delete(inputId);
+      } else {
+        next.add(inputId);
+      }
+      return next;
+    });
   };
 
   // Filtered products for search
@@ -352,7 +389,12 @@ export default function InventoryConversionFromTemplatePage() {
 
         if (combo.templateVariant.templateRecipes && combo.templateVariant.templateRecipes.length > 0) {
           // Process each ingredient/recipe for this template variant
-          combo.templateVariant.templateRecipes.forEach(recipe => {
+          combo.templateVariant.templateRecipes.forEach((recipe: any) => {
+            // Saltar los insumos que el usuario deseleccionó de la receta.
+            const insumoId = recipe.inputVariant?.input?.id;
+            if (insumoId && excludedInsumoIds.has(insumoId)) {
+              return;
+            }
             const inputVariantId = recipe.inputVariant.id;
             const requiredQty = combo.quantity * Number(recipe.quantity);
             console.log('Adding input:', {
@@ -655,11 +697,53 @@ export default function InventoryConversionFromTemplatePage() {
         </div>
       )}
 
+      {/* Insumos de la receta: seleccionar / deseleccionar lo que se consume */}
+      {selectedProduct && selectedTemplate && !loadingRecipes && recipeInsumos.length > 0 && (
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div className="px-4 py-3 bg-orange-50 border-b border-orange-100">
+            <h2 className="font-semibold text-gray-900">3. Insumos de la receta</h2>
+            <p className="text-xs text-gray-600 mt-1">
+              Marca los insumos que esta conversión debe consumir. Si desmarcas uno, no se
+              descontará de inventario.
+            </p>
+          </div>
+          <div className="p-4 space-y-2">
+            {recipeInsumos.map((insumo) => {
+              const checked = !excludedInsumoIds.has(insumo.inputId);
+              return (
+                <label
+                  key={insumo.inputId}
+                  className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                    checked ? 'border-orange-300 bg-orange-50/50' : 'border-gray-200 bg-gray-50'
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => toggleInsumo(insumo.inputId)}
+                    className="w-4 h-4 text-orange-600 border-gray-300 rounded focus:ring-orange-500"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-900">{insumo.name}</p>
+                    <p className="text-xs text-gray-500">
+                      {insumo.code} · {insumo.lines} variante(s) en la receta
+                    </p>
+                  </div>
+                  {!checked && (
+                    <span className="text-xs text-gray-400">No se consume</span>
+                  )}
+                </label>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Matrix: Color x Size */}
       {selectedProduct && selectedTemplate && matrix.length > 0 && !loadingRecipes && (
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
           <div className="px-4 py-3 bg-orange-50 border-b border-orange-100">
-            <h2 className="font-semibold text-gray-900">3. Ingresa Cantidades por Color y Talla</h2>
+            <h2 className="font-semibold text-gray-900">4. Ingresa Cantidades por Color y Talla</h2>
             <p className="text-xs text-gray-600 mt-1">
               Ingresa la cantidad a producir en cada combinación (puedes seleccionar múltiples)
             </p>

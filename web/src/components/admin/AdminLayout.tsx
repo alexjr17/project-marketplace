@@ -35,9 +35,12 @@ import {
   ArrowDownUp,
   ArrowRightLeft,
   ClipboardList,
+  RotateCcw,
   Building2,
   Store,
   Star,
+  MapPin,
+  Plug,
 } from 'lucide-react';
 import type { Permission } from '../../types/roles';
 import AppSwitcher from '../common/AppSwitcher';
@@ -74,8 +77,21 @@ const menuWithSubmenus: {
     submenu: [
       { path: '/admin-panel/orders', label: 'Pedidos', icon: FileText, permission: 'orders.view' },
       { path: '/admin-panel/payments', label: 'Pagos', icon: DollarSign, permission: 'settings.payment' },
-      { path: '/admin-panel/orders/shipping', label: 'Despachos', icon: Truck, permission: 'orders.manage' },
       { path: '/admin-panel/reviews', label: 'Reseñas', icon: Star, permission: 'orders.view' },
+    ],
+  },
+  // 2. ENVÍOS - Transportadoras, zonas/tarifas, conexiones y despachos
+  {
+    id: 'shipping',
+    label: 'Envíos',
+    icon: Truck,
+    basePath: '/admin-panel/shipping',
+    submenu: [
+      { path: '/admin-panel/shipping/carriers', label: 'Transportadoras', icon: Truck, permission: 'settings.shipping' },
+      { path: '/admin-panel/shipping/zones', label: 'Zonas y Tarifas', icon: MapPin, permission: 'settings.shipping' },
+      { path: '/admin-panel/shipping/connections', label: 'Conexiones', icon: Plug, permission: 'settings.shipping' },
+      { path: '/admin-panel/shipping/config', label: 'Configuración', icon: Settings, permission: 'settings.shipping' },
+      { path: '/admin-panel/orders/shipping', label: 'Despachos', icon: Truck, permission: 'orders.manage' },
     ],
   },
   // 2. PUNTO DE VENTA - POS y códigos de barras
@@ -135,6 +151,7 @@ const menuWithSubmenus: {
     submenu: [
       { path: '/admin-panel/suppliers', label: 'Proveedores', icon: Building2, permission: 'inventory.view' },
       { path: '/admin-panel/purchase-orders', label: 'Órdenes de Compra', icon: ClipboardList, permission: 'inventory.view' },
+      { path: '/admin-panel/purchase-returns', label: 'Devoluciones', icon: RotateCcw, permission: 'inventory.view' },
       { path: '/admin-panel/inventory-conversions', label: 'Conversiones', icon: ArrowRightLeft, permission: 'inventory.view' },
       { path: '/admin-panel/inventory-counts', label: 'Conteo Físico', icon: Archive, permission: 'inventory.view' },
       { path: '/admin-panel/inventory-movements', label: 'Movimientos', icon: ArrowDownUp, permission: 'inventory.view' },
@@ -163,7 +180,6 @@ const menuWithSubmenus: {
       { path: '/admin-panel/settings/appearance', label: 'Apariencia', permission: 'settings.appearance' },
       { path: '/admin-panel/settings/home', label: 'Página de Inicio', permission: 'settings.home' },
       { path: '/admin-panel/settings/catalog', label: 'Catálogo', permission: 'settings.catalog' },
-      { path: '/admin-panel/settings/shipping', label: 'Envíos', permission: 'settings.shipping' },
       { path: '/admin-panel/settings/payment', label: 'Pagos', permission: 'settings.payment' },
       { path: '/admin-panel/settings/legal', label: 'Legal', permission: 'settings.legal' },
       { path: '/admin-panel/settings/printing', label: 'Impresión', permission: 'settings.general' },
@@ -220,6 +236,7 @@ export const AdminLayout = ({ children }: AdminLayoutProps) => {
   // Estado para cada submenú
   const [openSubmenus, setOpenSubmenus] = useState<Record<string, boolean>>({
     sales: false,
+    shipping: false,
     catalog: false,
     production: false,
     inventory: false,

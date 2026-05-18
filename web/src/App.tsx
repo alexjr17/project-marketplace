@@ -53,6 +53,8 @@ import SuppliersPage from './pages/admin/SuppliersPage';
 import SupplierDetailPage from './pages/admin/SupplierDetailPage';
 import PurchaseOrdersPage from './pages/admin/PurchaseOrdersPage';
 import PurchaseOrderDetailPage from './pages/admin/PurchaseOrderDetailPage';
+import PurchaseReturnsPage from './pages/admin/PurchaseReturnsPage';
+import PurchaseReturnFormPage from './pages/admin/PurchaseReturnFormPage';
 import InventoryMovementsPage from './pages/admin/InventoryMovementsPage';
 import InventoryCountsPage from './pages/admin/InventoryCountsPage';
 import InventoryCountDetailPage from './pages/admin/InventoryCountDetailPage';
@@ -459,6 +461,22 @@ function App() {
                                       }
                                     />
                                     <Route
+                                      path="/purchase-returns"
+                                      element={
+                                        <PermissionRoute permission="inventory.view">
+                                          <PurchaseReturnsPage />
+                                        </PermissionRoute>
+                                      }
+                                    />
+                                    <Route
+                                      path="/purchase-returns/new"
+                                      element={
+                                        <PermissionRoute permission="inventory.manage">
+                                          <PurchaseReturnFormPage />
+                                        </PermissionRoute>
+                                      }
+                                    />
+                                    <Route
                                       path="/inventory-movements"
                                       element={
                                         <PermissionRoute permission="inventory.view">
@@ -570,6 +588,18 @@ function App() {
                                         </PermissionRoute>
                                       }
                                     />
+                                    {/* Módulo Envíos: pestañas del sidebar */}
+                                    {['carriers', 'zones', 'connections', 'config'].map((tab) => (
+                                      <Route
+                                        key={tab}
+                                        path={`/shipping/${tab}`}
+                                        element={
+                                          <PermissionRoute permission="settings.shipping">
+                                            <SettingsShippingPage />
+                                          </PermissionRoute>
+                                        }
+                                      />
+                                    ))}
                                     <Route
                                       path="/settings/payment"
                                       element={

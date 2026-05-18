@@ -19,8 +19,11 @@ import {
   X,
   Barcode as BarcodeIcon,
   ChevronDown,
+  ChevronUp,
   Smartphone,
   Camera,
+  Package,
+  Loader2,
 } from 'lucide-react';
 
 export default function NewSalePage() {
@@ -51,8 +54,6 @@ export default function NewSalePage() {
   const barcodeInputRef = useRef<HTMLInputElement>(null);
 
   // Search state
-  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
-  const [showSearchDropdown, setShowSearchDropdown] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
 
   // Template zone selection
@@ -84,6 +85,14 @@ export default function NewSalePage() {
 
   // Camera barcode scanner (for mobile)
   const [showBarcodeScanner, setShowBarcodeScanner] = useState(false);
+
+  // Catálogo de productos (acordeón con scroll infinito + búsqueda)
+  const [showProductsList, setShowProductsList] = useState(false);
+  const [browseItems, setBrowseItems] = useState<SearchResult[]>([]);
+  const [browsePage, setBrowsePage] = useState(0);
+  const [browseTotalPages, setBrowseTotalPages] = useState(1);
+  const [browseLoading, setBrowseLoading] = useState(false);
+  const [browseSearch, setBrowseSearch] = useState('');
 
   // Detect mobile device
   const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
@@ -143,18 +152,10 @@ export default function NewSalePage() {
           setSelectedTemplate(result.result as TemplateSearchResult);
         }
         setBarcodeInput('');
-      } else if (result.type === 'list' && result.results) {
-        // Name search - multiple results, show dropdown
-        if (result.results.length === 0) {
-          showToast('No se encontraron resultados', 'error');
-        } else if (result.results.length === 1) {
-          // Only one result - handle directly
-          handleSelectSearchResult(result.results[0]);
-        } else {
-          // Multiple results - show dropdown
-          setSearchResults(result.results);
-          setShowSearchDropdown(true);
-        }
+      } else {
+        // No es un código de barras exacto: filtrar el catálogo de productos.
+        runCatalogSearch(barcodeInput.trim());
+        setBarcodeInput('');
       }
     } catch (error: any) {
       console.error('Error searching:', error);
@@ -165,9 +166,8 @@ export default function NewSalePage() {
     }
   };
 
-  // Handle selecting a result from dropdown
+  // Handle selecting a result (del catálogo o de un escaneo)
   const handleSelectSearchResult = (result: SearchResult) => {
-    setShowSearchDropdown(false);
     setBarcodeInput('');
 
     if (result.type === 'product') {
@@ -212,6 +212,56 @@ export default function NewSalePage() {
     }
   };
 
+  // Catálogo de productos: trae una página (con o sin término de búsqueda).
+  const fetchProducts = async (page: number, term: string) => {
+    if (browseLoading) return;
+    setBrowseLoading(true);
+    try {
+      const res = await posService.browseProducts(page, 12, term);
+      setBrowseItems((prev) => (page === 1 ? res.results : [...prev, ...res.results]));
+      setBrowsePage(res.page);
+      setBrowseTotalPages(res.totalPages);
+    } catch {
+      showToast('Error al cargar el catálogo de productos', 'error');
+    } finally {
+      setBrowseLoading(false);
+    }
+  };
+
+  // Ejecuta una búsqueda en el catálogo: lo abre y recarga desde la página 1.
+  const runCatalogSearch = (term: string) => {
+    setBrowseSearch(term);
+    setBrowseItems([]);
+    setBrowsePage(0);
+    setBrowseTotalPages(1);
+    setShowProductsList(true);
+    fetchProducts(1, term);
+  };
+
+  // Abrir/cerrar el acordeón del catálogo; al abrir por primera vez, carga.
+  const toggleProductsList = () => {
+    const opening = !showProductsList;
+    setShowProductsList(opening);
+    if (opening && browsePage === 0 && !browseLoading) {
+      fetchProducts(1, browseSearch);
+    }
+  };
+
+  // Limpia el filtro de búsqueda del catálogo y recarga todo.
+  const clearCatalogSearch = () => {
+    runCatalogSearch('');
+  };
+
+  // Al hacer scroll cerca del fondo, cargar más productos.
+  const handleProductsScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const el = e.currentTarget;
+    if (el.scrollHeight - el.scrollTop - el.clientHeight < 80) {
+      if (!browseLoading && browsePage < browseTotalPages) {
+        fetchProducts(browsePage + 1, browseSearch);
+      }
+    }
+  };
+
   // Handle zone selection confirmation
   const handleZoneSelectionConfirm = (selectedZones: TemplateZoneInfo[], totalPrice: number) => {
     if (!selectedTemplate) return;
@@ -230,15 +280,6 @@ export default function NewSalePage() {
     setSelectedTemplate(null);
   };
 
-  // Toggle dropdown manually
-  const toggleSearchDropdown = () => {
-    if (searchResults.length > 0) {
-      setShowSearchDropdown(!showSearchDropdown);
-    } else {
-      showToast('Escribe algo para buscar productos', 'info');
-    }
-  };
-
   // Handle camera scan result
   const handleCameraScan = async (barcode: string) => {
     setBarcodeInput(barcode);
@@ -248,15 +289,9 @@ export default function NewSalePage() {
 
       if (result.type === 'single' && result.result) {
         handleSelectSearchResult(result.result);
-      } else if (result.type === 'multiple') {
-        if (result.results.length === 0) {
-          showToast('Producto no encontrado', 'error');
-        } else if (result.results.length === 1) {
-          handleSelectSearchResult(result.results[0]);
-        } else {
-          setSearchResults(result.results);
-          setShowSearchDropdown(true);
-        }
+      } else {
+        // Sin coincidencia exacta: filtrar el catálogo de productos.
+        runCatalogSearch(barcode.trim());
       }
     } catch (error: any) {
       console.error('Error searching:', error);
@@ -424,28 +459,13 @@ export default function NewSalePage() {
                   ref={barcodeInputRef}
                   type="text"
                   value={barcodeInput}
-                  onChange={(e) => {
-                    setBarcodeInput(e.target.value);
-                    if (!e.target.value) {
-                      setShowSearchDropdown(false);
-                    }
-                  }}
+                  onChange={(e) => setBarcodeInput(e.target.value)}
                   placeholder="Escanea o busca..."
                   className="w-full pl-10 pr-4 py-2.5 sm:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base sm:text-lg"
                   disabled={isSearching}
                 />
               </div>
             </div>
-
-            <button
-              type="button"
-              onClick={toggleSearchDropdown}
-              className="px-3 lg:px-4 py-2.5 sm:py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 disabled:opacity-50 transition-colors"
-              disabled={isSearching}
-              title="Ver resultados"
-            >
-              <ChevronDown className="w-4 h-4 lg:w-5 lg:h-5" />
-            </button>
 
             {/* Camera button for mobile */}
             {isMobile && (
@@ -468,52 +488,109 @@ export default function NewSalePage() {
               {isSearching ? '...' : 'Buscar'}
             </button>
           </form>
+        </div>
 
-          {/* Search Results Dropdown - Ancho completo */}
-          {showSearchDropdown && searchResults.length > 0 && (
-            <div className="mt-2 bg-white border border-gray-300 rounded-lg shadow-lg z-10 max-h-72 overflow-y-auto">
-              {searchResults.map((result, index) => (
+        {/* Catálogo de productos (acordeón con scroll infinito + búsqueda) */}
+        <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+          <div className="w-full px-3 lg:px-4 py-3 flex items-center justify-between">
+            <button
+              type="button"
+              onClick={toggleProductsList}
+              className="flex items-center gap-2 flex-1 min-w-0"
+            >
+              <Package className="w-4 h-4 lg:w-5 lg:h-5 text-gray-600 flex-shrink-0" />
+              <span className="text-base lg:text-lg font-semibold text-gray-900">Productos</span>
+              {browseItems.length > 0 && (
+                <span className="text-xs text-gray-500">({browseItems.length})</span>
+              )}
+              {browseSearch && (
+                <span className="text-xs text-blue-600 truncate">· filtro: "{browseSearch}"</span>
+              )}
+            </button>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              {browseSearch && (
                 <button
-                  key={index}
                   type="button"
-                  onClick={() => handleSelectSearchResult(result)}
-                  className="w-full px-3 py-2.5 text-left hover:bg-gray-50 border-b border-gray-100 last:border-b-0 transition-colors"
+                  onClick={clearCatalogSearch}
+                  className="text-xs text-gray-500 hover:text-red-600 flex items-center gap-0.5"
+                  title="Quitar filtro"
                 >
-                  <div className="flex items-center gap-3">
-                    {result.image && (
-                      <img
-                        src={result.image}
-                        alt={result.name}
-                        className="w-10 h-10 lg:w-12 lg:h-12 object-cover rounded flex-shrink-0"
-                      />
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-gray-900 text-sm lg:text-base truncate">{result.name}</p>
-                      <p className="text-xs lg:text-sm text-gray-500 truncate">
-                        {result.type === 'product'
-                          ? `${(result as ProductSearchResult).color} - ${(result as ProductSearchResult).size}`
-                          : 'Personalizable'}
-                      </p>
-                    </div>
-                    <div className="text-right flex-shrink-0">
-                      {result.type === 'product' ? (
-                        <>
-                          <p className="text-base lg:text-lg font-bold text-gray-900">
-                            ${(result as ProductSearchResult).price.toLocaleString()}
-                          </p>
-                          <p className="text-xs text-gray-500">
-                            Stock: {(result as ProductSearchResult).stock}
-                          </p>
-                        </>
-                      ) : (
-                        <p className="text-base lg:text-lg font-bold text-purple-600">
-                          ${Number((result as TemplateSearchResult).basePrice).toLocaleString()}
-                        </p>
-                      )}
-                    </div>
-                  </div>
+                  <X className="w-3.5 h-3.5" />
+                  Limpiar
                 </button>
-              ))}
+              )}
+              <button type="button" onClick={toggleProductsList} aria-label="Mostrar/ocultar">
+                {showProductsList ? (
+                  <ChevronUp className="w-4 h-4 lg:w-5 lg:h-5 text-gray-500" />
+                ) : (
+                  <ChevronDown className="w-4 h-4 lg:w-5 lg:h-5 text-gray-500" />
+                )}
+              </button>
+            </div>
+          </div>
+
+          {showProductsList && (
+            <div
+              onScroll={handleProductsScroll}
+              className="max-h-80 overflow-y-auto border-t border-gray-200 p-3"
+            >
+              <div className="grid grid-cols-2 lg:grid-cols-3 gap-2">
+                {browseItems.map((item, index) => {
+                  const isProduct = item.type === 'product';
+                  const price = isProduct
+                    ? (item as ProductSearchResult).price
+                    : Number((item as TemplateSearchResult).basePrice);
+                  return (
+                    <button
+                      key={index}
+                      type="button"
+                      onClick={() => handleSelectSearchResult(item)}
+                      className="text-left border border-gray-200 rounded-lg p-2 hover:border-blue-400 hover:shadow-sm transition-all"
+                    >
+                      {item.image ? (
+                        <img
+                          src={item.image}
+                          alt={item.name}
+                          className="w-full h-20 object-cover rounded mb-1.5"
+                        />
+                      ) : (
+                        <div className="w-full h-20 bg-gray-100 rounded mb-1.5 flex items-center justify-center">
+                          <Package className="w-6 h-6 text-gray-300" />
+                        </div>
+                      )}
+                      <p className="text-xs font-medium text-gray-900 leading-tight line-clamp-2">
+                        {item.name}
+                      </p>
+                      <div className="flex items-center justify-between mt-1">
+                        <span
+                          className={`text-sm font-bold ${isProduct ? 'text-gray-900' : 'text-purple-600'}`}
+                        >
+                          ${price.toLocaleString()}
+                        </span>
+                        {isProduct && (
+                          <span className="text-[10px] text-gray-500">
+                            Stock: {(item as ProductSearchResult).stock}
+                          </span>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {browseLoading && (
+                <div className="flex items-center justify-center py-4">
+                  <Loader2 className="w-5 h-5 animate-spin text-blue-600" />
+                </div>
+              )}
+              {!browseLoading && browseItems.length === 0 && (
+                <p className="text-center text-sm text-gray-500 py-6">No hay productos</p>
+              )}
+              {!browseLoading && browseItems.length > 0 && browsePage >= browseTotalPages && (
+                <p className="text-center text-xs text-gray-400 py-3">
+                  No hay más productos
+                </p>
+              )}
             </div>
           )}
         </div>

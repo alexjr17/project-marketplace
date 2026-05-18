@@ -139,6 +139,75 @@ class POSService
         ])->find($id);
     }
 
+    /** Da formato a un producto normal (usa su primera variante). */
+    private function formatProductResult(Product $product): ?array
+    {
+        $v = $product->variants->first();
+        if (! $v) {
+            return null;
+        }
+        $finalPrice = (float) $product->basePrice + (float) ($v->priceAdjustment ?? 0);
+
+        return [
+            'type' => 'product',
+            'variantId' => $v->id,
+            'productId' => $product->id,
+            'name' => $product->name,
+            'image' => $this->firstImage($product->images),
+            'color' => $v->color?->name ?? 'N/A',
+            'size' => $v->size?->abbreviation ?? $v->size?->name ?? 'N/A',
+            'sku' => $v->sku ?? $product->sku,
+            'barcode' => $v->barcode,
+            'price' => $finalPrice,
+            'stock' => (int) $v->stock,
+            'available' => (int) $v->stock > 0,
+        ];
+    }
+
+    /** Lista paginada de productos y templates para el POS (GET /pos/products). */
+    public function browseProducts(int $page, int $perPage, ?string $search = null): array
+    {
+        $query = Product::with([
+            'variants' => fn ($q) => $q->where('isActive', true)->with('color', 'size')->limit(1),
+            'templateZones' => fn ($q) => $q->where('isActive', true)->with('zoneType'),
+            'productColors.color',
+            'productSizes.size',
+        ])->where('isActive', true);
+
+        if ($search !== null && trim($search) !== '') {
+            $term = trim($search);
+            $query->where(fn ($q) => $q->where('name', 'like', "%{$term}%")
+                ->orWhere('sku', 'like', "%{$term}%")
+                ->orWhere('barcode', 'like', "%{$term}%")
+                ->orWhereHas('variants', fn ($v) => $v->where('barcode', 'like', "%{$term}%")
+                    ->orWhere('sku', 'like', "%{$term}%")));
+        }
+
+        $total = (clone $query)->count();
+        $products = $query->orderBy('name')
+            ->skip(($page - 1) * $perPage)->take($perPage)->get();
+
+        $results = [];
+        foreach ($products as $product) {
+            if ($product->isTemplate) {
+                $results[] = $this->formatTemplate($product);
+            } else {
+                $row = $this->formatProductResult($product);
+                if ($row) {
+                    $results[] = $row;
+                }
+            }
+        }
+
+        return [
+            'results' => $results,
+            'page' => $page,
+            'perPage' => $perPage,
+            'total' => $total,
+            'totalPages' => (int) ceil($total / max(1, $perPage)),
+        ];
+    }
+
     /** Busca productos y templates por código de barras o nombre (POST /pos/search). */
     public function search(string $query): array
     {
@@ -212,25 +281,10 @@ class POSService
             ->limit(20)->get();
 
         foreach ($products as $product) {
-            $v = $product->variants->first();
-            if (! $v) {
-                continue;
+            $row = $this->formatProductResult($product);
+            if ($row) {
+                $results[] = $row;
             }
-            $finalPrice = (float) $product->basePrice + (float) ($v->priceAdjustment ?? 0);
-            $results[] = [
-                'type' => 'product',
-                'variantId' => $v->id,
-                'productId' => $product->id,
-                'name' => $product->name,
-                'image' => $this->firstImage($product->images),
-                'color' => $v->color?->name ?? 'N/A',
-                'size' => $v->size?->abbreviation ?? $v->size?->name ?? 'N/A',
-                'sku' => $v->sku ?? $product->sku,
-                'barcode' => $v->barcode,
-                'price' => $finalPrice,
-                'stock' => (int) $v->stock,
-                'available' => (int) $v->stock > 0,
-            ];
         }
 
         $templates = Product::with([

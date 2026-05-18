@@ -25,10 +25,7 @@ export interface PublicSettings {
       whatsapp?: string;
     };
   };
-  shipping: {
-    cost: number;
-    freeThreshold: number;
-  };
+  shipping: ShippingSettings;
   tax: {
     rate: number;
   };
@@ -36,6 +33,7 @@ export interface PublicSettings {
   general?: GeneralSettings;
   appearance?: AppearanceSettings;
   home?: HomeSettings;
+  catalog?: CatalogSettings;
 }
 
 export interface StoreSettings {

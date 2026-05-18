@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ShoppingBag,
@@ -26,6 +26,8 @@ import { useAuth } from '../context/AuthContext';
 import { Input } from '../components/shared/Input';
 import { Button } from '../components/shared/Button';
 import { WompiCheckout } from '../components/payment/WompiCheckout';
+import { addressesService, type Address } from '../services/addresses.service';
+import { quoteShipping } from '../utils/shippingQuote';
 
 interface FormData {
   customerName: string;
@@ -70,9 +72,9 @@ export const CheckoutPage = () => {
   const [paymentReference, setPaymentReference] = useState('');
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string>('');
 
-  // Estado para dirección: usar guardada o personalizar
-  const hasSavedAddress = Boolean(user?.profile?.address && user?.profile?.city);
-  const [useSavedAddress, setUseSavedAddress] = useState(hasSavedAddress);
+  // Direcciones guardadas del usuario. selectedAddressId = 'new' para escribir una nueva.
+  const [savedAddresses, setSavedAddresses] = useState<Address[]>([]);
+  const [selectedAddressId, setSelectedAddressId] = useState<number | 'new'>('new');
 
   // Colores de marca dinámicos
   const brandColors = settings.appearance?.brandColors || settings.general?.brandColors || {
@@ -106,6 +108,69 @@ export const CheckoutPage = () => {
       setSelectedPaymentMethod(activePaymentMethods[0].id);
     }
   }, [activePaymentMethods, selectedPaymentMethod]);
+
+  // Cargar direcciones guardadas y precargar la predeterminada.
+  useEffect(() => {
+    if (!user) return;
+    let active = true;
+    addressesService
+      .list()
+      .then((list) => {
+        if (!active) return;
+        setSavedAddresses(list);
+        const def = list.find((a) => a.isDefault) ?? list[0];
+        if (def) {
+          setSelectedAddressId(def.id);
+          setFormData((prev) => ({
+            ...prev,
+            shippingAddress: def.address,
+            shippingCity: def.city,
+            shippingPostalCode: def.postalCode || '',
+          }));
+        }
+      })
+      .catch(() => {
+        /* sin direcciones guardadas: se usa el formulario manual */
+      });
+    return () => {
+      active = false;
+    };
+  }, [user]);
+
+  // Elegir una dirección guardada: rellena el formulario con sus datos.
+  const selectSavedAddress = (a: Address) => {
+    setSelectedAddressId(a.id);
+    setFormData((prev) => ({
+      ...prev,
+      shippingAddress: a.address,
+      shippingCity: a.city,
+      shippingPostalCode: a.postalCode || '',
+    }));
+    setErrors((prev) => ({ ...prev, shippingAddress: undefined, shippingCity: undefined }));
+  };
+
+  // Cambiar a "otra dirección": limpia los campos para escribir una nueva.
+  const selectNewAddress = () => {
+    setSelectedAddressId('new');
+    setFormData((prev) => ({
+      ...prev,
+      shippingAddress: '',
+      shippingCity: '',
+      shippingPostalCode: '',
+    }));
+  };
+
+  // Cotización del envío según la ciudad destino y la configuración de zonas.
+  const shippingQuote = useMemo(() => {
+    if (!formData.shippingCity.trim()) return null;
+    const perItem = settings.shipping?.packageDefaults?.defaultWeightPerItem ?? 0.5;
+    const weight = perItem * Math.max(1, cart.totalItems);
+    return quoteShipping(settings.shipping, formData.shippingCity, weight, cart.subtotal);
+  }, [settings.shipping, formData.shippingCity, cart.totalItems, cart.subtotal]);
+
+  // Costo de envío efectivo: el calculado por zona, o el estimado del carrito.
+  const shippingCost = shippingQuote ? shippingQuote.cost : cart.shipping;
+  const orderTotal = cart.subtotal + cart.tax + shippingCost - cart.discount;
 
   // Icono según tipo de método de pago
   const getPaymentIcon = (type: string) => {
@@ -216,9 +281,9 @@ export const CheckoutPage = () => {
       paymentMethod: (selectedMethod?.type || 'wompi') as import('../types/order').PaymentMethod,
       items: orderItems,
       subtotal: cart.subtotal,
-      shippingCost: cart.shipping,
+      shippingCost: shippingCost,
       discount: cart.discount,
-      total: cart.total,
+      total: orderTotal,
     });
 
     // Si el pago fue exitoso (Wompi), cambiar estado a pagado
@@ -245,7 +310,7 @@ export const CheckoutPage = () => {
         orderId: Number(order.id),
         transactionId: transactionId,
         paymentMethod: 'wompi',
-        amount: cart.total,
+        amount: orderTotal,
         currency: settings.general.currency || 'COP',
         payerName: formData.customerName,
         payerEmail: formData.customerEmail,
@@ -258,7 +323,7 @@ export const CheckoutPage = () => {
       showToast('¡Pago exitoso! Tu pedido ha sido confirmado.', 'success');
 
       // Redirigir a mis pedidos
-      navigate('/orders');
+      navigate('/my-orders');
     } catch (error: any) {
       const errorMessage = error?.response?.data?.message || error?.message || 'Error al crear el pedido. Contacta soporte.';
       showToast(errorMessage, 'error');
@@ -293,7 +358,7 @@ export const CheckoutPage = () => {
         orderId: Number(order.id),
         transactionId: paymentReference, // Usar referencia generada
         paymentMethod: selectedMethod?.type || 'transfer',
-        amount: cart.total,
+        amount: orderTotal,
         currency: settings.general.currency || 'COP',
         payerName: formData.customerName,
         payerEmail: formData.customerEmail,
@@ -305,7 +370,7 @@ export const CheckoutPage = () => {
       showToast('¡Pedido creado! Te contactaremos pronto.', 'success');
 
       // Redirigir a mis pedidos
-      navigate('/orders');
+      navigate('/my-orders');
     } catch (error: any) {
       const errorMessage = error?.response?.data?.message || error?.message || 'Error al procesar el pedido. Intenta de nuevo.';
       showToast(errorMessage, 'error');
@@ -334,7 +399,7 @@ export const CheckoutPage = () => {
   }
 
   // Convertir total a centavos para Wompi
-  const amountInCents = Math.round(cart.total * 100);
+  const amountInCents = Math.round(orderTotal * 100);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -451,71 +516,95 @@ export const CheckoutPage = () => {
                   </div>
 
                   <div className="border-t pt-4 mt-6">
-                    <div className="flex items-center justify-between mb-4">
-                      <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-                        <MapPin className="w-5 h-5" style={{ color: brandColors.secondary }} />
-                        Dirección de Envío
-                      </h3>
-                      {hasSavedAddress && (
+                    <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2 mb-4">
+                      <MapPin className="w-5 h-5" style={{ color: brandColors.secondary }} />
+                      Dirección de Envío
+                    </h3>
+
+                    {/* Selector de direcciones guardadas */}
+                    {savedAddresses.length > 0 && (
+                      <div className="space-y-3 mb-4">
+                        {savedAddresses.map((a) => {
+                          const isSelected = selectedAddressId === a.id;
+                          return (
+                            <button
+                              type="button"
+                              key={a.id}
+                              onClick={() => selectSavedAddress(a)}
+                              className="w-full p-4 rounded-xl border-2 text-left transition-all"
+                              style={{
+                                borderColor: isSelected ? brandColors.primary : '#e5e7eb',
+                                backgroundColor: isSelected ? `${brandColors.primary}08` : 'transparent',
+                              }}
+                            >
+                              <div className="flex items-start gap-3">
+                                <div
+                                  className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0"
+                                  style={{ backgroundColor: `${brandColors.secondary}15` }}
+                                >
+                                  <Home className="w-5 h-5" style={{ color: brandColors.secondary }} />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <p className="font-medium text-gray-900">{a.label}</p>
+                                    {a.isDefault && (
+                                      <span
+                                        className="text-xs font-medium px-2 py-0.5 rounded-full"
+                                        style={{ backgroundColor: `${brandColors.primary}15`, color: brandColors.primary }}
+                                      >
+                                        Predeterminada
+                                      </span>
+                                    )}
+                                  </div>
+                                  <p className="text-sm text-gray-600 mt-0.5">{a.address}</p>
+                                  <p className="text-sm text-gray-600">
+                                    {a.city}
+                                    {a.postalCode && `, ${a.postalCode}`}
+                                  </p>
+                                </div>
+                                <div
+                                  className="w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 mt-1"
+                                  style={{
+                                    borderColor: isSelected ? brandColors.primary : '#d1d5db',
+                                    backgroundColor: isSelected ? brandColors.primary : 'transparent',
+                                  }}
+                                >
+                                  {isSelected && <div className="w-2 h-2 rounded-full bg-white" />}
+                                </div>
+                              </div>
+                            </button>
+                          );
+                        })}
+
+                        {/* Opción: escribir otra dirección */}
                         <button
                           type="button"
-                          onClick={() => setUseSavedAddress(!useSavedAddress)}
-                          className="text-sm font-medium flex items-center gap-1 hover:underline transition-colors"
-                          style={{ color: brandColors.primary }}
+                          onClick={selectNewAddress}
+                          className="w-full p-4 rounded-xl border-2 text-left transition-all flex items-center gap-3"
+                          style={{
+                            borderColor: selectedAddressId === 'new' ? brandColors.primary : '#e5e7eb',
+                            backgroundColor: selectedAddressId === 'new' ? `${brandColors.primary}08` : 'transparent',
+                          }}
                         >
-                          {useSavedAddress ? (
-                            <>
-                              <Edit3 className="w-4 h-4" />
-                              Usar otra dirección
-                            </>
-                          ) : (
-                            <>
-                              <Home className="w-4 h-4" />
-                              Usar dirección guardada
-                            </>
-                          )}
-                        </button>
-                      )}
-                    </div>
-
-                    {/* Dirección guardada */}
-                    {useSavedAddress && hasSavedAddress ? (
-                      <div className="p-4 bg-gray-50 border-2 border-gray-200 rounded-xl">
-                        <div className="flex items-start gap-3">
+                          <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0">
+                            <Edit3 className="w-5 h-5 text-gray-500" />
+                          </div>
+                          <span className="flex-1 font-medium text-gray-900">Usar otra dirección</span>
                           <div
-                            className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0"
-                            style={{ backgroundColor: `${brandColors.secondary}15` }}
+                            className="w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0"
+                            style={{
+                              borderColor: selectedAddressId === 'new' ? brandColors.primary : '#d1d5db',
+                              backgroundColor: selectedAddressId === 'new' ? brandColors.primary : 'transparent',
+                            }}
                           >
-                            <Home className="w-5 h-5" style={{ color: brandColors.secondary }} />
+                            {selectedAddressId === 'new' && <div className="w-2 h-2 rounded-full bg-white" />}
                           </div>
-                          <div className="flex-1">
-                            <p className="font-medium text-gray-900">Dirección de mi perfil</p>
-                            <p className="text-sm text-gray-600 mt-1">{formData.shippingAddress}</p>
-                            <p className="text-sm text-gray-600">
-                              {formData.shippingCity}
-                              {formData.shippingPostalCode && `, ${formData.shippingPostalCode}`}
-                            </p>
-                          </div>
-                          <CheckCircle2 className="w-5 h-5 text-green-500 flex-shrink-0" />
-                        </div>
-
-                        {/* Notas de entrega siempre visibles */}
-                        <div className="mt-4 pt-4 border-t border-gray-200">
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Notas de entrega (opcional)
-                          </label>
-                          <textarea
-                            name="shippingNotes"
-                            value={formData.shippingNotes}
-                            onChange={handleInputChange}
-                            rows={2}
-                            className="w-full px-4 py-2 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-200 focus:border-gray-500 transition-all"
-                            placeholder="Edificio azul, portería 24h, timbre..."
-                          />
-                        </div>
+                        </button>
                       </div>
-                    ) : (
-                      /* Formulario de dirección personalizada */
+                    )}
+
+                    {/* Formulario para dirección nueva */}
+                    {selectedAddressId === 'new' && (
                       <div className="space-y-4">
                         <Input
                           label="Dirección completa *"
@@ -543,22 +632,23 @@ export const CheckoutPage = () => {
                             placeholder="110111"
                           />
                         </div>
-
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Notas de entrega (opcional)
-                          </label>
-                          <textarea
-                            name="shippingNotes"
-                            value={formData.shippingNotes}
-                            onChange={handleInputChange}
-                            rows={3}
-                            className="w-full px-4 py-2 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-200 focus:border-gray-500 transition-all"
-                            placeholder="Edificio azul, portería 24h, timbre..."
-                          />
-                        </div>
                       </div>
                     )}
+
+                    {/* Notas de entrega (siempre visibles) */}
+                    <div className="mt-4">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Notas de entrega (opcional)
+                      </label>
+                      <textarea
+                        name="shippingNotes"
+                        value={formData.shippingNotes}
+                        onChange={handleInputChange}
+                        rows={3}
+                        className="w-full px-4 py-2 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-200 focus:border-gray-500 transition-all"
+                        placeholder="Edificio azul, portería 24h, timbre..."
+                      />
+                    </div>
                   </div>
 
                   <div className="pt-4">
@@ -709,7 +799,7 @@ export const CheckoutPage = () => {
                           ) : (
                             <CheckCircle2 className="w-5 h-5" />
                           )}
-                          Confirmar Pedido - {formatCurrency(cart.total)}
+                          Confirmar Pedido - {formatCurrency(orderTotal)}
                         </button>
                       </div>
                     )}
@@ -733,10 +823,10 @@ export const CheckoutPage = () => {
                           ) : (
                             <Banknote className="w-5 h-5" />
                           )}
-                          Confirmar Pedido - {formatCurrency(cart.total)}
+                          Confirmar Pedido - {formatCurrency(orderTotal)}
                         </button>
                         <p className="text-xs text-gray-500 text-center mt-3">
-                          Pagarás {formatCurrency(cart.total)} al momento de recibir tu pedido
+                          Pagarás {formatCurrency(orderTotal)} al momento de recibir tu pedido
                         </p>
                       </div>
                     )}
@@ -807,10 +897,10 @@ export const CheckoutPage = () => {
                           ) : (
                             <Store className="w-5 h-5" />
                           )}
-                          Reservar para Recoger - {formatCurrency(cart.total)}
+                          Reservar para Recoger - {formatCurrency(orderTotal)}
                         </button>
                         <p className="text-xs text-gray-500 text-center mt-3">
-                          Pagarás {formatCurrency(cart.total)} al recoger tu pedido en tienda
+                          Pagarás {formatCurrency(orderTotal)} al recoger tu pedido en tienda
                         </p>
                       </div>
                     )}
@@ -912,10 +1002,21 @@ export const CheckoutPage = () => {
 
                 <div className="flex justify-between">
                   <span className="text-gray-600">Envío</span>
-                  <span className={`font-medium ${cart.shipping === 0 ? 'text-green-600' : ''}`}>
-                    {cart.shipping === 0 ? 'Gratis' : formatCurrency(cart.shipping)}
+                  <span className={`font-medium ${shippingCost === 0 ? 'text-green-600' : ''}`}>
+                    {shippingCost === 0 ? 'Gratis' : formatCurrency(shippingCost)}
                   </span>
                 </div>
+                {shippingQuote && (
+                  <p className="text-xs text-gray-400 -mt-1">
+                    {shippingQuote.carrierName} · {shippingQuote.zoneName} ·{' '}
+                    {shippingQuote.estimatedDays.min}-{shippingQuote.estimatedDays.max} días hábiles
+                  </p>
+                )}
+                {!shippingQuote && formData.shippingCity.trim() !== '' && (
+                  <p className="text-xs text-amber-500 -mt-1">
+                    Tarifa estimada — "{formData.shippingCity}" aún no está en una zona de cobertura
+                  </p>
+                )}
 
                 {cart.discount > 0 && (
                   <div className="flex justify-between text-green-600">
@@ -927,7 +1028,7 @@ export const CheckoutPage = () => {
                 <div className="border-t pt-3 mt-3">
                   <div className="flex justify-between text-lg font-bold">
                     <span>Total</span>
-                    <span className="text-gray-900">{formatCurrency(cart.total)}</span>
+                    <span className="text-gray-900">{formatCurrency(orderTotal)}</span>
                   </div>
                 </div>
               </div>

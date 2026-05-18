@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
+import api from '../../services/api.service';
 import { templateZonesService, type TemplateZone, type CreateTemplateZoneDto } from '../../services/template-zones.service';
 import { zoneTypesService, type ZoneType } from '../../services/zone-types.service';
 import { Button } from '../shared/Button';
@@ -49,6 +50,39 @@ interface DragState {
   startMaxWidth: number;
   startMaxHeight: number;
   resizeHandle: string | null;
+}
+
+/** Lee un archivo como data URL (base64). */
+function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(new Error('No se pudo leer el archivo'));
+    reader.readAsDataURL(file);
+  });
+}
+
+/** Sube una imagen base64 al servidor y devuelve su URL almacenada. */
+async function uploadDataUrl(dataUrl: string): Promise<string> {
+  const res = await api.post<{ url: string }>('/uploads/base64', {
+    image: dataUrl,
+    folder: 'templates',
+  });
+  const url = res.data?.url;
+  if (!url) throw new Error('No se pudo subir la imagen');
+  return url;
+}
+
+/**
+ * Garantiza que el valor sea una URL: si todavía es base64 (data:...) lo
+ * sube y devuelve la URL; si ya es una URL la deja igual. Así el template
+ * guarda solo URLs y nunca imágenes base64 pesadas en la base de datos.
+ */
+async function ensureUrl(value: string): Promise<string> {
+  if (typeof value === 'string' && value.startsWith('data:')) {
+    return uploadDataUrl(value);
+  }
+  return value;
 }
 
 export const VisualZoneEditor = ({
@@ -285,10 +319,14 @@ export const VisualZoneEditor = ({
           // Calcular aspect ratio original para bloqueo de proporciones
           const aspectRatio = dragState.startMaxWidth / dragState.startMaxHeight;
 
+          // Mantener Ctrl (o Cmd) presionado redimensiona libremente,
+          // sin conservar la proporción, aunque el bloqueo esté activo.
+          const effectiveLock = lockAspectRatio && !(e.ctrlKey || e.metaKey);
+
           switch (dragState.resizeHandle) {
             case 'se':
               newMaxWidth = Math.max(10, dragState.startMaxWidth + deltaX);
-              if (lockAspectRatio) {
+              if (effectiveLock) {
                 newMaxHeight = newMaxWidth / aspectRatio;
               } else {
                 newMaxHeight = Math.max(10, dragState.startMaxHeight + deltaY);
@@ -296,7 +334,7 @@ export const VisualZoneEditor = ({
               break;
             case 'sw':
               newMaxWidth = Math.max(10, dragState.startMaxWidth - deltaX);
-              if (lockAspectRatio) {
+              if (effectiveLock) {
                 newMaxHeight = newMaxWidth / aspectRatio;
               } else {
                 newMaxHeight = Math.max(10, dragState.startMaxHeight + deltaY);
@@ -305,7 +343,7 @@ export const VisualZoneEditor = ({
               break;
             case 'ne':
               newMaxWidth = Math.max(10, dragState.startMaxWidth + deltaX);
-              if (lockAspectRatio) {
+              if (effectiveLock) {
                 newMaxHeight = newMaxWidth / aspectRatio;
                 newY = dragState.startZoneY + (dragState.startMaxHeight - newMaxHeight);
               } else {
@@ -315,7 +353,7 @@ export const VisualZoneEditor = ({
               break;
             case 'nw':
               newMaxWidth = Math.max(10, dragState.startMaxWidth - deltaX);
-              if (lockAspectRatio) {
+              if (effectiveLock) {
                 newMaxHeight = newMaxWidth / aspectRatio;
                 newX = dragState.startZoneX + (dragState.startMaxWidth - newMaxWidth);
                 newY = dragState.startZoneY + (dragState.startMaxHeight - newMaxHeight);
@@ -326,7 +364,7 @@ export const VisualZoneEditor = ({
               }
               break;
             case 'n':
-              if (lockAspectRatio) {
+              if (effectiveLock) {
                 // En modo bloqueado, redimensionar desde arriba también afecta el ancho
                 newMaxHeight = Math.max(10, dragState.startMaxHeight - deltaY);
                 newMaxWidth = newMaxHeight * aspectRatio;
@@ -337,7 +375,7 @@ export const VisualZoneEditor = ({
               }
               break;
             case 's':
-              if (lockAspectRatio) {
+              if (effectiveLock) {
                 newMaxHeight = Math.max(10, dragState.startMaxHeight + deltaY);
                 newMaxWidth = newMaxHeight * aspectRatio;
               } else {
@@ -345,7 +383,7 @@ export const VisualZoneEditor = ({
               }
               break;
             case 'e':
-              if (lockAspectRatio) {
+              if (effectiveLock) {
                 newMaxWidth = Math.max(10, dragState.startMaxWidth + deltaX);
                 newMaxHeight = newMaxWidth / aspectRatio;
               } else {
@@ -353,7 +391,7 @@ export const VisualZoneEditor = ({
               }
               break;
             case 'w':
-              if (lockAspectRatio) {
+              if (effectiveLock) {
                 newMaxWidth = Math.max(10, dragState.startMaxWidth - deltaX);
                 newMaxHeight = newMaxWidth / aspectRatio;
                 newX = dragState.startZoneX + (dragState.startMaxWidth - newMaxWidth);
@@ -509,8 +547,10 @@ export const VisualZoneEditor = ({
     };
   };
 
-  // Manejar subida de imagen para tipo de zona
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Manejar subida de imagen para tipo de zona.
+  // La imagen se sube como archivo y se guarda solo la URL (no base64),
+  // para no enviar payloads enormes al guardar el template.
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !selectedZoneTypeForImage) return;
 
@@ -527,28 +567,29 @@ export const VisualZoneEditor = ({
     }
 
     setUploadingImage(true);
+    try {
+      // Subir la nueva imagen y obtener su URL.
+      const dataUrl = await readFileAsDataUrl(file);
+      const url = await uploadDataUrl(dataUrl);
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const dataUrl = event.target?.result as string;
-      const newImages = {
-        ...zoneTypeImages,
-        [selectedZoneTypeForImage]: dataUrl,
-      };
+      // Convertir a URL cualquier imagen previa que aún esté en base64,
+      // para que el template termine guardando solo URLs.
+      const newImages: ZoneTypeImages = {};
+      for (const [slug, value] of Object.entries(zoneTypeImages)) {
+        newImages[slug] = await ensureUrl(value);
+      }
+      newImages[selectedZoneTypeForImage] = url;
+
       setZoneTypeImages(newImages);
       onZoneTypeImagesChange?.(newImages);
       setSelectedZoneTypeForImage(null);
+    } catch {
+      alert('Error al subir la imagen');
+    } finally {
       setUploadingImage(false);
-    };
-    reader.onerror = () => {
-      alert('Error al leer el archivo');
-      setUploadingImage(false);
-    };
-    reader.readAsDataURL(file);
-
-    // Limpiar el input
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
     }
   };
 

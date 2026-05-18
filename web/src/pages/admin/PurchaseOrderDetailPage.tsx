@@ -15,6 +15,7 @@ import { Button } from '../../components/shared/Button';
 import { Modal } from '../../components/shared/Modal';
 import { PurchaseItemSelector, type PurchaseItem } from '../../components/admin/PurchaseItemSelector';
 import { useToast } from '../../context/ToastContext';
+import { useAuth } from '../../context/AuthContext';
 import * as purchaseOrdersService from '../../services/purchase-orders.service';
 import * as suppliersService from '../../services/suppliers.service';
 import type { PurchaseOrder, PurchaseOrderStatus } from '../../services/purchase-orders.service';
@@ -24,6 +25,7 @@ export default function PurchaseOrderDetailPage() {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const { showToast } = useToast();
+  const { isSuperAdmin } = useAuth();
   const isCreating = id === 'new';
 
   const [order, setOrder] = useState<PurchaseOrder | null>(null);
@@ -858,7 +860,8 @@ export default function PurchaseOrderDetailPage() {
 
           {/* Action Buttons */}
           <div className="flex gap-3 pt-4 border-t">
-            {order && ['DRAFT', 'CANCELLED'].includes(order.status) && (
+            {/* Eliminar: solo el administrador y solo órdenes en borrador o canceladas. */}
+            {isSuperAdmin && order && ['DRAFT', 'CANCELLED'].includes(order.status) && (
               <Button
                 type="button"
                 variant="admin-danger"
@@ -1205,6 +1208,7 @@ export default function PurchaseOrderDetailPage() {
           </div>
         </div>
       </Modal>
+
     </div>
   );
 }
