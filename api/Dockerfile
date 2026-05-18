@@ -1,0 +1,56 @@
+# ===========================================
+# Imagen de desarrollo para la API Laravel
+# PHP 8.3 + extensiones + opcache + Composer
+# ===========================================
+FROM php:8.3-cli
+
+# Dependencias del sistema para las extensiones de PHP
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    unzip \
+    libzip-dev \
+    libpng-dev \
+    libjpeg62-turbo-dev \
+    libfreetype6-dev \
+    libonig-dev \
+    libicu-dev \
+    && docker-php-ext-configure gd --with-freetype --with-jpeg \
+    && docker-php-ext-install -j$(nproc) \
+        pdo_mysql \
+        mbstring \
+        bcmath \
+        gd \
+        zip \
+        exif \
+        intl \
+        opcache \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Opcache: cachea el bytecode de PHP en memoria. Es CLAVE para el rendimiento
+# cuando el código se monta desde un bind-mount lento (Windows / OneDrive).
+RUN { \
+        echo 'opcache.enable=1'; \
+        echo 'opcache.enable_cli=1'; \
+        echo 'opcache.memory_consumption=256'; \
+        echo 'opcache.interned_strings_buffer=16'; \
+        echo 'opcache.max_accelerated_files=20000'; \
+        echo 'opcache.validate_timestamps=1'; \
+        echo 'opcache.revalidate_freq=2'; \
+        echo 'realpath_cache_size=4096K'; \
+        echo 'realpath_cache_ttl=600'; \
+    } > /usr/local/etc/php/conf.d/opcache.ini
+
+# Composer (copiado desde la imagen oficial)
+COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
+
+WORKDIR /app
+
+# Instala las dependencias DENTRO de la imagen: vendor queda en el sistema de
+# archivos rápido del contenedor (un volumen lo mantiene fuera del bind-mount).
+COPY composer.json composer.lock ./
+RUN composer install --no-interaction --no-scripts --prefer-dist
+
+EXPOSE 8000
+
+CMD ["sh", "-c", "php artisan serve --host=0.0.0.0 --port=8000"]
