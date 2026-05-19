@@ -1,6 +1,6 @@
 # ===========================================
-# Imagen de desarrollo para la API Laravel
-# PHP 8.3 + extensiones + opcache + Composer
+# Imagen de la API Laravel — PRODUCCIÓN (Render / Railway / etc.)
+# Para desarrollo local con docker-compose se usa Dockerfile.dev
 # ===========================================
 FROM php:8.3-cli
 
@@ -8,6 +8,7 @@ FROM php:8.3-cli
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     unzip \
+    ca-certificates \
     libzip-dev \
     libpng-dev \
     libjpeg62-turbo-dev \
@@ -27,30 +28,24 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Opcache: cachea el bytecode de PHP en memoria. Es CLAVE para el rendimiento
-# cuando el código se monta desde un bind-mount lento (Windows / OneDrive).
-RUN { \
-        echo 'opcache.enable=1'; \
-        echo 'opcache.enable_cli=1'; \
-        echo 'opcache.memory_consumption=256'; \
-        echo 'opcache.interned_strings_buffer=16'; \
-        echo 'opcache.max_accelerated_files=20000'; \
-        echo 'opcache.validate_timestamps=1'; \
-        echo 'opcache.revalidate_freq=2'; \
-        echo 'realpath_cache_size=4096K'; \
-        echo 'realpath_cache_ttl=600'; \
-    } > /usr/local/etc/php/conf.d/opcache.ini
-
-# Composer (copiado desde la imagen oficial)
+# Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
 WORKDIR /app
 
-# Instala las dependencias DENTRO de la imagen: vendor queda en el sistema de
-# archivos rápido del contenedor (un volumen lo mantiene fuera del bind-mount).
+# 1) Dependencias (capa cacheable) — solo las de producción
 COPY composer.json composer.lock ./
-RUN composer install --no-interaction --no-scripts --prefer-dist
+RUN composer install --no-dev --optimize-autoloader --no-interaction --no-scripts --prefer-dist
 
-EXPOSE 8000
+# 2) Código de la aplicación
+COPY . .
+RUN composer dump-autoload --optimize --no-dev \
+    && php artisan package:discover --ansi \
+    && chmod -R 775 storage bootstrap/cache
 
-CMD ["sh", "-c", "php artisan serve --host=0.0.0.0 --port=8000"]
+# Arranque: aplica migraciones, siembra datos solo si la BD está vacía
+# (primer despliegue) y sirve en el puerto que asigne el host.
+# $PORT lo inyecta Render/Railway; en local cae a 8000.
+CMD php artisan migrate --force \
+    && php artisan app:seed-if-empty \
+    && php artisan serve --host=0.0.0.0 --port=${PORT:-8000}
