@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import api from '../../services/api.service';
+import { assetUrl } from '../../utils/assetUrl';
 import { templateZonesService, type TemplateZone, type CreateTemplateZoneDto } from '../../services/template-zones.service';
 import { zoneTypesService, type ZoneType } from '../../services/zone-types.service';
 import { Button } from '../shared/Button';
@@ -1182,7 +1183,7 @@ export const VisualZoneEditor = ({
                 <div className="space-y-2">
                   <div className="relative">
                     <img
-                      src={zoneTypeImages[currentZoneType.slug]}
+                      src={assetUrl(zoneTypeImages[currentZoneType.slug])}
                       alt={`Imagen ${currentZoneType.name}`}
                       className="w-full h-24 object-contain rounded border border-blue-200 bg-white"
                     />
@@ -1247,7 +1248,7 @@ export const VisualZoneEditor = ({
           >
             <img
               ref={imageRef}
-              src={currentImage}
+              src={assetUrl(currentImage)}
               alt="Modelo"
               onLoad={handleImageLoad}
               className="w-full h-auto max-h-[600px] object-contain"
