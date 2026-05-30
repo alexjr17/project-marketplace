@@ -5,6 +5,7 @@ namespace App\Providers;
 use App\Services\Ai\AiAssistantService;
 use App\Services\Ai\GroqAiAssistant;
 use App\Services\Ai\MockAiAssistant;
+use Dedoc\Scramble\Scramble;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
 
@@ -33,10 +34,18 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        // Acceso a la documentación de la API (Scramble) en producción.
-        // Por defecto Scramble solo la muestra en local; aquí la abrimos
-        // SOLO si la petición trae ?token=... que coincida con SCRAMBLE_DOCS_TOKEN.
-        // En local (sin token configurado) se permite siempre para no estorbar.
+        // La documentación de la API (Scramble) se publica en /api/doc
+        // (como la tenía el backend anterior en Node). El JSON OpenAPI
+        // queda en /api/doc.json. Por defecto Scramble la pone en /docs/api.
+        Scramble::configure()->expose(
+            ui: 'api/doc',
+            document: 'api/doc.json',
+        );
+
+        // Acceso en producción: Scramble solo muestra la doc en local por
+        // defecto. Aquí la abrimos también en producción SOLO si la petición
+        // trae ?token=... igual a SCRAMBLE_DOCS_TOKEN. Una vez validado, se
+        // recuerda en la sesión para no repetir el token al navegar.
         Gate::define('viewApiDocs', function ($user = null) {
             $expected = (string) env('SCRAMBLE_DOCS_TOKEN', '');
 
@@ -45,8 +54,13 @@ class AppServiceProvider extends ServiceProvider
             }
 
             $provided = (string) request()->query('token', '');
+            if ($provided !== '' && hash_equals($expected, $provided)) {
+                session(['scramble_docs_ok' => true]);
 
-            return $provided !== '' && hash_equals($expected, $provided);
+                return true;
+            }
+
+            return (bool) session('scramble_docs_ok', false);
         });
     }
 }
