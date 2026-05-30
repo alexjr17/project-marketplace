@@ -18,7 +18,10 @@ return [
     |
     */
 
-    'driver' => env('SESSION_DRIVER', 'database'),
+    // Default 'file' (no 'database'): este proyecto NO tiene tabla `sessions`,
+    // así que el driver database rompería con 500 cualquier ruta `web`
+    // (incluida la raíz y la doc de la API). Override con SESSION_DRIVER si hace falta.
+    'driver' => env('SESSION_DRIVER', 'file'),
 
     /*
     |--------------------------------------------------------------------------
