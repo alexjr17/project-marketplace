@@ -48,6 +48,9 @@ RUN composer dump-autoload --optimize --no-dev \
 # Arranque: aplica migraciones, siembra datos solo si la BD está vacía
 # (primer despliegue) y sirve en el puerto que asigne el host.
 # $PORT lo inyecta Render/Railway; en local cae a 8000.
+# Se usa `php -S` con un router propio (server-router.php) en vez de
+# `php artisan serve` para poder añadir cabeceras CORS a /uploads (las
+# imágenes que el personalizador procesa en <canvas>/máscaras desde el front).
 CMD php artisan migrate --force \
     && php artisan app:seed-if-empty \
-    && php artisan serve --host=0.0.0.0 --port=${PORT:-8000}
+    && php -S 0.0.0.0:${PORT:-8000} -t public server-router.php
