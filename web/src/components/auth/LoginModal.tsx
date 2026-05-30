@@ -171,6 +171,11 @@ export const LoginModal = ({ isOpen, onClose, initialMode = 'login' }: LoginModa
               value={formData.email}
               onChange={(e) => setFormData({ ...formData, email: e.target.value })}
               placeholder="tu@email.com"
+              autoComplete="email"
+              autoCapitalize="none"
+              autoCorrect="off"
+              inputMode="email"
+              spellCheck={false}
               required
             />
           </div>
@@ -186,6 +191,10 @@ export const LoginModal = ({ isOpen, onClose, initialMode = 'login' }: LoginModa
                 onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                 placeholder="••••••••"
                 className="pr-10"
+                autoComplete={mode === 'register' ? 'new-password' : 'current-password'}
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
                 required
               />
               <button
