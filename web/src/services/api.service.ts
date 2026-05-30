@@ -1,6 +1,27 @@
 // API Base Service
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
 
+// Origen del backend (VITE_API_URL sin "/api"), para resolver imágenes.
+const API_ORIGIN = API_URL.replace(/\/api\/?$/, '');
+
+// El backend devuelve rutas de imágenes RELATIVAS ("/uploads/..."). En
+// producción el front está en otro dominio, así que esas rutas darían 404.
+// Esta función recorre la respuesta y las convierte en absolutas hacia el
+// backend. Es idempotente: ignora strings que ya contienen el origen.
+function absolutizeUploads(node: any): void {
+  if (!node || typeof node !== 'object') return;
+  for (const key of Object.keys(node)) {
+    const val = node[key];
+    if (typeof val === 'string') {
+      if (val.includes('/uploads/') && !val.includes(API_ORIGIN)) {
+        node[key] = val.replace(/\/uploads\//g, `${API_ORIGIN}/uploads/`);
+      }
+    } else if (val && typeof val === 'object') {
+      absolutizeUploads(val);
+    }
+  }
+}
+
 interface ApiResponse<T> {
   success: boolean;
   message?: string;
@@ -55,6 +76,7 @@ class ApiService {
       });
 
       const data = await response.json();
+      absolutizeUploads(data);
 
       if (!response.ok) {
         if (response.status === 401) {
