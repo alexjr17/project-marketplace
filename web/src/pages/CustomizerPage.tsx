@@ -7,6 +7,7 @@ import { templateZonesService, type TemplateZone } from '../services/template-zo
 import { templateRecipesService } from '../services/template-recipes.service';
 import { useCart } from '../context/CartContext';
 import { useSettings } from '../context/SettingsContext';
+import { useAuth } from '../context/AuthContext';
 import { ColorPicker } from '../components/customizer/ColorPicker';
 import { ImageUploader, type ImageUploadData } from '../components/customizer/ImageUploader';
 import { SizeGuideModal } from '../components/customizer/SizeGuideModal';
@@ -23,6 +24,9 @@ export const CustomizerPage = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const { addCustomizedProduct, updateCustomizedProduct, getCartItemById } = useCart();
   const { settings } = useSettings();
+  // Solo el admin puede colocar una imagen por cada zona de impresión.
+  // El cliente normal mantiene un único diseño por vista.
+  const { isAdmin } = useAuth();
 
   // Estado para modo edición
   const [editingCartItemId, setEditingCartItemId] = useState<string | null>(null);
@@ -65,6 +69,8 @@ export const CustomizerPage = () => {
   const [pngBounds, setPngBounds] = useState<PngBounds | null>(null);
   // Zona seleccionada para ajustar el tamaño del diseño
   const [selectedZone, setSelectedZone] = useState<string | null>(null);
+  // Modo admin: id de la zona de impresión donde se está colocando/editando el diseño
+  const [activeZoneId, setActiveZoneId] = useState<number | null>(null);
   // Zonas de diseño (habilitadas y bloqueadas) del template actual
   const [allowedZones, setAllowedZones] = useState<DesignZone[]>([]);
   const [blockedZones, setBlockedZones] = useState<DesignZone[]>([]);
@@ -423,12 +429,12 @@ export const CustomizerPage = () => {
         setIsEditMode(true);
         setEditingCartItemId(editId);
 
-        // Cargar diseños existentes usando viewType como key (igual que al crear)
+        // Cargar diseños existentes. La key del Map es el slot:
+        // viewType para cliente, `${viewType}::${zonaId}` (slotKey) para admin.
         const designsMap = new Map<string, Design>();
         customizedProduct.designs.forEach(design => {
-          // Usar viewType como key (front, back, etc.) - no zoneId
-          const key = design.viewType || design.zoneId.replace('view-', '');
-          console.log('[Edit Mode] Cargando diseño para vista:', key, design);
+          const key = design.slotKey || design.viewType || design.zoneId.replace('view-', '');
+          console.log('[Edit Mode] Cargando diseño en slot:', key, design);
           designsMap.set(key, design);
         });
 
@@ -437,7 +443,7 @@ export const CustomizerPage = () => {
           const template = templates.find(t => t.id === customizedProduct.templateId);
 
           // Determinar la vista que tiene diseño para seleccionarla
-          const viewWithDesign = Array.from(designsMap.keys())[0] || null;
+          const viewWithDesign = customizedProduct.designs[0]?.viewType || null;
 
           // Función para aplicar los datos guardados del producto al template
           const applyEditData = (baseTemplate: typeof template) => {
@@ -556,6 +562,7 @@ export const CustomizerPage = () => {
   // positionX/Y son la esquina superior izquierda en porcentaje
   const availableZones = zonesForCurrentType.map(zone => ({
     id: `zone-${zone.id}` as PrintZone,
+    dbId: zone.id, // Id numérico real de la zona en la base de datos
     name: zone.name,
     // Guardar porcentajes originales para el renderizado
     positionXPercent: zone.positionX,
@@ -833,8 +840,33 @@ export const CustomizerPage = () => {
     }
   };
 
-  // Diseño actual para la vista seleccionada
-  const currentDesign = currentZoneType ? designs.get(currentZoneType) : null;
+  // Clave del "slot" de diseño dentro del Map `designs`.
+  // - Cliente: la propia vista (un diseño por vista, comportamiento original).
+  // - Admin: `${vista}::${zonaId}` (un diseño por cada zona de impresión).
+  const slotKey = useCallback(
+    (view: string | null, zoneId: number | null): string | null => {
+      if (!view) return null;
+      return isAdmin && zoneId != null ? `${view}::${zoneId}` : view;
+    },
+    [isAdmin]
+  );
+
+  // Slot que se está editando ahora mismo
+  const activeKey = slotKey(currentZoneType, activeZoneId);
+
+  // Diseño actualmente activo (el que se puede arrastrar/redimensionar)
+  const currentDesign = activeKey ? designs.get(activeKey) ?? null : null;
+
+  // Todos los diseños de la vista actual (en modo admin puede haber varios)
+  const designsForCurrentView = Array.from(designs.values()).filter(
+    (d) => d.viewType === currentZoneType
+  );
+
+  // Al cambiar de vista, olvidar la zona activa (pertenece a otra vista)
+  useEffect(() => {
+    setActiveZoneId(null);
+    setSelectedZone(null);
+  }, [currentZoneType]);
 
   // Sincronizar slider cuando cambia el diseño
   useEffect(() => {
@@ -851,34 +883,61 @@ export const CustomizerPage = () => {
   const handleImageUpload = (imageData: string, uploadData?: ImageUploadData) => {
     if (!currentZoneType) return;
 
+    // Modo admin: hay que elegir primero la zona de impresión destino.
+    if (isAdmin && activeZoneId == null) {
+      alert('Selecciona una zona de impresión (haz clic en una guía) antes de subir la imagen.');
+      return;
+    }
+
     setIsUploading(true);
 
-    // Calcular tamaño inicial basado en la zona más grande disponible (o 30% por defecto)
+    // Zona de impresión destino (solo admin). Si existe, la imagen se coloca
+    // dentro de ese recuadro; si no, se centra con un tamaño por defecto.
+    const targetZone = isAdmin && activeZoneId != null
+      ? availableZones.find(z => z.dbId === activeZoneId)
+      : undefined;
+
     let initialWidth = 30;
     let initialHeight = 30;
-    if (availableZones.length > 0) {
+    let initialX = 50;
+    let initialY = 50;
+
+    if (targetZone) {
+      // Admin: el diseño nace ocupando la zona seleccionada
+      initialWidth = targetZone.widthPercent;
+      initialHeight = targetZone.heightPercent;
+      initialX = targetZone.positionXPercent + targetZone.widthPercent / 2;
+      initialY = targetZone.positionYPercent + targetZone.heightPercent / 2;
+    } else if (availableZones.length > 0) {
+      // Cliente: tamaño inicial basado en la zona más grande disponible
       const maxZoneWidth = Math.max(...availableZones.map(z => z.widthPercent));
       const maxZoneHeight = Math.max(...availableZones.map(z => z.heightPercent));
-      // Usar el 70% del tamaño de la zona más grande como tamaño inicial
       initialWidth = Math.min(maxZoneWidth * 0.7, 50);
       initialHeight = Math.min(maxZoneHeight * 0.7, 50);
     }
 
+    const designKey = slotKey(currentZoneType, activeZoneId);
+    if (!designKey) {
+      setIsUploading(false);
+      return;
+    }
+
     const newDesign: Design = {
-      id: `design-${currentZoneType}-${Date.now()}`,
+      id: `design-${designKey}-${Date.now()}`,
       zoneId: `view-${currentZoneType}` as PrintZone,
       viewType: currentZoneType,
+      slotKey: designKey,
+      templateZoneId: targetZone?.dbId,
+      zoneName: targetZone?.name,
       imageUrl: '',
       imageData: imageData,
       originalImageData: uploadData?.original,
       originalFileName: uploadData?.fileName,
       originalFileSize: uploadData?.fileSize,
-      // Posición centrada en el template (50%, 50%)
       position: {
-        x: 50,
-        y: 50,
+        x: initialX,
+        y: initialY,
       },
-      // Tamaño inicial basado en la zona
       size: {
         width: initialWidth,
         height: initialHeight,
@@ -887,7 +946,7 @@ export const CustomizerPage = () => {
       opacity: 1,
     };
 
-    setDesigns(prev => new Map(prev).set(currentZoneType, newDesign));
+    setDesigns(prev => new Map(prev).set(designKey, newDesign));
     setIsUploading(false);
   };
 
@@ -1020,7 +1079,8 @@ export const CustomizerPage = () => {
     currentPosRef.current = { x: currentDesign.position.x, y: currentDesign.position.y };
 
     isDraggingRef.current = true;
-    currentZoneTypeRef.current = currentZoneType;
+    // Guardar el slot activo (vista para cliente, vista::zona para admin)
+    currentZoneTypeRef.current = activeKey;
 
     // Agregar event listeners inmediatamente (sin esperar re-render)
     window.addEventListener('mousemove', handleDragMoveRef.current);
@@ -1036,19 +1096,19 @@ export const CustomizerPage = () => {
   };
 
   const handleDesignUpdate = (updates: Partial<Design>) => {
-    if (!currentZoneType) return;
-    const design = designs.get(currentZoneType);
+    if (!activeKey) return;
+    const design = designs.get(activeKey);
     if (!design) return;
 
     const updatedDesign = { ...design, ...updates };
-    setDesigns(prev => new Map(prev).set(currentZoneType, updatedDesign));
+    setDesigns(prev => new Map(prev).set(activeKey, updatedDesign));
   };
 
   const handleDesignDelete = () => {
-    if (!currentZoneType) return;
+    if (!activeKey) return;
     setDesigns(prev => {
       const newMap = new Map(prev);
-      newMap.delete(currentZoneType);
+      newMap.delete(activeKey);
       return newMap;
     });
   };
@@ -1089,61 +1149,93 @@ export const CustomizerPage = () => {
         canvas.width = canvasW;
         canvas.height = canvasH;
 
-        // Dibujar el diseño de la vista actual con recorte al contorno del template
+        // Dibuja un diseño concreto sobre el canvas, conservando proporción
+        // (object-contain) y aplicando rotación/opacidad.
+        const drawOneDesign = (design: Design): Promise<void> => {
+          return new Promise<void>((res) => {
+            if (!design.imageData) {
+              res();
+              return;
+            }
+            const designImg = new Image();
+            designImg.crossOrigin = 'anonymous';
+            designImg.onload = () => {
+              // Caja del diseño en píxeles (equivale al <div> del editor)
+              const w = (design.size.width / 100) * canvas.width;
+              const h = (design.size.height / 100) * canvas.height;
+
+              // Calcular posición (centro del diseño en porcentaje)
+              const centerX = (design.position.x / 100) * canvas.width;
+              const centerY = (design.position.y / 100) * canvas.height;
+              const x = centerX - w / 2;
+              const y = centerY - h / 2;
+
+              // Ajusta la imagen dentro de la caja conservando su proporción
+              // natural (como el `object-contain` del editor) para no deformarla.
+              const fitContain = (iw: number, ih: number) => {
+                const imgRatio = iw / ih;
+                const boxRatio = w / h;
+                let dw: number;
+                let dh: number;
+                if (imgRatio > boxRatio) {
+                  dw = w;
+                  dh = w / imgRatio;
+                } else {
+                  dh = h;
+                  dw = h * imgRatio;
+                }
+                return { dx: x + (w - dw) / 2, dy: y + (h - dh) / 2, dw, dh };
+              };
+
+              ctx.save();
+              ctx.globalAlpha = design.opacity || 1;
+
+              // Aplicar rotación si existe
+              if (design.rotation) {
+                ctx.translate(centerX, centerY);
+                ctx.rotate((design.rotation * Math.PI) / 180);
+                ctx.translate(-centerX, -centerY);
+              }
+
+              // Usar imagen coloreada si existe
+              const displayImage = design.colorizedImageData || design.imageData!;
+              const colorizedImg = new Image();
+              colorizedImg.crossOrigin = 'anonymous';
+              colorizedImg.onload = () => {
+                const f = fitContain(colorizedImg.naturalWidth, colorizedImg.naturalHeight);
+                ctx.drawImage(colorizedImg, f.dx, f.dy, f.dw, f.dh);
+                ctx.restore();
+                res();
+              };
+              colorizedImg.onerror = () => {
+                const f = fitContain(designImg.naturalWidth, designImg.naturalHeight);
+                ctx.drawImage(designImg, f.dx, f.dy, f.dw, f.dh);
+                ctx.restore();
+                res();
+              };
+              colorizedImg.src = displayImage;
+            };
+            designImg.onerror = () => res();
+            designImg.src = design.imageData;
+          });
+        };
+
+        // Dibujar todos los diseños de la vista actual, recortados al contorno
+        // del template (en modo admin puede haber varios, uno por zona).
         const drawDesign = async () => {
-          const design = currentZoneType ? designs.get(currentZoneType) : null;
+          const viewDesigns = designsForCurrentView.filter((d) => d.imageData);
 
           // Limpiar canvas
           ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-          if (design?.imageData) {
-            // PASO 1: Dibujar el diseño primero
-            const designImg = new Image();
-            designImg.crossOrigin = 'anonymous';
-            await new Promise<void>((res) => {
-              designImg.onload = () => {
-                // Calcular tamaño en píxeles del canvas
-                const w = (design.size.width / 100) * canvas.width;
-                const h = (design.size.height / 100) * canvas.height;
+          if (viewDesigns.length > 0) {
+            // PASO 1: Dibujar cada diseño
+            for (const design of viewDesigns) {
+              await drawOneDesign(design);
+            }
 
-                // Calcular posición (centro del diseño en porcentaje)
-                const centerX = (design.position.x / 100) * canvas.width;
-                const centerY = (design.position.y / 100) * canvas.height;
-                const x = centerX - w / 2;
-                const y = centerY - h / 2;
-
-                ctx.save();
-                ctx.globalAlpha = design.opacity || 1;
-
-                // Aplicar rotación si existe
-                if (design.rotation) {
-                  ctx.translate(centerX, centerY);
-                  ctx.rotate((design.rotation * Math.PI) / 180);
-                  ctx.translate(-centerX, -centerY);
-                }
-
-                // Usar imagen coloreada si existe
-                const displayImage = design.colorizedImageData || design.imageData;
-                const colorizedImg = new Image();
-                colorizedImg.crossOrigin = 'anonymous';
-                colorizedImg.onload = () => {
-                  ctx.drawImage(colorizedImg, x, y, w, h);
-                  ctx.restore();
-                  res();
-                };
-                colorizedImg.onerror = () => {
-                  ctx.drawImage(designImg, x, y, w, h);
-                  ctx.restore();
-                  res();
-                };
-                colorizedImg.src = displayImage;
-              };
-              designImg.onerror = () => res();
-              designImg.src = design.imageData;
-            });
-
-            // PASO 2: Usar el template como máscara para recortar el diseño
-            // Solo los píxeles donde el template tiene contenido (no transparente) se mantienen
+            // PASO 2: Usar el template como máscara para recortar los diseños.
+            // Solo los píxeles donde el template tiene contenido se mantienen.
             const maskImg = new Image();
             maskImg.crossOrigin = 'anonymous';
             await new Promise<void>((res) => {
@@ -1264,12 +1356,21 @@ export const CustomizerPage = () => {
 
     setIsExporting(true);
     try {
-      // Construir mapa de imágenes del template por vista
+      // Construir mapa de imágenes del template por vista.
+      // Se usa el viewType real de cada diseño (no la clave del Map, que en
+      // modo admin es un slot `vista::zona`).
       const templateImages = new Map<string, string>();
       const colorizedImages = new Map<string, string>();
+      const viewTypes = [
+        ...new Set(
+          Array.from(designs.values())
+            .map(d => d.viewType)
+            .filter((v): v is string => !!v)
+        ),
+      ];
 
-      // Para cada diseño, obtener la imagen del template correspondiente
-      for (const [viewType] of designs) {
+      // Para cada vista con diseño, obtener la imagen del template correspondiente
+      for (const viewType of viewTypes) {
         // Obtener imagen del template para esta vista
         let imageUrl: string | undefined;
 
@@ -1488,7 +1589,7 @@ export const CustomizerPage = () => {
                           } : undefined}
                         >
                           {zt.name}
-                          {designs.has(zt.slug) && (
+                          {Array.from(designs.values()).some(d => d.viewType === zt.slug) && (
                             <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full border-2 border-white" style={{ backgroundColor: brandColors.secondary }}></span>
                           )}
                         </button>
@@ -1739,7 +1840,13 @@ export const CustomizerPage = () => {
                             key={zone.id}
                             onClick={(e) => {
                               e.stopPropagation();
-                              // Si hay diseño, ajustar su tamaño a la zona seleccionada
+                              // Admin: elegir esta zona como destino para colocar/editar su imagen
+                              if (isAdmin) {
+                                setActiveZoneId(zone.dbId);
+                                setSelectedZone(zone.id);
+                                return;
+                              }
+                              // Cliente: si hay diseño, ajustar su tamaño a la zona seleccionada
                               if (currentDesign && currentZoneType) {
                                 // Calcular el centro de la zona
                                 const zoneCenterX = zone.positionXPercent + (zone.widthPercent / 2);
@@ -1760,9 +1867,9 @@ export const CustomizerPage = () => {
 
                                 setDesigns(prev => {
                                   const updated = new Map(prev);
-                                  const design = updated.get(currentZoneType);
-                                  if (design) {
-                                    updated.set(currentZoneType, {
+                                  const design = activeKey ? updated.get(activeKey) : undefined;
+                                  if (design && activeKey) {
+                                    updated.set(activeKey, {
                                       ...design,
                                       position: { x: finalX, y: finalY },
                                       size: { width: zone.widthPercent, height: zone.heightPercent },
@@ -1794,7 +1901,8 @@ export const CustomizerPage = () => {
                               className="absolute -top-5 left-0 px-1.5 py-0.5 text-xs font-medium rounded-t whitespace-nowrap text-white"
                               style={{ backgroundColor: isSelected ? brandColors.primary : 'rgba(59, 130, 246, 0.7)' }}
                             >
-                              {zone.name} {isSelected && '- Clic para ajustar'}
+                              {zone.name}
+                              {isSelected && (isAdmin ? ' — zona activa' : ' - Clic para ajustar')}
                             </div>
                           </div>
                         );
@@ -1919,9 +2027,11 @@ export const CustomizerPage = () => {
                           WebkitMask: 'url(#blocked-zones-container-mask)',
                         } : undefined}
                       >
-                        {/* Diseño posicionable libremente */}
-                        {currentDesign && (() => {
-                          const design = currentDesign;
+                        {/* Diseños posicionables. Cliente: uno por vista.
+                            Admin: uno por cada zona; el activo se arrastra,
+                            los demás se ven y se pueden seleccionar al hacer clic. */}
+                        {designsForCurrentView.map((design) => {
+                          const isActive = design === currentDesign;
                           const displayImage = design.colorizedImageData || design.imageData;
 
                           // Calcular posición y tamaño como porcentajes del contenedor
@@ -1930,8 +2040,11 @@ export const CustomizerPage = () => {
 
                           return (
                             <div
-                              ref={designElementRef}
-                              className="absolute cursor-move select-none hover:ring-2 rounded"
+                              key={design.id}
+                              ref={isActive ? designElementRef : undefined}
+                              className={`absolute select-none rounded ${
+                                isActive ? 'cursor-move hover:ring-2' : 'cursor-pointer'
+                              }`}
                               style={{
                                 left: `${leftPercent}%`,
                                 top: `${topPercent}%`,
@@ -1940,12 +2053,24 @@ export const CustomizerPage = () => {
                                 opacity: design.opacity || 1,
                                 transform: `rotate(${design.rotation || 0}deg)`,
                                 transformOrigin: 'center center',
-                                pointerEvents: 'auto', // El diseño sí captura eventos para arrastrarlo
-                                touchAction: 'none', // Prevenir scroll/zoom del navegador al arrastrar
+                                pointerEvents: 'auto', // El diseño sí captura eventos
+                                touchAction: 'none', // Prevenir scroll/zoom al arrastrar
+                                outline: !isActive && showZoneGuides ? `1px dashed ${brandColors.primary}80` : undefined,
                                 '--tw-ring-color': `${brandColors.primary}60`,
                               } as React.CSSProperties}
-                              onMouseDown={handleDragStart}
-                              onTouchStart={handleDragStart}
+                              onMouseDown={isActive ? handleDragStart : undefined}
+                              onTouchStart={isActive ? handleDragStart : undefined}
+                              onClick={
+                                !isActive
+                                  ? () => {
+                                      // Admin: seleccionar este diseño/zona para editarlo
+                                      if (design.templateZoneId != null) {
+                                        setActiveZoneId(design.templateZoneId);
+                                        setSelectedZone(`zone-${design.templateZoneId}`);
+                                      }
+                                    }
+                                  : undefined
+                              }
                             >
                               <img
                                 src={displayImage}
@@ -1953,26 +2078,30 @@ export const CustomizerPage = () => {
                                 className="w-full h-full object-contain pointer-events-none"
                                 draggable={false}
                               />
-                              {/* Indicador de arrastre */}
-                              <div
-                                className="absolute -top-8 left-1/2 transform -translate-x-1/2 text-white text-xs px-2 py-1 rounded-full flex items-center gap-1 opacity-0 hover:opacity-100 transition-opacity"
-                                style={{ backgroundColor: brandColors.primary }}
-                              >
-                                <Move className="w-3 h-3" />
-                                <span>Arrastra para mover</span>
-                              </div>
+                              {/* Indicador de arrastre (solo el activo) */}
+                              {isActive && (
+                                <div
+                                  className="absolute -top-8 left-1/2 transform -translate-x-1/2 text-white text-xs px-2 py-1 rounded-full flex items-center gap-1 opacity-0 hover:opacity-100 transition-opacity"
+                                  style={{ backgroundColor: brandColors.primary }}
+                                >
+                                  <Move className="w-3 h-3" />
+                                  <span>Arrastra para mover</span>
+                                </div>
+                              )}
                             </div>
                           );
-                        })()}
+                        })}
                       </div>
                     </div>
 
-                    {/* Indicador cuando no hay diseño (fuera de la máscara) */}
-                    {!currentDesign && imageLoaded && (
+                    {/* Indicador cuando no hay ningún diseño en la vista */}
+                    {designsForCurrentView.length === 0 && imageLoaded && (
                       <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-400 pointer-events-none">
                         <Package className="w-12 h-12 mb-2 opacity-50" />
                         <span className="text-sm font-medium opacity-70">
-                          Sube una imagen para esta vista
+                          {isAdmin
+                            ? 'Selecciona una zona y sube una imagen'
+                            : 'Sube una imagen para esta vista'}
                         </span>
                       </div>
                     )}
@@ -2004,6 +2133,52 @@ export const CustomizerPage = () => {
 
               {selectedTemplate && currentZoneType ? (
                 <div className="space-y-4">
+                  {/* Selector de zona de impresión (solo admin) */}
+                  {isAdmin && availableZones.length > 0 && (
+                    <div>
+                      <span className="text-xs font-semibold text-gray-900 mb-1.5 block">
+                        Zona de impresión
+                      </span>
+                      <div className="flex flex-wrap gap-1.5">
+                        {availableZones.map((zone) => {
+                          const zoneSlot = slotKey(currentZoneType, zone.dbId);
+                          const hasDesign = !!zoneSlot && designs.has(zoneSlot);
+                          const isActiveZone = activeZoneId === zone.dbId;
+                          return (
+                            <button
+                              key={zone.dbId}
+                              onClick={() => {
+                                setActiveZoneId(zone.dbId);
+                                setSelectedZone(zone.id);
+                              }}
+                              className={`px-2.5 py-1.5 rounded-lg border-2 text-xs font-medium transition-all relative ${
+                                isActiveZone ? '' : 'border-gray-200 hover:border-gray-300 text-gray-700'
+                              }`}
+                              style={isActiveZone ? {
+                                borderColor: brandColors.primary,
+                                backgroundColor: `${brandColors.primary}15`,
+                                color: brandColors.primary,
+                              } : undefined}
+                            >
+                              {zone.name}
+                              {hasDesign && (
+                                <span
+                                  className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full border-2 border-white"
+                                  style={{ backgroundColor: brandColors.secondary }}
+                                ></span>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <p className="text-[11px] text-gray-400 mt-1.5">
+                        {activeZoneId == null
+                          ? 'Elige una zona para colocar su imagen.'
+                          : 'Sube una imagen para esta zona.'}
+                      </p>
+                    </div>
+                  )}
+
                   {/* Estado actual del diseño */}
                   {currentDesign && (
                     <div
@@ -2020,7 +2195,9 @@ export const CustomizerPage = () => {
                         <img src={currentDesign.imageData} alt="Tu diseño" className="w-full h-full object-contain" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-xs font-medium" style={{ color: brandColors.secondary }}>Diseño cargado</p>
+                        <p className="text-xs font-medium" style={{ color: brandColors.secondary }}>
+                          {currentDesign.zoneName ? `Zona: ${currentDesign.zoneName}` : 'Diseño cargado'}
+                        </p>
                         <p className="text-xs" style={{ color: `${brandColors.secondary}cc` }}>Sube otra para reemplazar</p>
                       </div>
                       <button
@@ -2035,20 +2212,29 @@ export const CustomizerPage = () => {
                     </div>
                   )}
 
-                  <ImageUploader onImageUpload={handleImageUpload} isUploading={isUploading} />
+                  {/* Subida de imagen: en modo admin requiere una zona seleccionada */}
+                  {(!isAdmin || activeZoneId != null) ? (
+                    <>
+                      <ImageUploader onImageUpload={handleImageUpload} isUploading={isUploading} />
 
-                  {/* Separador */}
-                  <div className="flex items-center gap-3">
-                    <div className="flex-1 h-px bg-gray-200"></div>
-                    <span className="text-xs text-gray-400">o elige</span>
-                    <div className="flex-1 h-px bg-gray-200"></div>
-                  </div>
+                      {/* Separador */}
+                      <div className="flex items-center gap-3">
+                        <div className="flex-1 h-px bg-gray-200"></div>
+                        <span className="text-xs text-gray-400">o elige</span>
+                        <div className="flex-1 h-px bg-gray-200"></div>
+                      </div>
 
-                  {/* Carrusel de imágenes prediseñadas */}
-                  <ImageCarousel
-                    onImageSelect={handlePresetImageSelect}
-                    isLoading={isUploading}
-                  />
+                      {/* Carrusel de imágenes prediseñadas */}
+                      <ImageCarousel
+                        onImageSelect={handlePresetImageSelect}
+                        isLoading={isUploading}
+                      />
+                    </>
+                  ) : (
+                    <p className="text-sm text-center text-gray-400 py-4">
+                      Selecciona una zona de impresión arriba para subir su imagen.
+                    </p>
+                  )}
                 </div>
               ) : (
                 <div className="text-center py-6">

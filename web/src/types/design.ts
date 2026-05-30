@@ -6,6 +6,11 @@ export interface Design {
   id: string;
   zoneId: PrintZone; // Ahora representa la vista (front/back) no una zona específica
   viewType: string; // 'front', 'back', etc. - tipo de vista donde está el diseño
+  // Modo admin: identifica la zona de impresión concreta donde se colocó el diseño.
+  // El cliente normal no los usa (un solo diseño por vista).
+  slotKey?: string; // Clave única del "slot": vista para cliente, `${vista}::${zonaId}` para admin
+  templateZoneId?: number; // Id de la zona de impresión del template (solo admin)
+  zoneName?: string; // Nombre legible de la zona (solo admin)
   imageUrl: string;
   imageData?: string; // Base64 comprimido para preview
   originalImageData?: string; // Base64 original sin compresión para producción

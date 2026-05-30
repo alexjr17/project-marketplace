@@ -79,11 +79,13 @@ const loadImage = (src: string): Promise<HTMLImageElement> => {
 };
 
 /**
- * Genera una imagen compuesta del template con el diseño aplicado
+ * Genera una imagen compuesta del template con uno o varios diseños aplicados.
+ * En modo admin una misma vista puede tener varios diseños (uno por zona),
+ * por eso recibe un arreglo de diseños y los compone todos en un solo mockup.
  */
 const generateCompositeImage = async (
   templateImageSrc: string,
-  design: Design,
+  designs: Design[],
   outputSize: number = 1200
 ): Promise<string> => {
   // Cargar la imagen del template
@@ -110,45 +112,70 @@ const generateCompositeImage = async (
   // Dibujar el template
   ctx.drawImage(templateImg, 0, 0, canvasWidth, canvasHeight);
 
-  // Si hay imagen de diseño, dibujarla
-  const displayImage = design.colorizedImageData || design.imageData;
-  if (displayImage) {
+  let anyDrawn = false;
+
+  // Dibujar cada diseño de la vista
+  for (const design of designs) {
+    const displayImage = design.colorizedImageData || design.imageData;
+    if (!displayImage) continue;
+
     const designImg = await loadImage(displayImage);
 
-    // Calcular posición y tamaño del diseño
-    // Los porcentajes están basados en el área del template
-    const designWidth = (design.size.width / 100) * canvasWidth;
-    const designHeight = (design.size.height / 100) * canvasHeight;
-    const designX = ((design.position.x - design.size.width / 2) / 100) * canvasWidth;
-    const designY = ((design.position.y - design.size.height / 2) / 100) * canvasHeight;
+    // Caja del diseño en píxeles (equivale al <div> posicionable del editor).
+    // Los porcentajes están basados en el área del template.
+    const boxWidth = (design.size.width / 100) * canvasWidth;
+    const boxHeight = (design.size.height / 100) * canvasHeight;
+    const boxX = ((design.position.x - design.size.width / 2) / 100) * canvasWidth;
+    const boxY = ((design.position.y - design.size.height / 2) / 100) * canvasHeight;
+
+    // La imagen se ajusta DENTRO de la caja conservando su proporción natural,
+    // igual que el `object-contain` del <img> en el editor. Sin esto la imagen
+    // se estira para llenar la caja y queda deformada (achatada).
+    const imgRatio = designImg.naturalWidth / designImg.naturalHeight;
+    const boxRatio = boxWidth / boxHeight;
+    let drawWidth: number;
+    let drawHeight: number;
+    if (imgRatio > boxRatio) {
+      drawWidth = boxWidth;
+      drawHeight = boxWidth / imgRatio;
+    } else {
+      drawHeight = boxHeight;
+      drawWidth = boxHeight * imgRatio;
+    }
+    const drawX = boxX + (boxWidth - drawWidth) / 2;
+    const drawY = boxY + (boxHeight - drawHeight) / 2;
 
     // Guardar contexto para aplicar transformaciones
     ctx.save();
 
-    // Aplicar máscara usando el template (solo visible donde hay prenda)
+    // Recortar el diseño al contorno de la prenda ya dibujada
     ctx.globalCompositeOperation = 'source-atop';
 
     // Aplicar opacidad
     ctx.globalAlpha = design.opacity || 1;
 
-    // Aplicar rotación si existe
+    // Aplicar rotación si existe (alrededor del centro de la caja, como el editor)
     if (design.rotation) {
-      const centerX = designX + designWidth / 2;
-      const centerY = designY + designHeight / 2;
+      const centerX = boxX + boxWidth / 2;
+      const centerY = boxY + boxHeight / 2;
       ctx.translate(centerX, centerY);
       ctx.rotate((design.rotation * Math.PI) / 180);
       ctx.translate(-centerX, -centerY);
     }
 
-    // Dibujar el diseño
-    ctx.drawImage(designImg, designX, designY, designWidth, designHeight);
+    // Dibujar el diseño conservando proporción
+    ctx.drawImage(designImg, drawX, drawY, drawWidth, drawHeight);
 
     // Restaurar contexto
     ctx.restore();
+    anyDrawn = true;
+  }
 
-    // Redibujar el template encima para que los bordes y detalles se vean bien
+  // Redibujar el template detrás para que los bordes y detalles se vean bien
+  if (anyDrawn) {
     ctx.globalCompositeOperation = 'destination-over';
     ctx.drawImage(templateImg, 0, 0, canvasWidth, canvasHeight);
+    ctx.globalCompositeOperation = 'source-over';
   }
 
   return canvas.toDataURL('image/png');
@@ -207,40 +234,48 @@ export const exportDesignsToZip = async (
     }>,
   };
 
-  // Agregar cada diseño al ZIP (solo mockups)
+  // Agrupar los diseños por vista. En modo admin una misma vista puede tener
+  // varios diseños (uno por zona); todos se componen en un único mockup.
+  const designsByView = new Map<string, Design[]>();
   for (const design of designsWithImages) {
     const viewType = design.viewType || 'unknown';
+    if (!designsByView.has(viewType)) designsByView.set(viewType, []);
+    designsByView.get(viewType)!.push(design);
+  }
+
+  // Un mockup por vista (con todos sus diseños compuestos)
+  for (const [viewType, viewDesigns] of designsByView) {
     const viewName = `vista_${viewType}`;
+    let compositeFileName: string | undefined;
 
-    // Preparar info del diseño
-    const designInfo: typeof info.designs[0] = {
-      zoneId: design.zoneId,
-      fileName: `${viewName}_mockup.png`,
-      originalFileName: design.originalFileName,
-      position: design.position,
-      size: design.size,
-      rotation: design.rotation,
-      opacity: design.opacity,
-      tintColor: design.tintColor,
-    };
-
-    // SOLO generar MOCKUP (imagen compuesta template + diseño)
     const templateImageSrc = colorizedTemplateImages?.get(viewType) || templateImages?.get(viewType);
     if (templateImageSrc) {
       try {
-        console.log('Generando mockup para vista:', viewType);
-        const compositeImage = await generateCompositeImage(templateImageSrc, design, 1200);
-        const compositeFileName = `${viewName}_mockup.png`;
+        console.log('Generando mockup para vista:', viewType, `(${viewDesigns.length} diseño/s)`);
+        const compositeImage = await generateCompositeImage(templateImageSrc, viewDesigns, 1200);
+        compositeFileName = `${viewName}_mockup.png`;
         const compositeBlob = base64ToBlob(compositeImage);
         folder.file(compositeFileName, compositeBlob);
-        designInfo.compositeFileName = compositeFileName;
         console.log('Mockup generado correctamente:', compositeFileName);
       } catch (err) {
         console.warn('No se pudo generar mockup (continuando sin él):', err);
       }
     }
 
-    info.designs.push(designInfo);
+    // Info de cada diseño de la vista
+    for (const design of viewDesigns) {
+      info.designs.push({
+        zoneId: design.zoneName || design.zoneId,
+        fileName: `${viewName}_mockup.png`,
+        compositeFileName,
+        originalFileName: design.originalFileName,
+        position: design.position,
+        size: design.size,
+        rotation: design.rotation,
+        opacity: design.opacity,
+        tintColor: design.tintColor,
+      });
+    }
   }
 
   // Agregar archivo de información
