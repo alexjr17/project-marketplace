@@ -13,6 +13,7 @@ import { ImageUploader, type ImageUploadData } from '../components/customizer/Im
 import { SizeGuideModal } from '../components/customizer/SizeGuideModal';
 import { ImageCarousel } from '../components/customizer/ImageCarousel';
 import { applyColorToImage } from '../utils/imageColorizer';
+import { assetUrl } from '../utils/assetUrl';
 import { exportDesignsToZip } from '../utils/designExporter';
 import { detectPngBounds, clampPositionToBounds, type PngBounds } from '../utils/pngBoundsDetector';
 import type { ProductType, PrintZone } from '../types/product';
@@ -655,14 +656,11 @@ export const CustomizerPage = () => {
       console.log('[getCurrentTemplateImage] Sin zoneType, usando images.front');
     }
 
-    // Normalizar: si la imagen es una URL absoluta a /uploads (subida antes),
-    // se convierte a ruta relativa para servirla desde el mismo origen y
-    // poder procesarla en <canvas> sin problemas de CORS.
+    // La imagen debe ser ABSOLUTA hacia el backend: en producción el front
+    // está en otro dominio, así que una ruta relativa /uploads daría 404.
+    // (Antes se forzaba relativa para el proxy de Vite en dev.)
     if (imageUrl) {
-      const uploadsIdx = imageUrl.indexOf('/uploads/');
-      if (uploadsIdx > 0 && /^https?:\/\//i.test(imageUrl)) {
-        imageUrl = imageUrl.slice(uploadsIdx);
-      }
+      imageUrl = assetUrl(imageUrl);
     }
 
     return imageUrl;
