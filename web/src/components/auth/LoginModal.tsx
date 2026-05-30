@@ -3,7 +3,7 @@ import { Modal } from '../shared/Modal';
 import { Button } from '../shared/Button';
 import { Input } from '../shared/Input';
 import { useAuth } from '../../context/AuthContext';
-import { LogIn, UserPlus, Mail, ArrowLeft, Check } from 'lucide-react';
+import { LogIn, UserPlus, Mail, ArrowLeft, Check, Eye, EyeOff } from 'lucide-react';
 
 interface LoginModalProps {
   isOpen: boolean;
@@ -19,6 +19,7 @@ export const LoginModal = ({ isOpen, onClose, initialMode = 'login' }: LoginModa
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [forgotSuccess, setForgotSuccess] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const [formData, setFormData] = useState({
     email: '',
@@ -178,13 +179,25 @@ export const LoginModal = ({ isOpen, onClose, initialMode = 'login' }: LoginModa
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Contraseña
             </label>
-            <Input
-              type="password"
-              value={formData.password}
-              onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-              placeholder="••••••••"
-              required
-            />
+            <div className="relative">
+              <Input
+                type={showPassword ? 'text' : 'password'}
+                value={formData.password}
+                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                placeholder="••••••••"
+                className="pr-10"
+                required
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((v) => !v)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                tabIndex={-1}
+              >
+                {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+              </button>
+            </div>
             {mode === 'login' && (
               <div className="text-right mt-1">
                 <button
