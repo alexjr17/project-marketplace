@@ -646,4 +646,7 @@ Route::prefix('webchat')->group(function () {
     Route::post('send', [WebChatController::class, 'send']);
     Route::get('poll', [WebChatController::class, 'poll']);
 });
-require __DIR__."/debug-ai.php";
+// Rutas de depuración opcionales (archivo ignorado por git; solo en local).
+if (file_exists(__DIR__."/debug-ai.php")) {
+    require __DIR__."/debug-ai.php";
+}
