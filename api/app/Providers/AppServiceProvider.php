@@ -5,6 +5,7 @@ namespace App\Providers;
 use App\Services\Ai\AiAssistantService;
 use App\Services\Ai\GroqAiAssistant;
 use App\Services\Ai\MockAiAssistant;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -32,6 +33,20 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        //
+        // Acceso a la documentación de la API (Scramble) en producción.
+        // Por defecto Scramble solo la muestra en local; aquí la abrimos
+        // SOLO si la petición trae ?token=... que coincida con SCRAMBLE_DOCS_TOKEN.
+        // En local (sin token configurado) se permite siempre para no estorbar.
+        Gate::define('viewApiDocs', function ($user = null) {
+            $expected = (string) env('SCRAMBLE_DOCS_TOKEN', '');
+
+            if ($expected === '') {
+                return app()->environment('local');
+            }
+
+            $provided = (string) request()->query('token', '');
+
+            return $provided !== '' && hash_equals($expected, $provided);
+        });
     }
 }
