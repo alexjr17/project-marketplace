@@ -23,6 +23,12 @@ import { ResetPasswordPage } from './pages/ResetPasswordPage';
 import ProductDetailPage from './pages/ProductDetailPage';
 import { AdminLayout } from './components/admin/AdminLayout';
 import { DashboardPage } from './pages/admin/DashboardPage';
+import { InboxPage as MessagingInboxPage } from './pages/messaging/InboxPage';
+import { ChannelsPage as MessagingChannelsPage } from './pages/messaging/ChannelsPage';
+import { PostsPage as MessagingPostsPage } from './pages/messaging/PostsPage';
+import { PagesPage as MessagingPagesPage } from './pages/messaging/PagesPage';
+import { KnowledgePage as MessagingKnowledgePage } from './pages/messaging/KnowledgePage';
+import MessagingLayout from './components/messaging/MessagingLayout';
 import { ProductsPage } from './pages/admin/ProductsPage';
 import { VariantsPage } from './pages/admin/VariantsPage';
 import { UsersPage } from './pages/admin/UsersPage';
@@ -146,6 +152,26 @@ function App() {
                         <POSProvider>
                           <CartProvider>
                           <Routes>
+                            {/* Mensajería — app independiente con su propio layout */}
+                            <Route
+                              path="/messaging/*"
+                              element={
+                                <AdminRoute>
+                                  <MessagingLayout>
+                                    <Routes>
+                                      <Route path="/" element={<Navigate to="/messaging/inbox" replace />} />
+                                      <Route path="/inbox" element={<MessagingInboxPage />} />
+                                      <Route path="/posts" element={<MessagingPostsPage />} />
+                                      <Route path="/pages" element={<MessagingPagesPage />} />
+                                      <Route path="/knowledge" element={<MessagingKnowledgePage />} />
+                                      <Route path="/channels" element={<MessagingChannelsPage />} />
+                                      <Route path="*" element={<Navigate to="/messaging/inbox" replace />} />
+                                    </Routes>
+                                  </MessagingLayout>
+                                </AdminRoute>
+                              }
+                            />
+
                             {/* POS Routes - Con POSLayout */}
                             <Route
                               path="/pos/*"

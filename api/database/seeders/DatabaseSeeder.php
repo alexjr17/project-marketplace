@@ -20,6 +20,9 @@ class DatabaseSeeder extends Seeder
             PurchaseSeeder::class,
             SettingsSeeder::class,
             ShippingSeeder::class,
+            MessagingSeeder::class,
+            BotKnowledgeCategorySeeder::class, // categorías primero
+            BotKnowledgeSeeder::class,
         ]);
     }
 }

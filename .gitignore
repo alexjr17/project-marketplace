@@ -42,3 +42,12 @@ nul
 backend/prisma/*.js
 backend/prisma/*.d.ts
 backend/prisma/*.map
+
+# Documentos personales (que no van al repo)
+*.docx
+*.doc
+*.pdf
+api/uploads/
+
+# Archivos de debug temporales
+api/routes/debug-*.php

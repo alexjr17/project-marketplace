@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { Grid3x3, ShoppingCart, LayoutGrid, ChevronDown } from 'lucide-react';
+import { Grid3x3, ShoppingCart, LayoutGrid, ChevronDown, MessageSquare } from 'lucide-react';
 
 export default function AppSwitcher() {
   const { user, hasPermission } = useAuth();
@@ -25,6 +25,7 @@ export default function AppSwitcher() {
   const getCurrentApp = () => {
     if (location.pathname.startsWith('/pos')) return 'pos';
     if (location.pathname.startsWith('/admin-panel')) return 'admin';
+    if (location.pathname.startsWith('/messaging')) return 'messaging';
     return 'store';
   };
 
@@ -57,6 +58,15 @@ export default function AppSwitcher() {
       path: '/admin-panel',
       color: 'text-purple-600',
       bgColor: 'bg-purple-50',
+      available: user?.roleId !== 2, // Todos excepto clientes
+    },
+    {
+      id: 'messaging',
+      name: 'Social Media',
+      icon: MessageSquare,
+      path: '/messaging',
+      color: 'text-pink-600',
+      bgColor: 'bg-pink-50',
       available: user?.roleId !== 2, // Todos excepto clientes
     },
   ].filter((app) => app.available);
@@ -113,6 +123,7 @@ export default function AppSwitcher() {
                     {app.id === 'store' && 'Navegar tienda'}
                     {app.id === 'pos' && 'Ventas y caja'}
                     {app.id === 'admin' && 'Administración'}
+                    {app.id === 'messaging' && 'Inbox + publicaciones'}
                   </div>
                 </div>
                 {isCurrent && (

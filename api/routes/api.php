@@ -2,9 +2,13 @@
 
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BarcodeController;
+use App\Http\Controllers\BotKnowledgeCategoryController;
+use App\Http\Controllers\BotKnowledgeController;
 use App\Http\Controllers\CartController;
 use App\Http\Controllers\CashRegisterController;
 use App\Http\Controllers\CatalogController;
+use App\Http\Controllers\ChannelController;
+use App\Http\Controllers\ConversationController;
 use App\Http\Controllers\DesignImageController;
 use App\Http\Controllers\InputBatchController;
 use App\Http\Controllers\InputController;
@@ -13,6 +17,7 @@ use App\Http\Controllers\InventoryConversionController;
 use App\Http\Controllers\InventoryCountController;
 use App\Http\Controllers\InventoryMovementController;
 use App\Http\Controllers\LabelTemplateController;
+use App\Http\Controllers\MessageController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\OrderController;
 use App\Http\Controllers\PaymentController;
@@ -22,6 +27,7 @@ use App\Http\Controllers\PurchaseOrderController;
 use App\Http\Controllers\PurchaseReturnController;
 use App\Http\Controllers\ReviewController;
 use App\Http\Controllers\RoleController;
+use App\Http\Controllers\SocialPostController;
 use App\Http\Controllers\SettingController;
 use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\TemplateController;
@@ -30,6 +36,7 @@ use App\Http\Controllers\TemplateZoneController;
 use App\Http\Controllers\UploadController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\VariantController;
+use App\Http\Controllers\WebChatController;
 use App\Http\Controllers\WebhookController;
 use App\Http\Controllers\ZoneTypeController;
 use Illuminate\Support\Facades\Route;
@@ -271,6 +278,14 @@ Route::prefix('webhooks')->group(function () {
     Route::post('wompi', [WebhookController::class, 'wompi']);
     Route::get('wompi/verify/{transactionId}', [WebhookController::class, 'verifyWompiTransaction'])
         ->middleware(['auth:sanctum', 'admin']);
+
+    // Meta — Messenger (Instagram comparte el mismo endpoint en futuro).
+    Route::get('messenger', [WebhookController::class, 'messengerVerify']);
+    Route::post('messenger', [WebhookController::class, 'messengerIncoming']);
+
+    // Meta — WhatsApp Cloud API (payload diferente, endpoint separado).
+    Route::get('whatsapp', [WebhookController::class, 'whatsappVerify']);
+    Route::post('whatsapp', [WebhookController::class, 'whatsappIncoming']);
 });
 
 // ==================== TIPOS DE INSUMO ====================
@@ -583,3 +598,52 @@ Route::prefix('notifications')->middleware('auth:sanctum')->group(function () {
     Route::patch('{id}/read', [NotificationController::class, 'markAsRead'])->whereNumber('id');
     Route::delete('{id}', [NotificationController::class, 'destroy'])->whereNumber('id');
 });
+
+// ==================== MENSAJERÍA — bandeja y canales de admin ====================
+Route::prefix('messaging')->middleware(['auth:sanctum', 'admin'])->group(function () {
+    // Conversaciones
+    Route::get('conversations', [ConversationController::class, 'index']);
+    Route::get('conversations/{id}', [ConversationController::class, 'show'])->whereNumber('id');
+    Route::patch('conversations/{id}', [ConversationController::class, 'update'])->whereNumber('id');
+    Route::post('conversations/{id}/read', [ConversationController::class, 'markRead'])->whereNumber('id');
+    Route::get('conversations/{id}/messages', [ConversationController::class, 'messages'])->whereNumber('id');
+    Route::post('conversations/{id}/messages', [MessageController::class, 'store'])->whereNumber('id');
+    Route::post('conversations/{id}/suggest', [MessageController::class, 'suggest'])->whereNumber('id');
+
+    // Canales (Meta Messenger, Instagram, WhatsApp, SMS, Chat Web)
+    Route::get('channels', [ChannelController::class, 'index']);
+    Route::get('channels/{id}', [ChannelController::class, 'show'])->whereNumber('id');
+    Route::patch('channels/{id}', [ChannelController::class, 'update'])->whereNumber('id');
+    Route::post('channels/{id}/test', [ChannelController::class, 'test'])->whereNumber('id');
+
+    // Categorías de la base de conocimiento (editables)
+    Route::get('knowledge/categories', [BotKnowledgeCategoryController::class, 'index']);
+    Route::post('knowledge/categories', [BotKnowledgeCategoryController::class, 'store']);
+    Route::patch('knowledge/categories/{id}', [BotKnowledgeCategoryController::class, 'update'])->whereNumber('id');
+    Route::delete('knowledge/categories/{id}', [BotKnowledgeCategoryController::class, 'destroy'])->whereNumber('id');
+
+    // Base de conocimiento del bot (lo que la IA usa en su system prompt)
+    Route::get('knowledge', [BotKnowledgeController::class, 'index']);
+    Route::post('knowledge', [BotKnowledgeController::class, 'store']);
+    Route::patch('knowledge/{id}', [BotKnowledgeController::class, 'update'])->whereNumber('id');
+    Route::delete('knowledge/{id}', [BotKnowledgeController::class, 'destroy'])->whereNumber('id');
+    Route::post('knowledge/test', [BotKnowledgeController::class, 'test']);
+
+    // Publicaciones (Facebook Page; Instagram + programación en fases siguientes)
+    Route::get('posts', [SocialPostController::class, 'index']);
+    Route::post('posts', [SocialPostController::class, 'store']);
+    Route::post('posts/publish', [SocialPostController::class, 'publishNow']);
+    Route::get('posts/{id}', [SocialPostController::class, 'show'])->whereNumber('id');
+    Route::post('posts/{id}/publish', [SocialPostController::class, 'publishExisting'])->whereNumber('id');
+    Route::delete('posts/{id}', [SocialPostController::class, 'destroy'])->whereNumber('id');
+});
+
+// ==================== MENSAJERÍA — chat web público ====================
+// El widget de la tienda usa estas rutas. No requieren login; se autentican
+// con un token de sesión devuelto por /start y enviado en X-WebChat-Token.
+Route::prefix('webchat')->group(function () {
+    Route::post('start', [WebChatController::class, 'start']);
+    Route::post('send', [WebChatController::class, 'send']);
+    Route::get('poll', [WebChatController::class, 'poll']);
+});
+require __DIR__."/debug-ai.php";

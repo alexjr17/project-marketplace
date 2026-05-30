@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Http\Concerns\ApiResponse;
+use App\Services\Messaging\Channels\MessengerChannel;
+use App\Services\Messaging\Channels\WhatsAppChannel;
 use App\Services\WompiService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -12,7 +14,93 @@ class WebhookController extends Controller
 {
     use ApiResponse;
 
-    public function __construct(private WompiService $wompi) {}
+    public function __construct(
+        private WompiService $wompi,
+        private MessengerChannel $messenger,
+        private WhatsAppChannel $whatsapp,
+    ) {}
+
+    /** Handshake del webhook de Meta — Meta hace GET ?hub.mode=subscribe&hub.verify_token=...&hub.challenge=... */
+    public function messengerVerify(Request $request)
+    {
+        $challenge = $this->messenger->verifyWebhook(
+            $request->query('hub_mode'),
+            $request->query('hub_verify_token'),
+            $request->query('hub_challenge'),
+        );
+
+        if ($challenge === null) {
+            return response('Forbidden', 403);
+        }
+
+        // Meta exige que se devuelva el challenge como texto plano.
+        return response($challenge, 200)->header('Content-Type', 'text/plain');
+    }
+
+    /** Webhook entrante de Messenger / Instagram (mismo endpoint, Meta los enruta por "object"). */
+    public function messengerIncoming(Request $request)
+    {
+        try {
+            $raw = $request->getContent();
+            $signature = $request->header('X-Hub-Signature-256');
+
+            if (! $this->messenger->verifySignature($raw, $signature)) {
+                Log::warning('[Messenger] Firma inválida en webhook entrante');
+
+                return response('Invalid signature', 401);
+            }
+
+            $payload = $request->all();
+            $result = $this->messenger->handleInbound($payload);
+
+            // Meta espera 200 siempre — si devolvemos otro código, reintentará.
+            return response()->json(['ok' => true] + $result);
+        } catch (Throwable $e) {
+            Log::error('[Messenger] Webhook entrante: '.$e->getMessage());
+
+            return response()->json(['ok' => false, 'error' => $e->getMessage()]);
+        }
+    }
+
+    /** Handshake de Meta para WhatsApp Cloud API (mismo formato que Messenger). */
+    public function whatsappVerify(Request $request)
+    {
+        $challenge = $this->whatsapp->verifyWebhook(
+            $request->query('hub_mode'),
+            $request->query('hub_verify_token'),
+            $request->query('hub_challenge'),
+        );
+
+        if ($challenge === null) {
+            return response('Forbidden', 403);
+        }
+
+        return response($challenge, 200)->header('Content-Type', 'text/plain');
+    }
+
+    /** Webhook entrante de WhatsApp Cloud API. */
+    public function whatsappIncoming(Request $request)
+    {
+        try {
+            $raw = $request->getContent();
+            $signature = $request->header('X-Hub-Signature-256');
+
+            if (! $this->whatsapp->verifySignature($raw, $signature)) {
+                Log::warning('[WhatsApp] Firma inválida en webhook entrante');
+
+                return response('Invalid signature', 401);
+            }
+
+            $payload = $request->all();
+            $result = $this->whatsapp->handleInbound($payload);
+
+            return response()->json(['ok' => true] + $result);
+        } catch (Throwable $e) {
+            Log::error('[WhatsApp] Webhook entrante: '.$e->getMessage());
+
+            return response()->json(['ok' => false, 'error' => $e->getMessage()]);
+        }
+    }
 
     /** Webhook de eventos de Wompi (pública, valida la firma). */
     public function wompi(Request $request)
