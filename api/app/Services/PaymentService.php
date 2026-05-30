@@ -288,7 +288,7 @@ class PaymentService
     public function getStats(): array
     {
         $byStatus = Payment::selectRaw('status, count(*) as c')->groupBy('status')->pluck('c', 'status');
-        $byMethod = Payment::selectRaw('paymentMethod, count(*) as c, sum(amount) as total')
+        $byMethod = Payment::select('paymentMethod')->selectRaw('count(*) as c, sum(amount) as total')
             ->groupBy('paymentMethod')->get();
         $revenueAmount = (float) Payment::where('status', 'APPROVED')->sum('amount');
         $revenueRefunded = (float) Payment::where('status', 'APPROVED')->sum('refundedAmount');

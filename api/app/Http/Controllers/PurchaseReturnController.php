@@ -83,7 +83,7 @@ class PurchaseReturnController extends Controller
 
         // Cantidad ya devuelta por cada ítem de la orden.
         $returned = PurchaseReturnItem::whereIn('purchaseOrderItemId', $order->items->pluck('id'))
-            ->selectRaw('purchaseOrderItemId, SUM(quantity) as total')
+            ->select('purchaseOrderItemId')->selectRaw('SUM(quantity) as total')
             ->groupBy('purchaseOrderItemId')->pluck('total', 'purchaseOrderItemId');
 
         $items = $order->items->map(function ($item) use ($returned) {
@@ -140,7 +140,7 @@ class PurchaseReturnController extends Controller
 
         // Validar cantidades contra lo recibido y lo ya devuelto.
         $returned = PurchaseReturnItem::whereIn('purchaseOrderItemId', $order->items->pluck('id'))
-            ->selectRaw('purchaseOrderItemId, SUM(quantity) as total')
+            ->select('purchaseOrderItemId')->selectRaw('SUM(quantity) as total')
             ->groupBy('purchaseOrderItemId')->pluck('total', 'purchaseOrderItemId');
 
         $resolved = [];
