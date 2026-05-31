@@ -417,8 +417,13 @@ class POSService
         }
 
         return DB::transaction(function () use ($data, $calculation, $session) {
+            $isDebt = ($data['paymentMethod'] === 'debe');
+
+            // Resolver cliente: por id seleccionado, por cédula (upsert) o por nombre.
             $posCustomerId = null;
-            if (! empty($data['customerCedula'])) {
+            if (! empty($data['customerId'])) {
+                $posCustomerId = (int) $data['customerId'];
+            } elseif (! empty($data['customerCedula'])) {
                 $posCustomerId = $this->upsertPOSCustomer(
                     $data['customerCedula'],
                     $data['customerName'] ?? null,
@@ -426,6 +431,13 @@ class POSService
                     $data['customerPhone'] ?? null,
                     $calculation['total'],
                 );
+            } elseif ($isDebt && ! empty($data['customerName'])) {
+                $posCustomerId = $this->findOrCreateCustomerByName($data['customerName'])->id;
+            }
+
+            // Un fiado ("debe") exige cliente identificado para poder cobrarlo después.
+            if ($isDebt && ! $posCustomerId) {
+                throw new RuntimeException('Para una venta a crédito (Debe) debes seleccionar o registrar un cliente.');
             }
 
             $order = Order::create([
@@ -438,7 +450,7 @@ class POSService
                 'discount' => $calculation['discount'],
                 'tax' => $calculation['tax'],
                 'total' => $calculation['total'],
-                'status' => 'PAID',
+                'status' => $isDebt ? 'PENDING' : 'PAID',
                 'paymentMethod' => $data['paymentMethod'],
                 'paymentRef' => $data['cardReference'] ?? ('POS-'.(int) (microtime(true) * 1000)),
                 'cashAmount' => $data['cashAmount'] ?? null,
@@ -450,12 +462,14 @@ class POSService
                 'sellerId' => $data['sellerId'],
                 'cashRegisterId' => $data['cashRegisterId'],
                 'statusHistory' => [[
-                    'status' => 'PAID',
+                    'status' => $isDebt ? 'PENDING' : 'PAID',
                     'timestamp' => now()->toIso8601String(),
-                    'note' => 'Venta POS - '.$data['paymentMethod']
-                        .(! empty($data['cardReference']) ? ' - Ref: '.$data['cardReference'] : ''),
+                    'note' => $isDebt
+                        ? 'Venta POS a crédito (Debe) - pendiente de cobro'
+                        : 'Venta POS - '.$data['paymentMethod']
+                            .(! empty($data['cardReference']) ? ' - Ref: '.$data['cardReference'] : ''),
                 ]],
-                'paidAt' => now(),
+                'paidAt' => $isDebt ? null : now(),
                 'notes' => $data['notes'] ?? null,
             ]);
 
@@ -624,6 +638,93 @@ class POSService
     public function customerByCedula(string $cedula): ?POSCustomer
     {
         return POSCustomer::where('cedula', trim($cedula))->first();
+    }
+
+    /** Busca clientes POS por nombre, cédula o teléfono (autocompletar). */
+    public function searchCustomers(string $q, int $limit = 10): array
+    {
+        $q = trim($q);
+        if ($q === '') {
+            return [];
+        }
+
+        return POSCustomer::where('name', 'like', "%{$q}%")
+            ->orWhere('cedula', 'like', "%{$q}%")
+            ->orWhere('phone', 'like', "%{$q}%")
+            ->orderBy('name')
+            ->limit($limit)
+            ->get()
+            ->all();
+    }
+
+    /** Crea o devuelve un cliente POS por nombre (sin requerir cédula). */
+    public function findOrCreateCustomerByName(string $name): POSCustomer
+    {
+        $name = trim($name);
+        $existing = POSCustomer::whereRaw('LOWER(name) = ?', [mb_strtolower($name)])->first();
+        if ($existing) {
+            return $existing;
+        }
+
+        return POSCustomer::create([
+            'name' => $name,
+            'cedula' => null,
+            'email' => null,
+            'phone' => null,
+        ]);
+    }
+
+    /** Lista los fiados POS pendientes de cobro (GET /pos/debts). */
+    public function pendingDebts(): array
+    {
+        return Order::where('saleChannel', 'POS')
+            ->where('paymentMethod', 'debe')
+            ->where('status', 'PENDING')
+            ->orderByDesc('createdAt')
+            ->get()
+            ->map(fn ($o) => [
+                'id' => $o->id,
+                'orderNumber' => $o->orderNumber,
+                'posCustomerId' => $o->posCustomerId,
+                'customerName' => $o->customerName,
+                'customerPhone' => $o->customerPhone,
+                'total' => (float) $o->total,
+                'createdAt' => $o->createdAt,
+            ])
+            ->all();
+    }
+
+    /** Cobra un fiado: lo marca PAID con el método de cobro (POST /pos/sale/{id}/collect). */
+    public function collectDebt(int $orderId, string $paymentMethod, int $userId): Order
+    {
+        $order = Order::find($orderId);
+        if (! $order || $order->saleChannel !== 'POS' || $order->paymentMethod !== 'debe') {
+            throw new RuntimeException('Fiado no encontrado');
+        }
+        if ($order->status !== 'PENDING') {
+            throw new RuntimeException('Este fiado ya fue cobrado o cancelado');
+        }
+
+        // Atribuir el cobro a la sesión de caja abierta del cobrador, para que el
+        // efectivo recibido ahora cuadre en el cierre de esa caja.
+        $session = CashSession::where('sellerId', $userId)->where('status', 'OPEN')->first();
+        if ($session) {
+            $order->cashRegisterId = $session->cashRegisterId;
+        }
+
+        $order->status = 'PAID';
+        $order->paymentMethod = $paymentMethod;
+        $order->paidAt = now();
+        $history = $order->statusHistory ?? [];
+        $history[] = [
+            'status' => 'PAID',
+            'timestamp' => now()->toIso8601String(),
+            'note' => 'Fiado cobrado - '.$paymentMethod,
+        ];
+        $order->statusHistory = $history;
+        $order->save();
+
+        return $order;
     }
 
     /** Carga una orden POS para facturación (PDF/email). */

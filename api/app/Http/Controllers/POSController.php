@@ -102,7 +102,7 @@ class POSController extends Controller
             'customerEmail' => 'nullable|string',
             'customerPhone' => 'nullable|string',
             'customerCedula' => 'nullable|string',
-            'paymentMethod' => 'required|in:cash,card,transfer,mixed',
+            'paymentMethod' => 'required|in:cash,card,transfer,mixed,debe',
             'cashAmount' => 'nullable|numeric',
             'cardAmount' => 'nullable|numeric',
             'cardReference' => 'nullable|string',
@@ -167,12 +167,41 @@ class POSController extends Controller
     /** GET /api/pos/customer/search */
     public function customerSearch(Request $request)
     {
+        // Búsqueda por nombre/cédula/teléfono (autocompletar): ?q=...
+        $q = $request->query('q');
+        if (is_string($q) && $q !== '') {
+            return $this->success($this->pos->searchCustomers($q));
+        }
+
+        // Compatibilidad: búsqueda exacta por cédula (?cedula=...).
         $cedula = $request->query('cedula');
         if (! is_string($cedula) || $cedula === '') {
-            return $this->error('La cédula es requerida', 400);
+            return $this->error('La cédula o el término de búsqueda es requerido', 400);
         }
 
         return $this->success($this->pos->customerByCedula($cedula));
+    }
+
+    /** GET /api/pos/debts — fiados pendientes de cobro. */
+    public function debts()
+    {
+        return $this->success($this->pos->pendingDebts());
+    }
+
+    /** POST /api/pos/sale/{id}/collect — cobrar un fiado. */
+    public function collectDebt(Request $request, int $id)
+    {
+        $data = $request->validate([
+            'paymentMethod' => 'required|in:cash,card,transfer',
+        ]);
+
+        try {
+            $order = $this->pos->collectDebt($id, $data['paymentMethod'], $request->user()->id);
+        } catch (\RuntimeException $e) {
+            return $this->error($e->getMessage(), 400);
+        }
+
+        return $this->success($order, 'Fiado cobrado exitosamente');
     }
 
     /** Arma los datos de la factura a partir de la orden. */
