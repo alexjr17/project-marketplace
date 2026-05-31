@@ -373,6 +373,50 @@ export interface PendingDebt {
   createdAt: string;
 }
 
+export interface POSCustomerListItem {
+  id: number;
+  name: string;
+  cedula: string | null;
+  phone: string | null;
+  email: string | null;
+  totalPurchases: number;
+  totalSpent: number;
+  debt: number;
+}
+
+export interface POSCustomerOrder {
+  id: number;
+  orderNumber: string;
+  total: number;
+  status: string;
+  paymentMethod: string;
+  paid: number;
+  remaining: number;
+  itemsCount: number;
+  createdAt: string;
+}
+
+export interface POSCustomerDetail extends POSCustomerListItem {
+  orders: POSCustomerOrder[];
+}
+
+/** Lista de clientes POS (con deuda). */
+export async function listCustomers(q?: string): Promise<POSCustomerListItem[]> {
+  const response = await axios.get(`${API_URL}/pos/customers`, {
+    params: q ? { q } : {},
+    headers: { Authorization: `Bearer ${getAuthToken()}` },
+  });
+  return response.data.data ?? [];
+}
+
+/** Detalle de un cliente POS con su historial de compras. */
+export async function getCustomerDetail(id: number): Promise<POSCustomerDetail> {
+  const response = await axios.get(`${API_URL}/pos/customers/${id}`, {
+    headers: { Authorization: `Bearer ${getAuthToken()}` },
+  });
+  return response.data.data;
+}
+
 /**
  * List pending POS debts (fiados).
  */

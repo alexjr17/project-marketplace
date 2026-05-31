@@ -12,6 +12,7 @@ import {
   LayoutGrid,
   Store,
   Clock,
+  Users,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { usePOS } from '../../context/POSContext';
@@ -75,6 +76,11 @@ export default function POSLayout({ children }: POSLayoutProps) {
       path: '/pos/debts',
       label: 'Fiados',
       icon: Clock,
+    },
+    {
+      path: '/pos/customers',
+      label: 'Clientes',
+      icon: Users,
     },
     {
       path: '/pos/cash',
