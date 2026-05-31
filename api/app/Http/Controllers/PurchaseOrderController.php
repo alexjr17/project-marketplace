@@ -314,16 +314,29 @@ class PurchaseOrderController extends Controller
         return $this->success(PurchaseOrder::with(self::DETAIL_RELATIONS)->find($id), 'Items recibidos');
     }
 
-    public function destroy(int $id)
+    public function destroy(Request $request, int $id)
     {
         $order = PurchaseOrder::find($id);
         if (! $order) {
             return $this->error('Orden de compra no encontrada', 404);
         }
-        if (! in_array($order->status, ['DRAFT', 'CANCELLED'], true)) {
+
+        // ?force=1 (solo admin): permite eliminar órdenes en cualquier estado,
+        // limpiando en cascada sus ítems y los movimientos de inventario que
+        // generó su recepción. Sin force se mantiene la regla normal.
+        $force = $request->boolean('force');
+
+        if (! $force && ! in_array($order->status, ['DRAFT', 'CANCELLED'], true)) {
             return $this->error('Solo se pueden eliminar órdenes en borrador o canceladas', 400);
         }
-        $order->delete();
+
+        DB::transaction(function () use ($order) {
+            VariantMovement::where('referenceType', 'purchase_order')->where('referenceId', $order->id)->delete();
+            InputBatchMovement::where('referenceType', 'purchase_order')->where('referenceId', $order->id)->delete();
+            InputVariantMovement::where('referenceType', 'purchase_order')->where('referenceId', $order->id)->delete();
+            PurchaseOrderItem::where('purchaseOrderId', $order->id)->delete();
+            $order->delete();
+        });
 
         return $this->success(null, 'Orden eliminada correctamente');
     }
