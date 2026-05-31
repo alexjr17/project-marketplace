@@ -431,7 +431,8 @@ class POSService
                     $data['customerPhone'] ?? null,
                     $calculation['total'],
                 );
-            } elseif ($isDebt && ! empty($data['customerName'])) {
+            } elseif (! empty($data['customerName'])) {
+                // Cliente nuevo por nombre: se registra al finalizar la venta.
                 $posCustomerId = $this->findOrCreateCustomerByName($data['customerName'])->id;
             }
 

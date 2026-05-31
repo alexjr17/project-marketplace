@@ -7,6 +7,7 @@ import type { SearchResult, TemplateSearchResult, ProductSearchResult, TemplateZ
 import OpenSessionPrompt from '../../components/pos/OpenSessionPrompt';
 import ZoneSelectionModal from '../../components/pos/ZoneSelectionModal';
 import CheckoutModal from '../../components/pos/CheckoutModal';
+import CustomerSelect, { type SelectedCustomer } from '../../components/pos/CustomerSelect';
 import BarcodeScanner from '../../components/pos/BarcodeScanner';
 import {
   ShoppingCart,
@@ -62,6 +63,7 @@ export default function NewSalePage() {
 
   // Payment state
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'transfer' | 'mixed' | 'debe'>('cash');
+  const [selectedCustomer, setSelectedCustomer] = useState<SelectedCustomer | null>(null);
   const [cashAmount, setCashAmount] = useState('');
   const [cardAmount, setCardAmount] = useState('');
 
@@ -353,6 +355,7 @@ export default function NewSalePage() {
     setCashAmount('');
     setCardAmount('');
     setPaymentMethod('cash');
+    setSelectedCustomer(null);
     barcodeInputRef.current?.focus();
   };
 
@@ -747,6 +750,12 @@ export default function NewSalePage() {
           </div>
         </div>
 
+        {/* Cliente */}
+        <div className="bg-white rounded-lg shadow-sm p-3 lg:p-4">
+          <h3 className="font-semibold text-gray-900 mb-2 lg:mb-3">Cliente</h3>
+          <CustomerSelect value={selectedCustomer} onChange={setSelectedCustomer} />
+        </div>
+
         {/* Payment Method */}
         <div className="bg-white rounded-lg shadow-sm p-3 lg:p-4">
           <h3 className="font-semibold text-gray-900 mb-2 lg:mb-3">Método de Pago</h3>
@@ -1013,6 +1022,7 @@ export default function NewSalePage() {
         onConfirm={handleProcessSale}
         total={total}
         paymentMethod={paymentMethod}
+        initialCustomer={selectedCustomer}
         taxRate={settings.payment?.taxRate || 19}
       />
 

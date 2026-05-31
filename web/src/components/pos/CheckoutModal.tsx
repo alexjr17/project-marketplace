@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import * as posService from '../../services/pos.service';
 import type { CustomerSearchResult } from '../../services/pos.service';
+import type { SelectedCustomer } from './CustomerSelect';
 
 type CheckoutStep = 'customer' | 'processing' | 'completed';
 
@@ -46,6 +47,7 @@ interface CheckoutModalProps {
   }>;
   total: number;
   paymentMethod: 'cash' | 'card' | 'transfer' | 'mixed' | 'debe';
+  initialCustomer?: SelectedCustomer | null;
   taxRate?: number;
 }
 
@@ -55,6 +57,7 @@ export const CheckoutModal = ({
   onConfirm,
   total,
   paymentMethod,
+  initialCustomer,
   taxRate = 19,
 }: CheckoutModalProps) => {
   const [step, setStep] = useState<CheckoutStep>('customer');
@@ -101,15 +104,28 @@ export const CheckoutModal = ({
   useEffect(() => {
     if (isOpen) {
       setStep('customer');
-      setNitInput('');
-      setNameInput('');
-      setEmailInput('');
-      setPhoneInput('');
-      setCustomerFound(null);
+      // Pre-rellenar con el cliente elegido en la pantalla de venta (si hay).
+      setNitInput(initialCustomer?.cedula || '');
+      setNameInput(initialCustomer?.name || '');
+      setEmailInput(initialCustomer?.email || '');
+      setPhoneInput(initialCustomer?.phone || '');
+      setCustomerFound(
+        initialCustomer?.id
+          ? {
+              id: initialCustomer.id,
+              name: initialCustomer.name,
+              email: initialCustomer.email ?? null,
+              phone: initialCustomer.phone ?? null,
+              cedula: initialCustomer.cedula ?? '',
+              totalPurchases: 0,
+              totalSpent: 0,
+            }
+          : null
+      );
       setCompletedData(null);
       setPdfUrl(null);
       setEmailSent(false);
-      setSendInvoiceEmail(false);
+      setSendInvoiceEmail(!!initialCustomer?.email);
       // Reset card data
       setCardReference('');
       setCardType('');
