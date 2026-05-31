@@ -121,7 +121,7 @@ export default function SalesHistoryPage() {
       await posService.printInvoicePDF(sale.id);
     } catch (error) {
       console.error('Error printing invoice:', error);
-      showToast('Error al imprimir la factura', 'error');
+      showToast('Error al imprimir el recibo', 'error');
     }
   };
 
@@ -141,7 +141,7 @@ export default function SalesHistoryPage() {
     setIsSendingEmail(true);
     try {
       await posService.sendInvoiceEmail(emailModalSale.id, emailInput.trim());
-      showToast('Factura enviada exitosamente', 'success');
+      showToast('Recibo enviado exitosamente', 'success');
 
       // Actualizar el sale con el email
       setSales(prevSales =>
@@ -156,7 +156,7 @@ export default function SalesHistoryPage() {
       setEmailInput('');
     } catch (error: any) {
       console.error('Error sending invoice:', error);
-      showToast(error.response?.data?.message || 'Error al enviar factura', 'error');
+      showToast(error.response?.data?.message || 'Error al enviar recibo', 'error');
     } finally {
       setIsSendingEmail(false);
     }
@@ -676,7 +676,7 @@ export default function SalesHistoryPage() {
                               ? 'bg-green-100 text-green-700 hover:bg-green-200'
                               : 'bg-purple-100 text-purple-700 hover:bg-purple-200'
                           }`}
-                          title={sale.customerEmail ? `Enviado a: ${sale.customerEmail}` : 'Enviar factura por email'}
+                          title={sale.customerEmail ? `Enviado a: ${sale.customerEmail}` : 'Enviar recibo por email'}
                         >
                           {sale.customerEmail ? (
                             <CheckCircle className="w-4 h-4" />
@@ -789,7 +789,7 @@ export default function SalesHistoryPage() {
                 <div className="flex items-center gap-2">
                   <Mail className="w-5 h-5 text-purple-600" />
                   <h2 className="text-lg font-semibold text-purple-800">
-                    Enviar Factura por Email
+                    Enviar Recibo por Email
                   </h2>
                 </div>
                 <button
@@ -831,7 +831,7 @@ export default function SalesHistoryPage() {
                   <div className="flex items-center gap-2 text-green-700">
                     <CheckCircle className="w-4 h-4" />
                     <span className="text-sm">
-                      Factura enviada anteriormente a: <strong>{emailModalSale.customerEmail}</strong>
+                      Recibo enviado anteriormente a: <strong>{emailModalSale.customerEmail}</strong>
                     </span>
                   </div>
                 </div>
@@ -877,7 +877,7 @@ export default function SalesHistoryPage() {
                   ) : (
                     <>
                       <Mail className="w-4 h-4" />
-                      Enviar Factura
+                      Enviar Recibo
                     </>
                   )}
                 </button>

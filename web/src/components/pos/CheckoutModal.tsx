@@ -13,6 +13,7 @@ import {
   Phone,
   CreditCard,
   Hash,
+  MessageCircle,
 } from 'lucide-react';
 import * as posService from '../../services/pos.service';
 import type { CustomerSearchResult } from '../../services/pos.service';
@@ -278,10 +279,37 @@ export const CheckoutModal = ({
     if (!pdfUrl || !completedData) return;
     const link = document.createElement('a');
     link.href = pdfUrl;
-    link.download = `Factura_${completedData.sale.orderNumber}.pdf`;
+    link.download = `Recibo_${completedData.sale.orderNumber}.pdf`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  };
+
+  // Enviar el recibo por WhatsApp (mensaje de texto).
+  const handleWhatsApp = async () => {
+    if (!completedData) return;
+    let text = `*Recibo ${completedData.sale.orderNumber}*\n`;
+    try {
+      const detail = await posService.getSaleDetail(completedData.sale.id);
+      (detail.items || []).forEach((it: any) => {
+        const name = it.productName || it.product?.name || 'Producto';
+        const qty = it.quantity || 1;
+        const sub = (it.unitPrice || 0) * qty;
+        text += `${qty} x ${name} — $${sub.toLocaleString()}\n`;
+      });
+    } catch {
+      /* si falla, va sin el detalle de items */
+    }
+    text += `\nTotal: $${completedData.total.toLocaleString()}`;
+    if (isDebt) {
+      text += `\nAbonó: $${abono.toLocaleString()}\nQueda debiendo: $${Math.max(0, completedData.total - abono).toLocaleString()}`;
+    }
+    text += `\n\n¡Gracias por tu compra!`;
+
+    // Teléfono del cliente si existe (Colombia: anteponer 57 a 10 dígitos).
+    const raw = (phoneInput || initialCustomer?.phone || '').replace(/\D/g, '');
+    const phone = raw.length === 10 ? `57${raw}` : raw;
+    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`, '_blank');
   };
 
   const handleSendEmail = async () => {
@@ -331,14 +359,14 @@ export const CheckoutModal = ({
                     ? 'Venta Exitosa'
                     : step === 'processing'
                     ? 'Procesando Venta...'
-                    : 'Datos de Facturación'}
+                    : 'Datos del Recibo'}
                 </h2>
                 <p className="text-white/80 text-sm">
                   {step === 'completed' && completedData
-                    ? `Factura #${completedData.sale.orderNumber}`
+                    ? `Recibo #${completedData.sale.orderNumber}`
                     : step === 'processing'
                     ? 'Por favor espere...'
-                    : 'Opcional - para personalizar la factura'}
+                    : 'Opcional - para personalizar el recibo'}
                 </p>
               </div>
             </div>
@@ -503,7 +531,7 @@ export const CheckoutModal = ({
                 {(!initialCustomer || editingCustomer) && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Email para factura
+                    Email para el recibo
                   </label>
                   <div className="relative">
                     <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
@@ -528,7 +556,7 @@ export const CheckoutModal = ({
                         onChange={(e) => setSendInvoiceEmail(e.target.checked)}
                         className="w-4 h-4 rounded border-gray-300 text-orange-500 focus:ring-orange-500"
                       />
-                      <span className="text-sm text-gray-600">Enviar factura por email</span>
+                      <span className="text-sm text-gray-600">Enviar recibo por email</span>
                     </label>
                   )}
                 </div>
@@ -813,6 +841,14 @@ export const CheckoutModal = ({
                   </button>
 
                   <button
+                    onClick={handleWhatsApp}
+                    className="w-full px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center justify-center gap-2 font-medium transition-colors"
+                  >
+                    <MessageCircle className="w-5 h-5" />
+                    Enviar por WhatsApp
+                  </button>
+
+                  <button
                     onClick={onClose}
                     className="w-full px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center justify-center gap-2 font-medium transition-colors"
                   >
@@ -829,18 +865,18 @@ export const CheckoutModal = ({
                     <div className="h-full flex items-center justify-center min-h-[400px]">
                       <div className="text-center">
                         <Loader2 className="w-10 h-10 animate-spin text-blue-500 mx-auto mb-3" />
-                        <p className="text-gray-600">Generando factura...</p>
+                        <p className="text-gray-600">Generando recibo...</p>
                       </div>
                     </div>
                   ) : pdfUrl ? (
                     <iframe
                       src={pdfUrl}
                       className="w-full h-full min-h-[400px]"
-                      title="Vista previa de factura"
+                      title="Vista previa del recibo"
                     />
                   ) : (
                     <div className="h-full flex items-center justify-center min-h-[400px]">
-                      <p className="text-gray-500">Error al cargar la factura</p>
+                      <p className="text-gray-500">Error al cargar el recibo</p>
                     </div>
                   )}
                 </div>

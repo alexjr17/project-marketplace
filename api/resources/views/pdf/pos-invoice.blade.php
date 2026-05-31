@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="utf-8">
-    <title>Factura {{ $invoice['orderNumber'] }}</title>
+    <title>Recibo {{ $invoice['orderNumber'] }}</title>
     <style>
         * { font-family: DejaVu Sans, sans-serif; }
         body { font-size: 12px; color: #1f2937; margin: 0; padding: 24px; }
@@ -21,7 +21,7 @@
 </head>
 <body>
     <div class="header">
-        <h1>Factura de Venta</h1>
+        <h1>Recibo de Venta</h1>
         <div class="muted">N.º {{ $invoice['orderNumber'] }}</div>
         <div class="muted">Fecha: {{ \Illuminate\Support\Carbon::parse($invoice['date'])->format('d/m/Y H:i') }}</div>
     </div>

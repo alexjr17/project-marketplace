@@ -277,8 +277,8 @@ class POSController extends Controller
         try {
             Mail::send('emails.pos-invoice', ['invoice' => $data], function ($message) use ($email, $data, $pdf) {
                 $message->to($email)
-                    ->subject('Factura '.$data['orderNumber'])
-                    ->attachData($pdf->output(), 'Factura_'.$data['orderNumber'].'.pdf', [
+                    ->subject('Recibo '.$data['orderNumber'])
+                    ->attachData($pdf->output(), 'Recibo_'.$data['orderNumber'].'.pdf', [
                         'mime' => 'application/pdf',
                     ]);
             });
@@ -291,7 +291,7 @@ class POSController extends Controller
             $order->save();
         }
 
-        return $this->success(null, 'Factura enviada correctamente');
+        return $this->success(null, 'Recibo enviado correctamente');
     }
 
     /** GET /api/pos/sale/{id}/invoice-pdf */
@@ -305,7 +305,7 @@ class POSController extends Controller
 
         $pdf = Pdf::loadView('pdf.pos-invoice', ['invoice' => $this->invoiceData($order)]);
 
-        return $pdf->stream('Factura_'.$order->orderNumber.'.pdf');
+        return $pdf->stream('Recibo_'.$order->orderNumber.'.pdf');
     }
 
     /** POST /api/pos/sale/{id}/payment-evidence */
