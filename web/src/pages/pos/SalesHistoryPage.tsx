@@ -8,7 +8,17 @@ import OpenSessionPrompt from '../../components/pos/OpenSessionPrompt';
 import PrintPreviewModal from '../../components/pos/PrintPreviewModal';
 import type { PrintSettings } from '../../types/settings';
 import { DEFAULT_PRINT_SETTINGS } from '../../types/settings';
-import { History, Receipt, Calendar, DollarSign, CreditCard, User, Printer, Mail, X, Loader2, CheckCircle, Smartphone, Eye, RefreshCw, Camera, Upload, Image as ImageIcon, ChevronLeft, ChevronRight } from 'lucide-react';
+import { History, Receipt, Calendar, DollarSign, CreditCard, User, Printer, Mail, X, Loader2, CheckCircle, Smartphone, Eye, RefreshCw, Camera, Upload, Image as ImageIcon, ChevronLeft, ChevronRight, Clock } from 'lucide-react';
+
+// Estado de la venta → etiqueta + estilo del badge.
+function statusInfo(status: string): { label: string; cls: string } {
+  switch (status) {
+    case 'PAID': return { label: 'Pagado', cls: 'bg-green-100 text-green-700' };
+    case 'PENDING': return { label: 'Pendiente', cls: 'bg-amber-100 text-amber-700' };
+    case 'CANCELLED': return { label: 'Cancelado', cls: 'bg-red-100 text-red-700' };
+    default: return { label: status || '—', cls: 'bg-gray-100 text-gray-700' };
+  }
+}
 
 export default function SalesHistoryPage() {
   const { currentSession } = usePOS();
@@ -41,6 +51,7 @@ export default function SalesHistoryPage() {
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 10;
+  const [statusFilter, setStatusFilter] = useState<'all' | 'PAID' | 'PENDING' | 'CANCELLED'>('all');
 
   useEffect(() => {
     loadPrintSettings();
@@ -360,11 +371,12 @@ export default function SalesHistoryPage() {
     }
   };
 
-  // Pagination calculations
-  const totalPages = Math.ceil(sales.length / pageSize);
+  // Filtro por estado + paginación
+  const filteredSales = statusFilter === 'all' ? sales : sales.filter((s) => s.status === statusFilter);
+  const totalPages = Math.ceil(filteredSales.length / pageSize);
   const startIndex = (currentPage - 1) * pageSize;
   const endIndex = startIndex + pageSize;
-  const paginatedSales = sales.slice(startIndex, endIndex);
+  const paginatedSales = filteredSales.slice(startIndex, endIndex);
 
   // Reset to page 1 when sales change
   useEffect(() => {
@@ -496,8 +508,24 @@ export default function SalesHistoryPage() {
 
       {/* Sales List */}
       <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-        <div className="p-4 border-b border-gray-200">
+        <div className="p-4 border-b border-gray-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <h2 className="text-lg font-semibold text-gray-900">Ventas Realizadas</h2>
+          <div className="flex items-center gap-1 flex-wrap">
+            {([
+              { key: 'all', label: 'Todas' },
+              { key: 'PAID', label: 'Pagadas' },
+              { key: 'PENDING', label: 'Pendientes' },
+              { key: 'CANCELLED', label: 'Canceladas' },
+            ] as const).map((f) => (
+              <button
+                key={f.key}
+                onClick={() => { setStatusFilter(f.key); setCurrentPage(1); }}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${statusFilter === f.key ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         {sales.length === 0 ? (
@@ -528,6 +556,9 @@ export default function SalesHistoryPage() {
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Pago
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Estado
                   </th>
                   <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Total
@@ -595,12 +626,16 @@ export default function SalesHistoryPage() {
                             <Smartphone className="w-4 h-4 text-purple-600" />
                           </div>
                         )}
+                        {sale.paymentMethod === 'debe' && (
+                          <Clock className="w-4 h-4 text-amber-600" />
+                        )}
                         <div className="text-sm">
                           <span className="text-gray-700 font-medium">
                             {sale.paymentMethod === 'cash' && 'Efectivo'}
                             {sale.paymentMethod === 'card' && 'Tarjeta'}
                             {sale.paymentMethod === 'transfer' && 'Transferencia'}
                             {sale.paymentMethod === 'mixed' && 'Mixto'}
+                            {sale.paymentMethod === 'debe' && 'Fiado'}
                           </span>
                           {sale.cardType && (
                             <span className="text-xs text-gray-500 block capitalize">
@@ -609,6 +644,16 @@ export default function SalesHistoryPage() {
                           )}
                         </div>
                       </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {(() => {
+                        const s = statusInfo(sale.status);
+                        return (
+                          <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-medium ${s.cls}`}>
+                            {s.label}
+                          </span>
+                        );
+                      })()}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right">
                       <span className="text-sm font-semibold text-gray-900">
@@ -666,13 +711,13 @@ export default function SalesHistoryPage() {
           </div>
 
           {/* Pagination */}
-          {sales.length > pageSize && (
+          {filteredSales.length > pageSize && (
             <div className="px-6 py-4 border-t border-gray-200 flex flex-col sm:flex-row items-center justify-between gap-4">
               <div className="text-sm text-gray-700">
                 Mostrando{' '}
                 <span className="font-medium">{startIndex + 1}</span> a{' '}
-                <span className="font-medium">{Math.min(endIndex, sales.length)}</span> de{' '}
-                <span className="font-medium">{sales.length}</span> ventas
+                <span className="font-medium">{Math.min(endIndex, filteredSales.length)}</span> de{' '}
+                <span className="font-medium">{filteredSales.length}</span> ventas
               </div>
 
               <div className="flex items-center gap-2">
