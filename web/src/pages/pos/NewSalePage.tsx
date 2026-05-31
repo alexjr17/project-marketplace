@@ -64,6 +64,8 @@ export default function NewSalePage() {
   // Payment state
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'transfer' | 'mixed' | 'debe'>('cash');
   const [selectedCustomer, setSelectedCustomer] = useState<SelectedCustomer | null>(null);
+  const [abonoAmount, setAbonoAmount] = useState('');
+  const [abonoMethod, setAbonoMethod] = useState<'cash' | 'transfer'>('cash');
   const [cashAmount, setCashAmount] = useState('');
   const [cardAmount, setCardAmount] = useState('');
 
@@ -356,6 +358,8 @@ export default function NewSalePage() {
     setCardAmount('');
     setPaymentMethod('cash');
     setSelectedCustomer(null);
+    setAbonoAmount('');
+    setAbonoMethod('cash');
     barcodeInputRef.current?.focus();
   };
 
@@ -380,12 +384,19 @@ export default function NewSalePage() {
 
     const sale = await processSale({
       paymentMethod,
-      cashAmount: paymentMethod === 'cash' || paymentMethod === 'mixed' ? parseFloat(cashAmount || '0') : undefined,
+      cashAmount:
+        paymentMethod === 'cash' || paymentMethod === 'mixed'
+          ? parseFloat(cashAmount || '0')
+          : paymentMethod === 'debe' && abonoMethod === 'cash'
+          ? parseFloat(abonoAmount || '0')
+          : undefined,
       cardAmount:
         paymentMethod === 'card' || paymentMethod === 'transfer'
           ? total
           : paymentMethod === 'mixed'
           ? parseFloat(cardAmount || '0')
+          : paymentMethod === 'debe' && abonoMethod === 'transfer'
+          ? parseFloat(abonoAmount || '0')
           : undefined,
       customerId: customerData.customerId,
       customerName: customerData.customerName,
@@ -832,10 +843,38 @@ export default function NewSalePage() {
           </label>
 
           {paymentMethod === 'debe' && (
-            <div className="bg-amber-50 border border-amber-200 rounded-lg p-2 lg:p-3 mb-2">
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-2 lg:p-3 mb-2 space-y-2">
               <p className="text-xs lg:text-sm text-amber-800">
-                Venta a crédito: tendrás que elegir o registrar el cliente que queda debiendo. Se cobra después desde "Fiados".
+                Venta a crédito: elige/registra el cliente que queda debiendo. Se cobra después desde "Fiados".
               </p>
+              <div>
+                <label className="block text-xs font-medium text-amber-900 mb-1">Abono ahora (opcional)</label>
+                <div className="flex gap-2">
+                  <input
+                    type="number"
+                    value={abonoAmount}
+                    onChange={(e) => setAbonoAmount(e.target.value)}
+                    placeholder="0"
+                    min="0"
+                    max={total}
+                    className="flex-1 px-3 py-2 border border-amber-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500"
+                  />
+                  <select
+                    value={abonoMethod}
+                    onChange={(e) => setAbonoMethod(e.target.value as 'cash' | 'transfer')}
+                    className="px-2 py-2 border border-amber-300 rounded-lg text-sm bg-white"
+                  >
+                    <option value="cash">Efectivo</option>
+                    <option value="transfer">Transfer</option>
+                  </select>
+                </div>
+                {parseFloat(abonoAmount || '0') > 0 && (
+                  <p className="text-xs text-amber-800 mt-1">
+                    Queda debiendo:{' '}
+                    <strong>${Math.max(0, total - parseFloat(abonoAmount || '0')).toLocaleString()}</strong>
+                  </p>
+                )}
+              </div>
             </div>
           )}
 

@@ -441,6 +441,10 @@ class POSService
                 throw new RuntimeException('Para una venta a crédito (Debe) debes seleccionar o registrar un cliente.');
             }
 
+            // ¿Queda como deuda? Solo si es "debe" y el abono no cubre el total.
+            $abonoPaid = (float) ($data['cashAmount'] ?? 0) + (float) ($data['cardAmount'] ?? 0);
+            $leavesDebt = $isDebt && ($abonoPaid + 0.01 < $calculation['total']);
+
             $order = Order::create([
                 'orderNumber' => $this->generateOrderNumber(),
                 'posCustomerId' => $posCustomerId,
@@ -451,7 +455,7 @@ class POSService
                 'discount' => $calculation['discount'],
                 'tax' => $calculation['tax'],
                 'total' => $calculation['total'],
-                'status' => $isDebt ? 'PENDING' : 'PAID',
+                'status' => $leavesDebt ? 'PENDING' : 'PAID',
                 'paymentMethod' => $data['paymentMethod'],
                 'paymentRef' => $data['cardReference'] ?? ('POS-'.(int) (microtime(true) * 1000)),
                 'cashAmount' => $data['cashAmount'] ?? null,
@@ -463,14 +467,14 @@ class POSService
                 'sellerId' => $data['sellerId'],
                 'cashRegisterId' => $data['cashRegisterId'],
                 'statusHistory' => [[
-                    'status' => $isDebt ? 'PENDING' : 'PAID',
+                    'status' => $leavesDebt ? 'PENDING' : 'PAID',
                     'timestamp' => now()->toIso8601String(),
-                    'note' => $isDebt
+                    'note' => $leavesDebt
                         ? 'Venta POS a crédito (Debe) - pendiente de cobro'
                         : 'Venta POS - '.$data['paymentMethod']
                             .(! empty($data['cardReference']) ? ' - Ref: '.$data['cardReference'] : ''),
                 ]],
-                'paidAt' => $isDebt ? null : now(),
+                'paidAt' => $leavesDebt ? null : now(),
                 'notes' => $data['notes'] ?? null,
             ]);
 
@@ -675,7 +679,7 @@ class POSService
         ]);
     }
 
-    /** Lista los fiados POS pendientes de cobro (GET /pos/debts). */
+    /** Lista los fiados POS pendientes de cobro, con saldo (GET /pos/debts). */
     public function pendingDebts(): array
     {
         return Order::where('saleChannel', 'POS')
@@ -683,20 +687,29 @@ class POSService
             ->where('status', 'PENDING')
             ->orderByDesc('createdAt')
             ->get()
-            ->map(fn ($o) => [
-                'id' => $o->id,
-                'orderNumber' => $o->orderNumber,
-                'posCustomerId' => $o->posCustomerId,
-                'customerName' => $o->customerName,
-                'customerPhone' => $o->customerPhone,
-                'total' => (float) $o->total,
-                'createdAt' => $o->createdAt,
-            ])
+            ->map(function ($o) {
+                $paid = (float) ($o->cashAmount ?? 0) + (float) ($o->cardAmount ?? 0);
+
+                return [
+                    'id' => $o->id,
+                    'orderNumber' => $o->orderNumber,
+                    'posCustomerId' => $o->posCustomerId,
+                    'customerName' => $o->customerName,
+                    'customerPhone' => $o->customerPhone,
+                    'total' => (float) $o->total,
+                    'paid' => $paid,
+                    'remaining' => max(0, (float) $o->total - $paid),
+                    'createdAt' => $o->createdAt,
+                ];
+            })
             ->all();
     }
 
-    /** Cobra un fiado: lo marca PAID con el método de cobro (POST /pos/sale/{id}/collect). */
-    public function collectDebt(int $orderId, string $paymentMethod, int $userId): Order
+    /**
+     * Registra un abono a un fiado (POST /pos/sale/{id}/collect). Acepta pagos
+     * parciales: suma al pagado y salda (PAID) solo cuando se completa el total.
+     */
+    public function collectDebt(int $orderId, string $paymentMethod, int $userId, ?float $amount = null): Order
     {
         $order = Order::find($orderId);
         if (! $order || $order->saleChannel !== 'POS' || $order->paymentMethod !== 'debe') {
@@ -706,23 +719,37 @@ class POSService
             throw new RuntimeException('Este fiado ya fue cobrado o cancelado');
         }
 
-        // Atribuir el cobro a la sesión de caja abierta del cobrador, para que el
-        // efectivo recibido ahora cuadre en el cierre de esa caja.
-        $session = CashSession::where('sellerId', $userId)->where('status', 'OPEN')->first();
-        if ($session) {
-            $order->cashRegisterId = $session->cashRegisterId;
+        $paid = (float) ($order->cashAmount ?? 0) + (float) ($order->cardAmount ?? 0);
+        $remaining = max(0, (float) $order->total - $paid);
+        $collect = $amount !== null ? min($amount, $remaining) : $remaining;
+        if ($collect <= 0) {
+            throw new RuntimeException('El monto a cobrar debe ser mayor a 0');
         }
 
-        $order->status = 'PAID';
-        $order->paymentMethod = $paymentMethod;
-        $order->paidAt = now();
+        // El abono se acumula según el método (efectivo va a cashAmount).
+        if ($paymentMethod === 'cash') {
+            $order->cashAmount = (float) ($order->cashAmount ?? 0) + $collect;
+        } else {
+            $order->cardAmount = (float) ($order->cardAmount ?? 0) + $collect;
+        }
+
+        $newPaid = (float) ($order->cashAmount ?? 0) + (float) ($order->cardAmount ?? 0);
+        $fullyPaid = $newPaid + 0.01 >= (float) $order->total;
+        $newRemaining = max(0, (float) $order->total - $newPaid);
+
         $history = $order->statusHistory ?? [];
         $history[] = [
-            'status' => 'PAID',
+            'status' => $fullyPaid ? 'PAID' : 'PENDING',
             'timestamp' => now()->toIso8601String(),
-            'note' => 'Fiado cobrado - '.$paymentMethod,
+            'note' => 'Abono $'.number_format($collect, 0).' - '.$paymentMethod
+                .($fullyPaid ? ' (saldado)' : ' (saldo $'.number_format($newRemaining, 0).')'),
         ];
         $order->statusHistory = $history;
+
+        if ($fullyPaid) {
+            $order->status = 'PAID';
+            $order->paidAt = now();
+        }
         $order->save();
 
         return $order;

@@ -193,15 +193,16 @@ class POSController extends Controller
     {
         $data = $request->validate([
             'paymentMethod' => 'required|in:cash,card,transfer',
+            'amount' => 'nullable|numeric|min:0',
         ]);
 
         try {
-            $order = $this->pos->collectDebt($id, $data['paymentMethod'], $request->user()->id);
+            $order = $this->pos->collectDebt($id, $data['paymentMethod'], $request->user()->id, $data['amount'] ?? null);
         } catch (\RuntimeException $e) {
             return $this->error($e->getMessage(), 400);
         }
 
-        return $this->success($order, 'Fiado cobrado exitosamente');
+        return $this->success($order, 'Abono registrado exitosamente');
     }
 
     /** Arma los datos de la factura a partir de la orden. */

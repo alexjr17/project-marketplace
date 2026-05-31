@@ -8,6 +8,7 @@ export default function DebtsPage() {
   const [loading, setLoading] = useState(true);
   const [collectingId, setCollectingId] = useState<number | null>(null);
   const [choosingId, setChoosingId] = useState<number | null>(null);
+  const [abonoInput, setAbonoInput] = useState('');
   const [error, setError] = useState('');
 
   const load = useCallback(async () => {
@@ -26,20 +27,32 @@ export default function DebtsPage() {
     load();
   }, [load]);
 
+  const openCollect = (d: PendingDebt) => {
+    setChoosingId(d.id);
+    setAbonoInput(String(d.remaining));
+    setError('');
+  };
+
   const handleCollect = async (id: number, method: 'cash' | 'transfer') => {
+    const amount = parseFloat(abonoInput || '0');
+    if (!amount || amount <= 0) {
+      setError('Ingresa un monto válido');
+      return;
+    }
     setCollectingId(id);
     try {
-      await posService.collectDebt(id, method);
+      await posService.collectDebt(id, method, amount);
       setChoosingId(null);
+      setAbonoInput('');
       await load();
     } catch (e: any) {
-      setError(e?.response?.data?.message || 'No se pudo cobrar el fiado');
+      setError(e?.response?.data?.message || 'No se pudo registrar el abono');
     } finally {
       setCollectingId(null);
     }
   };
 
-  const totalPending = debts.reduce((sum, d) => sum + d.total, 0);
+  const totalPending = debts.reduce((sum, d) => sum + d.remaining, 0);
 
   return (
     <div className="p-4 lg:p-6 max-w-3xl mx-auto">
@@ -90,44 +103,70 @@ export default function DebtsPage() {
                     {d.orderNumber} · {new Date(d.createdAt).toLocaleString()}
                   </p>
                 </div>
-                <span className="text-lg font-bold text-amber-700 whitespace-nowrap">
-                  ${d.total.toLocaleString()}
-                </span>
+                <div className="text-right whitespace-nowrap">
+                  <p className="text-lg font-bold text-amber-700">${d.remaining.toLocaleString()}</p>
+                  {d.paid > 0 && (
+                    <p className="text-xs text-gray-400">
+                      de ${d.total.toLocaleString()} · abonado ${d.paid.toLocaleString()}
+                    </p>
+                  )}
+                </div>
               </div>
 
-              <div className="mt-3 flex justify-end">
+              <div className="mt-3">
                 {choosingId === d.id ? (
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-gray-500">Cobrar con:</span>
-                    <button
-                      onClick={() => handleCollect(d.id, 'cash')}
-                      disabled={collectingId === d.id}
-                      className="flex items-center gap-1 px-3 py-1.5 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 disabled:opacity-50"
-                    >
-                      <DollarSign className="w-4 h-4" /> Efectivo
-                    </button>
-                    <button
-                      onClick={() => handleCollect(d.id, 'transfer')}
-                      disabled={collectingId === d.id}
-                      className="flex items-center gap-1 px-3 py-1.5 bg-purple-600 text-white text-sm rounded-lg hover:bg-purple-700 disabled:opacity-50"
-                    >
-                      <Smartphone className="w-4 h-4" /> Transfer
-                    </button>
-                    <button
-                      onClick={() => setChoosingId(null)}
-                      disabled={collectingId === d.id}
-                      className="px-2 py-1.5 text-gray-500 text-sm hover:text-gray-700"
-                    >
-                      Cancelar
-                    </button>
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-gray-500 whitespace-nowrap">Abono:</span>
+                      <input
+                        type="number"
+                        value={abonoInput}
+                        onChange={(e) => setAbonoInput(e.target.value)}
+                        min="0"
+                        max={d.remaining}
+                        className="w-28 px-2 py-1.5 border border-gray-300 rounded-lg text-sm"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setAbonoInput(String(d.remaining))}
+                        className="text-xs text-amber-600 hover:text-amber-800"
+                      >
+                        Todo (${d.remaining.toLocaleString()})
+                      </button>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handleCollect(d.id, 'cash')}
+                        disabled={collectingId === d.id}
+                        className="flex items-center gap-1 px-3 py-1.5 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 disabled:opacity-50"
+                      >
+                        <DollarSign className="w-4 h-4" /> Efectivo
+                      </button>
+                      <button
+                        onClick={() => handleCollect(d.id, 'transfer')}
+                        disabled={collectingId === d.id}
+                        className="flex items-center gap-1 px-3 py-1.5 bg-purple-600 text-white text-sm rounded-lg hover:bg-purple-700 disabled:opacity-50"
+                      >
+                        <Smartphone className="w-4 h-4" /> Transfer
+                      </button>
+                      <button
+                        onClick={() => setChoosingId(null)}
+                        disabled={collectingId === d.id}
+                        className="px-2 py-1.5 text-gray-500 text-sm hover:text-gray-700"
+                      >
+                        Cancelar
+                      </button>
+                    </div>
                   </div>
                 ) : (
-                  <button
-                    onClick={() => setChoosingId(d.id)}
-                    className="flex items-center gap-1.5 px-4 py-1.5 bg-amber-500 text-white text-sm font-medium rounded-lg hover:bg-amber-600"
-                  >
-                    <CheckCircle className="w-4 h-4" /> Marcar como pagado
-                  </button>
+                  <div className="flex justify-end">
+                    <button
+                      onClick={() => openCollect(d)}
+                      className="flex items-center gap-1.5 px-4 py-1.5 bg-amber-500 text-white text-sm font-medium rounded-lg hover:bg-amber-600"
+                    >
+                      <CheckCircle className="w-4 h-4" /> Registrar abono / pagar
+                    </button>
+                  </div>
                 )}
               </div>
             </div>

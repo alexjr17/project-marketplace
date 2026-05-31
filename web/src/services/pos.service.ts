@@ -368,6 +368,8 @@ export interface PendingDebt {
   customerName: string;
   customerPhone: string | null;
   total: number;
+  paid: number;
+  remaining: number;
   createdAt: string;
 }
 
@@ -388,11 +390,12 @@ export async function getDebts(): Promise<PendingDebt[]> {
  */
 export async function collectDebt(
   saleId: number,
-  paymentMethod: 'cash' | 'card' | 'transfer'
+  paymentMethod: 'cash' | 'card' | 'transfer',
+  amount?: number
 ): Promise<Sale> {
   const response = await axios.post(
     `${API_URL}/pos/sale/${saleId}/collect`,
-    { paymentMethod },
+    { paymentMethod, amount },
     {
       headers: {
         Authorization: `Bearer ${getAuthToken()}`,
