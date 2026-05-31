@@ -35,7 +35,7 @@ return new class extends Migration
 
         Schema::create('pos_customers', function (Blueprint $table) {
             $table->id();
-            $table->string('cedula')->unique();
+            $table->string('cedula')->nullable()->unique();
             $table->string('name');
             $table->string('email')->nullable();
             $table->string('phone')->nullable();
