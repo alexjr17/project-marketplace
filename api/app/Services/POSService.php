@@ -673,14 +673,25 @@ class POSService
                 ->orWhere('phone', 'like', "%{$t}%"));
         }
         $customers = $query->orderBy('name')->limit($limit)->get();
+        $ids = $customers->pluck('id')->all();
 
-        // Deuda pendiente por cliente (una sola consulta, agrupada en PHP).
-        $debtByCustomer = [];
-        Order::where('paymentMethod', 'debe')->where('status', 'PENDING')
-            ->get(['posCustomerId', 'total', 'cashAmount', 'cardAmount'])
-            ->each(function ($o) use (&$debtByCustomer) {
-                $rem = max(0, (float) $o->total - ((float) ($o->cashAmount ?? 0) + (float) ($o->cardAmount ?? 0)));
-                $debtByCustomer[$o->posCustomerId] = ($debtByCustomer[$o->posCustomerId] ?? 0) + $rem;
+        // Compras, gastado y deuda por cliente (calculado desde las órdenes).
+        $agg = [];
+        Order::where('saleChannel', 'POS')->whereIn('posCustomerId', $ids)
+            ->get(['posCustomerId', 'total', 'status', 'paymentMethod', 'cashAmount', 'cardAmount'])
+            ->each(function ($o) use (&$agg) {
+                $id = $o->posCustomerId;
+                if (! $id) {
+                    return;
+                }
+                $agg[$id] ??= ['count' => 0, 'spent' => 0.0, 'debt' => 0.0];
+                if ($o->status !== 'CANCELLED') {
+                    $agg[$id]['count']++;
+                    $agg[$id]['spent'] += (float) $o->total;
+                }
+                if ($o->paymentMethod === 'debe' && $o->status === 'PENDING') {
+                    $agg[$id]['debt'] += max(0, (float) $o->total - ((float) ($o->cashAmount ?? 0) + (float) ($o->cardAmount ?? 0)));
+                }
             });
 
         return $customers->map(fn ($c) => [
@@ -689,9 +700,9 @@ class POSService
             'cedula' => $c->cedula,
             'phone' => $c->phone,
             'email' => $c->email,
-            'totalPurchases' => (int) $c->totalPurchases,
-            'totalSpent' => (float) $c->totalSpent,
-            'debt' => (float) ($debtByCustomer[$c->id] ?? 0),
+            'totalPurchases' => (int) ($agg[$c->id]['count'] ?? 0),
+            'totalSpent' => (float) ($agg[$c->id]['spent'] ?? 0),
+            'debt' => (float) ($agg[$c->id]['debt'] ?? 0),
         ])->all();
     }
 
@@ -723,6 +734,7 @@ class POSService
                 ];
             });
 
+        $nonCancelled = $orders->where('status', '!=', 'CANCELLED');
         $debt = $orders->where('paymentMethod', 'debe')->where('status', 'PENDING')->sum('remaining');
 
         return [
@@ -731,8 +743,8 @@ class POSService
             'cedula' => $c->cedula,
             'phone' => $c->phone,
             'email' => $c->email,
-            'totalPurchases' => (int) $c->totalPurchases,
-            'totalSpent' => (float) $c->totalSpent,
+            'totalPurchases' => $nonCancelled->count(),
+            'totalSpent' => (float) $nonCancelled->sum('total'),
             'debt' => (float) $debt,
             'orders' => $orders->all(),
         ];
