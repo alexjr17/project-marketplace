@@ -17,6 +17,7 @@ class DatabaseSeeder extends Seeder
             CatalogSeeder::class,
             InventorySeeder::class,
             CommerceSeeder::class,
+            FoodProductsSeeder::class,
             PurchaseSeeder::class,
             SettingsSeeder::class,
             ShippingSeeder::class,
