@@ -72,6 +72,7 @@ export const CheckoutModal = ({
   // Autocompletar por nombre
   const [nameResults, setNameResults] = useState<CustomerSearchResult[]>([]);
   const [showNameResults, setShowNameResults] = useState(false);
+  const [editingCustomer, setEditingCustomer] = useState(false);
   const isDebt = paymentMethod === 'debe';
   const [sendInvoiceEmail, setSendInvoiceEmail] = useState(false);
 
@@ -126,6 +127,7 @@ export const CheckoutModal = ({
       setPdfUrl(null);
       setEmailSent(false);
       setSendInvoiceEmail(!!initialCustomer?.email);
+      setEditingCustomer(false);
       // Reset card data
       setCardReference('');
       setCardType('');
@@ -362,19 +364,28 @@ export const CheckoutModal = ({
                 )}
                 {/* Cliente ya elegido en la pantalla de venta */}
                 {initialCustomer && (
-                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex items-center gap-3">
-                    <User className="w-5 h-5 text-blue-600 flex-shrink-0" />
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-gray-900 truncate">{initialCustomer.name}</p>
-                      <p className="text-xs text-gray-500 truncate">
-                        {initialCustomer.cedula
-                          ? `CC/NIT ${initialCustomer.cedula}`
-                          : initialCustomer.id
-                          ? 'Cliente existente'
-                          : 'Cliente nuevo · se registra al cobrar'}
-                        {initialCustomer.phone ? ` · ${initialCustomer.phone}` : ''}
-                      </p>
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <User className="w-5 h-5 text-blue-600 flex-shrink-0" />
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-gray-900 truncate">{initialCustomer.name}</p>
+                        <p className="text-xs text-gray-500 truncate">
+                          {initialCustomer.cedula
+                            ? `CC/NIT ${initialCustomer.cedula}`
+                            : initialCustomer.id
+                            ? 'Cliente existente'
+                            : 'Cliente nuevo · se registra al cobrar'}
+                          {initialCustomer.phone ? ` · ${initialCustomer.phone}` : ''}
+                        </p>
+                      </div>
                     </div>
+                    <button
+                      type="button"
+                      onClick={() => setEditingCustomer((v) => !v)}
+                      className="text-xs font-medium text-blue-600 hover:text-blue-800 flex-shrink-0"
+                    >
+                      {editingCustomer ? 'Listo' : 'Editar'}
+                    </button>
                   </div>
                 )}
 
@@ -468,6 +479,7 @@ export const CheckoutModal = ({
                 )}
 
                 {/* Phone */}
+                {(!initialCustomer || editingCustomer) && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Teléfono
@@ -483,8 +495,10 @@ export const CheckoutModal = ({
                     />
                   </div>
                 </div>
+                )}
 
                 {/* Email */}
+                {(!initialCustomer || editingCustomer) && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Email para factura
@@ -516,6 +530,7 @@ export const CheckoutModal = ({
                     </label>
                   )}
                 </div>
+                )}
 
                 {/* Transaction Details - Only for card, transfer or mixed */}
                 {(paymentMethod === 'card' || paymentMethod === 'transfer' || paymentMethod === 'mixed') && (
