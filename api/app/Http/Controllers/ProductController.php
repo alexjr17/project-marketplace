@@ -314,14 +314,17 @@ class ProductController extends Controller
             }
             $product->save();
 
-            if (! empty($colorIds)) {
+            // Si se envía la clave 'colors' (aunque sea []), se reemplaza el set
+            // completo: una lista vacía deja el producto SIN colores. Si no se
+            // envía la clave, no se tocan los colores existentes.
+            if (array_key_exists('colors', $data)) {
                 ProductColor::where('productId', $product->id)->delete();
                 foreach ($colorIds as $colorId) {
                     ProductColor::create(['productId' => $product->id, 'colorId' => $colorId]);
                 }
                 $variantsNeedUpdate = true;
             }
-            if (! empty($sizeIds)) {
+            if (array_key_exists('sizes', $data)) {
                 ProductSize::where('productId', $product->id)->delete();
                 foreach ($sizeIds as $sizeId) {
                     ProductSize::create(['productId' => $product->id, 'sizeId' => $sizeId]);
