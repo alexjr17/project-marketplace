@@ -463,9 +463,9 @@ export default function NewSalePage() {
   }
 
   return (
-    <div className="h-full flex flex-col lg:flex-row gap-4">
+    <div className="lg:h-full flex flex-col lg:flex-row gap-4">
       {/* Left Column - Cart */}
-      <div className="flex-1 flex flex-col min-h-0 lg:min-h-0 max-h-[50vh] lg:max-h-none">
+      <div className="flex-1 flex flex-col min-h-0 lg:max-h-none">
         {/* Scanner Input */}
         <div className="bg-white rounded-lg shadow-sm p-3 sm:p-4 mb-3 sm:mb-4">
           <form onSubmit={handleScan} className="flex gap-2">
