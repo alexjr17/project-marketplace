@@ -1062,6 +1062,7 @@ export default function NewSalePage() {
         total={total}
         paymentMethod={paymentMethod}
         initialCustomer={selectedCustomer}
+        abono={paymentMethod === 'debe' ? parseFloat(abonoAmount || '0') : 0}
         taxRate={settings.payment?.taxRate || 19}
       />
 

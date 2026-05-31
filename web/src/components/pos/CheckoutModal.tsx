@@ -48,6 +48,7 @@ interface CheckoutModalProps {
   total: number;
   paymentMethod: 'cash' | 'card' | 'transfer' | 'mixed' | 'debe';
   initialCustomer?: SelectedCustomer | null;
+  abono?: number;
   taxRate?: number;
 }
 
@@ -58,6 +59,7 @@ export const CheckoutModal = ({
   total,
   paymentMethod,
   initialCustomer,
+  abono = 0,
   taxRate = 19,
 }: CheckoutModalProps) => {
   const [step, setStep] = useState<CheckoutStep>('customer');
@@ -628,6 +630,20 @@ export const CheckoutModal = ({
                        paymentMethod === 'debe' ? 'Debe (fiado)' : 'Mixto'}
                     </span>
                   </div>
+                  {isDebt && abono > 0 && (
+                    <>
+                      <div className="flex justify-between items-center mt-2 text-sm">
+                        <span className="text-gray-500">Abono ahora:</span>
+                        <span className="font-medium text-green-700">${abono.toLocaleString()}</span>
+                      </div>
+                      <div className="flex justify-between items-center mt-1 text-sm">
+                        <span className="text-gray-500">Queda debiendo:</span>
+                        <span className="font-bold text-amber-700">
+                          ${Math.max(0, total - abono).toLocaleString()}
+                        </span>
+                      </div>
+                    </>
+                  )}
                 </div>
 
                 {/* Action Buttons */}
