@@ -206,6 +206,23 @@ class POSController extends Controller
         return $this->success($order, 'Abono registrado exitosamente');
     }
 
+    /** GET /api/pos/customers — lista de clientes con su deuda. */
+    public function customers(Request $request)
+    {
+        return $this->success($this->pos->listCustomers($request->query('q')));
+    }
+
+    /** GET /api/pos/customers/{id} — detalle del cliente con su historial. */
+    public function customerDetail(int $id)
+    {
+        $data = $this->pos->customerDetail($id);
+        if (! $data) {
+            return $this->error('Cliente no encontrado', 404);
+        }
+
+        return $this->success($data);
+    }
+
     /** Arma los datos de la factura a partir de la orden. */
     private function invoiceData($order): array
     {

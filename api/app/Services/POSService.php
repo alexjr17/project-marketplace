@@ -662,6 +662,82 @@ class POSService
             ->all();
     }
 
+    /** Lista de clientes POS con su deuda actual (módulo Clientes). */
+    public function listCustomers(?string $q = null, int $limit = 100): array
+    {
+        $query = POSCustomer::query();
+        if ($q !== null && trim($q) !== '') {
+            $t = trim($q);
+            $query->where(fn ($w) => $w->where('name', 'like', "%{$t}%")
+                ->orWhere('cedula', 'like', "%{$t}%")
+                ->orWhere('phone', 'like', "%{$t}%"));
+        }
+        $customers = $query->orderBy('name')->limit($limit)->get();
+
+        // Deuda pendiente por cliente (una sola consulta, agrupada en PHP).
+        $debtByCustomer = [];
+        Order::where('paymentMethod', 'debe')->where('status', 'PENDING')
+            ->get(['posCustomerId', 'total', 'cashAmount', 'cardAmount'])
+            ->each(function ($o) use (&$debtByCustomer) {
+                $rem = max(0, (float) $o->total - ((float) ($o->cashAmount ?? 0) + (float) ($o->cardAmount ?? 0)));
+                $debtByCustomer[$o->posCustomerId] = ($debtByCustomer[$o->posCustomerId] ?? 0) + $rem;
+            });
+
+        return $customers->map(fn ($c) => [
+            'id' => $c->id,
+            'name' => $c->name,
+            'cedula' => $c->cedula,
+            'phone' => $c->phone,
+            'email' => $c->email,
+            'totalPurchases' => (int) $c->totalPurchases,
+            'totalSpent' => (float) $c->totalSpent,
+            'debt' => (float) ($debtByCustomer[$c->id] ?? 0),
+        ])->all();
+    }
+
+    /** Detalle de un cliente POS: info + historial de compras + deuda. */
+    public function customerDetail(int $id): ?array
+    {
+        $c = POSCustomer::find($id);
+        if (! $c) {
+            return null;
+        }
+
+        $orders = Order::where('posCustomerId', $id)
+            ->withCount('items')
+            ->orderByDesc('createdAt')
+            ->get()
+            ->map(function ($o) {
+                $paid = (float) ($o->cashAmount ?? 0) + (float) ($o->cardAmount ?? 0);
+
+                return [
+                    'id' => $o->id,
+                    'orderNumber' => $o->orderNumber,
+                    'total' => (float) $o->total,
+                    'status' => $o->status,
+                    'paymentMethod' => $o->paymentMethod,
+                    'paid' => $paid,
+                    'remaining' => max(0, (float) $o->total - $paid),
+                    'itemsCount' => (int) $o->items_count,
+                    'createdAt' => $o->createdAt,
+                ];
+            });
+
+        $debt = $orders->where('paymentMethod', 'debe')->where('status', 'PENDING')->sum('remaining');
+
+        return [
+            'id' => $c->id,
+            'name' => $c->name,
+            'cedula' => $c->cedula,
+            'phone' => $c->phone,
+            'email' => $c->email,
+            'totalPurchases' => (int) $c->totalPurchases,
+            'totalSpent' => (float) $c->totalSpent,
+            'debt' => (float) $debt,
+            'orders' => $orders->all(),
+        ];
+    }
+
     /** Crea o devuelve un cliente POS por nombre (sin requerir cédula). */
     public function findOrCreateCustomerByName(string $name): POSCustomer
     {

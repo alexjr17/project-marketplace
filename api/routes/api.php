@@ -547,6 +547,8 @@ Route::prefix('pos')->middleware('auth:sanctum')->group(function () {
     Route::get('debts', [POSController::class, 'debts'])->middleware('permission:pos.access,pos.view_sales');
     Route::post('sale/{id}/collect', [POSController::class, 'collectDebt'])->whereNumber('id')->middleware('permission:pos.access,pos.create_sale');
     Route::get('customer/search', [POSController::class, 'customerSearch'])->middleware('permission:pos.access,pos.create_sale');
+    Route::get('customers', [POSController::class, 'customers'])->middleware('permission:pos.access,pos.view_sales');
+    Route::get('customers/{id}', [POSController::class, 'customerDetail'])->whereNumber('id')->middleware('permission:pos.access,pos.view_sales');
     Route::get('sale/{id}', [POSController::class, 'saleDetail'])->whereNumber('id')->middleware('permission:pos.access,pos.view_sales');
     Route::post('sale/{id}/send-invoice', [POSController::class, 'sendInvoice'])->whereNumber('id')->middleware('permission:pos.access,pos.view_sales');
     Route::get('sale/{id}/invoice-pdf', [POSController::class, 'invoicePdf'])->whereNumber('id')->middleware('permission:pos.access,pos.view_sales');
