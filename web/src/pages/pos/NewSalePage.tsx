@@ -549,7 +549,7 @@ export default function NewSalePage() {
           {showProductsList && (
             <div
               onScroll={handleProductsScroll}
-              className="max-h-80 overflow-y-auto border-t border-gray-200 p-3"
+              className="max-h-[60vh] lg:max-h-80 overflow-y-auto border-t border-gray-200 p-3"
             >
               <div className="grid grid-cols-2 lg:grid-cols-3 gap-2">
                 {browseItems.map((item, index) => {
@@ -568,19 +568,19 @@ export default function NewSalePage() {
                         <img
                           src={item.image}
                           alt={item.name}
-                          className="w-full h-20 object-cover rounded mb-1.5"
+                          className="w-full h-28 lg:h-20 object-cover rounded mb-1.5"
                         />
                       ) : (
-                        <div className="w-full h-20 bg-gray-100 rounded mb-1.5 flex items-center justify-center">
-                          <Package className="w-6 h-6 text-gray-300" />
+                        <div className="w-full h-28 lg:h-20 bg-gray-100 rounded mb-1.5 flex items-center justify-center">
+                          <Package className="w-8 h-8 lg:w-6 lg:h-6 text-gray-300" />
                         </div>
                       )}
-                      <p className="text-xs font-medium text-gray-900 leading-tight line-clamp-2">
+                      <p className="text-sm lg:text-xs font-medium text-gray-900 leading-tight line-clamp-2">
                         {item.name}
                       </p>
                       <div className="flex items-center justify-between mt-1">
                         <span
-                          className={`text-sm font-bold ${isProduct ? 'text-gray-900' : 'text-purple-600'}`}
+                          className={`text-base lg:text-sm font-bold ${isProduct ? 'text-gray-900' : 'text-purple-600'}`}
                         >
                           ${price.toLocaleString()}
                         </span>
