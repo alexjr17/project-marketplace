@@ -24,6 +24,7 @@ import {
   Camera,
   Package,
   Loader2,
+  Clock,
 } from 'lucide-react';
 
 export default function NewSalePage() {
@@ -60,7 +61,7 @@ export default function NewSalePage() {
   const [selectedTemplate, setSelectedTemplate] = useState<TemplateSearchResult | null>(null);
 
   // Payment state
-  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'transfer' | 'mixed'>('cash');
+  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'transfer' | 'mixed' | 'debe'>('cash');
   const [cashAmount, setCashAmount] = useState('');
   const [cardAmount, setCardAmount] = useState('');
 
@@ -328,17 +329,19 @@ export default function NewSalePage() {
       return;
     }
 
-    // Validate payment amounts
-    const totalPaid =
-      paymentMethod === 'cash'
-        ? parseFloat(cashAmount || '0')
-        : paymentMethod === 'card' || paymentMethod === 'transfer'
-        ? total
-        : parseFloat(cashAmount || '0') + parseFloat(cardAmount || '0');
+    // Para fiado (debe) no se recibe dinero ahora; el cliente se valida en el checkout.
+    if (paymentMethod !== 'debe') {
+      const totalPaid =
+        paymentMethod === 'cash'
+          ? parseFloat(cashAmount || '0')
+          : paymentMethod === 'card' || paymentMethod === 'transfer'
+          ? total
+          : parseFloat(cashAmount || '0') + parseFloat(cardAmount || '0');
 
-    if (totalPaid < total) {
-      showToast('El monto pagado es insuficiente', 'error');
-      return;
+      if (totalPaid < total) {
+        showToast('El monto pagado es insuficiente', 'error');
+        return;
+      }
     }
 
     setShowCheckoutModal(true);
@@ -804,6 +807,28 @@ export default function NewSalePage() {
               <span className="text-xs lg:text-sm font-medium text-gray-500">Tarjeta</span>
             </label>
           </div>
+
+          {/* Debe / Fiado */}
+          <label className={`flex items-center gap-1.5 lg:gap-2 p-2 lg:p-2.5 border-2 rounded-lg cursor-pointer transition-colors mb-2 ${paymentMethod === 'debe' ? 'border-amber-500 bg-amber-50' : 'border-gray-200 hover:bg-gray-50'}`}>
+            <input
+              type="radio"
+              name="paymentMethod"
+              value="debe"
+              checked={paymentMethod === 'debe'}
+              onChange={() => setPaymentMethod('debe')}
+              className="w-3.5 h-3.5 lg:w-4 lg:h-4 text-amber-600"
+            />
+            <Clock className="w-3.5 h-3.5 lg:w-4 lg:h-4 text-amber-600" />
+            <span className="text-xs lg:text-sm font-medium">Debe (fiado)</span>
+          </label>
+
+          {paymentMethod === 'debe' && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-2 lg:p-3 mb-2">
+              <p className="text-xs lg:text-sm text-amber-800">
+                Venta a crédito: tendrás que elegir o registrar el cliente que queda debiendo. Se cobra después desde "Fiados".
+              </p>
+            </div>
+          )}
 
           {/* Info del método bloqueado - Hidden on mobile */}
           <p className="hidden lg:block text-xs text-gray-400 text-center mb-3">

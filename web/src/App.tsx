@@ -86,6 +86,7 @@ import POSLayout from './components/pos/POSLayout';
 import POSDashboard from './pages/pos/POSDashboard';
 import NewSalePage from './pages/pos/NewSalePage';
 import SalesHistoryPage from './pages/pos/SalesHistoryPage';
+import DebtsPage from './pages/pos/DebtsPage';
 import CashRegisterPage from './pages/pos/CashRegisterPage';
 import type { Permission } from './types/roles';
 
@@ -182,6 +183,7 @@ function App() {
                                       <Route path="/" element={<POSDashboard />} />
                                       <Route path="/sale" element={<NewSalePage />} />
                                       <Route path="/history" element={<SalesHistoryPage />} />
+                                      <Route path="/debts" element={<DebtsPage />} />
                                       <Route path="/cash" element={<CashRegisterPage />} />
                                       <Route path="*" element={<Navigate to="/pos" replace />} />
                                     </Routes>

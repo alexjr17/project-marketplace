@@ -60,7 +60,7 @@ export interface CreateSaleRequest {
   customerEmail?: string;
   customerPhone?: string;
   customerCedula?: string; // NIT/Cédula del cliente para registro
-  paymentMethod: 'cash' | 'card' | 'transfer' | 'mixed';
+  paymentMethod: 'cash' | 'card' | 'transfer' | 'mixed' | 'debe';
   cashAmount?: number;
   cardAmount?: number;
   discount?: number;
@@ -345,6 +345,60 @@ export async function searchCustomerByCedula(cedula: string): Promise<CustomerSe
       Authorization: `Bearer ${getAuthToken()}`,
     },
   });
+  return response.data.data;
+}
+
+/**
+ * Search customers by name / cédula / phone (autocomplete). Returns a list.
+ */
+export async function searchCustomers(q: string): Promise<CustomerSearchResult[]> {
+  const response = await axios.get(`${API_URL}/pos/customer/search`, {
+    params: { q },
+    headers: {
+      Authorization: `Bearer ${getAuthToken()}`,
+    },
+  });
+  return response.data.data ?? [];
+}
+
+export interface PendingDebt {
+  id: number;
+  orderNumber: string;
+  posCustomerId: number | null;
+  customerName: string;
+  customerPhone: string | null;
+  total: number;
+  createdAt: string;
+}
+
+/**
+ * List pending POS debts (fiados).
+ */
+export async function getDebts(): Promise<PendingDebt[]> {
+  const response = await axios.get(`${API_URL}/pos/debts`, {
+    headers: {
+      Authorization: `Bearer ${getAuthToken()}`,
+    },
+  });
+  return response.data.data ?? [];
+}
+
+/**
+ * Collect a debt (fiado): mark it paid with the given collection method.
+ */
+export async function collectDebt(
+  saleId: number,
+  paymentMethod: 'cash' | 'card' | 'transfer'
+): Promise<Sale> {
+  const response = await axios.post(
+    `${API_URL}/pos/sale/${saleId}/collect`,
+    { paymentMethod },
+    {
+      headers: {
+        Authorization: `Bearer ${getAuthToken()}`,
+      },
+    }
+  );
   return response.data.data;
 }
 

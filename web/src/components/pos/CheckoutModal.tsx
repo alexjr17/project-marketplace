@@ -42,10 +42,10 @@ interface CheckoutModalProps {
     tax: number;
     total: number;
     change: number;
-    paymentMethod: 'cash' | 'card' | 'transfer' | 'mixed';
+    paymentMethod: 'cash' | 'card' | 'transfer' | 'mixed' | 'debe';
   }>;
   total: number;
-  paymentMethod: 'cash' | 'card' | 'transfer' | 'mixed';
+  paymentMethod: 'cash' | 'card' | 'transfer' | 'mixed' | 'debe';
   taxRate?: number;
 }
 
@@ -66,6 +66,10 @@ export const CheckoutModal = ({
   const [phoneInput, setPhoneInput] = useState('');
   const [customerFound, setCustomerFound] = useState<CustomerSearchResult | null>(null);
   const [isSearching, setIsSearching] = useState(false);
+  // Autocompletar por nombre
+  const [nameResults, setNameResults] = useState<CustomerSearchResult[]>([]);
+  const [showNameResults, setShowNameResults] = useState(false);
+  const isDebt = paymentMethod === 'debe';
   const [sendInvoiceEmail, setSendInvoiceEmail] = useState(false);
 
   // Card payment data
@@ -81,7 +85,7 @@ export const CheckoutModal = ({
     tax: number;
     total: number;
     change: number;
-    paymentMethod: 'cash' | 'card' | 'transfer' | 'mixed';
+    paymentMethod: 'cash' | 'card' | 'transfer' | 'mixed' | 'debe';
   } | null>(null);
 
   // PDF preview
@@ -147,6 +151,35 @@ export const CheckoutModal = ({
     }
   };
 
+  // Buscar clientes por nombre (autocompletar)
+  const handleNameChange = async (value: string) => {
+    setNameInput(value);
+    setCustomerFound(null); // al editar el nombre se deselecciona el cliente
+    if (value.trim().length < 2) {
+      setNameResults([]);
+      setShowNameResults(false);
+      return;
+    }
+    try {
+      const results = await posService.searchCustomers(value.trim());
+      setNameResults(results);
+      setShowNameResults(results.length > 0);
+    } catch {
+      setNameResults([]);
+      setShowNameResults(false);
+    }
+  };
+
+  const handleSelectCustomer = (c: CustomerSearchResult) => {
+    setCustomerFound(c);
+    setNameInput(c.name);
+    setEmailInput(c.email || '');
+    setPhoneInput(c.phone || '');
+    setNitInput(c.cedula || '');
+    setSendInvoiceEmail(!!c.email);
+    setShowNameResults(false);
+  };
+
   // Load PDF after sale is completed
   const loadPdf = async (saleId: number) => {
     try {
@@ -169,6 +202,12 @@ export const CheckoutModal = ({
       // You can make it required by uncommenting the next lines:
       // alert('Por favor ingrese la referencia del pago con tarjeta');
       // return;
+    }
+
+    // Fiado: exige cliente identificado (seleccionado o por nombre).
+    if (isDebt && !customerFound && !nameInput.trim()) {
+      alert('Para una venta a crédito (Debe) debes seleccionar o registrar un cliente.');
+      return;
     }
 
     setStep('processing');
@@ -300,6 +339,11 @@ export const CheckoutModal = ({
           {step === 'customer' && (
             <div className="flex-1 p-6 overflow-y-auto">
               <div className="max-w-lg mx-auto space-y-6">
+                {isDebt && (
+                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">
+                    <strong>Venta a crédito (Debe).</strong> Selecciona o registra el cliente que queda debiendo. Se cobra después desde "Fiados".
+                  </div>
+                )}
                 {/* NIT/Cédula Search */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -343,21 +387,46 @@ export const CheckoutModal = ({
                   )}
                 </div>
 
-                {/* Customer Name */}
+                {/* Customer Name (con autocompletar por nombre) */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Nombre / Razón Social
+                    Nombre / Razón Social {isDebt && <span className="text-red-500">*</span>}
                   </label>
                   <div className="relative">
                     <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
                     <input
                       type="text"
                       value={nameInput}
-                      onChange={(e) => setNameInput(e.target.value)}
-                      placeholder="Nombre del cliente o empresa"
+                      onChange={(e) => handleNameChange(e.target.value)}
+                      onFocus={() => nameResults.length > 0 && setShowNameResults(true)}
+                      placeholder="Escribe para buscar o registrar un cliente"
+                      autoComplete="off"
                       className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                     />
+                    {showNameResults && nameResults.length > 0 && (
+                      <div className="absolute z-20 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-56 overflow-y-auto">
+                        {nameResults.map((c) => (
+                          <button
+                            key={c.id}
+                            type="button"
+                            onClick={() => handleSelectCustomer(c)}
+                            className="w-full text-left px-4 py-2 hover:bg-orange-50 border-b last:border-b-0"
+                          >
+                            <p className="text-sm font-medium text-gray-900">{c.name}</p>
+                            <p className="text-xs text-gray-500">
+                              {c.cedula ? `CC/NIT ${c.cedula}` : 'Sin cédula'}
+                              {c.phone ? ` · ${c.phone}` : ''}
+                            </p>
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
+                  {customerFound && (
+                    <p className="mt-1 text-xs text-green-600 flex items-center gap-1">
+                      <CheckCircle className="w-3.5 h-3.5" /> Cliente seleccionado
+                    </p>
+                  )}
                 </div>
 
                 {/* Phone */}
@@ -501,7 +570,9 @@ export const CheckoutModal = ({
                     <span className="text-gray-500">Método de pago:</span>
                     <span className="font-medium text-gray-700">
                       {paymentMethod === 'cash' ? 'Efectivo' :
-                       paymentMethod === 'card' ? 'Tarjeta' : 'Mixto'}
+                       paymentMethod === 'card' ? 'Tarjeta' :
+                       paymentMethod === 'transfer' ? 'Transferencia' :
+                       paymentMethod === 'debe' ? 'Debe (fiado)' : 'Mixto'}
                     </span>
                   </div>
                 </div>
@@ -516,10 +587,11 @@ export const CheckoutModal = ({
                   </button>
                   <button
                     onClick={handleConfirmSale}
-                    className="flex-1 px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium flex items-center justify-center gap-2 transition-colors"
+                    disabled={isDebt && !customerFound && !nameInput.trim()}
+                    className="flex-1 px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium flex items-center justify-center gap-2 transition-colors"
                   >
                     <CheckCircle className="w-5 h-5" />
-                    Confirmar Venta
+                    {isDebt ? 'Registrar Fiado' : 'Confirmar Venta'}
                   </button>
                 </div>
               </div>
