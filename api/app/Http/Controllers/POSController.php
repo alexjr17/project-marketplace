@@ -20,6 +20,7 @@ class POSController extends Controller
         'card' => 'Tarjeta',
         'mixed' => 'Mixto (Efectivo + Tarjeta)',
         'transfer' => 'Transferencia',
+        'debe' => 'Debe (fiado)',
     ];
 
     /** POST /api/pos/scan */
@@ -232,6 +233,9 @@ class POSController extends Controller
             'tax' => (float) ($order->tax ?? 0),
             'total' => (float) $order->total,
             'paymentMethod' => self::PAYMENT_LABELS[$order->paymentMethod ?? 'cash'] ?? 'Efectivo',
+            'isCredit' => ($order->paymentMethod === 'debe'),
+            'paid' => (float) ($order->cashAmount ?? 0) + (float) ($order->cardAmount ?? 0),
+            'remaining' => max(0, (float) $order->total - ((float) ($order->cashAmount ?? 0) + (float) ($order->cardAmount ?? 0))),
             'sellerName' => $order->seller->name ?? 'Vendedor',
         ];
     }

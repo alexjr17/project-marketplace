@@ -722,9 +722,27 @@ export const CheckoutModal = ({
                     <span className="text-gray-600">Método:</span>
                     <span className="font-medium text-blue-700">
                       {completedData.paymentMethod === 'cash' ? 'Efectivo' :
-                       completedData.paymentMethod === 'card' ? 'Tarjeta' : 'Mixto'}
+                       completedData.paymentMethod === 'card' ? 'Tarjeta' :
+                       completedData.paymentMethod === 'transfer' ? 'Transferencia' :
+                       completedData.paymentMethod === 'debe' ? 'Debe (fiado)' : 'Mixto'}
                     </span>
                   </div>
+                  {isDebt && (
+                    <div className="mt-3 pt-3 border-t border-blue-200 space-y-1 text-sm">
+                      {abono > 0 && (
+                        <div className="flex justify-between">
+                          <span className="text-green-700">Abonó:</span>
+                          <span className="font-medium text-green-700">${abono.toLocaleString()}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between">
+                        <span className="text-amber-700 font-medium">Queda debiendo:</span>
+                        <span className="font-bold text-amber-700">
+                          ${Math.max(0, completedData.total - abono).toLocaleString()}
+                        </span>
+                      </div>
+                    </div>
+                  )}
                   {completedData.paymentMethod !== 'card' && completedData.change > 0 && (
                     <div className="flex justify-between items-center mt-3 pt-3 border-t border-blue-200">
                       <span className="text-green-700 font-medium">Cambio:</span>

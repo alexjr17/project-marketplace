@@ -63,6 +63,12 @@
             <tr><td>Impuesto</td><td class="right">${{ number_format($invoice['tax'], 0, ',', '.') }}</td></tr>
         @endif
         <tr class="grand"><td>Total</td><td class="right">${{ number_format($invoice['total'], 0, ',', '.') }}</td></tr>
+        @if(!empty($invoice['isCredit']))
+            @if($invoice['paid'] > 0)
+                <tr><td>Abonado</td><td class="right">${{ number_format($invoice['paid'], 0, ',', '.') }}</td></tr>
+            @endif
+            <tr class="grand"><td>Saldo (debe)</td><td class="right">${{ number_format($invoice['remaining'], 0, ',', '.') }}</td></tr>
+        @endif
     </table>
 </body>
 </html>
