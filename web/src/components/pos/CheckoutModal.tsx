@@ -360,7 +360,26 @@ export const CheckoutModal = ({
                     <strong>Venta a crédito (Debe).</strong> Selecciona o registra el cliente que queda debiendo. Se cobra después desde "Fiados".
                   </div>
                 )}
-                {/* NIT/Cédula Search */}
+                {/* Cliente ya elegido en la pantalla de venta */}
+                {initialCustomer && (
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex items-center gap-3">
+                    <User className="w-5 h-5 text-blue-600 flex-shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-gray-900 truncate">{initialCustomer.name}</p>
+                      <p className="text-xs text-gray-500 truncate">
+                        {initialCustomer.cedula
+                          ? `CC/NIT ${initialCustomer.cedula}`
+                          : initialCustomer.id
+                          ? 'Cliente existente'
+                          : 'Cliente nuevo · se registra al cobrar'}
+                        {initialCustomer.phone ? ` · ${initialCustomer.phone}` : ''}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* NIT/Cédula Search (solo si no se eligió cliente en la venta) */}
+                {!initialCustomer && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Cédula / NIT del Cliente
@@ -402,8 +421,10 @@ export const CheckoutModal = ({
                     </p>
                   )}
                 </div>
+                )}
 
                 {/* Customer Name (con autocompletar por nombre) */}
+                {!initialCustomer && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Nombre / Razón Social {isDebt && <span className="text-red-500">*</span>}
@@ -444,6 +465,7 @@ export const CheckoutModal = ({
                     </p>
                   )}
                 </div>
+                )}
 
                 {/* Phone */}
                 <div>
