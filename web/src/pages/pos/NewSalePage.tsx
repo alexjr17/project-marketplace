@@ -668,9 +668,11 @@ export default function NewSalePage() {
                               )}
                             </h3>
                             {item.itemType === 'product' ? (
-                              <p className="text-xs lg:text-sm text-gray-500 truncate">
-                                {item.color} - {item.size}
-                              </p>
+                              ((item.color && item.color !== 'N/A') || (item.size && item.size !== 'N/A')) ? (
+                                <p className="text-xs lg:text-sm text-gray-500 truncate">
+                                  {[item.color, item.size].filter((x) => x && x !== 'N/A').join(' - ')}
+                                </p>
+                              ) : null
                             ) : (
                               <p className="text-xs text-gray-500">
                                 Base: ${item.basePrice.toLocaleString()}
