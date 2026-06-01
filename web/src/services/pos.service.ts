@@ -417,6 +417,25 @@ export async function getCustomerDetail(id: number): Promise<POSCustomerDetail> 
   return response.data.data;
 }
 
+export interface UpdateSalePayload {
+  items?: { variantId: number; quantity: number; price: number }[];
+  customerId?: number;
+  customerName?: string;
+  customerPhone?: string;
+  customerCedula?: string;
+  paymentMethod?: 'cash' | 'card' | 'transfer' | 'mixed' | 'debe';
+  discount?: number;
+  notes?: string;
+}
+
+/** Edita una venta POS (ítems, cliente, método de pago, notas). */
+export async function updateSale(saleId: number, data: UpdateSalePayload): Promise<Sale> {
+  const response = await axios.put(`${API_URL}/pos/sale/${saleId}`, data, {
+    headers: { Authorization: `Bearer ${getAuthToken()}` },
+  });
+  return response.data.data;
+}
+
 /**
  * List pending POS debts (fiados).
  */

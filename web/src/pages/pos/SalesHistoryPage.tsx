@@ -8,7 +8,8 @@ import OpenSessionPrompt from '../../components/pos/OpenSessionPrompt';
 import PrintPreviewModal from '../../components/pos/PrintPreviewModal';
 import type { PrintSettings } from '../../types/settings';
 import { DEFAULT_PRINT_SETTINGS } from '../../types/settings';
-import { History, Receipt, Calendar, DollarSign, CreditCard, User, Printer, Mail, X, Loader2, CheckCircle, Smartphone, Eye, RefreshCw, Camera, Upload, Image as ImageIcon, ChevronLeft, ChevronRight, Clock } from 'lucide-react';
+import { History, Receipt, Calendar, DollarSign, CreditCard, User, Printer, Mail, X, Loader2, CheckCircle, Smartphone, Eye, RefreshCw, Camera, Upload, Image as ImageIcon, ChevronLeft, ChevronRight, Clock, Pencil, Trash2 } from 'lucide-react';
+import EditSaleModal from '../../components/pos/EditSaleModal';
 
 // Estado de la venta → etiqueta + estilo del badge.
 function statusInfo(status: string): { label: string; cls: string } {
@@ -52,6 +53,7 @@ export default function SalesHistoryPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 10;
   const [statusFilter, setStatusFilter] = useState<'all' | 'PAID' | 'PENDING' | 'CANCELLED'>('all');
+  const [editSaleId, setEditSaleId] = useState<number | null>(null);
 
   useEffect(() => {
     loadPrintSettings();
@@ -105,6 +107,23 @@ export default function SalesHistoryPage() {
       console.error('Error loading sales:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Anular una venta (devuelve stock, queda como Cancelada)
+  const handleCancelSale = async (sale: any) => {
+    const reason = window.prompt(`¿Anular la venta ${sale.orderNumber}? Se devolverá el stock.\nMotivo de la anulación:`);
+    if (reason === null) return;
+    if (!reason.trim()) {
+      showToast('El motivo es requerido', 'error');
+      return;
+    }
+    try {
+      await posService.cancelSale(sale.id, reason.trim());
+      showToast('Venta anulada', 'success');
+      loadSales();
+    } catch (error: any) {
+      showToast(error.response?.data?.message || 'No se pudo anular la venta', 'error');
     }
   };
 
@@ -702,6 +721,24 @@ export default function SalesHistoryPage() {
                             )}
                           </button>
                         )}
+                        {sale.status !== 'CANCELLED' && (
+                          <>
+                            <button
+                              onClick={() => setEditSaleId(sale.id)}
+                              className="inline-flex items-center gap-1 px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm font-medium"
+                              title="Editar venta"
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleCancelSale(sale)}
+                              className="inline-flex items-center gap-1 px-3 py-1.5 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors text-sm font-medium"
+                              title="Anular venta"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -1068,6 +1105,14 @@ export default function SalesHistoryPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {editSaleId !== null && (
+        <EditSaleModal
+          saleId={editSaleId}
+          onClose={() => setEditSaleId(null)}
+          onSaved={() => { setEditSaleId(null); loadSales(); }}
+        />
       )}
     </div>
   );
