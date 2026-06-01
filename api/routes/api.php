@@ -543,6 +543,7 @@ Route::prefix('pos')->middleware('auth:sanctum')->group(function () {
     Route::post('calculate', [POSController::class, 'calculate'])->middleware('permission:pos.access,pos.create_sale');
     Route::post('sale', [POSController::class, 'createSale'])->middleware('permission:pos.access,pos.create_sale');
     Route::post('sale/{id}/cancel', [POSController::class, 'cancelSale'])->whereNumber('id')->middleware('permission:pos.access,pos.cancel_sale');
+    Route::put('sale/{id}', [POSController::class, 'updateSale'])->whereNumber('id')->middleware('permission:pos.access,pos.create_sale');
     Route::get('sales', [POSController::class, 'salesHistory'])->middleware('permission:pos.access,pos.view_sales');
     Route::get('debts', [POSController::class, 'debts'])->middleware('permission:pos.access,pos.view_sales');
     Route::post('sale/{id}/collect', [POSController::class, 'collectDebt'])->whereNumber('id')->middleware('permission:pos.access,pos.create_sale');

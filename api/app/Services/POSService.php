@@ -543,17 +543,17 @@ class POSService
     }
 
     /** Cancela una venta POS y restaura el stock (POST /pos/sale/{id}/cancel). */
-    public function cancelSale(int $orderId, int $sellerId, string $reason): Order
+    public function cancelSale(int $orderId, int $sellerId, string $reason, bool $isAdmin = false): Order
     {
         $order = Order::with('items')->find($orderId);
         if (! $order) {
             throw new RuntimeException('Venta no encontrada');
         }
         if ($order->saleChannel !== 'POS') {
-            throw new RuntimeException('Solo se pueden cancelar ventas POS desde este módulo');
+            throw new RuntimeException('Solo se pueden anular ventas POS desde este módulo');
         }
-        if ($order->sellerId !== $sellerId) {
-            throw new RuntimeException('Solo puedes cancelar tus propias ventas');
+        if (! $isAdmin && $order->sellerId !== $sellerId) {
+            throw new RuntimeException('Solo puedes anular tus propias ventas');
         }
         if ($order->status === 'CANCELLED') {
             throw new RuntimeException('La venta ya está cancelada');
@@ -584,6 +584,149 @@ class POSService
             }
 
             return $order;
+        });
+    }
+
+    /**
+     * Edita una venta POS (PUT /pos/sale/{id}): ítems (recalcula stock y
+     * totales), cliente, método de pago y notas.
+     */
+    public function updateSale(int $orderId, array $data, int $userId, bool $isAdmin = false): Order
+    {
+        $order = Order::with('items')->find($orderId);
+        if (! $order || $order->saleChannel !== 'POS') {
+            throw new RuntimeException('Venta no encontrada');
+        }
+        if ($order->status === 'CANCELLED') {
+            throw new RuntimeException('No se puede editar una venta anulada');
+        }
+        if (! $isAdmin && $order->sellerId !== $userId) {
+            throw new RuntimeException('Solo puedes editar tus propias ventas');
+        }
+
+        $editItems = isset($data['items']) && is_array($data['items']) && count($data['items']) > 0;
+
+        // Validar stock para los ítems nuevos (sumando lo que esta venta ya tenía).
+        if ($editItems) {
+            $current = [];
+            foreach ($order->items as $old) {
+                if ($old->variantId) {
+                    $current[$old->variantId] = ($current[$old->variantId] ?? 0) + $old->quantity;
+                }
+            }
+            foreach ($data['items'] as $it) {
+                $v = ProductVariant::find($it['variantId']);
+                if (! $v) {
+                    throw new RuntimeException("Variante {$it['variantId']} no encontrada");
+                }
+                $available = (int) $v->stock + ($current[$v->id] ?? 0);
+                if ($available < $it['quantity']) {
+                    throw new RuntimeException("Stock insuficiente para {$v->sku}. Disponible: {$available}");
+                }
+            }
+        }
+
+        return DB::transaction(function () use ($order, $data, $editItems) {
+            $oldTotal = (float) $order->total;
+
+            if ($editItems) {
+                // Restituir stock de los ítems actuales y reemplazarlos.
+                foreach ($order->items as $old) {
+                    if ($old->variantId) {
+                        ProductVariant::where('id', $old->variantId)->increment('stock', $old->quantity);
+                    }
+                }
+                OrderItem::where('orderId', $order->id)->delete();
+
+                $calc = $this->calculateSale($data['items'], (float) ($data['discount'] ?? $order->discount ?? 0));
+
+                foreach ($data['items'] as $it) {
+                    $v = ProductVariant::with(['product', 'color', 'size'])->find($it['variantId']);
+                    OrderItem::create([
+                        'orderId' => $order->id,
+                        'productId' => $v->productId,
+                        'variantId' => $v->id,
+                        'productName' => $v->product->name,
+                        'productImage' => (string) ($this->firstImage($v->product->images) ?? ''),
+                        'size' => $v->size?->abbreviation ?? $v->size?->name ?? 'N/A',
+                        'color' => $v->color?->name ?? 'N/A',
+                        'quantity' => $it['quantity'],
+                        'unitPrice' => $it['price'],
+                    ]);
+                    $prev = (int) $v->stock;
+                    $v->stock = $prev - $it['quantity'];
+                    $v->save();
+                    VariantMovement::create([
+                        'variantId' => $v->id,
+                        'movementType' => 'SALE',
+                        'quantity' => -$it['quantity'],
+                        'previousStock' => $prev,
+                        'newStock' => $prev - $it['quantity'],
+                        'referenceType' => 'sale',
+                        'referenceId' => $order->id,
+                        'reason' => 'Edición de venta POS',
+                    ]);
+                }
+
+                $order->subtotal = $calc['subtotal'];
+                $order->discount = $calc['discount'];
+                $order->tax = $calc['tax'];
+                $order->total = $calc['total'];
+            }
+
+            // Cliente (por id, cédula o nombre).
+            if (! empty($data['customerId'])) {
+                $order->posCustomerId = (int) $data['customerId'];
+            } elseif (! empty($data['customerCedula'])) {
+                $order->posCustomerId = $this->upsertPOSCustomer(
+                    $data['customerCedula'], $data['customerName'] ?? null,
+                    $data['customerEmail'] ?? null, $data['customerPhone'] ?? null, (float) $order->total
+                );
+            } elseif (! empty($data['customerName'])) {
+                $order->posCustomerId = $this->findOrCreateCustomerByName($data['customerName'])->id;
+            }
+            if (array_key_exists('customerName', $data) && $data['customerName']) {
+                $order->customerName = $data['customerName'];
+            }
+            if (array_key_exists('customerPhone', $data)) {
+                $order->customerPhone = $data['customerPhone'];
+            }
+            if (! empty($data['customerEmail'])) {
+                $order->customerEmail = $data['customerEmail'];
+            }
+            if (array_key_exists('paymentMethod', $data) && $data['paymentMethod']) {
+                $order->paymentMethod = $data['paymentMethod'];
+            }
+            if (array_key_exists('notes', $data)) {
+                $order->notes = $data['notes'];
+            }
+
+            // Estado según pago / abono acumulado.
+            $paid = (float) ($order->cashAmount ?? 0) + (float) ($order->cardAmount ?? 0);
+            if ($order->paymentMethod === 'debe') {
+                $order->status = ($paid + 0.01 >= (float) $order->total) ? 'PAID' : 'PENDING';
+                $order->paidAt = $order->status === 'PAID' ? ($order->paidAt ?? now()) : null;
+            } else {
+                $order->status = 'PAID';
+                $order->paidAt = $order->paidAt ?? now();
+            }
+
+            $history = $order->statusHistory ?? [];
+            $history[] = ['status' => $order->status, 'timestamp' => now()->toIso8601String(), 'note' => 'Venta editada'];
+            $order->statusHistory = $history;
+            $order->save();
+
+            // Ajustar el total de la caja abierta por el cambio.
+            if ($editItems && $order->cashRegisterId) {
+                $session = CashSession::where('cashRegisterId', $order->cashRegisterId)
+                    ->where('status', 'OPEN')->first();
+                if ($session) {
+                    $session->totalSales = (float) $session->totalSales - $oldTotal + (float) $order->total;
+                    $session->save();
+                }
+            }
+
+            return $order->fresh(['items']);
         });
     }
 

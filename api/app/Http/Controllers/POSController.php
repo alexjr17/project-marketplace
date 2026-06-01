@@ -131,13 +131,44 @@ class POSController extends Controller
             return $this->error('El motivo de cancelación es requerido', 400);
         }
 
+        $isAdmin = ((int) $request->user()->roleId === 1);
+
         try {
-            $sale = $this->pos->cancelSale($id, $request->user()->id, $reason);
+            $sale = $this->pos->cancelSale($id, $request->user()->id, $reason, $isAdmin);
         } catch (\RuntimeException $e) {
             return $this->error($e->getMessage(), 400);
         }
 
-        return $this->success($sale, 'Venta cancelada exitosamente');
+        return $this->success($sale, 'Venta anulada exitosamente');
+    }
+
+    /** PUT /api/pos/sale/{id} — editar una venta. */
+    public function updateSale(Request $request, int $id)
+    {
+        $data = $request->validate([
+            'items' => 'nullable|array',
+            'items.*.variantId' => 'required_with:items|integer',
+            'items.*.quantity' => 'required_with:items|integer|min:1',
+            'items.*.price' => 'required_with:items|numeric|min:0',
+            'customerId' => 'nullable|integer',
+            'customerName' => 'nullable|string',
+            'customerPhone' => 'nullable|string',
+            'customerEmail' => 'nullable|string',
+            'customerCedula' => 'nullable|string',
+            'paymentMethod' => 'nullable|in:cash,card,transfer,mixed,debe',
+            'discount' => 'nullable|numeric|min:0',
+            'notes' => 'nullable|string',
+        ]);
+
+        $isAdmin = ((int) $request->user()->roleId === 1);
+
+        try {
+            $sale = $this->pos->updateSale($id, $data, $request->user()->id, $isAdmin);
+        } catch (\RuntimeException $e) {
+            return $this->error($e->getMessage(), 400);
+        }
+
+        return $this->success($sale, 'Venta actualizada exitosamente');
     }
 
     /** GET /api/pos/sales */
