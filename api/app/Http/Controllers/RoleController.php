@@ -13,30 +13,39 @@ class RoleController extends Controller
 {
     use ApiResponse;
 
-    /** Permisos disponibles para roles personalizados. */
+    /**
+     * Permisos disponibles para roles personalizados.
+     * Organizados por aplicación/módulo, deben coincidir con el catálogo del
+     * frontend (web/src/types/roles.ts) y con lo que enforce el sidebar/rutas.
+     */
     private const AVAILABLE_PERMISSIONS = [
         'dashboard.view',
-        'products.view', 'products.create', 'products.edit', 'products.delete',
-        'orders.view', 'orders.create', 'orders.edit', 'orders.delete',
-        'users.view', 'users.create', 'users.edit', 'users.delete',
-        'roles.view', 'roles.create', 'roles.edit', 'roles.delete',
-        'settings.view', 'settings.edit',
-        'reports.view', 'reports.export',
-        'catalogs.view', 'catalogs.create', 'catalogs.edit', 'catalogs.delete',
+        'orders.view', 'orders.manage', 'orders.delete',
         'pos.access', 'pos.create_sale', 'pos.view_sales', 'pos.cancel_sale',
         'pos.cash_register', 'pos.open_close_session', 'pos.view_reports',
+        'products.view', 'products.create', 'products.edit', 'products.delete',
+        'catalogs.view', 'catalogs.manage',
+        'inventory.view', 'inventory.manage',
+        'shipping.view', 'shipping.manage',
+        'users.view', 'users.edit', 'users.delete',
+        'admins.view', 'admins.create', 'admins.edit', 'admins.delete',
+        'roles.view', 'roles.create', 'roles.edit', 'roles.delete',
+        'settings.general', 'settings.appearance', 'settings.home',
+        'settings.catalog', 'settings.payment', 'settings.legal',
     ];
 
     private const PERMISSION_GROUPS = [
         'dashboard' => ['dashboard.view'],
-        'products' => ['products.view', 'products.create', 'products.edit', 'products.delete'],
-        'orders' => ['orders.view', 'orders.create', 'orders.edit', 'orders.delete'],
-        'users' => ['users.view', 'users.create', 'users.edit', 'users.delete'],
-        'roles' => ['roles.view', 'roles.create', 'roles.edit', 'roles.delete'],
-        'settings' => ['settings.view', 'settings.edit'],
-        'reports' => ['reports.view', 'reports.export'],
-        'catalogs' => ['catalogs.view', 'catalogs.create', 'catalogs.edit', 'catalogs.delete'],
+        'orders' => ['orders.view', 'orders.manage', 'orders.delete'],
         'pos' => ['pos.access', 'pos.create_sale', 'pos.view_sales', 'pos.cancel_sale', 'pos.cash_register', 'pos.open_close_session', 'pos.view_reports'],
+        'products' => ['products.view', 'products.create', 'products.edit', 'products.delete'],
+        'catalogs' => ['catalogs.view', 'catalogs.manage'],
+        'inventory' => ['inventory.view', 'inventory.manage'],
+        'shipping' => ['shipping.view', 'shipping.manage'],
+        'users' => ['users.view', 'users.edit', 'users.delete'],
+        'admins' => ['admins.view', 'admins.create', 'admins.edit', 'admins.delete'],
+        'roles' => ['roles.view', 'roles.create', 'roles.edit', 'roles.delete'],
+        'settings' => ['settings.general', 'settings.appearance', 'settings.home', 'settings.catalog', 'settings.payment', 'settings.legal'],
     ];
 
     /** Roles del sistema: no se pueden eliminar ni cambiar nombre/permisos. */

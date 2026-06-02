@@ -613,7 +613,7 @@ function App() {
                                     <Route
                                       path="/settings/shipping"
                                       element={
-                                        <PermissionRoute permission="settings.shipping">
+                                        <PermissionRoute permission="shipping.view">
                                           <SettingsShippingPage />
                                         </PermissionRoute>
                                       }
@@ -624,7 +624,7 @@ function App() {
                                         key={tab}
                                         path={`/shipping/${tab}`}
                                         element={
-                                          <PermissionRoute permission="settings.shipping">
+                                          <PermissionRoute permission="shipping.view">
                                             <SettingsShippingPage />
                                           </PermissionRoute>
                                         }

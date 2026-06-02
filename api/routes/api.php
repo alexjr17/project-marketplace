@@ -559,16 +559,16 @@ Route::prefix('pos')->middleware('auth:sanctum')->group(function () {
 
 // ==================== PLANTILLAS DE ETIQUETAS ====================
 Route::prefix('label-templates')->middleware('auth:sanctum')->group(function () {
-    Route::get('/', [LabelTemplateController::class, 'index'])->middleware('permission:settings.view');
+    Route::get('/', [LabelTemplateController::class, 'index'])->middleware('permission:settings.general');
     Route::get('product-type/{productTypeId}', [LabelTemplateController::class, 'forProductType'])
-        ->whereNumber('productTypeId')->middleware('permission:settings.view');
-    Route::get('{id}', [LabelTemplateController::class, 'show'])->whereNumber('id')->middleware('permission:settings.view');
-    Route::post('/', [LabelTemplateController::class, 'store'])->middleware('permission:settings.edit');
-    Route::patch('{id}', [LabelTemplateController::class, 'update'])->whereNumber('id')->middleware('permission:settings.edit');
-    Route::delete('{id}', [LabelTemplateController::class, 'destroy'])->whereNumber('id')->middleware('permission:settings.edit');
-    Route::post('{id}/duplicate', [LabelTemplateController::class, 'duplicate'])->whereNumber('id')->middleware('permission:settings.edit');
+        ->whereNumber('productTypeId')->middleware('permission:settings.general');
+    Route::get('{id}', [LabelTemplateController::class, 'show'])->whereNumber('id')->middleware('permission:settings.general');
+    Route::post('/', [LabelTemplateController::class, 'store'])->middleware('permission:settings.general');
+    Route::patch('{id}', [LabelTemplateController::class, 'update'])->whereNumber('id')->middleware('permission:settings.general');
+    Route::delete('{id}', [LabelTemplateController::class, 'destroy'])->whereNumber('id')->middleware('permission:settings.general');
+    Route::post('{id}/duplicate', [LabelTemplateController::class, 'duplicate'])->whereNumber('id')->middleware('permission:settings.general');
 
-    Route::middleware('permission:settings.edit')->group(function () {
+    Route::middleware('permission:settings.general')->group(function () {
         Route::post('{templateId}/zones', [LabelTemplateController::class, 'createZone'])->whereNumber('templateId');
         Route::patch('{templateId}/zones/batch', [LabelTemplateController::class, 'updateZonesBatch'])->whereNumber('templateId');
         Route::patch('zones/{zoneId}', [LabelTemplateController::class, 'updateZone'])->whereNumber('zoneId');

@@ -38,12 +38,14 @@ export type Permission =
   | 'settings.appearance'
   | 'settings.home'
   | 'settings.catalog'
-  | 'settings.shipping'
   | 'settings.payment'
   | 'settings.legal'
-  // Inventario
+  // Inventario y Compras
   | 'inventory.view'
   | 'inventory.manage'
+  // Envíos
+  | 'shipping.view'
+  | 'shipping.manage'
   // POS (punto de venta)
   | 'pos.access'
   | 'pos.create_sale'
@@ -64,6 +66,7 @@ export type AdminModule =
   | 'roles'
   | 'settings'
   | 'inventory'
+  | 'shipping'
   | 'pos';
 
 // Interfaz de Rol
@@ -93,8 +96,11 @@ export const SYSTEM_ROLES: Role[] = [
       'admins.view', 'admins.create', 'admins.edit', 'admins.delete',
       'roles.view', 'roles.create', 'roles.edit', 'roles.delete',
       'settings.general', 'settings.appearance', 'settings.home',
-      'settings.catalog', 'settings.shipping', 'settings.payment', 'settings.legal',
+      'settings.catalog', 'settings.payment', 'settings.legal',
       'inventory.view', 'inventory.manage',
+      'shipping.view', 'shipping.manage',
+      'pos.access', 'pos.create_sale', 'pos.view_sales', 'pos.cancel_sale',
+      'pos.cash_register', 'pos.open_close_session', 'pos.view_reports',
     ],
     isSystem: true,
     isActive: true,
@@ -127,10 +133,32 @@ export const PERMISSION_GROUPS: {
     ],
   },
   {
-    module: 'products',
-    label: 'Productos',
+    module: 'orders',
+    label: 'Ventas y Pedidos',
     permissions: [
-      { id: 'products.view', label: 'Ver productos', description: 'Listar y ver detalles' },
+      { id: 'orders.view', label: 'Ver pedidos', description: 'Listar pedidos, reseñas y detalles' },
+      { id: 'orders.manage', label: 'Gestionar pedidos', description: 'Cambiar estados y despachos' },
+      { id: 'orders.delete', label: 'Eliminar pedidos', description: 'Borrar pedidos' },
+    ],
+  },
+  {
+    module: 'pos',
+    label: 'Punto de Venta',
+    permissions: [
+      { id: 'pos.access', label: 'Acceder al POS', description: 'Entrar al punto de venta' },
+      { id: 'pos.create_sale', label: 'Registrar ventas', description: 'Crear nuevas ventas y abonos' },
+      { id: 'pos.view_sales', label: 'Ver ventas y clientes', description: 'Historial, fiados y clientes' },
+      { id: 'pos.cancel_sale', label: 'Anular/editar ventas', description: 'Cancelar o modificar ventas' },
+      { id: 'pos.cash_register', label: 'Cajas registradoras', description: 'Administrar cajas' },
+      { id: 'pos.open_close_session', label: 'Abrir/cerrar caja', description: 'Sesiones de caja' },
+      { id: 'pos.view_reports', label: 'Ver reportes', description: 'Reportes de ventas' },
+    ],
+  },
+  {
+    module: 'products',
+    label: 'Catálogo y Productos',
+    permissions: [
+      { id: 'products.view', label: 'Ver productos', description: 'Productos, plantillas, variantes, producción e insumos' },
       { id: 'products.create', label: 'Crear productos', description: 'Agregar nuevos productos' },
       { id: 'products.edit', label: 'Editar productos', description: 'Modificar productos existentes' },
       { id: 'products.delete', label: 'Eliminar productos', description: 'Borrar productos' },
@@ -138,19 +166,26 @@ export const PERMISSION_GROUPS: {
   },
   {
     module: 'catalogs',
-    label: 'Catálogos',
+    label: 'Atributos del catálogo',
     permissions: [
-      { id: 'catalogs.view', label: 'Ver catálogos', description: 'Tallas, colores, tipos, categorías' },
-      { id: 'catalogs.manage', label: 'Gestionar catálogos', description: 'Crear, editar y eliminar' },
+      { id: 'catalogs.view', label: 'Ver atributos', description: 'Categorías, tipos, tallas y colores' },
+      { id: 'catalogs.manage', label: 'Gestionar atributos', description: 'Crear, editar y eliminar' },
     ],
   },
   {
-    module: 'orders',
-    label: 'Pedidos',
+    module: 'inventory',
+    label: 'Inventario y Compras',
     permissions: [
-      { id: 'orders.view', label: 'Ver pedidos', description: 'Listar y ver detalles' },
-      { id: 'orders.manage', label: 'Gestionar pedidos', description: 'Cambiar estados, despacho' },
-      { id: 'orders.delete', label: 'Eliminar pedidos', description: 'Borrar pedidos' },
+      { id: 'inventory.view', label: 'Ver inventario y compras', description: 'Proveedores, OCs, movimientos, conteos' },
+      { id: 'inventory.manage', label: 'Gestionar inventario y compras', description: 'Crear, recibir y ajustar stock' },
+    ],
+  },
+  {
+    module: 'shipping',
+    label: 'Envíos',
+    permissions: [
+      { id: 'shipping.view', label: 'Ver envíos', description: 'Transportadoras, zonas, tarifas y conexiones' },
+      { id: 'shipping.manage', label: 'Gestionar envíos', description: 'Configurar transportadoras y tarifas' },
     ],
   },
   {
@@ -186,34 +221,12 @@ export const PERMISSION_GROUPS: {
     module: 'settings',
     label: 'Configuración',
     permissions: [
-      { id: 'settings.general', label: 'General', description: 'Nombre, logo, contacto' },
+      { id: 'settings.general', label: 'General', description: 'Nombre, logo, contacto, impresión' },
       { id: 'settings.appearance', label: 'Apariencia', description: 'Colores y estilos' },
       { id: 'settings.home', label: 'Página de inicio', description: 'Secciones y contenido' },
       { id: 'settings.catalog', label: 'Catálogo', description: 'Filtros y ordenamiento' },
-      { id: 'settings.shipping', label: 'Envíos', description: 'Zonas y tarifas' },
       { id: 'settings.payment', label: 'Pagos', description: 'Métodos de pago' },
       { id: 'settings.legal', label: 'Legal', description: 'Términos y políticas' },
-    ],
-  },
-  {
-    module: 'inventory',
-    label: 'Inventario',
-    permissions: [
-      { id: 'inventory.view', label: 'Ver inventario', description: 'Proveedores, OCs, movimientos' },
-      { id: 'inventory.manage', label: 'Gestionar inventario', description: 'Crear, editar y ajustar stock' },
-    ],
-  },
-  {
-    module: 'pos',
-    label: 'Punto de Venta (POS)',
-    permissions: [
-      { id: 'pos.access', label: 'Acceder al POS', description: 'Entrar al punto de venta' },
-      { id: 'pos.create_sale', label: 'Registrar ventas', description: 'Crear nuevas ventas' },
-      { id: 'pos.view_sales', label: 'Ver ventas', description: 'Historial de ventas' },
-      { id: 'pos.cancel_sale', label: 'Anular/editar ventas', description: 'Cancelar o modificar ventas' },
-      { id: 'pos.cash_register', label: 'Caja', description: 'Manejo de caja' },
-      { id: 'pos.open_close_session', label: 'Abrir/cerrar caja', description: 'Sesiones de caja' },
-      { id: 'pos.view_reports', label: 'Ver reportes', description: 'Reportes de ventas' },
     ],
   },
 ];
