@@ -4,7 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { Grid3x3, ShoppingCart, LayoutGrid, ChevronDown, MessageSquare } from 'lucide-react';
 
 export default function AppSwitcher() {
-  const { user, hasPermission } = useAuth();
+  const { user, hasPermission, isAdmin } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [isOpen, setIsOpen] = useState(false);
@@ -40,7 +40,7 @@ export default function AppSwitcher() {
       path: '/',
       color: 'text-blue-600',
       bgColor: 'bg-blue-50',
-      available: true, // Todos pueden acceder
+      available: user?.roleId === 2 || hasPermission('store.access'),
     },
     {
       id: 'pos',
@@ -58,7 +58,7 @@ export default function AppSwitcher() {
       path: '/admin-panel',
       color: 'text-purple-600',
       bgColor: 'bg-purple-50',
-      available: user?.roleId !== 2, // Todos excepto clientes
+      available: isAdmin, // Acceso al panel admin (admin.access o módulos admin)
     },
     {
       id: 'messaging',
@@ -67,7 +67,7 @@ export default function AppSwitcher() {
       path: '/messaging',
       color: 'text-pink-600',
       bgColor: 'bg-pink-50',
-      available: user?.roleId !== 2, // Todos excepto clientes
+      available: hasPermission('messaging.access'),
     },
   ].filter((app) => app.available);
 

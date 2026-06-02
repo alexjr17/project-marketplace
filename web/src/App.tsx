@@ -139,6 +139,21 @@ const POSRoute = ({ children }: { children: React.ReactNode }) => {
   return <>{children}</>;
 };
 
+// Protected route for Social Media (messaging) access
+const MessagingRoute = ({ children }: { children: React.ReactNode }) => {
+  const { user, isAuthenticated, hasPermission } = useAuth();
+
+  if (!isAuthenticated || !user) {
+    return <Navigate to="/" replace />;
+  }
+
+  if (!hasPermission('messaging.access')) {
+    return <Navigate to="/" replace />;
+  }
+
+  return <>{children}</>;
+};
+
 function App() {
   return (
     <Router>
@@ -158,7 +173,7 @@ function App() {
                             <Route
                               path="/messaging/*"
                               element={
-                                <AdminRoute>
+                                <MessagingRoute>
                                   <MessagingLayout>
                                     <Routes>
                                       <Route path="/" element={<Navigate to="/messaging/inbox" replace />} />
@@ -170,7 +185,7 @@ function App() {
                                       <Route path="*" element={<Navigate to="/messaging/inbox" replace />} />
                                     </Routes>
                                   </MessagingLayout>
-                                </AdminRoute>
+                                </MessagingRoute>
                               }
                             />
 

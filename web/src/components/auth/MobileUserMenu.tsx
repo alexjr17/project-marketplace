@@ -11,10 +11,10 @@ interface MobileUserMenuProps {
 }
 
 export const MobileUserMenu = ({ isOpen, onClose, onLoginClick, onRegisterClick }: MobileUserMenuProps) => {
-  const { user, isAuthenticated, logout, hasPermission } = useAuth();
+  const { user, isAuthenticated, logout, hasPermission, isAdmin } = useAuth();
 
-  // Cliente (roleId 2) NUNCA es admin, sin importar permisos
-  const isAdminUser = user && user.roleId !== 2;
+  // Acceso al panel admin según permisos (admin.access o módulos admin)
+  const isAdminUser = isAdmin;
   const hasPosAccess = hasPermission('pos.access');
 
   useEffect(() => {

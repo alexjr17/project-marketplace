@@ -5,6 +5,10 @@
 
 // Permisos disponibles en el sistema
 export type Permission =
+  // Acceso a aplicaciones (selector "Cambiar a")
+  | 'store.access'
+  | 'admin.access'
+  | 'messaging.access'
   // Dashboard
   | 'dashboard.view'
   // Productos
@@ -57,6 +61,8 @@ export type Permission =
 
 // Módulos del panel administrativo
 export type AdminModule =
+  | 'apps'
+  | 'messaging'
   | 'dashboard'
   | 'products'
   | 'catalogs'
@@ -88,6 +94,7 @@ export const SYSTEM_ROLES: Role[] = [
     name: 'Super Administrador',
     description: 'Acceso total al sistema. Solo puede existir uno.',
     permissions: [
+      'store.access', 'admin.access', 'messaging.access',
       'dashboard.view',
       'products.view', 'products.create', 'products.edit', 'products.delete',
       'catalogs.view', 'catalogs.manage',
@@ -126,6 +133,16 @@ export const PERMISSION_GROUPS: {
   permissions: { id: Permission; label: string; description?: string }[];
 }[] = [
   {
+    module: 'apps',
+    label: 'Aplicaciones (selector "Cambiar a")',
+    permissions: [
+      { id: 'store.access', label: 'Tienda', description: 'Navegar la tienda pública' },
+      { id: 'pos.access', label: 'Punto de Venta', description: 'Acceder al POS' },
+      { id: 'admin.access', label: 'Administración', description: 'Acceder al panel de administración' },
+      { id: 'messaging.access', label: 'Social Media', description: 'Inbox, canales y publicaciones' },
+    ],
+  },
+  {
     module: 'dashboard',
     label: 'Dashboard',
     permissions: [
@@ -143,9 +160,8 @@ export const PERMISSION_GROUPS: {
   },
   {
     module: 'pos',
-    label: 'Punto de Venta',
+    label: 'Punto de Venta (operaciones)',
     permissions: [
-      { id: 'pos.access', label: 'Acceder al POS', description: 'Entrar al punto de venta' },
       { id: 'pos.create_sale', label: 'Registrar ventas', description: 'Crear nuevas ventas y abonos' },
       { id: 'pos.view_sales', label: 'Ver ventas y clientes', description: 'Historial, fiados y clientes' },
       { id: 'pos.cancel_sale', label: 'Anular/editar ventas', description: 'Cancelar o modificar ventas' },

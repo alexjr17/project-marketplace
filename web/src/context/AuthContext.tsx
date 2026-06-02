@@ -236,10 +236,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   // - roleId 3+: Roles administrativos (CON acceso al panel admin)
   const canAccessAdmin = useCallback((): boolean => {
     if (!user) return false;
+    // SuperAdmin (roleId 1): acceso total
+    if (user.roleId === 1) return true;
     // Cliente (roleId 2) NO tiene acceso al panel admin
     if (user.roleId === 2) return false;
-    // SuperAdmin (roleId 1) y roles administrativos (roleId 3+) tienen acceso
-    return true;
+    // Roles administrativos: acceso explícito (admin.access) o cualquier
+    // permiso de un módulo administrativo. Un rol enfocado (p. ej. solo POS)
+    // sin permisos de admin no verá el panel.
+    const ADMIN_PREFIXES = [
+      'admin.', 'dashboard.', 'orders.', 'products.', 'catalogs.',
+      'inventory.', 'shipping.', 'users.', 'admins.', 'roles.', 'settings.',
+    ];
+    return user.permissions.some((p) => ADMIN_PREFIXES.some((pre) => p.startsWith(pre)));
   }, [user]);
 
   return (

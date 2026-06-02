@@ -19,6 +19,7 @@ class RoleController extends Controller
      * frontend (web/src/types/roles.ts) y con lo que enforce el sidebar/rutas.
      */
     private const AVAILABLE_PERMISSIONS = [
+        'store.access', 'admin.access', 'messaging.access',
         'dashboard.view',
         'orders.view', 'orders.manage', 'orders.delete',
         'pos.access', 'pos.create_sale', 'pos.view_sales', 'pos.cancel_sale',
@@ -35,9 +36,10 @@ class RoleController extends Controller
     ];
 
     private const PERMISSION_GROUPS = [
+        'apps' => ['store.access', 'pos.access', 'admin.access', 'messaging.access'],
         'dashboard' => ['dashboard.view'],
         'orders' => ['orders.view', 'orders.manage', 'orders.delete'],
-        'pos' => ['pos.access', 'pos.create_sale', 'pos.view_sales', 'pos.cancel_sale', 'pos.cash_register', 'pos.open_close_session', 'pos.view_reports'],
+        'pos' => ['pos.create_sale', 'pos.view_sales', 'pos.cancel_sale', 'pos.cash_register', 'pos.open_close_session', 'pos.view_reports'],
         'products' => ['products.view', 'products.create', 'products.edit', 'products.delete'],
         'catalogs' => ['catalogs.view', 'catalogs.manage'],
         'inventory' => ['inventory.view', 'inventory.manage'],

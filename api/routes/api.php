@@ -605,7 +605,7 @@ Route::prefix('notifications')->middleware('auth:sanctum')->group(function () {
 });
 
 // ==================== MENSAJERÍA — bandeja y canales de admin ====================
-Route::prefix('messaging')->middleware(['auth:sanctum', 'admin'])->group(function () {
+Route::prefix('messaging')->middleware(['auth:sanctum', 'admin', 'permission:messaging.access'])->group(function () {
     // Conversaciones
     Route::get('conversations', [ConversationController::class, 'index']);
     Route::get('conversations/{id}', [ConversationController::class, 'show'])->whereNumber('id');
