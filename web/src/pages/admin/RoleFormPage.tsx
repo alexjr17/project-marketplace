@@ -11,11 +11,14 @@ import { PERMISSION_GROUPS, ALL_PERMISSIONS } from '../../types/roles';
 export const RoleFormPage = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { roles, getRoleById, createRole, updateRole } = useRoles();
+  const { roles, createRole, updateRole } = useRoles();
   const toast = useToast();
 
   const isEditing = !!id;
-  const editingRole = isEditing ? getRoleById(Number(id)) : null;
+  // Buscar el rol en el cache local (síncrono). getRoleById es async y
+  // devolvía una Promise, por lo que `[...editingRole.permissions]` reventaba
+  // con "permissions is not iterable".
+  const editingRole = isEditing ? roles.find((r) => r.id === Number(id)) ?? null : null;
 
   const [formData, setFormData] = useState({
     name: '',
@@ -37,7 +40,7 @@ export const RoleFormPage = () => {
       setFormData({
         name: editingRole.name,
         description: editingRole.description,
-        permissions: [...editingRole.permissions],
+        permissions: Array.isArray(editingRole.permissions) ? [...editingRole.permissions] : [],
         isActive: editingRole.isActive,
       });
     }

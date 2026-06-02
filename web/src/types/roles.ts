@@ -43,7 +43,15 @@ export type Permission =
   | 'settings.legal'
   // Inventario
   | 'inventory.view'
-  | 'inventory.manage';
+  | 'inventory.manage'
+  // POS (punto de venta)
+  | 'pos.access'
+  | 'pos.create_sale'
+  | 'pos.view_sales'
+  | 'pos.cancel_sale'
+  | 'pos.cash_register'
+  | 'pos.open_close_session'
+  | 'pos.view_reports';
 
 // Módulos del panel administrativo
 export type AdminModule =
@@ -55,7 +63,8 @@ export type AdminModule =
   | 'admins'
   | 'roles'
   | 'settings'
-  | 'inventory';
+  | 'inventory'
+  | 'pos';
 
 // Interfaz de Rol
 export interface Role {
@@ -192,6 +201,19 @@ export const PERMISSION_GROUPS: {
     permissions: [
       { id: 'inventory.view', label: 'Ver inventario', description: 'Proveedores, OCs, movimientos' },
       { id: 'inventory.manage', label: 'Gestionar inventario', description: 'Crear, editar y ajustar stock' },
+    ],
+  },
+  {
+    module: 'pos',
+    label: 'Punto de Venta (POS)',
+    permissions: [
+      { id: 'pos.access', label: 'Acceder al POS', description: 'Entrar al punto de venta' },
+      { id: 'pos.create_sale', label: 'Registrar ventas', description: 'Crear nuevas ventas' },
+      { id: 'pos.view_sales', label: 'Ver ventas', description: 'Historial de ventas' },
+      { id: 'pos.cancel_sale', label: 'Anular/editar ventas', description: 'Cancelar o modificar ventas' },
+      { id: 'pos.cash_register', label: 'Caja', description: 'Manejo de caja' },
+      { id: 'pos.open_close_session', label: 'Abrir/cerrar caja', description: 'Sesiones de caja' },
+      { id: 'pos.view_reports', label: 'Ver reportes', description: 'Reportes de ventas' },
     ],
   },
 ];
