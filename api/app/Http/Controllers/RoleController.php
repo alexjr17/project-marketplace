@@ -148,20 +148,16 @@ class RoleController extends Controller
             return $this->error("Ya existe un rol con el nombre \"{$data['name']}\"", 409);
         }
 
-        try {
-            $role = Role::create([
-                'name' => $data['name'],
-                'slug' => Str::slug($data['name']),
-                'description' => $data['description'],
-                'permissions' => $data['permissions'],
-                'isActive' => $data['isActive'] ?? true,
-                'isSystem' => false,
-            ]);
+        $role = Role::create([
+            'name' => $data['name'],
+            'slug' => Str::slug($data['name']),
+            'description' => $data['description'],
+            'permissions' => $data['permissions'],
+            'isActive' => $data['isActive'] ?? true,
+            'isSystem' => false,
+        ]);
 
-            return $this->created($this->formatRole($role), 'Rol creado exitosamente');
-        } catch (\Throwable $e) {
-            return $this->error('DEBUG '.get_class($e).': '.$e->getMessage(), 500);
-        }
+        return $this->created($this->formatRole($role), 'Rol creado exitosamente');
     }
 
     public function update(Request $request, int $id)
