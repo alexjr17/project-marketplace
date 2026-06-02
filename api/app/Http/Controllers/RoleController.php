@@ -23,6 +23,8 @@ class RoleController extends Controller
         'settings.view', 'settings.edit',
         'reports.view', 'reports.export',
         'catalogs.view', 'catalogs.create', 'catalogs.edit', 'catalogs.delete',
+        'pos.access', 'pos.create_sale', 'pos.view_sales', 'pos.cancel_sale',
+        'pos.cash_register', 'pos.open_close_session', 'pos.view_reports',
     ];
 
     private const PERMISSION_GROUPS = [
@@ -34,6 +36,7 @@ class RoleController extends Controller
         'settings' => ['settings.view', 'settings.edit'],
         'reports' => ['reports.view', 'reports.export'],
         'catalogs' => ['catalogs.view', 'catalogs.create', 'catalogs.edit', 'catalogs.delete'],
+        'pos' => ['pos.access', 'pos.create_sale', 'pos.view_sales', 'pos.cancel_sale', 'pos.cash_register', 'pos.open_close_session', 'pos.view_reports'],
     ];
 
     /** Roles del sistema: no se pueden eliminar ni cambiar nombre/permisos. */
