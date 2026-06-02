@@ -11,6 +11,7 @@ import { OrdersProvider } from './context/OrdersContext';
 import { PaymentsProvider } from './context/PaymentsContext';
 import { SettingsProvider } from './context/SettingsContext';
 import { HomePage } from './pages/HomePage';
+import AppSelectorPage from './pages/AppSelectorPage';
 import { CatalogPage } from './pages/CatalogPage';
 import { CustomizerPage } from './pages/CustomizerPage';
 import { CartPage } from './pages/CartPage';
@@ -137,6 +138,24 @@ const POSRoute = ({ children }: { children: React.ReactNode }) => {
   }
 
   return <>{children}</>;
+};
+
+// Selector de aplicaciones (/apps): requiere sesión iniciada.
+const AppsRoute = ({ children }: { children: React.ReactNode }) => {
+  const { isAuthenticated, user } = useAuth();
+  if (!isAuthenticated || !user) {
+    return <Navigate to="/" replace />;
+  }
+  return <>{children}</>;
+};
+
+// Home (/): los usuarios de staff SIN acceso a la Tienda van al selector.
+const HomeOrSelector = () => {
+  const { user, hasPermission } = useAuth();
+  if (user && user.roleId !== 2 && !hasPermission('store.access')) {
+    return <Navigate to="/apps" replace />;
+  }
+  return <HomePage />;
 };
 
 // Protected route for Social Media (messaging) access
@@ -688,13 +707,23 @@ function App() {
                           {/* Página de reset password (sin Layout) */}
                           <Route path="/reset-password" element={<ResetPasswordPage />} />
 
+                          {/* Selector de aplicaciones — pantalla completa propia */}
+                          <Route
+                            path="/apps"
+                            element={
+                              <AppsRoute>
+                                <AppSelectorPage />
+                              </AppsRoute>
+                            }
+                          />
+
                           {/* Rutas públicas - Con Layout */}
                           <Route
                             path="/*"
                             element={
                               <Layout>
                                 <Routes>
-                                  <Route path="/" element={<HomePage />} />
+                                  <Route path="/" element={<HomeOrSelector />} />
                                   <Route path="/catalog" element={<CatalogPage />} />
                                   <Route path="/product/:id" element={<ProductDetailPage />} />
                                   <Route path="/customize" element={<CustomizerPage />} />
