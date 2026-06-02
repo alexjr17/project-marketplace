@@ -1,6 +1,7 @@
 import { useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useSettings } from '../context/SettingsContext';
 import {
   Store,
   ShoppingCart,
@@ -32,7 +33,16 @@ interface AppCard {
  */
 export default function AppSelectorPage() {
   const { user, hasPermission, isAdmin, logout } = useAuth();
+  const { settings } = useSettings();
   const navigate = useNavigate();
+
+  // Colores de marca dinámicos (vienen de la base de datos, como la tienda)
+  const brandColors = settings.appearance?.brandColors || settings.general.brandColors || {
+    primary: '#7c3aed',
+    secondary: '#ec4899',
+    accent: '#f59e0b',
+  };
+  const gradientBgStyle = `linear-gradient(to bottom right, ${brandColors.primary}, ${brandColors.secondary}, ${brandColors.accent})`;
 
   const apps = useMemo<AppCard[]>(() => {
     const all: AppCard[] = [
@@ -98,7 +108,7 @@ export default function AppSelectorPage() {
   const firstName = user?.name?.split(' ').slice(0, 2).join(' ') || 'de nuevo';
 
   return (
-    <div className="min-h-screen w-full bg-gradient-to-br from-violet-700 via-violet-600 to-indigo-700 flex flex-col">
+    <div className="min-h-screen w-full flex flex-col" style={{ background: gradientBgStyle }}>
       {/* Barra superior */}
       <header className="flex items-center justify-between px-6 py-5 sm:px-10">
         <span className="text-white/90 font-semibold tracking-tight">
@@ -157,9 +167,9 @@ export default function AppSelectorPage() {
                       <ArrowRight className="w-5 h-5" />
                     </span>
                     <span className="flex gap-1">
-                      <span className="w-1.5 h-1.5 rounded-full bg-pink-400/80" />
-                      <span className="w-1.5 h-1.5 rounded-full bg-pink-400/60" />
-                      <span className="w-1.5 h-1.5 rounded-full bg-pink-400/40" />
+                      <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: brandColors.accent }} />
+                      <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: brandColors.accent, opacity: 0.7 }} />
+                      <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: brandColors.accent, opacity: 0.4 }} />
                     </span>
                   </div>
                 </button>
