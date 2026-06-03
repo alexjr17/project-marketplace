@@ -336,7 +336,10 @@ class ProductController extends Controller
         });
 
         if ($variantsNeedUpdate) {
-            $this->variants->generateVariantsForProduct($product->id, 0);
+            // Sin color/talla (producto simple) la variante [null,null] toma el
+            // stock del producto; con variantes, stock inicial 0 (se ajusta luego).
+            $initialStock = ($colorIds || $sizeIds) ? 0 : (int) ($product->stock ?? 0);
+            $this->variants->generateVariantsForProduct($product->id, $initialStock);
         }
 
         return $this->success(

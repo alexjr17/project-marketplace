@@ -467,8 +467,24 @@ export const ProductForm = ({ product, onSubmit, onDelete }: ProductFormProps) =
               type="button"
               onClick={() => {
                 const next = !hasVariants;
+                if (!next) {
+                  // Apagar variantes en un producto que YA tenía color/talla puede
+                  // afectar variantes con stock/ventas: pedir confirmación.
+                  const hadVariants = (product?.colors?.length ?? 0) > 0 ||
+                    (Array.isArray(product?.sizes) && product.sizes.length > 0);
+                  if (hadVariants) {
+                    const stockNote = (product?.stock ?? 0) > 0 ? ` El producto tiene stock (${product?.stock}).` : '';
+                    const ok = window.confirm(
+                      `Este producto tiene variantes de color/talla.${stockNote}\n\n` +
+                      'Si lo conviertes en producto simple, esas variantes dejarán de usarse y el inventario pasará a una sola variante. ' +
+                      'Esto puede afectar el stock y los reportes.\n\n¿Continuar?'
+                    );
+                    if (!ok) return;
+                  }
+                  setSelectedColorIds([]);
+                  setSelectedSizeIds([]);
+                }
                 setHasVariants(next);
-                if (!next) { setSelectedColorIds([]); setSelectedSizeIds([]); }
               }}
               className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors ${hasVariants ? 'bg-orange-500' : 'bg-gray-300'}`}
               aria-pressed={hasVariants}
@@ -581,7 +597,7 @@ export const ProductForm = ({ product, onSubmit, onDelete }: ProductFormProps) =
                 type="submit"
                 variant="admin-primary"
                 className="w-full"
-                disabled={selectedColorIds.length === 0 || selectedSizeIds.length === 0 || images.length === 0}
+                disabled={images.length === 0 || (hasVariants && (selectedColorIds.length === 0 || selectedSizeIds.length === 0))}
               >
                 Actualizar Producto
               </Button>
@@ -593,7 +609,7 @@ export const ProductForm = ({ product, onSubmit, onDelete }: ProductFormProps) =
               type="submit"
               variant="admin-primary"
               className="w-full"
-              disabled={selectedColorIds.length === 0 || selectedSizeIds.length === 0 || images.length === 0}
+              disabled={images.length === 0 || (hasVariants && (selectedColorIds.length === 0 || selectedSizeIds.length === 0))}
             >
               Crear Producto
             </Button>
