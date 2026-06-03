@@ -20,6 +20,8 @@ class RoleController extends Controller
      */
     private const AVAILABLE_PERMISSIONS = [
         'store.access', 'admin.access', 'messaging.access',
+        'messaging.inbox', 'messaging.posts', 'messaging.pages',
+        'messaging.knowledge', 'messaging.channels',
         'dashboard.view',
         'orders.view', 'orders.manage', 'orders.delete',
         'pos.access', 'pos.create_sale', 'pos.view_sales', 'pos.cancel_sale',
@@ -27,6 +29,7 @@ class RoleController extends Controller
         'products.view', 'products.create', 'products.edit', 'products.delete',
         'catalogs.view', 'catalogs.manage',
         'inventory.view', 'inventory.manage',
+        'production.view', 'production.manage',
         'shipping.view', 'shipping.manage',
         'users.view', 'users.edit', 'users.delete',
         'admins.view', 'admins.create', 'admins.edit', 'admins.delete',
@@ -43,7 +46,9 @@ class RoleController extends Controller
         'products' => ['products.view', 'products.create', 'products.edit', 'products.delete'],
         'catalogs' => ['catalogs.view', 'catalogs.manage'],
         'inventory' => ['inventory.view', 'inventory.manage'],
+        'production' => ['production.view', 'production.manage'],
         'shipping' => ['shipping.view', 'shipping.manage'],
+        'messaging' => ['messaging.inbox', 'messaging.posts', 'messaging.pages', 'messaging.knowledge', 'messaging.channels'],
         'users' => ['users.view', 'users.edit', 'users.delete'],
         'admins' => ['admins.view', 'admins.create', 'admins.edit', 'admins.delete'],
         'roles' => ['roles.view', 'roles.create', 'roles.edit', 'roles.delete'],

@@ -356,7 +356,7 @@ Route::prefix('settings')->group(function () {
 Route::prefix('zone-types')->group(function () {
     Route::get('/', [ZoneTypeController::class, 'index']);
     Route::get('{id}', [ZoneTypeController::class, 'show'])->whereNumber('id');
-    Route::middleware(['auth:sanctum', 'admin'])->group(function () {
+    Route::middleware(['auth:sanctum', 'admin', 'permission:production.manage'])->group(function () {
         Route::post('/', [ZoneTypeController::class, 'store']);
         Route::put('{id}', [ZoneTypeController::class, 'update'])->whereNumber('id');
         Route::delete('{id}', [ZoneTypeController::class, 'destroy'])->whereNumber('id');
@@ -368,7 +368,7 @@ Route::prefix('design-images')->group(function () {
     Route::get('/', [DesignImageController::class, 'index']);
     Route::get('categories', [DesignImageController::class, 'categories']);
     Route::get('{id}', [DesignImageController::class, 'show'])->whereNumber('id');
-    Route::middleware(['auth:sanctum', 'admin'])->group(function () {
+    Route::middleware(['auth:sanctum', 'admin', 'permission:production.manage'])->group(function () {
         Route::post('/', [DesignImageController::class, 'store']);
         Route::put('sort-order', [DesignImageController::class, 'updateSortOrder']);
         Route::put('{id}', [DesignImageController::class, 'update'])->whereNumber('id');
@@ -606,41 +606,51 @@ Route::prefix('notifications')->middleware('auth:sanctum')->group(function () {
 
 // ==================== MENSAJERÍA — bandeja y canales de admin ====================
 Route::prefix('messaging')->middleware(['auth:sanctum', 'admin', 'permission:messaging.access'])->group(function () {
-    // Conversaciones
-    Route::get('conversations', [ConversationController::class, 'index']);
-    Route::get('conversations/{id}', [ConversationController::class, 'show'])->whereNumber('id');
-    Route::patch('conversations/{id}', [ConversationController::class, 'update'])->whereNumber('id');
-    Route::post('conversations/{id}/read', [ConversationController::class, 'markRead'])->whereNumber('id');
-    Route::get('conversations/{id}/messages', [ConversationController::class, 'messages'])->whereNumber('id');
-    Route::post('conversations/{id}/messages', [MessageController::class, 'store'])->whereNumber('id');
-    Route::post('conversations/{id}/suggest', [MessageController::class, 'suggest'])->whereNumber('id');
+    // Conversaciones (Bandeja)
+    Route::middleware('permission:messaging.inbox')->group(function () {
+        Route::get('conversations', [ConversationController::class, 'index']);
+        Route::get('conversations/{id}', [ConversationController::class, 'show'])->whereNumber('id');
+        Route::patch('conversations/{id}', [ConversationController::class, 'update'])->whereNumber('id');
+        Route::post('conversations/{id}/read', [ConversationController::class, 'markRead'])->whereNumber('id');
+        Route::get('conversations/{id}/messages', [ConversationController::class, 'messages'])->whereNumber('id');
+        Route::post('conversations/{id}/messages', [MessageController::class, 'store'])->whereNumber('id');
+        Route::post('conversations/{id}/suggest', [MessageController::class, 'suggest'])->whereNumber('id');
+    });
 
-    // Canales (Meta Messenger, Instagram, WhatsApp, SMS, Chat Web)
-    Route::get('channels', [ChannelController::class, 'index']);
-    Route::get('channels/{id}', [ChannelController::class, 'show'])->whereNumber('id');
-    Route::patch('channels/{id}', [ChannelController::class, 'update'])->whereNumber('id');
-    Route::post('channels/{id}/test', [ChannelController::class, 'test'])->whereNumber('id');
+    // Canales (Meta Messenger, Instagram, WhatsApp, SMS, Chat Web).
+    // La pestaña "Páginas" también lee los canales conectados.
+    Route::middleware('permission:messaging.channels,messaging.pages')->group(function () {
+        Route::get('channels', [ChannelController::class, 'index']);
+        Route::get('channels/{id}', [ChannelController::class, 'show'])->whereNumber('id');
+    });
+    Route::middleware('permission:messaging.channels')->group(function () {
+        Route::patch('channels/{id}', [ChannelController::class, 'update'])->whereNumber('id');
+        Route::post('channels/{id}/test', [ChannelController::class, 'test'])->whereNumber('id');
+    });
 
-    // Categorías de la base de conocimiento (editables)
-    Route::get('knowledge/categories', [BotKnowledgeCategoryController::class, 'index']);
-    Route::post('knowledge/categories', [BotKnowledgeCategoryController::class, 'store']);
-    Route::patch('knowledge/categories/{id}', [BotKnowledgeCategoryController::class, 'update'])->whereNumber('id');
-    Route::delete('knowledge/categories/{id}', [BotKnowledgeCategoryController::class, 'destroy'])->whereNumber('id');
+    // Base de conocimiento del bot (Entrenar IA)
+    Route::middleware('permission:messaging.knowledge')->group(function () {
+        Route::get('knowledge/categories', [BotKnowledgeCategoryController::class, 'index']);
+        Route::post('knowledge/categories', [BotKnowledgeCategoryController::class, 'store']);
+        Route::patch('knowledge/categories/{id}', [BotKnowledgeCategoryController::class, 'update'])->whereNumber('id');
+        Route::delete('knowledge/categories/{id}', [BotKnowledgeCategoryController::class, 'destroy'])->whereNumber('id');
 
-    // Base de conocimiento del bot (lo que la IA usa en su system prompt)
-    Route::get('knowledge', [BotKnowledgeController::class, 'index']);
-    Route::post('knowledge', [BotKnowledgeController::class, 'store']);
-    Route::patch('knowledge/{id}', [BotKnowledgeController::class, 'update'])->whereNumber('id');
-    Route::delete('knowledge/{id}', [BotKnowledgeController::class, 'destroy'])->whereNumber('id');
-    Route::post('knowledge/test', [BotKnowledgeController::class, 'test']);
+        Route::get('knowledge', [BotKnowledgeController::class, 'index']);
+        Route::post('knowledge', [BotKnowledgeController::class, 'store']);
+        Route::patch('knowledge/{id}', [BotKnowledgeController::class, 'update'])->whereNumber('id');
+        Route::delete('knowledge/{id}', [BotKnowledgeController::class, 'destroy'])->whereNumber('id');
+        Route::post('knowledge/test', [BotKnowledgeController::class, 'test']);
+    });
 
     // Publicaciones (Facebook Page; Instagram + programación en fases siguientes)
-    Route::get('posts', [SocialPostController::class, 'index']);
-    Route::post('posts', [SocialPostController::class, 'store']);
-    Route::post('posts/publish', [SocialPostController::class, 'publishNow']);
-    Route::get('posts/{id}', [SocialPostController::class, 'show'])->whereNumber('id');
-    Route::post('posts/{id}/publish', [SocialPostController::class, 'publishExisting'])->whereNumber('id');
-    Route::delete('posts/{id}', [SocialPostController::class, 'destroy'])->whereNumber('id');
+    Route::middleware('permission:messaging.posts')->group(function () {
+        Route::get('posts', [SocialPostController::class, 'index']);
+        Route::post('posts', [SocialPostController::class, 'store']);
+        Route::post('posts/publish', [SocialPostController::class, 'publishNow']);
+        Route::get('posts/{id}', [SocialPostController::class, 'show'])->whereNumber('id');
+        Route::post('posts/{id}/publish', [SocialPostController::class, 'publishExisting'])->whereNumber('id');
+        Route::delete('posts/{id}', [SocialPostController::class, 'destroy'])->whereNumber('id');
+    });
 });
 
 // ==================== MENSAJERÍA — chat web público ====================

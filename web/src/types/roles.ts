@@ -9,6 +9,12 @@ export type Permission =
   | 'store.access'
   | 'admin.access'
   | 'messaging.access'
+  // Social Media (módulos)
+  | 'messaging.inbox'
+  | 'messaging.posts'
+  | 'messaging.pages'
+  | 'messaging.knowledge'
+  | 'messaging.channels'
   // Dashboard
   | 'dashboard.view'
   // Productos
@@ -47,6 +53,9 @@ export type Permission =
   // Inventario y Compras
   | 'inventory.view'
   | 'inventory.manage'
+  // Producción (personalizador: tipos de zona, imágenes de diseño)
+  | 'production.view'
+  | 'production.manage'
   // Envíos
   | 'shipping.view'
   | 'shipping.manage'
@@ -72,6 +81,7 @@ export type AdminModule =
   | 'roles'
   | 'settings'
   | 'inventory'
+  | 'production'
   | 'shipping'
   | 'pos';
 
@@ -105,7 +115,10 @@ export const SYSTEM_ROLES: Role[] = [
       'settings.general', 'settings.appearance', 'settings.home',
       'settings.catalog', 'settings.payment', 'settings.legal',
       'inventory.view', 'inventory.manage',
+      'production.view', 'production.manage',
       'shipping.view', 'shipping.manage',
+      'messaging.inbox', 'messaging.posts', 'messaging.pages',
+      'messaging.knowledge', 'messaging.channels',
       'pos.access', 'pos.create_sale', 'pos.view_sales', 'pos.cancel_sale',
       'pos.cash_register', 'pos.open_close_session', 'pos.view_reports',
     ],
@@ -182,8 +195,16 @@ export const PERMISSION_GROUPS: {
     module: 'inventory',
     label: 'Inventario y Compras',
     permissions: [
-      { id: 'inventory.view', label: 'Ver inventario y compras', description: 'Proveedores, OCs, movimientos, conteos' },
+      { id: 'inventory.view', label: 'Ver inventario y compras', description: 'Insumos, proveedores, OCs, movimientos, conteos' },
       { id: 'inventory.manage', label: 'Gestionar inventario y compras', description: 'Crear, recibir y ajustar stock' },
+    ],
+  },
+  {
+    module: 'production',
+    label: 'Producción',
+    permissions: [
+      { id: 'production.view', label: 'Ver producción', description: 'Tipos de zona e imágenes de diseño' },
+      { id: 'production.manage', label: 'Gestionar producción', description: 'Crear y editar tipos de zona e imágenes' },
     ],
   },
   {
@@ -235,6 +256,17 @@ export const PERMISSION_GROUPS: {
       { id: 'settings.legal', label: 'Legal', description: 'Términos y políticas' },
     ],
   },
+  {
+    module: 'messaging',
+    label: 'Social Media',
+    permissions: [
+      { id: 'messaging.inbox', label: 'Bandeja de entrada', description: 'Ver y responder conversaciones' },
+      { id: 'messaging.posts', label: 'Publicaciones', description: 'Crear y publicar en redes' },
+      { id: 'messaging.pages', label: 'Páginas', description: 'Páginas y cuentas conectadas' },
+      { id: 'messaging.knowledge', label: 'Entrenar IA', description: 'Base de conocimiento del bot' },
+      { id: 'messaging.channels', label: 'Canales', description: 'Configurar canales conectados' },
+    ],
+  },
 ];
 
 // Aplicaciones de alto nivel (selector "Cambiar a"). Cada app tiene un permiso
@@ -266,14 +298,14 @@ export const APPLICATIONS: {
     name: 'Administración',
     description: 'Panel de gestión del negocio',
     access: { id: 'admin.access', label: 'Acceso a Administración', description: 'Entrar al panel de administración' },
-    modules: ['dashboard', 'orders', 'products', 'catalogs', 'inventory', 'shipping', 'users', 'admins', 'roles', 'settings'],
+    modules: ['dashboard', 'orders', 'products', 'catalogs', 'inventory', 'production', 'shipping', 'users', 'admins', 'roles', 'settings'],
   },
   {
     id: 'messaging',
     name: 'Social Media',
     description: 'Inbox, canales y publicaciones',
     access: { id: 'messaging.access', label: 'Acceso a Social Media', description: 'Entrar a Social Media' },
-    modules: [],
+    modules: ['messaging'],
   },
 ];
 

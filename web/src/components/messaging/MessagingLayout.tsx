@@ -12,13 +12,14 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import { useSettings } from '../../context/SettingsContext';
 import AppSwitcher from '../common/AppSwitcher';
+import type { Permission } from '../../types/roles';
 
-const TABS = [
-  { path: '/messaging/inbox', label: 'Bandeja', icon: Inbox },
-  { path: '/messaging/posts', label: 'Publicaciones', icon: Share2 },
-  { path: '/messaging/pages', label: 'Páginas', icon: FileText },
-  { path: '/messaging/knowledge', label: 'Entrenar IA', icon: Sparkles },
-  { path: '/messaging/channels', label: 'Canales', icon: Plug },
+const TABS: { path: string; label: string; icon: typeof Inbox; permission: Permission }[] = [
+  { path: '/messaging/inbox', label: 'Bandeja', icon: Inbox, permission: 'messaging.inbox' },
+  { path: '/messaging/posts', label: 'Publicaciones', icon: Share2, permission: 'messaging.posts' },
+  { path: '/messaging/pages', label: 'Páginas', icon: FileText, permission: 'messaging.pages' },
+  { path: '/messaging/knowledge', label: 'Entrenar IA', icon: Sparkles, permission: 'messaging.knowledge' },
+  { path: '/messaging/channels', label: 'Canales', icon: Plug, permission: 'messaging.channels' },
 ];
 
 interface MessagingLayoutProps {
@@ -33,11 +34,14 @@ interface MessagingLayoutProps {
 export default function MessagingLayout({ children }: MessagingLayoutProps) {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, logout } = useAuth();
+  const { user, logout, hasPermission } = useAuth();
   const { settings } = useSettings();
   const [profileOpen, setProfileOpen] = useState(false);
 
   const isTabActive = (path: string) => location.pathname.startsWith(path);
+
+  // Solo las pestañas (módulos) a las que el rol tiene permiso
+  const visibleTabs = TABS.filter((t) => hasPermission(t.permission));
 
   const brandColors = settings.appearance?.brandColors || settings.general.brandColors || {
     primary: '#7c3aed',
@@ -72,7 +76,7 @@ export default function MessagingLayout({ children }: MessagingLayoutProps) {
 
             {/* Tabs internos */}
             <nav className="flex items-center gap-1 ml-2">
-              {TABS.map((tab) => {
+              {visibleTabs.map((tab) => {
                 const active = isTabActive(tab.path);
                 const Icon = tab.icon;
                 return (

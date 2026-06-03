@@ -158,6 +158,20 @@ const HomeOrSelector = () => {
   return <HomePage />;
 };
 
+// Redirige al primer módulo de Social Media al que el rol tenga permiso.
+const MESSAGING_TABS: { path: string; permission: Permission }[] = [
+  { path: '/messaging/inbox', permission: 'messaging.inbox' },
+  { path: '/messaging/posts', permission: 'messaging.posts' },
+  { path: '/messaging/pages', permission: 'messaging.pages' },
+  { path: '/messaging/knowledge', permission: 'messaging.knowledge' },
+  { path: '/messaging/channels', permission: 'messaging.channels' },
+];
+const MessagingHome = () => {
+  const { hasPermission } = useAuth();
+  const first = MESSAGING_TABS.find((t) => hasPermission(t.permission));
+  return <Navigate to={first ? first.path : '/'} replace />;
+};
+
 // Protected route for Social Media (messaging) access
 const MessagingRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, isAuthenticated, hasPermission } = useAuth();
@@ -195,13 +209,13 @@ function App() {
                                 <MessagingRoute>
                                   <MessagingLayout>
                                     <Routes>
-                                      <Route path="/" element={<Navigate to="/messaging/inbox" replace />} />
-                                      <Route path="/inbox" element={<MessagingInboxPage />} />
-                                      <Route path="/posts" element={<MessagingPostsPage />} />
-                                      <Route path="/pages" element={<MessagingPagesPage />} />
-                                      <Route path="/knowledge" element={<MessagingKnowledgePage />} />
-                                      <Route path="/channels" element={<MessagingChannelsPage />} />
-                                      <Route path="*" element={<Navigate to="/messaging/inbox" replace />} />
+                                      <Route path="/" element={<MessagingHome />} />
+                                      <Route path="/inbox" element={<PermissionRoute permission="messaging.inbox" fallback={<MessagingHome />}><MessagingInboxPage /></PermissionRoute>} />
+                                      <Route path="/posts" element={<PermissionRoute permission="messaging.posts" fallback={<MessagingHome />}><MessagingPostsPage /></PermissionRoute>} />
+                                      <Route path="/pages" element={<PermissionRoute permission="messaging.pages" fallback={<MessagingHome />}><MessagingPagesPage /></PermissionRoute>} />
+                                      <Route path="/knowledge" element={<PermissionRoute permission="messaging.knowledge" fallback={<MessagingHome />}><MessagingKnowledgePage /></PermissionRoute>} />
+                                      <Route path="/channels" element={<PermissionRoute permission="messaging.channels" fallback={<MessagingHome />}><MessagingChannelsPage /></PermissionRoute>} />
+                                      <Route path="*" element={<MessagingHome />} />
                                     </Routes>
                                   </MessagingLayout>
                                 </MessagingRoute>
@@ -365,7 +379,7 @@ function App() {
                                     <Route
                                       path="/zone-types"
                                       element={
-                                        <PermissionRoute permission="products.view">
+                                        <PermissionRoute permission="production.view">
                                           <ZoneTypesPage />
                                         </PermissionRoute>
                                       }
@@ -373,7 +387,7 @@ function App() {
                                     <Route
                                       path="/zone-types/:id"
                                       element={
-                                        <PermissionRoute permission="products.view">
+                                        <PermissionRoute permission="production.view">
                                           <ZoneTypeDetailPage />
                                         </PermissionRoute>
                                       }
@@ -383,7 +397,7 @@ function App() {
                                     <Route
                                       path="/input-types"
                                       element={
-                                        <PermissionRoute permission="products.view">
+                                        <PermissionRoute permission="inventory.view">
                                           <InputTypesPage />
                                         </PermissionRoute>
                                       }
@@ -391,7 +405,7 @@ function App() {
                                     <Route
                                       path="/input-types/:id"
                                       element={
-                                        <PermissionRoute permission="products.view">
+                                        <PermissionRoute permission="inventory.view">
                                           <InputTypeDetailPage />
                                         </PermissionRoute>
                                       }
@@ -401,7 +415,7 @@ function App() {
                                     <Route
                                       path="/inputs"
                                       element={
-                                        <PermissionRoute permission="products.view">
+                                        <PermissionRoute permission="inventory.view">
                                           <InputsPage />
                                         </PermissionRoute>
                                       }
@@ -409,7 +423,7 @@ function App() {
                                     <Route
                                       path="/inputs/:id"
                                       element={
-                                        <PermissionRoute permission="products.view">
+                                        <PermissionRoute permission="inventory.view">
                                           <InputDetailPage />
                                         </PermissionRoute>
                                       }
@@ -429,7 +443,7 @@ function App() {
                                     <Route
                                       path="/design-images"
                                       element={
-                                        <PermissionRoute permission="products.view">
+                                        <PermissionRoute permission="production.view">
                                           <DesignImagesPage />
                                         </PermissionRoute>
                                       }

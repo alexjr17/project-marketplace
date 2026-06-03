@@ -245,7 +245,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     // sin permisos de admin no verá el panel.
     const ADMIN_PREFIXES = [
       'admin.', 'dashboard.', 'orders.', 'products.', 'catalogs.',
-      'inventory.', 'shipping.', 'users.', 'admins.', 'roles.', 'settings.',
+      'inventory.', 'production.', 'shipping.', 'users.', 'admins.', 'roles.', 'settings.',
     ];
     return user.permissions.some((p) => ADMIN_PREFIXES.some((pre) => p.startsWith(pre)));
   }, [user]);

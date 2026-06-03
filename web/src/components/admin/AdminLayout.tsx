@@ -127,8 +127,8 @@ const menuWithSubmenus: {
     icon: Scissors,
     basePath: '/admin-panel/zone',
     submenu: [
-      { path: '/admin-panel/zone-types', label: 'Tipos de Zona', icon: Layers, permission: 'products.view' },
-      { path: '/admin-panel/design-images', label: 'Imágenes de Diseño', icon: Image, permission: 'products.view' },
+      { path: '/admin-panel/zone-types', label: 'Tipos de Zona', icon: Layers, permission: 'production.view' },
+      { path: '/admin-panel/design-images', label: 'Imágenes de Diseño', icon: Image, permission: 'production.view' },
     ],
   },
   // 5. INVENTARIO - Insumos y materiales
@@ -138,8 +138,8 @@ const menuWithSubmenus: {
     icon: Archive,
     basePath: '/admin-panel/input',
     submenu: [
-      { path: '/admin-panel/inputs', label: 'Insumos', icon: Box, permission: 'products.view' },
-      { path: '/admin-panel/input-types', label: 'Tipos de Insumo', icon: Layers, permission: 'products.view' },
+      { path: '/admin-panel/inputs', label: 'Insumos', icon: Box, permission: 'inventory.view' },
+      { path: '/admin-panel/input-types', label: 'Tipos de Insumo', icon: Layers, permission: 'inventory.view' },
     ],
   },
   // 6. COMPRAS - Proveedores y órdenes de compra
