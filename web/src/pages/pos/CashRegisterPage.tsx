@@ -1,12 +1,12 @@
 import { useState } from 'react';
-import { DollarSign, Clock, TrendingUp, CheckCircle, AlertCircle } from 'lucide-react';
+import { DollarSign, Clock, TrendingUp, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
 import { usePOS } from '../../context/POSContext';
 import { useToast } from '../../context/ToastContext';
 import * as cashRegisterService from '../../services/cash-register.service';
 import OpenSessionPrompt from '../../components/pos/OpenSessionPrompt';
 
 export default function CashRegisterPage() {
-  const { currentSession, loadSession } = usePOS();
+  const { currentSession, loadSession, isLoadingSession } = usePOS();
   const { showToast } = useToast();
   const [showCloseModal, setShowCloseModal] = useState(false);
   const [finalCash, setFinalCash] = useState('');
@@ -63,6 +63,17 @@ export default function CashRegisterPage() {
       setIsClosing(false);
     }
   };
+
+  // Mientras se valida si hay sesión abierta, mostrar un cargando (evita el
+  // flash de "Sin Sesión" antes de tener la respuesta del servidor).
+  if (isLoadingSession) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 text-gray-500">
+        <Loader2 className="w-10 h-10 animate-spin text-indigo-500 mb-3" />
+        <p className="text-sm">Validando sesión de caja…</p>
+      </div>
+    );
+  }
 
   if (!currentSession) {
     return (

@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
-import { AlertCircle, Plus, Info } from 'lucide-react';
-import { useAuth } from '../../context/AuthContext';
+import { AlertCircle, Plus } from 'lucide-react';
 import { useToast } from '../../context/ToastContext';
 import { usePOS } from '../../context/POSContext';
 import * as cashRegisterService from '../../services/cash-register.service';
@@ -14,7 +13,6 @@ export default function OpenSessionPrompt({
   title = 'Sin Sesión Activa',
   message = 'Debes abrir una sesión de caja para continuar'
 }: OpenSessionPromptProps) {
-  const { user, hasPermission } = useAuth();
   const { showToast } = useToast();
   const { loadSession } = usePOS();
 
@@ -69,26 +67,6 @@ export default function OpenSessionPrompt({
 
   return (
     <div className="max-w-2xl mx-auto">
-      {/* Debug Info */}
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-        <div className="flex items-start gap-3">
-          <Info className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
-          <div className="flex-1 text-sm">
-            <p className="font-semibold text-blue-900 mb-2">Informacion de Autenticacion</p>
-            <div className="space-y-1 text-blue-800">
-              <p><span className="font-medium">Usuario:</span> {user?.email}</p>
-              <p><span className="font-medium">Rol:</span> {user?.roleName} (ID: {user?.roleId})</p>
-              <p><span className="font-medium">Permisos POS:</span></p>
-              <ul className="ml-4 mt-1 space-y-0.5">
-                <li>pos.access: {hasPermission('pos.access') ? 'Si' : 'No'}</li>
-                <li>pos.cash_register: {hasPermission('pos.cash_register') ? 'Si' : 'No'}</li>
-                <li>pos.open_close_session: {hasPermission('pos.open_close_session') ? 'Si' : 'No'}</li>
-              </ul>
-            </div>
-          </div>
-        </div>
-      </div>
-
       <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-8 text-center">
         <AlertCircle className="w-16 h-16 text-yellow-600 mx-auto mb-4" />
         <h2 className="text-2xl font-bold text-gray-900 mb-2">{title}</h2>
