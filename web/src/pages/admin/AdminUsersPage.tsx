@@ -99,9 +99,11 @@ export const AdminUsersPage = () => {
         cell: (info) => {
           const admin = info.row.original;
           const isSuperAdmin = admin.role === 'superadmin';
-          // Obtener el nombre del rol desde RolesContext usando el id almacenado en el admin
-          // Por ahora usamos el campo role que tiene 'admin' o 'superadmin'
-          const roleName = isSuperAdmin ? 'Super Administrador' : 'Administrador';
+          // Nombre real del rol: lo trae el usuario (roleName) o se resuelve
+          // por roleId desde la lista de roles; respaldo "Administrador".
+          const roleName = isSuperAdmin
+            ? 'Super Administrador'
+            : (admin.roleName || roles.find((r) => r.id === admin.roleId)?.name || 'Administrador');
 
           return (
             <span
