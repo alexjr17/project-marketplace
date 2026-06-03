@@ -248,6 +248,18 @@ export const PERMISSION_GROUPS: {
       { id: 'messaging.channels', label: 'Canales', description: 'Configurar canales conectados' },
     ],
   },
+  {
+    module: 'pos',
+    label: 'Punto de Venta (operaciones)',
+    permissions: [
+      { id: 'pos.create_sale', label: 'Registrar ventas', description: 'Crear nuevas ventas y abonos' },
+      { id: 'pos.view_sales', label: 'Ver ventas y clientes', description: 'Historial, fiados y clientes' },
+      { id: 'pos.cancel_sale', label: 'Anular/editar ventas', description: 'Cancelar o modificar ventas' },
+      { id: 'pos.cash_register', label: 'Cajas registradoras', description: 'Administrar cajas registradoras' },
+      { id: 'pos.open_close_session', label: 'Abrir/cerrar caja', description: 'Sesiones de caja' },
+      { id: 'pos.view_reports', label: 'Ver reportes', description: 'Reportes de ventas' },
+    ],
+  },
 ];
 
 // Aplicaciones de alto nivel (selector "Cambiar a"). Cada app tiene un permiso
