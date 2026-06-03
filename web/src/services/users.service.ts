@@ -8,7 +8,9 @@ export interface ApiUser {
   cedula?: string;
   avatar?: string;
   roleId: number;
-  role?: {
+  // El backend (formatUser) devuelve el nombre del rol como string; otros
+  // endpoints pueden devolver el objeto completo.
+  role?: string | {
     id: number;
     name: string;
     permissions: string[];

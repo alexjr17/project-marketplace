@@ -33,7 +33,7 @@ export const AdminDetailPage = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { getAdminById, updateAdmin, toggleAdminStatus } = useUsers();
-  const { roles, getRoleById } = useRoles();
+  const { roles } = useRoles();
   const toast = useToast();
 
   const [admin, setAdmin] = useState<User | undefined>(undefined);
@@ -78,7 +78,7 @@ export const AdminDetailPage = () => {
         name: admin.name || '',
         phone: admin.phone || '',
         cedula: admin.cedula || '',
-        roleId: admin.role === 'superadmin' ? 1 : 3,
+        roleId: admin.roleId ?? (admin.role === 'superadmin' ? 1 : 3),
       });
     }
   }, [admin]);
@@ -464,7 +464,7 @@ export const AdminDetailPage = () => {
                     ) : (
                       <>
                         <Shield className="w-4 h-4 text-blue-500" />
-                        {getRoleById(formData.roleId)?.name || 'Administrador'}
+                        {roles.find((r) => r.id === formData.roleId)?.name || admin.roleName || 'Administrador'}
                       </>
                     )}
                     {isSuperAdmin && admin.id === 'super-admin-001' && (

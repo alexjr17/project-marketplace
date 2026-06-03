@@ -14,6 +14,10 @@ export interface User {
   email: string;
   name: string;
   role: UserRole;
+  /** roleId real (numérico) del backend; necesario para mostrar/editar el rol */
+  roleId?: number;
+  /** Nombre del rol asignado (p. ej. "Cajero y Productos") */
+  roleName?: string;
   status: UserStatus;
   phone?: string;
   cedula?: string;

@@ -92,6 +92,8 @@ const mapApiUserToUser = (apiUser: ApiUser): User => {
     email: apiUser.email,
     name: apiUser.name,
     role,
+    roleId: apiUser.roleId,
+    roleName: typeof apiUser.role === 'string' ? apiUser.role : apiUser.role?.name,
     status: mapApiStatus(apiUser.status),
     phone: apiUser.phone,
     cedula: apiUser.cedula,
