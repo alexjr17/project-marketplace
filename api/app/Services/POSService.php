@@ -796,9 +796,13 @@ class POSService
             return [];
         }
 
-        return POSCustomer::where('name', 'like', "%{$q}%")
-            ->orWhere('cedula', 'like', "%{$q}%")
-            ->orWhere('phone', 'like', "%{$q}%")
+        // Búsqueda sin distinguir mayúsculas/minúsculas (LOWER funciona en
+        // MySQL y PostgreSQL; LIKE en Postgres es sensible a may/min).
+        $like = '%'.mb_strtolower($q).'%';
+
+        return POSCustomer::whereRaw('LOWER(name) LIKE ?', [$like])
+            ->orWhereRaw('LOWER(cedula) LIKE ?', [$like])
+            ->orWhereRaw('LOWER(phone) LIKE ?', [$like])
             ->orderBy('name')
             ->limit($limit)
             ->get()
@@ -810,10 +814,10 @@ class POSService
     {
         $query = POSCustomer::query();
         if ($q !== null && trim($q) !== '') {
-            $t = trim($q);
-            $query->where(fn ($w) => $w->where('name', 'like', "%{$t}%")
-                ->orWhere('cedula', 'like', "%{$t}%")
-                ->orWhere('phone', 'like', "%{$t}%"));
+            $like = '%'.mb_strtolower(trim($q)).'%';
+            $query->where(fn ($w) => $w->whereRaw('LOWER(name) LIKE ?', [$like])
+                ->orWhereRaw('LOWER(cedula) LIKE ?', [$like])
+                ->orWhereRaw('LOWER(phone) LIKE ?', [$like]));
         }
         $customers = $query->orderBy('name')->limit($limit)->get();
         $ids = $customers->pluck('id')->all();
