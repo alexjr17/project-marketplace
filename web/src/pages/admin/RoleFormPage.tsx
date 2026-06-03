@@ -6,7 +6,7 @@ import { useToast } from '../../context/ToastContext';
 import { Button } from '../../components/shared/Button';
 import { Input } from '../../components/shared/Input';
 import type { Permission } from '../../types/roles';
-import { PERMISSION_GROUPS, ALL_PERMISSIONS } from '../../types/roles';
+import { PERMISSION_GROUPS, ALL_PERMISSIONS, APPLICATIONS, getAppPermissions } from '../../types/roles';
 
 export const RoleFormPage = () => {
   const { id } = useParams<{ id: string }>();
@@ -26,6 +26,9 @@ export const RoleFormPage = () => {
     permissions: [] as Permission[],
     isActive: true,
   });
+
+  // Aplicación seleccionada en el editor (Tienda, POS, Administración, Social Media)
+  const [selectedAppId, setSelectedAppId] = useState(APPLICATIONS[0].id);
 
   // Cargar datos del rol si estamos editando
   useEffect(() => {
@@ -112,6 +115,11 @@ export const RoleFormPage = () => {
   const getModuleSelectionCount = (modulePermissions: Permission[]) => {
     return modulePermissions.filter(p => formData.permissions.includes(p)).length;
   };
+
+  // App seleccionada y sus grupos de permisos (módulos que le pertenecen)
+  const selectedApp = APPLICATIONS.find((a) => a.id === selectedAppId) || APPLICATIONS[0];
+  const selectedAppGroups = PERMISSION_GROUPS.filter((g) => selectedApp.modules.includes(g.module));
+  const accessChecked = formData.permissions.includes(selectedApp.access.id);
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
@@ -259,8 +267,67 @@ export const RoleFormPage = () => {
               </button>
             </div>
 
+            {/* Selector de aplicaciones */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-5">
+              {APPLICATIONS.map((app) => {
+                const perms = getAppPermissions(app.id);
+                const sel = perms.filter((p) => formData.permissions.includes(p)).length;
+                const active = app.id === selectedAppId;
+                return (
+                  <button
+                    key={app.id}
+                    type="button"
+                    onClick={() => setSelectedAppId(app.id)}
+                    className={`flex flex-col items-start gap-1.5 p-3 rounded-xl border text-left transition-colors ${
+                      active
+                        ? 'border-orange-300 bg-orange-50 ring-1 ring-orange-200'
+                        : 'border-gray-200 hover:bg-gray-50'
+                    }`}
+                  >
+                    <span className={`text-sm font-semibold ${active ? 'text-orange-800' : 'text-gray-800'}`}>
+                      {app.name}
+                    </span>
+                    <span className={`text-xs px-2 py-0.5 rounded-full ${
+                      sel > 0 ? 'bg-orange-200 text-orange-800' : 'bg-gray-200 text-gray-600'
+                    }`}>
+                      {sel} / {perms.length}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Descripción + acceso a la app seleccionada */}
+            <p className="text-sm text-gray-500 mb-3">{selectedApp.description}</p>
+            <label
+              className={`flex items-center gap-3 p-4 rounded-xl border cursor-pointer transition-colors mb-4 ${
+                accessChecked
+                  ? 'bg-orange-100 border-orange-200'
+                  : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
+              }`}
+            >
+              <input
+                type="checkbox"
+                checked={accessChecked}
+                onChange={() => handleTogglePermission(selectedApp.access.id)}
+                className="w-5 h-5 text-orange-600 border-gray-300 rounded focus:ring-orange-500"
+              />
+              <div className="min-w-0">
+                <span className={`text-sm font-semibold ${accessChecked ? 'text-orange-900' : 'text-gray-800'}`}>
+                  {selectedApp.access.label}
+                </span>
+                <p className="text-xs text-gray-500">{selectedApp.access.description}</p>
+              </div>
+            </label>
+
+            {selectedAppGroups.length === 0 && (
+              <p className="text-sm text-gray-400 italic">
+                Esta aplicación solo requiere el permiso de acceso.
+              </p>
+            )}
+
             <div className="space-y-4">
-              {PERMISSION_GROUPS.map((group) => {
+              {selectedAppGroups.map((group) => {
                 const groupPermissions = group.permissions.map(p => p.id);
                 const allSelected = groupPermissions.every(p => formData.permissions.includes(p));
                 const someSelected = groupPermissions.some(p => formData.permissions.includes(p));

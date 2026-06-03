@@ -133,16 +133,6 @@ export const PERMISSION_GROUPS: {
   permissions: { id: Permission; label: string; description?: string }[];
 }[] = [
   {
-    module: 'apps',
-    label: 'Aplicaciones (selector "Cambiar a")',
-    permissions: [
-      { id: 'store.access', label: 'Tienda', description: 'Navegar la tienda pública' },
-      { id: 'pos.access', label: 'Punto de Venta', description: 'Acceder al POS' },
-      { id: 'admin.access', label: 'Administración', description: 'Acceder al panel de administración' },
-      { id: 'messaging.access', label: 'Social Media', description: 'Inbox, canales y publicaciones' },
-    ],
-  },
-  {
     module: 'dashboard',
     label: 'Dashboard',
     permissions: [
@@ -247,10 +237,61 @@ export const PERMISSION_GROUPS: {
   },
 ];
 
+// Aplicaciones de alto nivel (selector "Cambiar a"). Cada app tiene un permiso
+// de acceso y agrupa los módulos de permisos que le pertenecen. El editor de
+// roles muestra primero las apps y, al seleccionar una, carga sus permisos.
+export const APPLICATIONS: {
+  id: string;
+  name: string;
+  description: string;
+  access: { id: Permission; label: string; description: string };
+  modules: AdminModule[];
+}[] = [
+  {
+    id: 'store',
+    name: 'Tienda',
+    description: 'Tienda pública en línea',
+    access: { id: 'store.access', label: 'Acceso a la Tienda', description: 'Navegar y comprar en la tienda' },
+    modules: [],
+  },
+  {
+    id: 'pos',
+    name: 'Punto de Venta',
+    description: 'Caja registradora y ventas',
+    access: { id: 'pos.access', label: 'Acceso al Punto de Venta', description: 'Entrar al POS' },
+    modules: ['pos'],
+  },
+  {
+    id: 'admin',
+    name: 'Administración',
+    description: 'Panel de gestión del negocio',
+    access: { id: 'admin.access', label: 'Acceso a Administración', description: 'Entrar al panel de administración' },
+    modules: ['dashboard', 'orders', 'products', 'catalogs', 'inventory', 'shipping', 'users', 'admins', 'roles', 'settings'],
+  },
+  {
+    id: 'messaging',
+    name: 'Social Media',
+    description: 'Inbox, canales y publicaciones',
+    access: { id: 'messaging.access', label: 'Acceso a Social Media', description: 'Entrar a Social Media' },
+    modules: [],
+  },
+];
+
+// Helper: permisos que pertenecen a una aplicación (acceso + módulos)
+export const getAppPermissions = (appId: string): Permission[] => {
+  const app = APPLICATIONS.find((a) => a.id === appId);
+  if (!app) return [];
+  const modulePerms = PERMISSION_GROUPS
+    .filter((g) => app.modules.includes(g.module))
+    .flatMap((g) => g.permissions.map((p) => p.id));
+  return [app.access.id, ...modulePerms];
+};
+
 // Helper: Obtener todos los permisos
-export const ALL_PERMISSIONS: Permission[] = PERMISSION_GROUPS.flatMap(
-  group => group.permissions.map(p => p.id)
-);
+export const ALL_PERMISSIONS: Permission[] = [
+  ...APPLICATIONS.map((a) => a.access.id),
+  ...PERMISSION_GROUPS.flatMap((group) => group.permissions.map((p) => p.id)),
+];
 
 // Helper: Verificar si un rol tiene un permiso
 export const hasPermission = (role: Role | null, permission: Permission): boolean => {
