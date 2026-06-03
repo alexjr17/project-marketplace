@@ -244,8 +244,8 @@ export const ProductForm = ({ product, onSubmit, onDelete }: ProductFormProps) =
           />
         </div>
 
-        {/* Tercera fila: Categoría, Tipo, Precio, Stock */}
-        <div className="col-span-12 md:col-span-3">
+        {/* Tercera fila: Categoría, Tipo, Precio */}
+        <div className="col-span-12 md:col-span-4">
           <label className="block text-sm font-medium text-gray-700 mb-1">
             Categoría *
           </label>
@@ -264,7 +264,7 @@ export const ProductForm = ({ product, onSubmit, onDelete }: ProductFormProps) =
           </select>
         </div>
 
-        <div className="col-span-12 md:col-span-3">
+        <div className="col-span-12 md:col-span-4">
           <label className="block text-sm font-medium text-gray-700 mb-1">
             Tipo de Producto *
           </label>
@@ -285,7 +285,7 @@ export const ProductForm = ({ product, onSubmit, onDelete }: ProductFormProps) =
           </select>
         </div>
 
-        <div className="col-span-12 md:col-span-3">
+        <div className="col-span-12 md:col-span-4">
           <label className="block text-sm font-medium text-gray-700 mb-1">
             Precio ($) *
           </label>
@@ -299,18 +299,8 @@ export const ProductForm = ({ product, onSubmit, onDelete }: ProductFormProps) =
           />
         </div>
 
-        <div className="col-span-12 md:col-span-3">
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Stock *
-          </label>
-          <Input
-            type="number"
-            min="0"
-            value={formData.stock}
-            onChange={(e) => setFormData({ ...formData, stock: parseInt(e.target.value) })}
-            required
-          />
-        </div>
+        {/* El stock se administra por variante (módulo Variantes/Inventario),
+            no en el producto: por eso aquí no se edita. */}
 
         {/* Imágenes del Producto */}
         <div className="col-span-12">
@@ -439,7 +429,7 @@ export const ProductForm = ({ product, onSubmit, onDelete }: ProductFormProps) =
           />
         </div>
 
-        <div className="col-span-12 md:col-span-3">
+        <div className="col-span-12 md:col-span-4">
           <label className="block text-sm font-medium text-gray-700 mb-1">
             &nbsp;
           </label>

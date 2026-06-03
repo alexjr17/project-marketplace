@@ -45,7 +45,9 @@ class ProductController extends Controller
             'typeSlug' => $product->productType?->slug,
             'typeName' => $product->productType?->name,
             'basePrice' => (float) $product->basePrice,
-            'stock' => $product->stock,
+            // El stock real se maneja por variante; se reporta la suma de las
+            // variantes activas (el campo product.stock es solo de respaldo).
+            'stock' => (int) $product->variants()->where('isActive', true)->sum('stock'),
             'featured' => $product->featured,
             'isActive' => $product->isActive,
             'images' => is_array($product->images) ? $product->images : ['front' => ''],
