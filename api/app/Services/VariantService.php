@@ -135,11 +135,17 @@ class VariantService
 
         $created = [];
         foreach ($combos as [$colorId, $sizeId]) {
-            $exists = ProductVariant::where('productId', $productId)
+            $existing = ProductVariant::where('productId', $productId)
                 ->where('colorId', $colorId)
                 ->where('sizeId', $sizeId)
-                ->exists();
-            if ($exists) {
+                ->first();
+            if ($existing) {
+                // Si la combinación es válida pero estaba desactivada (p. ej. se
+                // volvió a agregar ese color/talla), se reactiva.
+                if (! $existing->isActive) {
+                    $existing->isActive = true;
+                    $existing->save();
+                }
                 continue;
             }
             try {
@@ -153,6 +159,21 @@ class VariantService
                 // Igual que el Node: se ignoran errores de combinaciones individuales.
             }
         }
+
+        // Desactivar las variantes que ya NO corresponden a la configuración
+        // actual de color/talla (p. ej. al convertir el producto en simple).
+        // No se eliminan para preservar ventas/movimientos; solo se ocultan.
+        ProductVariant::where('productId', $productId)
+            ->where('isActive', true)
+            ->get()
+            ->each(function (ProductVariant $v) use ($colorIds, $sizeIds) {
+                $colorOk = $colorIds ? in_array($v->colorId, $colorIds) : is_null($v->colorId);
+                $sizeOk = $sizeIds ? in_array($v->sizeId, $sizeIds) : is_null($v->sizeId);
+                if (! ($colorOk && $sizeOk)) {
+                    $v->isActive = false;
+                    $v->save();
+                }
+            });
 
         return $created;
     }
