@@ -62,6 +62,13 @@ export const ProductForm = ({ product, onSubmit, onDelete }: ProductFormProps) =
       : []
   );
 
+  // ¿El producto maneja variantes de color/talla? Si no, es un producto simple
+  // (una sola variante) — útil para comida y artículos sin tallas/colores.
+  const [hasVariants, setHasVariants] = useState<boolean>(
+    (product?.colors?.length ?? 0) > 0 ||
+    (Array.isArray(product?.sizes) && product.sizes.length > 0)
+  );
+
   // Cargar catálogos al montar
   useEffect(() => {
     const loadCatalogs = async () => {
@@ -158,9 +165,10 @@ export const ProductForm = ({ product, onSubmit, onDelete }: ProductFormProps) =
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Convertir IDs a objetos completos para el backend
-    const selectedColors = availableColors.filter(c => selectedColorIds.includes(c.id));
-    const selectedSizes = availableSizes.filter(s => selectedSizeIds.includes(s.id));
+    // Convertir IDs a objetos completos para el backend.
+    // Si el producto es simple (sin variantes), se envían color/tallas vacíos.
+    const selectedColors = hasVariants ? availableColors.filter(c => selectedColorIds.includes(c.id)) : [];
+    const selectedSizes = hasVariants ? availableSizes.filter(s => selectedSizeIds.includes(s.id)) : [];
 
     const productData: Omit<Product, 'id' | 'createdAt' | 'updatedAt'> = {
       name: formData.name,
@@ -446,10 +454,36 @@ export const ProductForm = ({ product, onSubmit, onDelete }: ProductFormProps) =
           </label>
         </div>
 
+        {/* Toggle de variantes (color y talla) */}
+        <div className="col-span-12">
+          <div className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 rounded-lg">
+            <div>
+              <p className="text-sm font-medium text-gray-900">Variantes (color y talla)</p>
+              <p className="text-xs text-gray-500">
+                Actívalo solo si el producto se vende en distintos colores o tallas. Si no, se guarda como producto simple.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                const next = !hasVariants;
+                setHasVariants(next);
+                if (!next) { setSelectedColorIds([]); setSelectedSizeIds([]); }
+              }}
+              className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors ${hasVariants ? 'bg-orange-500' : 'bg-gray-300'}`}
+              aria-pressed={hasVariants}
+            >
+              <span className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${hasVariants ? 'translate-x-5' : 'translate-x-0.5'}`} />
+            </button>
+          </div>
+        </div>
+
+        {hasVariants && (
+        <>
         {/* Colores (selector con checkboxes) */}
         <div className="col-span-12 md:col-span-6">
           <label className="block text-sm font-medium text-gray-700 mb-1.5">
-            Colores * (selecciona al menos uno)
+            Colores (selecciona al menos uno)
           </label>
           <div className="border border-gray-300 rounded-lg p-3 bg-gray-50 max-h-64 overflow-y-auto">
             {availableColors.length === 0 ? (
@@ -490,7 +524,7 @@ export const ProductForm = ({ product, onSubmit, onDelete }: ProductFormProps) =
         {/* Tallas (selector con checkboxes) */}
         <div className="col-span-12 md:col-span-6">
           <label className="block text-sm font-medium text-gray-700 mb-1.5">
-            Tallas * (selecciona al menos una)
+            Tallas (selecciona al menos una)
           </label>
           <div className="border border-gray-300 rounded-lg p-3 bg-gray-50 max-h-64 overflow-y-auto">
             {!formData.typeId ? (
@@ -524,6 +558,8 @@ export const ProductForm = ({ product, onSubmit, onDelete }: ProductFormProps) =
             </p>
           )}
         </div>
+        </>
+        )}
       </div>
 
       {/* Actions */}

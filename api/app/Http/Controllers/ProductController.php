@@ -268,9 +268,11 @@ class ProductController extends Controller
             return $product;
         });
 
-        if ($colorIds || $sizeIds) {
-            $this->variants->generateVariantsForProduct($product->id, 0);
-        }
+        // Siempre se generan variantes. Con color/talla se crean las combinaciones
+        // (stock inicial 0, se ajusta luego). Sin color/talla se crea UNA variante
+        // simple [null, null] con el stock del producto, para que sea vendible.
+        $initialStock = ($colorIds || $sizeIds) ? 0 : (int) ($data['stock'] ?? 0);
+        $this->variants->generateVariantsForProduct($product->id, $initialStock);
 
         return $this->created(
             $this->formatProduct($product->fresh(self::PRODUCT_RELATIONS)),
