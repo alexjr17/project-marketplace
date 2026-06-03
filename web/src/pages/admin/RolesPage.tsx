@@ -13,9 +13,9 @@ export const RolesPage = () => {
   const { hasPermission } = useAuth();
   const toast = useToast();
 
-  const canCreate = hasPermission('roles.create');
-  const canEdit = hasPermission('roles.edit');
-  const canDelete = hasPermission('roles.delete');
+  const canCreate = hasPermission('roles.view');
+  const canEdit = hasPermission('roles.view');
+  const canDelete = hasPermission('roles.view');
 
   const handleCreate = () => {
     navigate('/admin-panel/roles/new');

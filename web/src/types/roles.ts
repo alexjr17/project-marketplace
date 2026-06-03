@@ -3,46 +3,65 @@
 // Rol 1: Usuario Normal (solo acceso público, permisos fijos)
 // Rol 2+: Roles personalizados con permisos configurables
 
-// Permisos disponibles en el sistema
+// Permisos disponibles en el sistema.
+// Modelo GRANULAR: un permiso por cada ítem del menú (lo que ve cada rol).
 export type Permission =
   // Acceso a aplicaciones (selector "Cambiar a")
   | 'store.access'
   | 'admin.access'
   | 'messaging.access'
-  // Social Media (módulos)
+  // Social Media (módulos = pestañas)
   | 'messaging.inbox'
   | 'messaging.posts'
   | 'messaging.pages'
   | 'messaging.knowledge'
   | 'messaging.channels'
-  // Dashboard
+  // POS (operaciones de la app)
+  | 'pos.access'
+  | 'pos.create_sale'
+  | 'pos.view_sales'
+  | 'pos.cancel_sale'
+  | 'pos.cash_register'
+  | 'pos.open_close_session'
+  | 'pos.view_reports'
+  // ===== Administración — un permiso por ítem del menú =====
   | 'dashboard.view'
-  // Productos
-  | 'products.view'
-  | 'products.create'
-  | 'products.edit'
-  | 'products.delete'
-  // Catálogos (tallas, colores, tipos, categorías)
-  | 'catalogs.view'
-  | 'catalogs.manage'
-  // Pedidos
-  | 'orders.view'
-  | 'orders.manage'
-  | 'orders.delete'
+  // Ventas
+  | 'orders.view'              // Pedidos
+  | 'reviews.view'             // Reseñas
+  | 'payments.view'            // Pagos
+  // Envíos
+  | 'shipping.carriers'        // Transportadoras
+  | 'shipping.zones'           // Zonas y Tarifas
+  | 'shipping.connections'     // Conexiones
+  | 'shipping.config'          // Configuración de envíos
+  | 'shipping.dispatch'        // Despachos
+  // Punto de Venta (admin)
+  | 'variants.view'            // Variantes
+  // Catálogo
+  | 'products.view'            // Productos
+  | 'templates.view'           // Plantillas/Modelos
+  | 'categories.view'          // Categorías
+  | 'product_types.view'       // Tipos de Producto
+  | 'sizes.view'               // Tallas
+  | 'colors.view'              // Colores
+  // Producción
+  | 'zone_types.view'          // Tipos de Zona
+  | 'design_images.view'       // Imágenes de Diseño
+  // Inventario
+  | 'inputs.view'              // Insumos
+  | 'input_types.view'         // Tipos de Insumo
+  // Compras
+  | 'suppliers.view'           // Proveedores
+  | 'purchase_orders.view'     // Órdenes de Compra
+  | 'purchase_returns.view'    // Devoluciones
+  | 'conversions.view'         // Conversiones
+  | 'inventory_counts.view'    // Conteo Físico
+  | 'inventory_movements.view' // Movimientos
   // Usuarios
-  | 'users.view'
-  | 'users.edit'
-  | 'users.delete'
-  // Administradores
-  | 'admins.view'
-  | 'admins.create'
-  | 'admins.edit'
-  | 'admins.delete'
-  // Roles
-  | 'roles.view'
-  | 'roles.create'
-  | 'roles.edit'
-  | 'roles.delete'
+  | 'users.view'               // Clientes
+  | 'admins.view'              // Administradores
+  | 'roles.view'               // Roles y Permisos
   // Configuración
   | 'settings.general'
   | 'settings.appearance'
@@ -50,40 +69,23 @@ export type Permission =
   | 'settings.catalog'
   | 'settings.payment'
   | 'settings.legal'
-  // Inventario y Compras
-  | 'inventory.view'
-  | 'inventory.manage'
-  // Producción (personalizador: tipos de zona, imágenes de diseño)
-  | 'production.view'
-  | 'production.manage'
-  // Envíos
-  | 'shipping.view'
-  | 'shipping.manage'
-  // POS (punto de venta)
-  | 'pos.access'
-  | 'pos.create_sale'
-  | 'pos.view_sales'
-  | 'pos.cancel_sale'
-  | 'pos.cash_register'
-  | 'pos.open_close_session'
-  | 'pos.view_reports';
+  | 'settings.printing'        // Impresión
+  | 'settings.label_templates';// Plantillas de Etiquetas
 
-// Módulos del panel administrativo
+// Módulos (grupos del editor = secciones del menú)
 export type AdminModule =
   | 'apps'
   | 'messaging'
+  | 'pos'
   | 'dashboard'
-  | 'products'
-  | 'catalogs'
-  | 'orders'
-  | 'users'
-  | 'admins'
-  | 'roles'
-  | 'settings'
-  | 'inventory'
-  | 'production'
+  | 'sales'
   | 'shipping'
-  | 'pos';
+  | 'catalog'
+  | 'production'
+  | 'supplies'
+  | 'purchases'
+  | 'users'
+  | 'settings';
 
 // Interfaz de Rol
 export interface Role {
@@ -105,22 +107,21 @@ export const SYSTEM_ROLES: Role[] = [
     description: 'Acceso total al sistema. Solo puede existir uno.',
     permissions: [
       'store.access', 'admin.access', 'messaging.access',
-      'dashboard.view',
-      'products.view', 'products.create', 'products.edit', 'products.delete',
-      'catalogs.view', 'catalogs.manage',
-      'orders.view', 'orders.manage', 'orders.delete',
-      'users.view', 'users.edit', 'users.delete',
-      'admins.view', 'admins.create', 'admins.edit', 'admins.delete',
-      'roles.view', 'roles.create', 'roles.edit', 'roles.delete',
-      'settings.general', 'settings.appearance', 'settings.home',
-      'settings.catalog', 'settings.payment', 'settings.legal',
-      'inventory.view', 'inventory.manage',
-      'production.view', 'production.manage',
-      'shipping.view', 'shipping.manage',
-      'messaging.inbox', 'messaging.posts', 'messaging.pages',
-      'messaging.knowledge', 'messaging.channels',
+      'messaging.inbox', 'messaging.posts', 'messaging.pages', 'messaging.knowledge', 'messaging.channels',
       'pos.access', 'pos.create_sale', 'pos.view_sales', 'pos.cancel_sale',
       'pos.cash_register', 'pos.open_close_session', 'pos.view_reports',
+      'dashboard.view',
+      'orders.view', 'reviews.view', 'payments.view',
+      'shipping.carriers', 'shipping.zones', 'shipping.connections', 'shipping.config', 'shipping.dispatch',
+      'variants.view',
+      'products.view', 'templates.view', 'categories.view', 'product_types.view', 'sizes.view', 'colors.view',
+      'zone_types.view', 'design_images.view',
+      'inputs.view', 'input_types.view',
+      'suppliers.view', 'purchase_orders.view', 'purchase_returns.view',
+      'conversions.view', 'inventory_counts.view', 'inventory_movements.view',
+      'users.view', 'admins.view', 'roles.view',
+      'settings.general', 'settings.appearance', 'settings.home', 'settings.catalog',
+      'settings.payment', 'settings.legal', 'settings.printing', 'settings.label_templates',
     ],
     isSystem: true,
     isActive: true,
@@ -149,111 +150,91 @@ export const PERMISSION_GROUPS: {
     module: 'dashboard',
     label: 'Dashboard',
     permissions: [
-      { id: 'dashboard.view', label: 'Ver dashboard', description: 'Acceso al panel principal' },
+      { id: 'dashboard.view', label: 'Dashboard', description: 'Panel principal' },
     ],
   },
   {
-    module: 'orders',
-    label: 'Ventas y Pedidos',
+    module: 'sales',
+    label: 'Ventas',
     permissions: [
-      { id: 'orders.view', label: 'Ver pedidos', description: 'Listar pedidos, reseñas y detalles' },
-      { id: 'orders.manage', label: 'Gestionar pedidos', description: 'Cambiar estados y despachos' },
-      { id: 'orders.delete', label: 'Eliminar pedidos', description: 'Borrar pedidos' },
-    ],
-  },
-  {
-    module: 'pos',
-    label: 'Punto de Venta (operaciones)',
-    permissions: [
-      { id: 'pos.create_sale', label: 'Registrar ventas', description: 'Crear nuevas ventas y abonos' },
-      { id: 'pos.view_sales', label: 'Ver ventas y clientes', description: 'Historial, fiados y clientes' },
-      { id: 'pos.cancel_sale', label: 'Anular/editar ventas', description: 'Cancelar o modificar ventas' },
-      { id: 'pos.cash_register', label: 'Cajas registradoras', description: 'Administrar cajas' },
-      { id: 'pos.open_close_session', label: 'Abrir/cerrar caja', description: 'Sesiones de caja' },
-      { id: 'pos.view_reports', label: 'Ver reportes', description: 'Reportes de ventas' },
-    ],
-  },
-  {
-    module: 'products',
-    label: 'Catálogo y Productos',
-    permissions: [
-      { id: 'products.view', label: 'Ver productos', description: 'Productos, plantillas, variantes, producción e insumos' },
-      { id: 'products.create', label: 'Crear productos', description: 'Agregar nuevos productos' },
-      { id: 'products.edit', label: 'Editar productos', description: 'Modificar productos existentes' },
-      { id: 'products.delete', label: 'Eliminar productos', description: 'Borrar productos' },
-    ],
-  },
-  {
-    module: 'catalogs',
-    label: 'Atributos del catálogo',
-    permissions: [
-      { id: 'catalogs.view', label: 'Ver atributos', description: 'Categorías, tipos, tallas y colores' },
-      { id: 'catalogs.manage', label: 'Gestionar atributos', description: 'Crear, editar y eliminar' },
-    ],
-  },
-  {
-    module: 'inventory',
-    label: 'Inventario y Compras',
-    permissions: [
-      { id: 'inventory.view', label: 'Ver inventario y compras', description: 'Insumos, proveedores, OCs, movimientos, conteos' },
-      { id: 'inventory.manage', label: 'Gestionar inventario y compras', description: 'Crear, recibir y ajustar stock' },
-    ],
-  },
-  {
-    module: 'production',
-    label: 'Producción',
-    permissions: [
-      { id: 'production.view', label: 'Ver producción', description: 'Tipos de zona e imágenes de diseño' },
-      { id: 'production.manage', label: 'Gestionar producción', description: 'Crear y editar tipos de zona e imágenes' },
+      { id: 'orders.view', label: 'Pedidos', description: 'Listar pedidos y detalles' },
+      { id: 'reviews.view', label: 'Reseñas', description: 'Reseñas de productos' },
+      { id: 'payments.view', label: 'Pagos', description: 'Pagos de pedidos' },
     ],
   },
   {
     module: 'shipping',
     label: 'Envíos',
     permissions: [
-      { id: 'shipping.view', label: 'Ver envíos', description: 'Transportadoras, zonas, tarifas y conexiones' },
-      { id: 'shipping.manage', label: 'Gestionar envíos', description: 'Configurar transportadoras y tarifas' },
+      { id: 'shipping.carriers', label: 'Transportadoras', description: 'Transportadoras conectadas' },
+      { id: 'shipping.zones', label: 'Zonas y Tarifas', description: 'Zonas y tarifas de envío' },
+      { id: 'shipping.connections', label: 'Conexiones', description: 'Conexiones de transportadoras' },
+      { id: 'shipping.config', label: 'Configuración', description: 'Configuración de envíos' },
+      { id: 'shipping.dispatch', label: 'Despachos', description: 'Despachos de pedidos' },
+    ],
+  },
+  {
+    module: 'catalog',
+    label: 'Catálogo',
+    permissions: [
+      { id: 'products.view', label: 'Productos', description: 'Productos del catálogo' },
+      { id: 'variants.view', label: 'Variantes', description: 'Variantes de productos' },
+      { id: 'templates.view', label: 'Plantillas/Modelos', description: 'Plantillas y modelos' },
+      { id: 'categories.view', label: 'Categorías', description: 'Categorías de productos' },
+      { id: 'product_types.view', label: 'Tipos de Producto', description: 'Tipos de producto' },
+      { id: 'sizes.view', label: 'Tallas', description: 'Tallas' },
+      { id: 'colors.view', label: 'Colores', description: 'Colores' },
+    ],
+  },
+  {
+    module: 'production',
+    label: 'Producción',
+    permissions: [
+      { id: 'zone_types.view', label: 'Tipos de Zona', description: 'Tipos de zona de diseño' },
+      { id: 'design_images.view', label: 'Imágenes de Diseño', description: 'Catálogo de imágenes' },
+    ],
+  },
+  {
+    module: 'supplies',
+    label: 'Inventario',
+    permissions: [
+      { id: 'inputs.view', label: 'Insumos', description: 'Insumos y materiales' },
+      { id: 'input_types.view', label: 'Tipos de Insumo', description: 'Clasificación de insumos' },
+    ],
+  },
+  {
+    module: 'purchases',
+    label: 'Compras',
+    permissions: [
+      { id: 'suppliers.view', label: 'Proveedores', description: 'Proveedores' },
+      { id: 'purchase_orders.view', label: 'Órdenes de Compra', description: 'Órdenes de compra' },
+      { id: 'purchase_returns.view', label: 'Devoluciones', description: 'Devoluciones a proveedores' },
+      { id: 'conversions.view', label: 'Conversiones', description: 'Conversiones de inventario' },
+      { id: 'inventory_counts.view', label: 'Conteo Físico', description: 'Conteos físicos' },
+      { id: 'inventory_movements.view', label: 'Movimientos', description: 'Movimientos de inventario' },
     ],
   },
   {
     module: 'users',
-    label: 'Clientes',
+    label: 'Usuarios',
     permissions: [
-      { id: 'users.view', label: 'Ver clientes', description: 'Listar usuarios registrados' },
-      { id: 'users.edit', label: 'Editar clientes', description: 'Modificar información' },
-      { id: 'users.delete', label: 'Eliminar clientes', description: 'Borrar usuarios' },
-    ],
-  },
-  {
-    module: 'admins',
-    label: 'Administradores',
-    permissions: [
-      { id: 'admins.view', label: 'Ver administradores', description: 'Listar admins del sistema' },
-      { id: 'admins.create', label: 'Crear administradores', description: 'Agregar nuevos admins' },
-      { id: 'admins.edit', label: 'Editar administradores', description: 'Modificar admins' },
-      { id: 'admins.delete', label: 'Eliminar administradores', description: 'Borrar admins' },
-    ],
-  },
-  {
-    module: 'roles',
-    label: 'Roles y Permisos',
-    permissions: [
-      { id: 'roles.view', label: 'Ver roles', description: 'Listar roles del sistema' },
-      { id: 'roles.create', label: 'Crear roles', description: 'Agregar nuevos roles' },
-      { id: 'roles.edit', label: 'Editar roles', description: 'Modificar permisos de roles' },
-      { id: 'roles.delete', label: 'Eliminar roles', description: 'Borrar roles personalizados' },
+      { id: 'users.view', label: 'Clientes', description: 'Usuarios registrados' },
+      { id: 'admins.view', label: 'Administradores', description: 'Administradores del sistema' },
+      { id: 'roles.view', label: 'Roles y Permisos', description: 'Roles y permisos' },
     ],
   },
   {
     module: 'settings',
     label: 'Configuración',
     permissions: [
-      { id: 'settings.general', label: 'General', description: 'Nombre, logo, contacto, impresión' },
+      { id: 'settings.general', label: 'General', description: 'Nombre, logo, contacto' },
       { id: 'settings.appearance', label: 'Apariencia', description: 'Colores y estilos' },
       { id: 'settings.home', label: 'Página de inicio', description: 'Secciones y contenido' },
       { id: 'settings.catalog', label: 'Catálogo', description: 'Filtros y ordenamiento' },
       { id: 'settings.payment', label: 'Pagos', description: 'Métodos de pago' },
       { id: 'settings.legal', label: 'Legal', description: 'Términos y políticas' },
+      { id: 'settings.printing', label: 'Impresión', description: 'Configuración de impresión' },
+      { id: 'settings.label_templates', label: 'Plantillas de Etiquetas', description: 'Plantillas de etiquetas' },
     ],
   },
   {
@@ -298,7 +279,7 @@ export const APPLICATIONS: {
     name: 'Administración',
     description: 'Panel de gestión del negocio',
     access: { id: 'admin.access', label: 'Acceso a Administración', description: 'Entrar al panel de administración' },
-    modules: ['dashboard', 'orders', 'products', 'catalogs', 'inventory', 'production', 'shipping', 'users', 'admins', 'roles', 'settings'],
+    modules: ['dashboard', 'sales', 'shipping', 'catalog', 'production', 'supplies', 'purchases', 'users', 'settings'],
   },
   {
     id: 'messaging',

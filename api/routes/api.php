@@ -166,29 +166,29 @@ Route::prefix('products')->group(function () {
 // ==================== VARIANTES DE PRODUCTO ====================
 Route::prefix('variants')->middleware('auth:sanctum')->group(function () {
     Route::get('barcode/{barcode}', [VariantController::class, 'byBarcode'])
-        ->middleware('permission:products.view,pos.access');
+        ->middleware('permission:variants.view,pos.access,products.view');
     Route::get('sku/{sku}', [VariantController::class, 'bySku'])
-        ->middleware('permission:products.view');
+        ->middleware('permission:variants.view,pos.access,products.view');
     Route::get('lookup', [VariantController::class, 'lookup']);
     Route::get('low-stock', [VariantController::class, 'lowStock'])
-        ->middleware('permission:products.view');
+        ->middleware('permission:variants.view,products.view');
     Route::get('products', [VariantController::class, 'productVariants'])
-        ->middleware('permission:products.view');
+        ->middleware('permission:variants.view,products.view');
     Route::get('templates', [VariantController::class, 'templateVariants'])
-        ->middleware('permission:products.view');
+        ->middleware('permission:variants.view,products.view');
     Route::post('generate/{productId}', [VariantController::class, 'generate'])
-        ->whereNumber('productId')->middleware('permission:products.create');
+        ->whereNumber('productId')->middleware('permission:variants.view');
 
-    Route::get('/', [VariantController::class, 'index'])->middleware('permission:products.view');
-    Route::post('/', [VariantController::class, 'store'])->middleware('permission:products.create');
+    Route::get('/', [VariantController::class, 'index'])->middleware('permission:variants.view,products.view');
+    Route::post('/', [VariantController::class, 'store'])->middleware('permission:variants.view');
     Route::get('{id}', [VariantController::class, 'show'])->whereNumber('id')
-        ->middleware('permission:products.view');
+        ->middleware('permission:variants.view,products.view');
     Route::patch('{id}', [VariantController::class, 'update'])->whereNumber('id')
-        ->middleware('permission:products.edit');
+        ->middleware('permission:variants.view');
     Route::delete('{id}', [VariantController::class, 'destroy'])->whereNumber('id')
-        ->middleware('permission:products.delete');
+        ->middleware('permission:variants.view');
     Route::post('{id}/adjust-stock', [VariantController::class, 'adjustStock'])->whereNumber('id')
-        ->middleware('permission:products.edit');
+        ->middleware('permission:variants.view');
 });
 
 // ==================== RESEÑAS ====================
@@ -356,7 +356,7 @@ Route::prefix('settings')->group(function () {
 Route::prefix('zone-types')->group(function () {
     Route::get('/', [ZoneTypeController::class, 'index']);
     Route::get('{id}', [ZoneTypeController::class, 'show'])->whereNumber('id');
-    Route::middleware(['auth:sanctum', 'admin', 'permission:production.manage'])->group(function () {
+    Route::middleware(['auth:sanctum', 'admin', 'permission:zone_types.view'])->group(function () {
         Route::post('/', [ZoneTypeController::class, 'store']);
         Route::put('{id}', [ZoneTypeController::class, 'update'])->whereNumber('id');
         Route::delete('{id}', [ZoneTypeController::class, 'destroy'])->whereNumber('id');
@@ -368,7 +368,7 @@ Route::prefix('design-images')->group(function () {
     Route::get('/', [DesignImageController::class, 'index']);
     Route::get('categories', [DesignImageController::class, 'categories']);
     Route::get('{id}', [DesignImageController::class, 'show'])->whereNumber('id');
-    Route::middleware(['auth:sanctum', 'admin', 'permission:production.manage'])->group(function () {
+    Route::middleware(['auth:sanctum', 'admin', 'permission:design_images.view'])->group(function () {
         Route::post('/', [DesignImageController::class, 'store']);
         Route::put('sort-order', [DesignImageController::class, 'updateSortOrder']);
         Route::put('{id}', [DesignImageController::class, 'update'])->whereNumber('id');
@@ -400,27 +400,27 @@ Route::prefix('inputs')->middleware(['auth:sanctum', 'admin'])->group(function (
 
 // ==================== ÓRDENES DE COMPRA ====================
 Route::prefix('purchase-orders')->middleware('auth:sanctum')->group(function () {
-    Route::get('stats', [PurchaseOrderController::class, 'stats'])->middleware('permission:inventory.view');
-    Route::get('generate-number', [PurchaseOrderController::class, 'generateNumber'])->middleware('permission:inventory.manage');
-    Route::get('/', [PurchaseOrderController::class, 'index'])->middleware('permission:inventory.view');
-    Route::get('{id}', [PurchaseOrderController::class, 'show'])->whereNumber('id')->middleware('permission:inventory.view');
-    Route::post('/', [PurchaseOrderController::class, 'store'])->middleware('permission:inventory.manage');
-    Route::put('{id}', [PurchaseOrderController::class, 'update'])->whereNumber('id')->middleware('permission:inventory.manage');
-    Route::patch('{id}/status', [PurchaseOrderController::class, 'updateStatus'])->whereNumber('id')->middleware('permission:inventory.manage');
-    Route::post('{id}/receive', [PurchaseOrderController::class, 'receive'])->whereNumber('id')->middleware('permission:inventory.manage');
+    Route::get('stats', [PurchaseOrderController::class, 'stats'])->middleware('permission:purchase_orders.view');
+    Route::get('generate-number', [PurchaseOrderController::class, 'generateNumber'])->middleware('permission:purchase_orders.view');
+    Route::get('/', [PurchaseOrderController::class, 'index'])->middleware('permission:purchase_orders.view');
+    Route::get('{id}', [PurchaseOrderController::class, 'show'])->whereNumber('id')->middleware('permission:purchase_orders.view');
+    Route::post('/', [PurchaseOrderController::class, 'store'])->middleware('permission:purchase_orders.view');
+    Route::put('{id}', [PurchaseOrderController::class, 'update'])->whereNumber('id')->middleware('permission:purchase_orders.view');
+    Route::patch('{id}/status', [PurchaseOrderController::class, 'updateStatus'])->whereNumber('id')->middleware('permission:purchase_orders.view');
+    Route::post('{id}/receive', [PurchaseOrderController::class, 'receive'])->whereNumber('id')->middleware('permission:purchase_orders.view');
     // Eliminar una orden de compra: solo el administrador (SuperAdmin).
     Route::delete('{id}', [PurchaseOrderController::class, 'destroy'])->whereNumber('id')->middleware('admin');
 });
 
 // ==================== DEVOLUCIONES DE COMPRA ====================
 Route::prefix('purchase-returns')->middleware('auth:sanctum')->group(function () {
-    Route::get('stats', [PurchaseReturnController::class, 'stats'])->middleware('permission:inventory.view');
-    Route::get('generate-number', [PurchaseReturnController::class, 'generateNumber'])->middleware('permission:inventory.manage');
+    Route::get('stats', [PurchaseReturnController::class, 'stats'])->middleware('permission:purchase_returns.view');
+    Route::get('generate-number', [PurchaseReturnController::class, 'generateNumber'])->middleware('permission:purchase_returns.view');
     Route::get('returnable/{purchaseOrderId}', [PurchaseReturnController::class, 'returnableItems'])
-        ->whereNumber('purchaseOrderId')->middleware('permission:inventory.manage');
-    Route::get('/', [PurchaseReturnController::class, 'index'])->middleware('permission:inventory.view');
-    Route::get('{id}', [PurchaseReturnController::class, 'show'])->whereNumber('id')->middleware('permission:inventory.view');
-    Route::post('/', [PurchaseReturnController::class, 'store'])->middleware('permission:inventory.manage');
+        ->whereNumber('purchaseOrderId')->middleware('permission:purchase_returns.view');
+    Route::get('/', [PurchaseReturnController::class, 'index'])->middleware('permission:purchase_returns.view');
+    Route::get('{id}', [PurchaseReturnController::class, 'show'])->whereNumber('id')->middleware('permission:purchase_returns.view');
+    Route::post('/', [PurchaseReturnController::class, 'store'])->middleware('permission:purchase_returns.view');
 });
 
 // ==================== LOTES DE INSUMO ====================
@@ -441,52 +441,52 @@ Route::prefix('input-batches')->middleware(['auth:sanctum', 'admin'])->group(fun
 
 // ==================== PROVEEDORES ====================
 Route::prefix('suppliers')->middleware('auth:sanctum')->group(function () {
-    Route::get('stats', [SupplierController::class, 'stats'])->middleware('permission:inventory.view');
-    Route::get('generate-code', [SupplierController::class, 'generateCode'])->middleware('permission:inventory.manage');
-    Route::get('/', [SupplierController::class, 'index'])->middleware('permission:inventory.view');
-    Route::get('{id}', [SupplierController::class, 'show'])->whereNumber('id')->middleware('permission:inventory.view');
-    Route::post('/', [SupplierController::class, 'store'])->middleware('permission:inventory.manage');
-    Route::put('{id}', [SupplierController::class, 'update'])->whereNumber('id')->middleware('permission:inventory.manage');
-    Route::delete('{id}', [SupplierController::class, 'destroy'])->whereNumber('id')->middleware('permission:inventory.manage');
+    Route::get('stats', [SupplierController::class, 'stats'])->middleware('permission:suppliers.view');
+    Route::get('generate-code', [SupplierController::class, 'generateCode'])->middleware('permission:suppliers.view');
+    Route::get('/', [SupplierController::class, 'index'])->middleware('permission:suppliers.view');
+    Route::get('{id}', [SupplierController::class, 'show'])->whereNumber('id')->middleware('permission:suppliers.view');
+    Route::post('/', [SupplierController::class, 'store'])->middleware('permission:suppliers.view');
+    Route::put('{id}', [SupplierController::class, 'update'])->whereNumber('id')->middleware('permission:suppliers.view');
+    Route::delete('{id}', [SupplierController::class, 'destroy'])->whereNumber('id')->middleware('permission:suppliers.view');
 });
 
 // ==================== INVENTARIO (movimientos de variantes) ====================
 Route::prefix('inventory')->middleware('auth:sanctum')->group(function () {
-    Route::get('stats', [InventoryMovementController::class, 'stats'])->middleware('permission:inventory.view');
-    Route::get('low-stock', [InventoryMovementController::class, 'lowStock'])->middleware('permission:inventory.view');
-    Route::get('summary', [InventoryMovementController::class, 'summary'])->middleware('permission:inventory.view');
+    Route::get('stats', [InventoryMovementController::class, 'stats'])->middleware('permission:inventory_movements.view');
+    Route::get('low-stock', [InventoryMovementController::class, 'lowStock'])->middleware('permission:inventory_movements.view');
+    Route::get('summary', [InventoryMovementController::class, 'summary'])->middleware('permission:inventory_movements.view');
     Route::get('movements/variant/{variantId}', [InventoryMovementController::class, 'variantMovements'])
-        ->whereNumber('variantId')->middleware('permission:inventory.view');
-    Route::get('movements', [InventoryMovementController::class, 'movements'])->middleware('permission:inventory.view');
-    Route::post('movements', [InventoryMovementController::class, 'createMovement'])->middleware('permission:inventory.manage');
-    Route::post('bulk-adjustment', [InventoryMovementController::class, 'bulkAdjustment'])->middleware('permission:inventory.manage');
+        ->whereNumber('variantId')->middleware('permission:inventory_movements.view');
+    Route::get('movements', [InventoryMovementController::class, 'movements'])->middleware('permission:inventory_movements.view');
+    Route::post('movements', [InventoryMovementController::class, 'createMovement'])->middleware('permission:inventory_movements.view');
+    Route::post('bulk-adjustment', [InventoryMovementController::class, 'bulkAdjustment'])->middleware('permission:inventory_movements.view');
 });
 
 // ==================== CONTEOS DE INVENTARIO ====================
 Route::prefix('inventory-counts')->middleware('auth:sanctum')->group(function () {
-    Route::get('stats', [InventoryCountController::class, 'stats'])->middleware('permission:inventory.view');
-    Route::get('/', [InventoryCountController::class, 'index'])->middleware('permission:inventory.view');
-    Route::get('{id}', [InventoryCountController::class, 'show'])->whereNumber('id')->middleware('permission:inventory.view');
-    Route::post('/', [InventoryCountController::class, 'store'])->middleware('permission:inventory.manage');
-    Route::patch('{id}/start', [InventoryCountController::class, 'start'])->whereNumber('id')->middleware('permission:inventory.manage');
+    Route::get('stats', [InventoryCountController::class, 'stats'])->middleware('permission:inventory_counts.view');
+    Route::get('/', [InventoryCountController::class, 'index'])->middleware('permission:inventory_counts.view');
+    Route::get('{id}', [InventoryCountController::class, 'show'])->whereNumber('id')->middleware('permission:inventory_counts.view');
+    Route::post('/', [InventoryCountController::class, 'store'])->middleware('permission:inventory_counts.view');
+    Route::patch('{id}/start', [InventoryCountController::class, 'start'])->whereNumber('id')->middleware('permission:inventory_counts.view');
     Route::patch('{id}/items/{itemId}', [InventoryCountController::class, 'updateItemCount'])
-        ->whereNumber('id')->whereNumber('itemId')->middleware('permission:inventory.manage');
-    Route::patch('{id}/submit', [InventoryCountController::class, 'submit'])->whereNumber('id')->middleware('permission:inventory.manage');
-    Route::patch('{id}/approve', [InventoryCountController::class, 'approve'])->whereNumber('id')->middleware('permission:inventory.manage');
-    Route::patch('{id}/cancel', [InventoryCountController::class, 'cancel'])->whereNumber('id')->middleware('permission:inventory.manage');
-    Route::delete('{id}', [InventoryCountController::class, 'destroy'])->whereNumber('id')->middleware('permission:inventory.manage');
+        ->whereNumber('id')->whereNumber('itemId')->middleware('permission:inventory_counts.view');
+    Route::patch('{id}/submit', [InventoryCountController::class, 'submit'])->whereNumber('id')->middleware('permission:inventory_counts.view');
+    Route::patch('{id}/approve', [InventoryCountController::class, 'approve'])->whereNumber('id')->middleware('permission:inventory_counts.view');
+    Route::patch('{id}/cancel', [InventoryCountController::class, 'cancel'])->whereNumber('id')->middleware('permission:inventory_counts.view');
+    Route::delete('{id}', [InventoryCountController::class, 'destroy'])->whereNumber('id')->middleware('permission:inventory_counts.view');
 });
 
 // ==================== CONVERSIONES DE INVENTARIO ====================
 Route::prefix('inventory-conversions')->middleware('auth:sanctum')->group(function () {
-    Route::get('stats', [InventoryConversionController::class, 'stats'])->middleware('permission:inventory.view');
-    Route::post('from-template', [InventoryConversionController::class, 'fromTemplate'])->middleware('permission:inventory.manage');
-    Route::get('/', [InventoryConversionController::class, 'index'])->middleware('permission:inventory.view');
-    Route::get('{id}', [InventoryConversionController::class, 'show'])->whereNumber('id')->middleware('permission:inventory.view');
-    Route::post('/', [InventoryConversionController::class, 'store'])->middleware('permission:inventory.manage');
-    Route::delete('{id}', [InventoryConversionController::class, 'destroy'])->whereNumber('id')->middleware('permission:inventory.manage');
+    Route::get('stats', [InventoryConversionController::class, 'stats'])->middleware('permission:conversions.view');
+    Route::post('from-template', [InventoryConversionController::class, 'fromTemplate'])->middleware('permission:conversions.view');
+    Route::get('/', [InventoryConversionController::class, 'index'])->middleware('permission:conversions.view');
+    Route::get('{id}', [InventoryConversionController::class, 'show'])->whereNumber('id')->middleware('permission:conversions.view');
+    Route::post('/', [InventoryConversionController::class, 'store'])->middleware('permission:conversions.view');
+    Route::delete('{id}', [InventoryConversionController::class, 'destroy'])->whereNumber('id')->middleware('permission:conversions.view');
 
-    Route::middleware('permission:inventory.manage')->group(function () {
+    Route::middleware('permission:conversions.view')->group(function () {
         Route::post('{id}/input-items', [InventoryConversionController::class, 'addInputItem'])->whereNumber('id');
         Route::patch('{id}/input-items/{itemId}', [InventoryConversionController::class, 'updateInputItem'])->whereNumber('id')->whereNumber('itemId');
         Route::delete('{id}/input-items/{itemId}', [InventoryConversionController::class, 'removeInputItem'])->whereNumber('id')->whereNumber('itemId');
@@ -587,8 +587,8 @@ Route::prefix('barcodes')->middleware('auth:sanctum')->group(function () {
     Route::get('labels/product/{productId}', [BarcodeController::class, 'productLabels'])
         ->whereNumber('productId')->middleware('permission:products.view');
     Route::post('assign/{variantId}', [BarcodeController::class, 'assign'])
-        ->whereNumber('variantId')->middleware('permission:products.edit');
-    Route::post('assign-all', [BarcodeController::class, 'assignAll'])->middleware('permission:products.edit');
+        ->whereNumber('variantId')->middleware('permission:products.view');
+    Route::post('assign-all', [BarcodeController::class, 'assignAll'])->middleware('permission:products.view');
     Route::post('validate', [BarcodeController::class, 'validateBarcode'])->middleware('permission:products.view');
     Route::post('print', [BarcodeController::class, 'print'])->middleware('permission:products.view');
 });

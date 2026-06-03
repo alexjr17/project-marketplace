@@ -43,7 +43,11 @@ export const RoleFormPage = () => {
       setFormData({
         name: editingRole.name,
         description: editingRole.description,
-        permissions: Array.isArray(editingRole.permissions) ? [...editingRole.permissions] : [],
+        // Filtra permisos heredados que ya no existen en el catálogo, para que
+        // al guardar no falle la validación del backend.
+        permissions: Array.isArray(editingRole.permissions)
+          ? editingRole.permissions.filter((p) => (ALL_PERMISSIONS as string[]).includes(p))
+          : [],
         isActive: editingRole.isActive,
       });
     }

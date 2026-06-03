@@ -307,7 +307,7 @@ function App() {
                                     <Route
                                       path="/roles/new"
                                       element={
-                                        <PermissionRoute permission="roles.create">
+                                        <PermissionRoute permission="roles.view">
                                           <RoleFormPage />
                                         </PermissionRoute>
                                       }
@@ -315,7 +315,7 @@ function App() {
                                     <Route
                                       path="/roles/:id/edit"
                                       element={
-                                        <PermissionRoute permission="roles.edit">
+                                        <PermissionRoute permission="roles.view">
                                           <RoleFormPage />
                                         </PermissionRoute>
                                       }
@@ -335,7 +335,7 @@ function App() {
                                     <Route
                                       path="/variants"
                                       element={
-                                        <PermissionRoute permission="products.view">
+                                        <PermissionRoute permission="variants.view">
                                           <VariantsPage />
                                         </PermissionRoute>
                                       }
@@ -345,7 +345,7 @@ function App() {
                                     <Route
                                       path="/catalogs/sizes"
                                       element={
-                                        <PermissionRoute permission="catalogs.view">
+                                        <PermissionRoute permission="sizes.view">
                                           <SizesPage />
                                         </PermissionRoute>
                                       }
@@ -353,7 +353,7 @@ function App() {
                                     <Route
                                       path="/catalogs/colors"
                                       element={
-                                        <PermissionRoute permission="catalogs.view">
+                                        <PermissionRoute permission="colors.view">
                                           <ColorsPage />
                                         </PermissionRoute>
                                       }
@@ -361,7 +361,7 @@ function App() {
                                     <Route
                                       path="/catalogs/product-types"
                                       element={
-                                        <PermissionRoute permission="catalogs.view">
+                                        <PermissionRoute permission="product_types.view">
                                           <ProductTypesPage />
                                         </PermissionRoute>
                                       }
@@ -369,7 +369,7 @@ function App() {
                                     <Route
                                       path="/catalogs/categories"
                                       element={
-                                        <PermissionRoute permission="catalogs.view">
+                                        <PermissionRoute permission="categories.view">
                                           <CategoriesPage />
                                         </PermissionRoute>
                                       }
@@ -379,7 +379,7 @@ function App() {
                                     <Route
                                       path="/zone-types"
                                       element={
-                                        <PermissionRoute permission="production.view">
+                                        <PermissionRoute permission="zone_types.view">
                                           <ZoneTypesPage />
                                         </PermissionRoute>
                                       }
@@ -387,7 +387,7 @@ function App() {
                                     <Route
                                       path="/zone-types/:id"
                                       element={
-                                        <PermissionRoute permission="production.view">
+                                        <PermissionRoute permission="zone_types.view">
                                           <ZoneTypeDetailPage />
                                         </PermissionRoute>
                                       }
@@ -397,7 +397,7 @@ function App() {
                                     <Route
                                       path="/input-types"
                                       element={
-                                        <PermissionRoute permission="inventory.view">
+                                        <PermissionRoute permission="input_types.view">
                                           <InputTypesPage />
                                         </PermissionRoute>
                                       }
@@ -405,7 +405,7 @@ function App() {
                                     <Route
                                       path="/input-types/:id"
                                       element={
-                                        <PermissionRoute permission="inventory.view">
+                                        <PermissionRoute permission="input_types.view">
                                           <InputTypeDetailPage />
                                         </PermissionRoute>
                                       }
@@ -415,7 +415,7 @@ function App() {
                                     <Route
                                       path="/inputs"
                                       element={
-                                        <PermissionRoute permission="inventory.view">
+                                        <PermissionRoute permission="inputs.view">
                                           <InputsPage />
                                         </PermissionRoute>
                                       }
@@ -423,7 +423,7 @@ function App() {
                                     <Route
                                       path="/inputs/:id"
                                       element={
-                                        <PermissionRoute permission="inventory.view">
+                                        <PermissionRoute permission="inputs.view">
                                           <InputDetailPage />
                                         </PermissionRoute>
                                       }
@@ -433,7 +433,7 @@ function App() {
                                     <Route
                                       path="/templates"
                                       element={
-                                        <PermissionRoute permission="products.view">
+                                        <PermissionRoute permission="templates.view">
                                           <TemplatesPage />
                                         </PermissionRoute>
                                       }
@@ -443,7 +443,7 @@ function App() {
                                     <Route
                                       path="/design-images"
                                       element={
-                                        <PermissionRoute permission="production.view">
+                                        <PermissionRoute permission="design_images.view">
                                           <DesignImagesPage />
                                         </PermissionRoute>
                                       }
@@ -479,7 +479,7 @@ function App() {
                                     <Route
                                       path="/orders/shipping"
                                       element={
-                                        <PermissionRoute permission="orders.manage">
+                                        <PermissionRoute permission="shipping.dispatch">
                                           <ShippingPage />
                                         </PermissionRoute>
                                       }
@@ -489,7 +489,7 @@ function App() {
                                     <Route
                                       path="/payments"
                                       element={
-                                        <PermissionRoute permission="settings.payment">
+                                        <PermissionRoute permission="payments.view">
                                           <PaymentsPage />
                                         </PermissionRoute>
                                       }
@@ -509,7 +509,7 @@ function App() {
                                     <Route
                                       path="/suppliers"
                                       element={
-                                        <PermissionRoute permission="inventory.view">
+                                        <PermissionRoute permission="suppliers.view">
                                           <SuppliersPage />
                                         </PermissionRoute>
                                       }
@@ -517,7 +517,7 @@ function App() {
                                     <Route
                                       path="/suppliers/:id"
                                       element={
-                                        <PermissionRoute permission="inventory.view">
+                                        <PermissionRoute permission="suppliers.view">
                                           <SupplierDetailPage />
                                         </PermissionRoute>
                                       }
@@ -525,7 +525,7 @@ function App() {
                                     <Route
                                       path="/purchase-orders"
                                       element={
-                                        <PermissionRoute permission="inventory.view">
+                                        <PermissionRoute permission="purchase_orders.view">
                                           <PurchaseOrdersPage />
                                         </PermissionRoute>
                                       }
@@ -533,7 +533,7 @@ function App() {
                                     <Route
                                       path="/purchase-orders/:id"
                                       element={
-                                        <PermissionRoute permission="inventory.view">
+                                        <PermissionRoute permission="purchase_orders.view">
                                           <PurchaseOrderDetailPage />
                                         </PermissionRoute>
                                       }
@@ -541,7 +541,7 @@ function App() {
                                     <Route
                                       path="/purchase-returns"
                                       element={
-                                        <PermissionRoute permission="inventory.view">
+                                        <PermissionRoute permission="purchase_returns.view">
                                           <PurchaseReturnsPage />
                                         </PermissionRoute>
                                       }
@@ -549,7 +549,7 @@ function App() {
                                     <Route
                                       path="/purchase-returns/new"
                                       element={
-                                        <PermissionRoute permission="inventory.manage">
+                                        <PermissionRoute permission="purchase_returns.view">
                                           <PurchaseReturnFormPage />
                                         </PermissionRoute>
                                       }
@@ -557,7 +557,7 @@ function App() {
                                     <Route
                                       path="/inventory-movements"
                                       element={
-                                        <PermissionRoute permission="inventory.view">
+                                        <PermissionRoute permission="inventory_movements.view">
                                           <InventoryMovementsPage />
                                         </PermissionRoute>
                                       }
@@ -565,7 +565,7 @@ function App() {
                                     <Route
                                       path="/inventory-counts"
                                       element={
-                                        <PermissionRoute permission="inventory.view">
+                                        <PermissionRoute permission="inventory_counts.view">
                                           <InventoryCountsPage />
                                         </PermissionRoute>
                                       }
@@ -573,7 +573,7 @@ function App() {
                                     <Route
                                       path="/inventory-counts/:id"
                                       element={
-                                        <PermissionRoute permission="inventory.view">
+                                        <PermissionRoute permission="inventory_counts.view">
                                           <InventoryCountDetailPage />
                                         </PermissionRoute>
                                       }
@@ -581,7 +581,7 @@ function App() {
                                     <Route
                                       path="/inventory-conversions"
                                       element={
-                                        <PermissionRoute permission="inventory.view">
+                                        <PermissionRoute permission="conversions.view">
                                           <InventoryConversionsPage />
                                         </PermissionRoute>
                                       }
@@ -589,7 +589,7 @@ function App() {
                                     <Route
                                       path="/inventory-conversions/new-from-template"
                                       element={
-                                        <PermissionRoute permission="inventory.manage">
+                                        <PermissionRoute permission="conversions.view">
                                           <InventoryConversionFromTemplatePage />
                                         </PermissionRoute>
                                       }
@@ -597,7 +597,7 @@ function App() {
                                     <Route
                                       path="/inventory-conversions/:id"
                                       element={
-                                        <PermissionRoute permission="inventory.view">
+                                        <PermissionRoute permission="conversions.view">
                                           <InventoryConversionDetailPage />
                                         </PermissionRoute>
                                       }
@@ -605,7 +605,7 @@ function App() {
                                     <Route
                                       path="/template-recipes"
                                       element={
-                                        <PermissionRoute permission="inventory.manage">
+                                        <PermissionRoute permission="templates.view">
                                           <TemplateRecipesPage />
                                         </PermissionRoute>
                                       }
@@ -615,7 +615,7 @@ function App() {
                                     <Route
                                       path="/reviews"
                                       element={
-                                        <PermissionRoute permission="orders.view">
+                                        <PermissionRoute permission="reviews.view">
                                           <ReviewsPage />
                                         </PermissionRoute>
                                       }
@@ -661,18 +661,23 @@ function App() {
                                     <Route
                                       path="/settings/shipping"
                                       element={
-                                        <PermissionRoute permission="shipping.view">
+                                        <PermissionRoute permission="shipping.config">
                                           <SettingsShippingPage />
                                         </PermissionRoute>
                                       }
                                     />
-                                    {/* Módulo Envíos: pestañas del sidebar */}
-                                    {['carriers', 'zones', 'connections', 'config'].map((tab) => (
+                                    {/* Módulo Envíos: pestañas del sidebar (un permiso por pestaña) */}
+                                    {([
+                                      { tab: 'carriers', permission: 'shipping.carriers' as const },
+                                      { tab: 'zones', permission: 'shipping.zones' as const },
+                                      { tab: 'connections', permission: 'shipping.connections' as const },
+                                      { tab: 'config', permission: 'shipping.config' as const },
+                                    ]).map(({ tab, permission }) => (
                                       <Route
                                         key={tab}
                                         path={`/shipping/${tab}`}
                                         element={
-                                          <PermissionRoute permission="shipping.view">
+                                          <PermissionRoute permission={permission}>
                                             <SettingsShippingPage />
                                           </PermissionRoute>
                                         }
@@ -697,7 +702,7 @@ function App() {
                                     <Route
                                       path="/settings/label-templates"
                                       element={
-                                        <PermissionRoute permission="settings.general">
+                                        <PermissionRoute permission="settings.label_templates">
                                           <LabelTemplatesPage />
                                         </PermissionRoute>
                                       }
@@ -705,7 +710,7 @@ function App() {
                                     <Route
                                       path="/settings/printing"
                                       element={
-                                        <PermissionRoute permission="settings.general">
+                                        <PermissionRoute permission="settings.printing">
                                           <SettingsPrintingPage />
                                         </PermissionRoute>
                                       }

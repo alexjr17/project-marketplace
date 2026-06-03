@@ -2,6 +2,10 @@ import type { ReactNode } from 'react';
 import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { authService } from '../services';
 import type { AuthResponse, User as ApiUser } from '../services/auth.service';
+import { getAppPermissions } from '../types/roles';
+
+// Permisos que pertenecen al panel de Administración (acceso + todos sus módulos)
+const ADMIN_PERMISSIONS = new Set<string>(getAppPermissions('admin'));
 
 export interface UserProfile {
   phone?: string;
@@ -241,13 +245,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     // Cliente (roleId 2) NO tiene acceso al panel admin
     if (user.roleId === 2) return false;
     // Roles administrativos: acceso explícito (admin.access) o cualquier
-    // permiso de un módulo administrativo. Un rol enfocado (p. ej. solo POS)
+    // permiso de un ítem del panel admin. Un rol enfocado (p. ej. solo POS)
     // sin permisos de admin no verá el panel.
-    const ADMIN_PREFIXES = [
-      'admin.', 'dashboard.', 'orders.', 'products.', 'catalogs.',
-      'inventory.', 'production.', 'shipping.', 'users.', 'admins.', 'roles.', 'settings.',
-    ];
-    return user.permissions.some((p) => ADMIN_PREFIXES.some((pre) => p.startsWith(pre)));
+    return user.permissions.some((p) => ADMIN_PERMISSIONS.has(p));
   }, [user]);
 
   return (

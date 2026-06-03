@@ -76,8 +76,8 @@ const menuWithSubmenus: {
     basePath: '/admin-panel/orders',
     submenu: [
       { path: '/admin-panel/orders', label: 'Pedidos', icon: FileText, permission: 'orders.view' },
-      { path: '/admin-panel/payments', label: 'Pagos', icon: DollarSign, permission: 'settings.payment' },
-      { path: '/admin-panel/reviews', label: 'Reseñas', icon: Star, permission: 'orders.view' },
+      { path: '/admin-panel/payments', label: 'Pagos', icon: DollarSign, permission: 'payments.view' },
+      { path: '/admin-panel/reviews', label: 'Reseñas', icon: Star, permission: 'reviews.view' },
     ],
   },
   // 2. ENVÍOS - Transportadoras, zonas/tarifas, conexiones y despachos
@@ -87,11 +87,11 @@ const menuWithSubmenus: {
     icon: Truck,
     basePath: '/admin-panel/shipping',
     submenu: [
-      { path: '/admin-panel/shipping/carriers', label: 'Transportadoras', icon: Truck, permission: 'shipping.view' },
-      { path: '/admin-panel/shipping/zones', label: 'Zonas y Tarifas', icon: MapPin, permission: 'shipping.view' },
-      { path: '/admin-panel/shipping/connections', label: 'Conexiones', icon: Plug, permission: 'shipping.view' },
-      { path: '/admin-panel/shipping/config', label: 'Configuración', icon: Settings, permission: 'shipping.manage' },
-      { path: '/admin-panel/orders/shipping', label: 'Despachos', icon: Truck, permission: 'orders.manage' },
+      { path: '/admin-panel/shipping/carriers', label: 'Transportadoras', icon: Truck, permission: 'shipping.carriers' },
+      { path: '/admin-panel/shipping/zones', label: 'Zonas y Tarifas', icon: MapPin, permission: 'shipping.zones' },
+      { path: '/admin-panel/shipping/connections', label: 'Conexiones', icon: Plug, permission: 'shipping.connections' },
+      { path: '/admin-panel/shipping/config', label: 'Configuración', icon: Settings, permission: 'shipping.config' },
+      { path: '/admin-panel/orders/shipping', label: 'Despachos', icon: Truck, permission: 'shipping.dispatch' },
     ],
   },
   // 2. PUNTO DE VENTA - POS y códigos de barras
@@ -101,7 +101,6 @@ const menuWithSubmenus: {
     icon: ShoppingCart,
     basePath: '/admin-panel/cash-registers',
     submenu: [
-      { path: '/admin-panel/variants', label: 'Variantes', icon: LayoutGrid, permission: 'products.view' },
       { path: '/admin-panel/cash-registers', label: 'Cajas Registradoras', icon: DollarSign, permission: 'pos.cash_register' },
     ],
   },
@@ -113,11 +112,12 @@ const menuWithSubmenus: {
     basePath: '/admin-panel/products',
     submenu: [
       { path: '/admin-panel/products', label: 'Productos', icon: Package, permission: 'products.view' },
-      { path: '/admin-panel/templates', label: 'Plantillas/Modelos', icon: LayoutTemplate, permission: 'products.view' },
-      { path: '/admin-panel/catalogs/categories', label: 'Categorías', icon: FolderTree, permission: 'catalogs.view' },
-      { path: '/admin-panel/catalogs/product-types', label: 'Tipos de Producto', icon: Tag, permission: 'catalogs.view' },
-      { path: '/admin-panel/catalogs/sizes', label: 'Tallas', icon: Ruler, permission: 'catalogs.view' },
-      { path: '/admin-panel/catalogs/colors', label: 'Colores', icon: Palette, permission: 'catalogs.view' },
+      { path: '/admin-panel/variants', label: 'Variantes', icon: LayoutGrid, permission: 'variants.view' },
+      { path: '/admin-panel/templates', label: 'Plantillas/Modelos', icon: LayoutTemplate, permission: 'templates.view' },
+      { path: '/admin-panel/catalogs/categories', label: 'Categorías', icon: FolderTree, permission: 'categories.view' },
+      { path: '/admin-panel/catalogs/product-types', label: 'Tipos de Producto', icon: Tag, permission: 'product_types.view' },
+      { path: '/admin-panel/catalogs/sizes', label: 'Tallas', icon: Ruler, permission: 'sizes.view' },
+      { path: '/admin-panel/catalogs/colors', label: 'Colores', icon: Palette, permission: 'colors.view' },
     ],
   },
   // 4. PRODUCCIÓN - Zonas y personalización
@@ -127,8 +127,8 @@ const menuWithSubmenus: {
     icon: Scissors,
     basePath: '/admin-panel/zone',
     submenu: [
-      { path: '/admin-panel/zone-types', label: 'Tipos de Zona', icon: Layers, permission: 'production.view' },
-      { path: '/admin-panel/design-images', label: 'Imágenes de Diseño', icon: Image, permission: 'production.view' },
+      { path: '/admin-panel/zone-types', label: 'Tipos de Zona', icon: Layers, permission: 'zone_types.view' },
+      { path: '/admin-panel/design-images', label: 'Imágenes de Diseño', icon: Image, permission: 'design_images.view' },
     ],
   },
   // 5. INVENTARIO - Insumos y materiales
@@ -138,8 +138,8 @@ const menuWithSubmenus: {
     icon: Archive,
     basePath: '/admin-panel/input',
     submenu: [
-      { path: '/admin-panel/inputs', label: 'Insumos', icon: Box, permission: 'inventory.view' },
-      { path: '/admin-panel/input-types', label: 'Tipos de Insumo', icon: Layers, permission: 'inventory.view' },
+      { path: '/admin-panel/inputs', label: 'Insumos', icon: Box, permission: 'inputs.view' },
+      { path: '/admin-panel/input-types', label: 'Tipos de Insumo', icon: Layers, permission: 'input_types.view' },
     ],
   },
   // 6. COMPRAS - Proveedores y órdenes de compra
@@ -149,12 +149,12 @@ const menuWithSubmenus: {
     icon: ClipboardList,
     basePath: '/admin-panel/suppliers',
     submenu: [
-      { path: '/admin-panel/suppliers', label: 'Proveedores', icon: Building2, permission: 'inventory.view' },
-      { path: '/admin-panel/purchase-orders', label: 'Órdenes de Compra', icon: ClipboardList, permission: 'inventory.view' },
-      { path: '/admin-panel/purchase-returns', label: 'Devoluciones', icon: RotateCcw, permission: 'inventory.view' },
-      { path: '/admin-panel/inventory-conversions', label: 'Conversiones', icon: ArrowRightLeft, permission: 'inventory.view' },
-      { path: '/admin-panel/inventory-counts', label: 'Conteo Físico', icon: Archive, permission: 'inventory.view' },
-      { path: '/admin-panel/inventory-movements', label: 'Movimientos', icon: ArrowDownUp, permission: 'inventory.view' },
+      { path: '/admin-panel/suppliers', label: 'Proveedores', icon: Building2, permission: 'suppliers.view' },
+      { path: '/admin-panel/purchase-orders', label: 'Órdenes de Compra', icon: ClipboardList, permission: 'purchase_orders.view' },
+      { path: '/admin-panel/purchase-returns', label: 'Devoluciones', icon: RotateCcw, permission: 'purchase_returns.view' },
+      { path: '/admin-panel/inventory-conversions', label: 'Conversiones', icon: ArrowRightLeft, permission: 'conversions.view' },
+      { path: '/admin-panel/inventory-counts', label: 'Conteo Físico', icon: Archive, permission: 'inventory_counts.view' },
+      { path: '/admin-panel/inventory-movements', label: 'Movimientos', icon: ArrowDownUp, permission: 'inventory_movements.view' },
     ],
   },
   // 7. USUARIOS - Gestión de usuarios y roles
@@ -182,8 +182,8 @@ const menuWithSubmenus: {
       { path: '/admin-panel/settings/catalog', label: 'Catálogo', permission: 'settings.catalog' },
       { path: '/admin-panel/settings/payment', label: 'Pagos', permission: 'settings.payment' },
       { path: '/admin-panel/settings/legal', label: 'Legal', permission: 'settings.legal' },
-      { path: '/admin-panel/settings/printing', label: 'Impresión', permission: 'settings.general' },
-      { path: '/admin-panel/settings/label-templates', label: 'Plantillas de Etiquetas', permission: 'settings.general' },
+      { path: '/admin-panel/settings/printing', label: 'Impresión', permission: 'settings.printing' },
+      { path: '/admin-panel/settings/label-templates', label: 'Plantillas de Etiquetas', permission: 'settings.label_templates' },
     ],
   },
 ];
