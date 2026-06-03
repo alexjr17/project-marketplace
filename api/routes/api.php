@@ -39,6 +39,8 @@ use App\Http\Controllers\VariantController;
 use App\Http\Controllers\WebChatController;
 use App\Http\Controllers\WebhookController;
 use App\Http\Controllers\ZoneTypeController;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -661,6 +663,24 @@ Route::prefix('webchat')->group(function () {
     Route::post('send', [WebChatController::class, 'send']);
     Route::get('poll', [WebChatController::class, 'poll']);
 });
+// ==================== MANTENIMIENTO (solo SuperAdmin) ====================
+// Ejecuta el reset de datos transaccionales sin necesidad de Shell. Requiere
+// rol SuperAdmin (roleId 1) y un token de confirmación en el body.
+Route::post('maintenance/reset-transactional', function (Request $request) {
+    if ((int) ($request->user()->roleId ?? 0) !== 1) {
+        abort(403, 'Solo el Super Administrador puede ejecutar esta acción.');
+    }
+    if ($request->input('confirm') !== 'RESET') {
+        abort(422, 'Confirmación inválida: envía { "confirm": "RESET" }.');
+    }
+    Artisan::call('data:reset-transactional', ['--force' => true]);
+
+    return response()->json([
+        'success' => true,
+        'output' => Artisan::output(),
+    ]);
+})->middleware('auth:sanctum');
+
 // Rutas de depuración opcionales (archivo ignorado por git; solo en local).
 if (file_exists(__DIR__."/debug-ai.php")) {
     require __DIR__."/debug-ai.php";
