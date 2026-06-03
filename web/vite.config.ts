@@ -1,9 +1,30 @@
-import { defineConfig } from 'vite'
+import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
+import { writeFileSync } from 'fs'
+import { resolve } from 'path'
+
+// Identificador único de cada build. Se inyecta en el código (__BUILD_ID__) y
+// se escribe en /build-id.txt; el cliente compara ambos para detectar cuando
+// hay una versión nueva desplegada y recargar automáticamente (evita que el
+// móvil quede con un bundle viejo en caché).
+const buildId = Date.now().toString()
+
+function buildIdPlugin(): Plugin {
+  return {
+    name: 'build-id',
+    writeBundle(options) {
+      const dir = options.dir || 'dist'
+      writeFileSync(resolve(dir, 'build-id.txt'), buildId)
+    },
+  }
+}
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react()],
+  define: {
+    __BUILD_ID__: JSON.stringify(buildId),
+  },
+  plugins: [react(), buildIdPlugin()],
   server: {
     host: true, // Permite acceso desde la red local
     port: 5174,
