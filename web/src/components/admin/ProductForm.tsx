@@ -305,7 +305,7 @@ export const ProductForm = ({ product, onSubmit, onDelete }: ProductFormProps) =
         {/* Imágenes del Producto */}
         <div className="col-span-12">
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Imágenes del Producto * (mínimo 1, máximo {MAX_IMAGES})
+            Imágenes del Producto (opcional, máximo {MAX_IMAGES})
           </label>
 
           {/* Galería de imágenes existentes - arrastrables */}
@@ -386,7 +386,7 @@ export const ProductForm = ({ product, onSubmit, onDelete }: ProductFormProps) =
           )}
 
           {images.length === 0 && (
-            <p className="text-xs text-red-500 mt-1">Debes agregar al menos una imagen</p>
+            <p className="text-xs text-gray-400 mt-1">Sin imagen: se mostrará un marcador de posición.</p>
           )}
         </div>
 
@@ -587,7 +587,7 @@ export const ProductForm = ({ product, onSubmit, onDelete }: ProductFormProps) =
                 type="submit"
                 variant="admin-primary"
                 className="w-full"
-                disabled={images.length === 0 || (hasVariants && (selectedColorIds.length === 0 || selectedSizeIds.length === 0))}
+                disabled={hasVariants && (selectedColorIds.length === 0 || selectedSizeIds.length === 0)}
               >
                 Actualizar Producto
               </Button>
@@ -599,7 +599,7 @@ export const ProductForm = ({ product, onSubmit, onDelete }: ProductFormProps) =
               type="submit"
               variant="admin-primary"
               className="w-full"
-              disabled={images.length === 0 || (hasVariants && (selectedColorIds.length === 0 || selectedSizeIds.length === 0))}
+              disabled={hasVariants && (selectedColorIds.length === 0 || selectedSizeIds.length === 0)}
             >
               Crear Producto
             </Button>

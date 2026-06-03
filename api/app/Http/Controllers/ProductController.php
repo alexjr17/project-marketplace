@@ -226,7 +226,7 @@ class ProductController extends Controller
             'featured' => 'nullable|boolean',
             'isActive' => 'nullable|boolean',
             'isTemplate' => 'nullable|boolean',
-            'images' => 'required',
+            'images' => 'nullable',
             'tags' => 'nullable|array',
             'colors' => 'nullable|array',
             'sizes' => 'nullable|array',
@@ -256,7 +256,7 @@ class ProductController extends Controller
                 'featured' => $data['featured'] ?? false,
                 'isActive' => $data['isActive'] ?? true,
                 'isTemplate' => $data['isTemplate'] ?? false,
-                'images' => $data['images'],
+                'images' => $data['images'] ?? [],
                 'tags' => $data['tags'] ?? [],
             ]);
 
