@@ -67,6 +67,11 @@ export const TemplateForm = ({ template, onSubmit, onDelete }: TemplateFormProps
     template?.sizes?.map(s => s.id) || []
   );
 
+  // ¿Maneja variantes de color/talla? Si no, se guarda como modelo simple.
+  const [hasVariants, setHasVariants] = useState<boolean>(
+    (template?.colors?.length ?? 0) > 0 || (template?.sizes?.length ?? 0) > 0
+  );
+
   // Cargar catálogos al montar
   useEffect(() => {
     const loadCatalogs = async () => {
@@ -156,8 +161,8 @@ export const TemplateForm = ({ template, onSubmit, onDelete }: TemplateFormProps
       isActive: formData.isActive,
       tags: formData.tags.split(',').map(t => t.trim()).filter(Boolean),
       images: images.filter(Boolean),
-      colorIds: selectedColorIds,
-      sizeIds: selectedSizeIds,
+      colorIds: hasVariants ? selectedColorIds : [],
+      sizeIds: hasVariants ? selectedSizeIds : [],
     };
 
     await onSubmit(templateData);
@@ -331,7 +336,7 @@ export const TemplateForm = ({ template, onSubmit, onDelete }: TemplateFormProps
         {/* Imágenes del Producto */}
         <div className="col-span-12">
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Imágenes del Producto * (mínimo 1, máximo {MAX_IMAGES})
+            Imágenes del Producto (opcional, máximo {MAX_IMAGES})
           </label>
 
           {/* Galería de imágenes existentes - arrastrables */}
@@ -412,7 +417,7 @@ export const TemplateForm = ({ template, onSubmit, onDelete }: TemplateFormProps
           )}
 
           {images.length === 0 && (
-            <p className="text-xs text-red-500 mt-1">Debes agregar al menos una imagen</p>
+            <p className="text-xs text-gray-400 mt-1">Sin imagen: se mostrará un marcador de posición.</p>
           )}
         </div>
 
@@ -457,10 +462,36 @@ export const TemplateForm = ({ template, onSubmit, onDelete }: TemplateFormProps
           </label>
         </div>
 
+        {/* Toggle de variantes (color y talla) */}
+        <div className="col-span-12">
+          <div className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 rounded-lg">
+            <div>
+              <p className="text-sm font-medium text-gray-900">Variantes (color y talla)</p>
+              <p className="text-xs text-gray-500">
+                Actívalo solo si el modelo se vende en distintos colores o tallas. Si no, se guarda como modelo simple.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                const next = !hasVariants;
+                setHasVariants(next);
+                if (!next) { setSelectedColorIds([]); setSelectedSizeIds([]); }
+              }}
+              className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors ${hasVariants ? 'bg-orange-500' : 'bg-gray-300'}`}
+              aria-pressed={hasVariants}
+            >
+              <span className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${hasVariants ? 'translate-x-5' : 'translate-x-0.5'}`} />
+            </button>
+          </div>
+        </div>
+
+        {hasVariants && (
+        <>
         {/* Séptima fila: Colores (selector con checkboxes) */}
         <div className="col-span-12 md:col-span-6">
           <label className="block text-sm font-medium text-gray-700 mb-1.5">
-            Colores * (selecciona al menos uno)
+            Colores (selecciona al menos uno)
           </label>
           <div className="border border-gray-300 rounded-lg p-3 bg-gray-50 max-h-64 overflow-y-auto">
             {availableColors.length === 0 ? (
@@ -501,7 +532,7 @@ export const TemplateForm = ({ template, onSubmit, onDelete }: TemplateFormProps
         {/* Tallas (selector con checkboxes) */}
         <div className="col-span-12 md:col-span-6">
           <label className="block text-sm font-medium text-gray-700 mb-1.5">
-            Tallas * (selecciona al menos una)
+            Tallas (selecciona al menos una)
           </label>
           <div className="border border-gray-300 rounded-lg p-3 bg-gray-50 max-h-64 overflow-y-auto">
             {!formData.typeId ? (
@@ -535,6 +566,8 @@ export const TemplateForm = ({ template, onSubmit, onDelete }: TemplateFormProps
             </p>
           )}
         </div>
+        </>
+        )}
       </div>
 
       {/* Actions */}
@@ -553,7 +586,7 @@ export const TemplateForm = ({ template, onSubmit, onDelete }: TemplateFormProps
           type="submit"
           variant="admin-primary"
           className="flex-1"
-          disabled={selectedColorIds.length === 0 || selectedSizeIds.length === 0 || images.length === 0}
+          disabled={hasVariants && (selectedColorIds.length === 0 || selectedSizeIds.length === 0)}
         >
           {template ? 'Guardar' : 'Crear'}
         </Button>
