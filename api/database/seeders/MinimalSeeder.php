@@ -100,7 +100,10 @@ class MinimalSeeder extends Seeder
     /** Producto simple SIN variantes (una sola variante color/talla nulos). */
     private function seedSimpleProduct(): void
     {
-        $category = Category::where('slug', 'blusas')->first() ?? Category::where('slug', 'sueteres')->first();
+        $type = ProductType::where('slug', 'tote-bag')->first();
+        $category = $type?->categoryId
+            ? Category::find($type->categoryId)
+            : (Category::where('slug', 'accesorios')->first() ?? Category::where('slug', 'blusas')->first());
         $product = Product::updateOrCreate(
             ['slug' => 'tote-bag-lienzo'],
             [
@@ -108,7 +111,7 @@ class MinimalSeeder extends Seeder
                 'name' => 'Tote Bag de Lienzo',
                 'description' => 'Bolso tote de lienzo resistente. Producto simple, talla única, sin variantes.',
                 'categoryId' => $category?->id,
-                'typeId' => null,
+                'typeId' => $type?->id,
                 'basePrice' => 25000,
                 'stock' => 30,
                 'featured' => false,
@@ -289,21 +292,13 @@ class MinimalSeeder extends Seeder
         );
     }
 
-    /** Proveedor de ejemplo + una compra recibida de una sola unidad. */
+    /** Una compra recibida de ejemplo (1 unidad) al proveedor ya sembrado. */
     private function seedSupplierAndPurchase(): void
     {
-        $supplier = Supplier::updateOrCreate(
+        // El proveedor lo crea InventorySeeder (PROV-0001); si no, lo creamos.
+        $supplier = Supplier::firstOrCreate(
             ['code' => 'PROV-0001'],
-            [
-                'name' => 'Textiles del Caribe',
-                'contactName' => 'Proveedor Ejemplo',
-                'email' => 'ventas@textilescaribe.com',
-                'phone' => '+57 305 555 5555',
-                'city' => 'Barranquilla',
-                'department' => 'Atlántico',
-                'country' => 'Colombia',
-                'isActive' => true,
-            ]
+            ['name' => 'Textiles del Norte S.A.S.', 'country' => 'Colombia', 'isActive' => true]
         );
 
         $product = Product::where('slug', 'buso-clasico')->first();

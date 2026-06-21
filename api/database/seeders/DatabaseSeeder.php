@@ -19,8 +19,9 @@ class DatabaseSeeder extends Seeder
             UserSeeder::class,
             SettingsSeeder::class,
             ShippingSeeder::class,
-            CatalogSeeder::class,   // categorías, tipos, colores, tallas, zonas
-            MinimalSeeder::class,   // productos, plantillas, anuncios, descuentos, caja
+            CatalogSeeder::class,    // categorías, tipos, colores, tallas, zonas
+            InventorySeeder::class,  // proveedor, tipos de insumo e insumos (materia prima)
+            MinimalSeeder::class,    // productos, plantillas, anuncios, descuentos, caja, compra
         ]);
     }
 }
