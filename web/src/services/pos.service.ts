@@ -294,6 +294,24 @@ export async function cancelSale(saleId: number, reason: string): Promise<Sale> 
   return response.data.data;
 }
 
+export interface PosStats {
+  range: string;
+  from: string;
+  totals: { salesCount: number; totalSold: number; avgTicket: number; itemsSold: number };
+  byMethod: { method: string; count: number; total: number }[];
+  byHour: { hour: number; total: number; count: number }[];
+  topProducts: { name: string; qty: number; total: number }[];
+}
+
+/** Estadísticas/reportes del POS (today | 7d | 30d). */
+export async function getPosStats(range: 'today' | '7d' | '30d' = 'today'): Promise<PosStats> {
+  const response = await axios.get(`${API_URL}/pos/stats`, {
+    params: { range },
+    headers: { Authorization: `Bearer ${getAuthToken()}` },
+  });
+  return response.data.data;
+}
+
 export interface ReturnSalePayload {
   items: { variantId: number; quantity: number }[];
   reason?: string;

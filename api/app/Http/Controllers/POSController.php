@@ -203,6 +203,14 @@ class POSController extends Controller
         return $this->success($sale, 'Venta actualizada exitosamente');
     }
 
+    /** GET /api/pos/stats — estadísticas/reportes del POS. */
+    public function stats(Request $request)
+    {
+        $range = (string) $request->query('range', 'today');
+
+        return $this->success($this->pos->posStats($request->user()->id, $range));
+    }
+
     /** GET /api/pos/sales */
     public function salesHistory(Request $request)
     {

@@ -537,6 +537,12 @@ export default function NewSalePage() {
     );
   }
 
+  // Si la caja tiene categorías asignadas, los chips solo muestran esas.
+  const cajaCatIds = currentSession?.cashRegister?.categoryIds;
+  const visibleCategories = Array.isArray(cajaCatIds) && cajaCatIds.length > 0
+    ? categories.filter((c) => cajaCatIds.includes(c.id))
+    : categories;
+
   return (
     <div className="lg:h-full flex flex-col gap-3">
       {/* Banner de edición de venta */}
@@ -606,8 +612,8 @@ export default function NewSalePage() {
             </form>
           </div>
 
-          {/* Chips de categoría para toque rápido */}
-          {categories.length > 0 && (
+          {/* Chips de categoría para toque rápido (solo las de la caja) */}
+          {visibleCategories.length > 0 && (
             <div className="flex gap-1.5 overflow-x-auto px-3 py-2 border-b border-gray-100 bg-gray-50/60">
               <button
                 type="button"
@@ -618,7 +624,7 @@ export default function NewSalePage() {
               >
                 Todas
               </button>
-              {categories.map((cat) => (
+              {visibleCategories.map((cat) => (
                 <button
                   key={cat.id}
                   type="button"

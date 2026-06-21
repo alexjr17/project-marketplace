@@ -1099,6 +1099,82 @@ class POSService
         });
     }
 
+    /**
+     * Estadísticas/reportes del POS para el vendedor (GET /pos/stats).
+     * range: today | 7d | 30d. Agrega en PHP para portabilidad MySQL/Postgres.
+     */
+    public function posStats(int $sellerId, string $range = 'today'): array
+    {
+        $now = now();
+        switch ($range) {
+            case '7d':
+                $from = $now->copy()->subDays(6)->startOfDay();
+                break;
+            case '30d':
+                $from = $now->copy()->subDays(29)->startOfDay();
+                break;
+            default:
+                $range = 'today';
+                $from = $now->copy()->startOfDay();
+                break;
+        }
+
+        $orders = Order::with('items')
+            ->where('saleChannel', 'POS')
+            ->where('sellerId', $sellerId)
+            ->where('status', '!=', 'CANCELLED')
+            ->where('createdAt', '>=', $from)
+            ->get();
+
+        $salesCount = $orders->count();
+        $totalSold = (float) $orders->sum('total');
+        $itemsSold = 0;
+
+        $methods = [];
+        $hours = [];
+        for ($h = 0; $h < 24; $h++) {
+            $hours[$h] = ['hour' => $h, 'total' => 0.0, 'count' => 0];
+        }
+        $products = [];
+
+        foreach ($orders as $o) {
+            $m = $o->paymentMethod ?: 'cash';
+            $methods[$m] ??= ['method' => $m, 'count' => 0, 'total' => 0.0];
+            $methods[$m]['count']++;
+            $methods[$m]['total'] += (float) $o->total;
+
+            $h = (int) \Illuminate\Support\Carbon::parse($o->createdAt)->format('G');
+            $hours[$h]['total'] += (float) $o->total;
+            $hours[$h]['count']++;
+
+            foreach ($o->items as $it) {
+                $qty = (int) $it->quantity;
+                $itemsSold += $qty;
+                $key = $it->productName ?: ('#'.$it->variantId);
+                $products[$key] ??= ['name' => $key, 'qty' => 0, 'total' => 0.0];
+                $products[$key]['qty'] += $qty;
+                $products[$key]['total'] += $qty * (float) $it->unitPrice;
+            }
+        }
+
+        usort($products, fn ($a, $b) => $b['qty'] <=> $a['qty']);
+        $topProducts = array_slice(array_values($products), 0, 10);
+
+        return [
+            'range' => $range,
+            'from' => $from->toIso8601String(),
+            'totals' => [
+                'salesCount' => $salesCount,
+                'totalSold' => $totalSold,
+                'avgTicket' => $salesCount > 0 ? round($totalSold / $salesCount) : 0,
+                'itemsSold' => $itemsSold,
+            ],
+            'byMethod' => array_values($methods),
+            'byHour' => array_values($hours),
+            'topProducts' => $topProducts,
+        ];
+    }
+
     /** Detalle de una venta POS (GET /pos/sale/{id}). */
     public function saleById(int $id): ?Order
     {
