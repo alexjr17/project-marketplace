@@ -85,7 +85,6 @@ import {
 import { NotFoundPage } from './pages/NotFoundPage';
 import { POSProvider } from './context/POSContext';
 import POSLayout from './components/pos/POSLayout';
-import POSDashboard from './pages/pos/POSDashboard';
 import NewSalePage from './pages/pos/NewSalePage';
 import SalesHistoryPage from './pages/pos/SalesHistoryPage';
 import DebtsPage from './pages/pos/DebtsPage';
@@ -230,13 +229,13 @@ function App() {
                                 <POSRoute>
                                   <POSLayout>
                                     <Routes>
-                                      <Route path="/" element={<POSDashboard />} />
+                                      <Route path="/" element={<Navigate to="/pos/sale" replace />} />
                                       <Route path="/sale" element={<NewSalePage />} />
                                       <Route path="/history" element={<SalesHistoryPage />} />
                                       <Route path="/debts" element={<DebtsPage />} />
                                       <Route path="/customers" element={<CustomersPage />} />
                                       <Route path="/cash" element={<CashRegisterPage />} />
-                                      <Route path="*" element={<Navigate to="/pos" replace />} />
+                                      <Route path="*" element={<Navigate to="/pos/sale" replace />} />
                                     </Routes>
                                   </POSLayout>
                                 </POSRoute>

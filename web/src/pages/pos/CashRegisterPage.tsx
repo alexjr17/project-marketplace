@@ -4,6 +4,7 @@ import { usePOS } from '../../context/POSContext';
 import { useToast } from '../../context/ToastContext';
 import * as cashRegisterService from '../../services/cash-register.service';
 import OpenSessionPrompt from '../../components/pos/OpenSessionPrompt';
+import PosReports from '../../components/pos/PosReports';
 
 export default function CashRegisterPage() {
   const { currentSession, loadSession, isLoadingSession } = usePOS();
@@ -174,6 +175,9 @@ export default function CashRegisterPage() {
           </div>
         </div>
       </div>
+
+      {/* Reportes / gráficas de ventas */}
+      <PosReports />
 
       {/* Session Details */}
       <div className="bg-white rounded-lg shadow-sm p-6">

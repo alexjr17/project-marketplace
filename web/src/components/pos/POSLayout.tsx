@@ -10,7 +10,6 @@ import {
   Menu,
   X,
   LayoutGrid,
-  LayoutDashboard,
   Store,
   Clock,
   Users,
@@ -66,12 +65,6 @@ export default function POSLayout({ children }: POSLayoutProps) {
   };
 
   const menuItems = [
-    {
-      path: '/pos',
-      label: 'Dashboard',
-      icon: LayoutDashboard,
-      exact: true,
-    },
     {
       path: '/pos/sale',
       label: 'Nueva Venta',

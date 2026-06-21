@@ -1,47 +1,20 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { usePOS } from '../../context/POSContext';
-import OpenSessionPrompt from '../../components/pos/OpenSessionPrompt';
 import * as posService from '../../services/pos.service';
 import type { PosStats } from '../../services/pos.service';
-import {
-  ShoppingCart,
-  Clock,
-  DollarSign,
-  TrendingUp,
-  Package,
-  Download,
-  Loader2,
-  BarChart3,
-} from 'lucide-react';
+import { DollarSign, TrendingUp, Package, Download, Loader2, BarChart3, ShoppingCart } from 'lucide-react';
 
 type Range = 'today' | '7d' | '30d';
 
-const RANGE_LABELS: Record<Range, string> = {
-  today: 'Hoy',
-  '7d': '7 días',
-  '30d': '30 días',
-};
-
+const RANGE_LABELS: Record<Range, string> = { today: 'Hoy', '7d': '7 días', '30d': '30 días' };
 const METHOD_LABELS: Record<string, string> = {
-  cash: 'Efectivo',
-  card: 'Tarjeta',
-  transfer: 'Transferencia',
-  mixed: 'Mixto',
-  debe: 'Fiado',
+  cash: 'Efectivo', card: 'Tarjeta', transfer: 'Transferencia', mixed: 'Mixto', debe: 'Fiado',
 };
-
 const METHOD_COLORS: Record<string, string> = {
-  cash: 'bg-green-500',
-  card: 'bg-blue-500',
-  transfer: 'bg-purple-500',
-  mixed: 'bg-orange-500',
-  debe: 'bg-amber-500',
+  cash: 'bg-green-500', card: 'bg-blue-500', transfer: 'bg-purple-500', mixed: 'bg-orange-500', debe: 'bg-amber-500',
 };
 
-export default function POSDashboard() {
-  const navigate = useNavigate();
-  const { currentSession, isLoadingSession } = usePOS();
+/** Bloque de gráficas y reporte del POS (se usa dentro de la vista de Caja). */
+export default function PosReports() {
   const [range, setRange] = useState<Range>('today');
   const [stats, setStats] = useState<PosStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -56,35 +29,12 @@ export default function POSDashboard() {
     return () => { active = false; };
   }, [range]);
 
-  if (isLoadingSession) {
-    return (
-      <div className="flex flex-col items-center justify-center py-24 text-gray-500">
-        <Loader2 className="w-10 h-10 animate-spin text-indigo-500 mb-3" />
-        <p className="text-sm">Validando sesión de caja…</p>
-      </div>
-    );
-  }
-
-  if (!currentSession) {
-    return (
-      <OpenSessionPrompt
-        title="Sin Sesion Activa"
-        message="Debes abrir una sesion de caja para comenzar a realizar ventas"
-      />
-    );
-  }
-
-  const sessionDuration = currentSession.openedAt
-    ? Math.floor((new Date().getTime() - new Date(currentSession.openedAt).getTime()) / (1000 * 60))
-    : 0;
-
   const totals = stats?.totals;
   const maxMethodTotal = Math.max(1, ...(stats?.byMethod || []).map((m) => m.total));
   const activeHours = (stats?.byHour || []).filter((h) => h.count > 0);
   const maxHourTotal = Math.max(1, ...activeHours.map((h) => h.total));
   const maxProductQty = Math.max(1, ...(stats?.topProducts || []).map((p) => p.qty));
 
-  // Exportar el reporte actual a CSV (resumen + métodos + más vendidos).
   const exportCsv = () => {
     if (!stats) return;
     const lines: string[] = [];
@@ -113,14 +63,19 @@ export default function POSDashboard() {
     URL.revokeObjectURL(url);
   };
 
+  const kpis = [
+    { label: 'Ventas', value: totals?.salesCount ?? 0, icon: ShoppingCart, iconBg: 'bg-indigo-100', iconText: 'text-indigo-600' },
+    { label: 'Total vendido', value: `$${(totals?.totalSold ?? 0).toLocaleString()}`, icon: DollarSign, iconBg: 'bg-green-100', iconText: 'text-green-600' },
+    { label: 'Ticket promedio', value: `$${(totals?.avgTicket ?? 0).toLocaleString()}`, icon: TrendingUp, iconBg: 'bg-blue-100', iconText: 'text-blue-600' },
+    { label: 'Productos vendidos', value: totals?.itemsSold ?? 0, icon: Package, iconBg: 'bg-purple-100', iconText: 'text-purple-600' },
+  ];
+
   return (
-    <div>
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-1">Dashboard POS</h1>
-          <p className="text-gray-600">Reportes de ventas y resumen de tu caja</p>
-        </div>
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+          <BarChart3 className="w-5 h-5 text-indigo-500" /> Reportes de ventas
+        </h2>
         <div className="flex items-center gap-2">
           <div className="flex bg-gray-100 rounded-lg p-1">
             {(['today', '7d', '30d'] as Range[]).map((r) => (
@@ -141,29 +96,21 @@ export default function POSDashboard() {
             className="inline-flex items-center gap-2 px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
             title="Exportar a CSV"
           >
-            <Download className="w-4 h-4" />
-            CSV
+            <Download className="w-4 h-4" /> CSV
           </button>
         </div>
       </div>
 
-      {/* KPIs del reporte */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        {[
-          { label: 'Ventas', value: totals?.salesCount ?? 0, icon: ShoppingCart, iconBg: 'bg-indigo-100', iconText: 'text-indigo-600' },
-          { label: 'Total vendido', value: `$${(totals?.totalSold ?? 0).toLocaleString()}`, icon: DollarSign, iconBg: 'bg-green-100', iconText: 'text-green-600' },
-          { label: 'Ticket promedio', value: `$${(totals?.avgTicket ?? 0).toLocaleString()}`, icon: TrendingUp, iconBg: 'bg-blue-100', iconText: 'text-blue-600' },
-          { label: 'Productos vendidos', value: totals?.itemsSold ?? 0, icon: Package, iconBg: 'bg-purple-100', iconText: 'text-purple-600' },
-        ].map((kpi) => {
+      {/* KPIs */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {kpis.map((kpi) => {
           const Icon = kpi.icon;
           return (
             <div key={kpi.label} className="bg-white rounded-lg shadow-sm p-4">
               <div className="flex items-center justify-between">
                 <div className="min-w-0">
                   <p className="text-xs font-medium text-gray-500">{kpi.label}</p>
-                  <p className="text-xl lg:text-2xl font-bold text-gray-900 mt-1 truncate">
-                    {loading ? '—' : kpi.value}
-                  </p>
+                  <p className="text-xl lg:text-2xl font-bold text-gray-900 mt-1 truncate">{loading ? '—' : kpi.value}</p>
                 </div>
                 <div className={`w-10 h-10 ${kpi.iconBg} rounded-lg flex items-center justify-center flex-shrink-0`}>
                   <Icon className={`w-5 h-5 ${kpi.iconText}`} />
@@ -175,12 +122,12 @@ export default function POSDashboard() {
       </div>
 
       {loading ? (
-        <div className="flex justify-center py-16 text-gray-400">
+        <div className="flex justify-center py-12 text-gray-400">
           <Loader2 className="w-8 h-8 animate-spin" />
         </div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-          {/* Por método de pago */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Por método */}
           <div className="bg-white rounded-lg shadow-sm p-5">
             <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
               <DollarSign className="w-4 h-4 text-gray-400" /> Ventas por método
@@ -231,7 +178,7 @@ export default function POSDashboard() {
             )}
           </div>
 
-          {/* Ventas por hora */}
+          {/* Por hora */}
           <div className="bg-white rounded-lg shadow-sm p-5 lg:col-span-2">
             <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
               <BarChart3 className="w-4 h-4 text-gray-400" /> Ventas por hora
@@ -251,34 +198,6 @@ export default function POSDashboard() {
           </div>
         </div>
       )}
-
-      {/* Sesión actual + accesos rápidos */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-white rounded-lg shadow-sm p-4 flex items-center justify-between">
-          <div>
-            <p className="text-xs font-medium text-gray-500">Tiempo de caja abierta</p>
-            <p className="text-xl font-bold text-gray-900 mt-1">
-              {Math.floor(sessionDuration / 60)}h {sessionDuration % 60}m
-            </p>
-          </div>
-          <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
-            <Clock className="w-5 h-5 text-purple-600" />
-          </div>
-        </div>
-
-        <button onClick={() => navigate('/pos/sale')} className="bg-white rounded-lg shadow-sm p-4 hover:shadow-md transition-shadow text-left flex items-center gap-3">
-          <div className="w-10 h-10 bg-indigo-100 rounded-lg flex items-center justify-center"><ShoppingCart className="w-5 h-5 text-indigo-600" /></div>
-          <span className="font-semibold text-gray-900">Nueva Venta</span>
-        </button>
-        <button onClick={() => navigate('/pos/history')} className="bg-white rounded-lg shadow-sm p-4 hover:shadow-md transition-shadow text-left flex items-center gap-3">
-          <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center"><Clock className="w-5 h-5 text-blue-600" /></div>
-          <span className="font-semibold text-gray-900">Historial</span>
-        </button>
-        <button onClick={() => navigate('/pos/cash')} className="bg-white rounded-lg shadow-sm p-4 hover:shadow-md transition-shadow text-left flex items-center gap-3">
-          <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center"><DollarSign className="w-5 h-5 text-green-600" /></div>
-          <span className="font-semibold text-gray-900">Gestión de Caja</span>
-        </button>
-      </div>
     </div>
   );
 }
