@@ -149,10 +149,14 @@ export default function ProductDetailPage() {
     return images;
   }, [product]);
 
-  // Verificar stock cuando cambia color o talla
+  // Verificar stock cuando cambia color o talla.
+  // Productos simples (sin color/talla) usan la variante por defecto.
   useEffect(() => {
     const fetchStock = async () => {
-      if (!selectedColor || !selectedSize || !product) return;
+      if (!product) return;
+      const needsColor = product.colors.length > 0;
+      const needsSize = product.sizes.length > 0;
+      if ((needsColor && !selectedColor) || (needsSize && !selectedSize)) return;
 
       setLoadingStock(true);
       try {
@@ -174,7 +178,10 @@ export default function ProductDetailPage() {
   }, [selectedColor, selectedSize, product]);
 
   const handleAddToCart = async () => {
-    if (!selectedColor || !selectedSize || !product) return;
+    if (!product) return;
+    const needsColor = product.colors.length > 0;
+    const needsSize = product.sizes.length > 0;
+    if ((needsColor && !selectedColor) || (needsSize && !selectedSize)) return;
 
     setIsAdding(true);
     try {
@@ -276,7 +283,11 @@ export default function ProductDetailPage() {
 
   const isOutOfStock = availableStock !== null && availableStock === 0;
   const hasInsufficientStock = availableStock !== null && availableStock > 0 && availableStock < quantity;
-  const canAddToCart = selectedColor && selectedSize && !isOutOfStock && !hasInsufficientStock;
+  // Solo exigir color/talla si el producto los tiene (los simples no).
+  const needsColor = (product?.colors.length ?? 0) > 0;
+  const needsSize = (product?.sizes.length ?? 0) > 0;
+  const hasRequiredSelection = (!needsColor || !!selectedColor) && (!needsSize || !!selectedSize);
+  const canAddToCart = hasRequiredSelection && !isOutOfStock && !hasInsufficientStock;
 
   // Loading state
   if (loading) {

@@ -356,19 +356,33 @@ class VariantService
 
     public function getVariantByProductColorSize(int $productId, string $colorHex, string $sizeName): ?array
     {
-        $color = Color::where('hexCode', $colorHex)->first();
-        $size = Size::where('name', $sizeName)->orWhere('abbreviation', $sizeName)->first();
+        $query = ProductVariant::with(['product', 'color', 'size'])
+            ->where('productId', $productId)
+            ->where('isActive', true);
 
-        if (! $color || ! $size) {
-            return null;
+        // Color: vacío = producto simple (sin color → colorId null).
+        if ($colorHex === '') {
+            $query->whereNull('colorId');
+        } else {
+            $color = Color::where('hexCode', $colorHex)->first();
+            if (! $color) {
+                return null;
+            }
+            $query->where('colorId', $color->id);
         }
 
-        $variant = ProductVariant::with(['product', 'color', 'size'])
-            ->where('productId', $productId)
-            ->where('colorId', $color->id)
-            ->where('sizeId', $size->id)
-            ->where('isActive', true)
-            ->first();
+        // Talla: vacío = producto simple (sin talla → sizeId null).
+        if ($sizeName === '') {
+            $query->whereNull('sizeId');
+        } else {
+            $size = Size::where('name', $sizeName)->orWhere('abbreviation', $sizeName)->first();
+            if (! $size) {
+                return null;
+            }
+            $query->where('sizeId', $size->id);
+        }
+
+        $variant = $query->first();
 
         return $variant ? $this->withFinalPrice($variant) : null;
     }

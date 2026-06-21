@@ -101,14 +101,15 @@ class VariantController extends Controller
     {
         $data = $request->validate([
             'productId' => 'required|integer',
-            'colorHex' => 'required|string',
-            'sizeName' => 'required|string',
+            // Vacío = producto simple (variante por defecto sin color/talla).
+            'colorHex' => 'nullable|string',
+            'sizeName' => 'nullable|string',
         ]);
 
         $variant = $this->variants->getVariantByProductColorSize(
             $data['productId'],
-            $data['colorHex'],
-            $data['sizeName']
+            $data['colorHex'] ?? '',
+            $data['sizeName'] ?? ''
         );
 
         return $variant ? $this->success($variant) : $this->error('Variante no encontrada', 404);
