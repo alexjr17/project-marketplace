@@ -19,8 +19,6 @@ import {
   Percent,
   X,
   Barcode as BarcodeIcon,
-  ChevronDown,
-  ChevronUp,
   Smartphone,
   Camera,
   Package,
@@ -91,8 +89,7 @@ export default function NewSalePage() {
   // Camera barcode scanner (for mobile)
   const [showBarcodeScanner, setShowBarcodeScanner] = useState(false);
 
-  // Catálogo de productos (acordeón con scroll infinito + búsqueda)
-  const [showProductsList, setShowProductsList] = useState(false);
+  // Catálogo de productos (scroll infinito + búsqueda)
   const [browseItems, setBrowseItems] = useState<SearchResult[]>([]);
   const [browsePage, setBrowsePage] = useState(0);
   const [browseTotalPages, setBrowseTotalPages] = useState(1);
@@ -239,17 +236,7 @@ export default function NewSalePage() {
     setBrowseItems([]);
     setBrowsePage(0);
     setBrowseTotalPages(1);
-    setShowProductsList(true);
     fetchProducts(1, term);
-  };
-
-  // Abrir/cerrar el acordeón del catálogo; al abrir por primera vez, carga.
-  const toggleProductsList = () => {
-    const opening = !showProductsList;
-    setShowProductsList(opening);
-    if (opening && browsePage === 0 && !browseLoading) {
-      fetchProducts(1, browseSearch);
-    }
   };
 
   // Limpia el filtro de búsqueda del catálogo y recarga todo.
@@ -465,9 +452,9 @@ export default function NewSalePage() {
   return (
     <div className="lg:h-full flex flex-col lg:flex-row gap-4">
       {/* Left Column - Productos */}
-      <div className="flex-1 flex flex-col min-h-0 lg:max-h-none">
+      <div className="flex-1 flex flex-col min-h-0 lg:max-h-none gap-3 lg:gap-4">
         {/* Scanner Input */}
-        <div className="bg-white rounded-lg shadow-sm p-3 sm:p-4 mb-3 sm:mb-4">
+        <div className="bg-white rounded-lg shadow-sm p-3 sm:p-4">
           <form onSubmit={handleScan} className="flex gap-2">
             <div className="flex-1">
               <div className="relative">
@@ -514,13 +501,9 @@ export default function NewSalePage() {
         </div>
 
         {/* Catálogo de productos (acordeón con scroll infinito + búsqueda) */}
-        <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+        <div className="bg-white rounded-lg shadow-sm overflow-hidden flex-1 flex flex-col min-h-0">
           <div className="w-full px-3 lg:px-4 py-3 flex items-center justify-between">
-            <button
-              type="button"
-              onClick={toggleProductsList}
-              className="flex items-center gap-2 flex-1 min-w-0"
-            >
+            <div className="flex items-center gap-2 flex-1 min-w-0">
               <Package className="w-4 h-4 lg:w-5 lg:h-5 text-gray-600 flex-shrink-0" />
               <span className="text-base lg:text-lg font-semibold text-gray-900">Productos</span>
               {browseItems.length > 0 && (
@@ -529,7 +512,7 @@ export default function NewSalePage() {
               {browseSearch && (
                 <span className="text-xs text-blue-600 truncate">· filtro: "{browseSearch}"</span>
               )}
-            </button>
+            </div>
             <div className="flex items-center gap-2 flex-shrink-0">
               {browseSearch && (
                 <button
@@ -542,21 +525,13 @@ export default function NewSalePage() {
                   Limpiar
                 </button>
               )}
-              <button type="button" onClick={toggleProductsList} aria-label="Mostrar/ocultar">
-                {showProductsList ? (
-                  <ChevronUp className="w-4 h-4 lg:w-5 lg:h-5 text-gray-500" />
-                ) : (
-                  <ChevronDown className="w-4 h-4 lg:w-5 lg:h-5 text-gray-500" />
-                )}
-              </button>
             </div>
           </div>
 
-          {showProductsList && (
-            <div
-              onScroll={handleProductsScroll}
-              className="max-h-[60vh] lg:max-h-80 overflow-y-auto border-t border-gray-200 p-3"
-            >
+          <div
+            onScroll={handleProductsScroll}
+            className="flex-1 min-h-0 overflow-y-auto border-t border-gray-200 p-3 max-h-[60vh] lg:max-h-none"
+          >
               <div className="grid grid-cols-2 lg:grid-cols-3 gap-2">
                 {browseItems.map((item, index) => {
                   const isProduct = item.type === 'product';
@@ -614,8 +589,7 @@ export default function NewSalePage() {
                   No hay más productos
                 </p>
               )}
-            </div>
-          )}
+          </div>
         </div>
 
       </div>
@@ -642,7 +616,7 @@ export default function NewSalePage() {
             )}
           </div>
 
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto min-h-0">
             {cart.length === 0 ? (
               <div className="flex items-center justify-center h-full text-gray-400 py-8 lg:py-0">
                 <div className="text-center">
@@ -728,12 +702,9 @@ export default function NewSalePage() {
               </div>
             )}
           </div>
-        </div>
 
-        {/* Totals */}
-        <div className="bg-white rounded-lg shadow-sm p-3 lg:p-4">
-          <h3 className="font-semibold text-gray-900 mb-2 lg:mb-4">Resumen</h3>
-
+          {/* Totals (footer, no-scroll) */}
+          <div className="border-t border-gray-200 p-3 lg:p-4">
           <div className="space-y-1 lg:space-y-2">
             <div className="flex justify-between text-gray-600">
               <span>Subtotal:</span>
@@ -767,6 +738,7 @@ export default function NewSalePage() {
                 <span>${total.toLocaleString()}</span>
               </div>
             </div>
+          </div>
           </div>
         </div>
 
