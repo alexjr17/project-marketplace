@@ -30,7 +30,7 @@ class NotificationController extends Controller
             if ($product) {
                 $data['productName'] = $product->name;
                 $images = is_array($product->images) ? $product->images : [];
-                $data['productImage'] = $images[0] ?? null;
+                $data['productImage'] = $images['front'] ?? ($images[0] ?? null);
             }
         }
 

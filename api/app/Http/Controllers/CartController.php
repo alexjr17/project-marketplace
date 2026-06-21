@@ -19,17 +19,23 @@ class CartController extends Controller
         return Cart::firstOrCreate(['userId' => $userId]);
     }
 
-    /** Normaliza el objeto de imágenes de un producto a {front,back,side,extra1,extra2}. */
+    /** Normaliza el objeto de imágenes a {front,back,side,extra1,extra2}.
+     *  Soporta objeto {front,...} y lista numérica ['data:...', ...]. */
     private function normalizeImages($images): array
     {
+        if (is_string($images)) {
+            $decoded = json_decode($images, true);
+            $images = is_array($decoded) ? $decoded : [];
+        }
         $images = is_array($images) ? $images : [];
+        $get = fn ($key, $idx) => $images[$key] ?? ($images[$idx] ?? null);
 
         return [
-            'front' => $images['front'] ?? null,
-            'back' => $images['back'] ?? null,
-            'side' => $images['side'] ?? null,
-            'extra1' => $images['extra1'] ?? null,
-            'extra2' => $images['extra2'] ?? null,
+            'front' => $get('front', 0),
+            'back' => $get('back', 1),
+            'side' => $get('side', 2),
+            'extra1' => $get('extra1', 3),
+            'extra2' => $get('extra2', 4),
         ];
     }
 

@@ -42,21 +42,51 @@ class OrderService
 
     public function __construct(private TemplateStockService $templateStock) {}
 
+    /** Primera imagen utilizable de un producto ({front,...} u array). */
+    private function firstImage($images): string
+    {
+        if (is_string($images)) {
+            $decoded = json_decode($images, true);
+            $images = is_array($decoded) ? $decoded : [];
+        }
+        if (! is_array($images)) {
+            return '';
+        }
+        if (is_string($images['front'] ?? null) && $images['front'] !== '') {
+            return $images['front'];
+        }
+        foreach ($images as $v) {
+            if (is_string($v) && $v !== '') {
+                return $v;
+            }
+        }
+
+        return '';
+    }
+
     /** Da formato a un pedido para la respuesta de la API. */
     public function formatOrder(Order $order): array
     {
-        $items = $order->items->map(fn ($item) => [
-            'id' => $item->id,
-            'productId' => $item->productId,
-            'productName' => $item->productName,
-            'productImage' => $item->productImage,
-            'size' => $item->size,
-            'color' => $item->color,
-            'quantity' => $item->quantity,
-            'unitPrice' => (float) $item->unitPrice,
-            'subtotal' => (float) $item->unitPrice * $item->quantity,
-            'customization' => $item->customization,
-        ])->all();
+        $items = $order->items->map(function ($item) {
+            // Si el ítem no guardó imagen, usar la imagen actual del producto.
+            $image = $item->productImage;
+            if (empty($image)) {
+                $image = $this->firstImage($item->product?->images);
+            }
+
+            return [
+                'id' => $item->id,
+                'productId' => $item->productId,
+                'productName' => $item->productName,
+                'productImage' => $image,
+                'size' => $item->size,
+                'color' => $item->color,
+                'quantity' => $item->quantity,
+                'unitPrice' => (float) $item->unitPrice,
+                'subtotal' => (float) $item->unitPrice * $item->quantity,
+                'customization' => $item->customization,
+            ];
+        })->all();
 
         return [
             'id' => $order->id,
@@ -174,8 +204,7 @@ class OrderService
             $unitPrice = (float) $product->basePrice;
             $subtotal += $unitPrice * $item['quantity'];
 
-            $images = is_array($product->images) ? $product->images : [];
-            $firstImage = is_string($images[0] ?? null) ? $images[0] : '';
+            $firstImage = $this->firstImage($product->images);
 
             $orderItems[] = [
                 'productId' => $product->id,
@@ -250,7 +279,7 @@ class OrderService
                 ]);
             }
 
-            return $order->load(['items', 'user']);
+            return $order->load(['items.product:id,images', 'user']);
         });
     }
 
@@ -260,7 +289,7 @@ class OrderService
         $page = max(1, (int) ($query['page'] ?? 1));
         $limit = max(1, (int) ($query['limit'] ?? 10));
 
-        $builder = Order::with(['items', 'user']);
+        $builder = Order::with(['items.product:id,images', 'user']);
 
         if (! empty($query['status'])) {
             $builder->where('status', $query['status']);
@@ -304,7 +333,7 @@ class OrderService
 
     public function getOrderById(int $id, ?int $userId = null): Order
     {
-        $order = Order::with(['items', 'user'])->find($id);
+        $order = Order::with(['items.product:id,images', 'user'])->find($id);
         if (! $order || ($userId && $order->userId !== $userId)) {
             throw new RuntimeException('Pedido no encontrado', 404);
         }
@@ -314,7 +343,7 @@ class OrderService
 
     public function getOrderByNumber(string $orderNumber, ?int $userId = null): Order
     {
-        $order = Order::with(['items', 'user'])->where('orderNumber', $orderNumber)->first();
+        $order = Order::with(['items.product:id,images', 'user'])->where('orderNumber', $orderNumber)->first();
         if (! $order || ($userId && $order->userId !== $userId)) {
             throw new RuntimeException('Pedido no encontrado', 404);
         }
@@ -370,7 +399,7 @@ class OrderService
             $order->save();
         });
 
-        return $order->load(['items', 'user']);
+        return $order->load(['items.product:id,images', 'user']);
     }
 
     public function cancelOrder(int $id, int $userId): Order

@@ -138,7 +138,7 @@ class ReviewController extends Controller
                     'product' => [
                         'id' => $r->product?->id,
                         'name' => $r->product?->name,
-                        'image' => $images[0] ?? null,
+                        'image' => $images['front'] ?? ($images[0] ?? null),
                     ],
                 ];
             })->all(),
