@@ -35,6 +35,11 @@ export const ProductCard = ({ product }: ProductCardProps) => {
             DESTACADO
           </span>
         )}
+        {(product.stock ?? 0) <= 0 && (
+          <span className="absolute top-2 right-2 bg-red-600 text-white text-[10px] font-bold px-2 py-0.5 rounded">
+            AGOTADO
+          </span>
+        )}
       </div>
 
       {/* Info */}
@@ -98,10 +103,21 @@ export const ProductCard = ({ product }: ProductCardProps) => {
           )}
         </div>
 
-        {/* Precio */}
-        <span className="text-base font-bold text-gray-900 mt-1">
-          {format(product.basePrice)}
-        </span>
+        {/* Precio + disponibilidad */}
+        <div className="flex items-center justify-between mt-1 gap-2">
+          <span className="text-base font-bold text-gray-900">
+            {format(product.basePrice)}
+          </span>
+          {(product.stock ?? 0) > 0 ? (
+            <span className="text-xs font-medium text-green-600 whitespace-nowrap">
+              {product.stock} disp.
+            </span>
+          ) : (
+            <span className="text-xs font-medium text-red-500 whitespace-nowrap">
+              Agotado
+            </span>
+          )}
+        </div>
       </div>
     </Link>
   );
