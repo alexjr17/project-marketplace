@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Search, UserPlus, Loader2, UserCog } from 'lucide-react';
+import { Search, UserPlus, Loader2, UserCog, User, RotateCcw } from 'lucide-react';
 import * as posService from '../../services/pos.service';
 import type { CustomerSearchResult } from '../../services/pos.service';
 import CustomerFormModal from './CustomerFormModal';
@@ -100,6 +100,13 @@ export default function CustomerSelect({ value, onChange }: Props) {
     setQuery('');
   };
 
+  // Limpiar y volver al cliente por defecto (el padre lo convierte a "Consumidor Final").
+  const clearToDefault = () => {
+    onChange(null);
+    setQuery('');
+    setOpen(false);
+  };
+
   // El término escrito ¿ya coincide exactamente con un resultado?
   const exactMatch = results.some((c) => c.name.toLowerCase() === query.trim().toLowerCase());
 
@@ -108,30 +115,43 @@ export default function CustomerSelect({ value, onChange }: Props) {
 
   return (
     <div className="relative" ref={boxRef}>
-      {/* Input simple: muestra el cliente actual; al enfocar se limpia para
-          buscar; al cerrar sin elegir, queda el que estaba (por defecto). */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+      {/* Campo de cliente: prefijo "Cliente" para que se entienda de inmediato.
+          Al enfocar se limpia para buscar; iconos para editar y volver al default. */}
+      <div className="flex items-center gap-1.5 pl-2 pr-1.5 bg-white border border-gray-300 rounded-lg focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent">
+        <div className="flex items-center gap-1 pr-2 mr-0.5 border-r border-gray-200 text-gray-500 flex-shrink-0">
+          {open ? <Search className="w-4 h-4" /> : <User className="w-4 h-4" />}
+          <span className="text-xs font-medium">Cliente</span>
+        </div>
         <input
           ref={inputRef}
           type="text"
           value={open ? query : (value?.name ?? '')}
           onChange={(e) => setQuery(e.target.value)}
           onFocus={() => { setQuery(''); setOpen(true); }}
-          placeholder="Buscar o registrar cliente..."
+          placeholder={open ? 'Buscar o registrar...' : 'Consumidor Final'}
           autoComplete="off"
-          className={`w-full pl-9 ${hasRealCustomer && !open ? 'pr-10' : 'pr-3'} py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
+          className="flex-1 min-w-0 py-2 text-sm bg-transparent outline-none"
         />
-        {/* Icono editar: completar datos del cliente seleccionado */}
+        {/* Acciones del cliente seleccionado (no en modo búsqueda) */}
         {hasRealCustomer && !open && (
-          <button
-            type="button"
-            onClick={openEditForm}
-            title="Editar / completar datos del cliente"
-            className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-blue-600"
-          >
-            <UserCog className="w-4 h-4" />
-          </button>
+          <>
+            <button
+              type="button"
+              onClick={openEditForm}
+              title="Editar / completar datos del cliente"
+              className="p-1 text-gray-400 hover:text-blue-600 flex-shrink-0"
+            >
+              <UserCog className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              onClick={clearToDefault}
+              title="Quitar cliente (volver a Consumidor Final)"
+              className="p-1 text-gray-400 hover:text-red-600 flex-shrink-0"
+            >
+              <RotateCcw className="w-4 h-4" />
+            </button>
+          </>
         )}
       </div>
 

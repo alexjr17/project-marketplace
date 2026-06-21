@@ -97,9 +97,9 @@ export const CheckoutModal = ({
   const [custEmail, setCustEmail] = useState('');
 
   // Abre el editor inline precargando los datos del cliente actual.
+  // Toma el nombre tal cual (aunque no esté registrado o sea el por defecto).
   const startEditCustomer = () => {
-    const isDefault = !customer?.id && (customer?.name ?? '') === 'Consumidor Final';
-    setCustName(isDefault ? '' : (customer?.name ?? ''));
+    setCustName(customer?.name ?? '');
     setCustCedula(customer?.cedula ?? '');
     setCustPhone(customer?.phone ?? '');
     setCustEmail(customer?.email ?? '');

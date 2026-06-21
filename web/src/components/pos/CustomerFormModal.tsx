@@ -10,8 +10,6 @@ interface Props {
   onSave: (customer: SelectedCustomer) => void;
 }
 
-const DEFAULT_NAME = 'Consumidor Final';
-
 /**
  * Formulario para registrar/completar un cliente con datos reales
  * (nombre, cédula/NIT, teléfono, email). No persiste por sí mismo: devuelve
@@ -27,9 +25,8 @@ export default function CustomerFormModal({ isOpen, initial, onClose, onSave }: 
 
   useEffect(() => {
     if (!isOpen) return;
-    // Si es el cliente por defecto, empezamos en blanco para capturar datos reales.
-    const isDefault = !initial?.id && (initial?.name ?? '') === DEFAULT_NAME;
-    setName(isDefault ? '' : (initial?.name ?? ''));
+    // Tomar el nombre tal cual (aunque no esté registrado o sea el por defecto).
+    setName(initial?.name ?? '');
     setCedula(initial?.cedula ?? '');
     setPhone(initial?.phone ?? '');
     setEmail(initial?.email ?? '');
