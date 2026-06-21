@@ -11,19 +11,16 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
+        // Set mínimo de arranque (demo limpia). Los seeders pesados de ejemplo
+        // (inventario, compras, comida, mensajería, bot) siguen existiendo pero
+        // fuera del seed por defecto.
         $this->call([
             RoleSeeder::class,
             UserSeeder::class,
-            CatalogSeeder::class,
-            InventorySeeder::class,
-            CommerceSeeder::class,
-            FoodProductsSeeder::class,
-            PurchaseSeeder::class,
             SettingsSeeder::class,
             ShippingSeeder::class,
-            MessagingSeeder::class,
-            BotKnowledgeCategorySeeder::class, // categorías primero
-            BotKnowledgeSeeder::class,
+            CatalogSeeder::class,   // categorías, tipos, colores, tallas, zonas
+            MinimalSeeder::class,   // productos, plantillas, anuncios, descuentos, caja
         ]);
     }
 }

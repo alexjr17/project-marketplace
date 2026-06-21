@@ -13,26 +13,19 @@ class UserSeeder extends Seeder
     {
         $users = [
             [
-                'email' => 'admin@marketplace.com', 'password' => 'admin123', 'name' => 'Administrador', 'phone' => '+57 300 000 0000', 'roleId' => 1,
-                // Una dirección por cada zona configurada, para probar el
-                // cambio de dirección y ver cómo cambia el costo de envío.
+                'email' => 'alexjose.r.r@gmail.com', 'password' => 'admin123', 'name' => 'Alex Rodríguez', 'phone' => '+57 300 000 0000', 'roleId' => 1,
                 'addresses' => [
                     ['label' => 'Casa - Sincelejo', 'address' => 'Calle 20 #15-30', 'city' => 'Sincelejo', 'department' => 'Sucre', 'postalCode' => '700001', 'country' => 'Colombia', 'isDefault' => true],
-                    ['label' => 'Montería', 'address' => 'Calle 30 #5-20', 'city' => 'Montería', 'department' => 'Córdoba', 'postalCode' => '230001', 'country' => 'Colombia', 'isDefault' => false],
-                    ['label' => 'Cartagena', 'address' => 'Av. Pedro de Heredia #40-10', 'city' => 'Cartagena', 'department' => 'Bolívar', 'postalCode' => '130001', 'country' => 'Colombia', 'isDefault' => false],
-                    ['label' => 'Barranquilla', 'address' => 'Calle 84 #50-15', 'city' => 'Barranquilla', 'department' => 'Atlántico', 'postalCode' => '080001', 'country' => 'Colombia', 'isDefault' => false],
-                    ['label' => 'Medellín', 'address' => 'Carrera 70 #45-30', 'city' => 'Medellín', 'department' => 'Antioquia', 'postalCode' => '050001', 'country' => 'Colombia', 'isDefault' => false],
-                    ['label' => 'Bogotá', 'address' => 'Carrera 7 #71-21', 'city' => 'Bogotá', 'department' => 'Cundinamarca', 'postalCode' => '110111', 'country' => 'Colombia', 'isDefault' => false],
                 ],
             ],
-            ['email' => 'vendedor@marketplace.com', 'password' => 'vendedor123', 'name' => 'Vendedor', 'phone' => '+57 300 111 1111', 'roleId' => 3],
+            ['email' => 'alexjose.r.r.17@gmail.com', 'password' => 'vendedor123', 'name' => 'Vendedor', 'phone' => '+57 300 111 1111', 'roleId' => 3],
             [
-                'email' => 'cliente@marketplace.com', 'password' => 'cliente123', 'name' => 'Cliente Demo', 'phone' => '+57 311 111 1111', 'roleId' => 2,
+                'email' => 'estilovexa@gmail.com', 'password' => 'cliente123', 'name' => 'Cliente Vexa', 'phone' => '+57 311 111 1111', 'roleId' => 2,
                 'addresses' => [
                     ['label' => 'Casa', 'address' => 'Calle 80 #12-34', 'city' => 'Medellín', 'department' => 'Antioquia', 'postalCode' => '050001', 'country' => 'Colombia', 'isDefault' => true],
                 ],
             ],
-            ['email' => 'cajero@marketplace.com', 'password' => 'cajero123', 'name' => 'Cajero POS', 'phone' => '+57 312 222 2222', 'roleId' => 4],
+            ['email' => 'bystreamergames@gmail.com', 'password' => 'pos123', 'name' => 'Cajero POS', 'phone' => '+57 312 222 2222', 'roleId' => 4],
         ];
 
         foreach ($users as $user) {

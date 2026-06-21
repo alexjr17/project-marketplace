@@ -18,6 +18,18 @@ class SeedIfEmpty extends Command
 
     public function handle(): int
     {
+        // Reseteo total bajo demanda: si FRESH_SEED está activo, recrea la base
+        // y siembra el set mínimo (sirve para "limpiar" la data en producción).
+        // IMPORTANTE: quitar la variable después del primer deploy, o cada
+        // reinicio borrará la base de datos.
+        if (filter_var(getenv('FRESH_SEED'), FILTER_VALIDATE_BOOLEAN)) {
+            $this->warn('FRESH_SEED activo — recreando la base de datos y sembrando datos mínimos...');
+            $this->call('migrate:fresh', ['--force' => true, '--seed' => true]);
+            $this->warn('Listo. RECUERDA quitar FRESH_SEED para no borrar la base en el próximo reinicio.');
+
+            return self::SUCCESS;
+        }
+
         try {
             if (User::count() > 0) {
                 $this->info('La base de datos ya tiene datos — no se siembra.');
