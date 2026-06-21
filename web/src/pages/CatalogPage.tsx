@@ -4,6 +4,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useProducts } from '../context/ProductsContext';
 import { useSettings } from '../context/SettingsContext';
 import { ProductGrid } from '../components/products/ProductGrid';
+import { Seo } from '../components/seo/Seo';
 import { ProductFilters, type FilterValues } from '../components/products/ProductFilters';
 import { ProductSort } from '../components/products/ProductSort';
 import { Pagination } from '../components/common/Pagination';
@@ -111,6 +112,7 @@ export const CatalogPage = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      <Seo title="Catálogo" description="Explora todos nuestros productos y personalízalos a tu gusto." />
       {/* Header */}
       <div className="text-white py-6 shadow-lg" style={{ background: gradientStyle }}>
         <div className="max-w-7xl mx-auto px-4">

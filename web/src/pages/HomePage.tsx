@@ -4,6 +4,7 @@ import { FeaturedProducts } from '../components/products/FeaturedProducts';
 import { HeroSection } from '../components/home/HeroSection';
 import { PromoBanner } from '../components/home/PromoBanner';
 import { useSettings } from '../context/SettingsContext';
+import { Seo } from '../components/seo/Seo';
 
 // Mapeo de iconos por ID
 const iconMap: Record<string, React.ComponentType<{ className?: string; strokeWidth?: number }>> = {
@@ -78,6 +79,7 @@ export const HomePage = () => {
 
   return (
     <div className="overflow-x-hidden bg-gray-100 min-h-screen">
+      <Seo />
       {/* Hero Section - Configurable */}
       <HeroSection />
 

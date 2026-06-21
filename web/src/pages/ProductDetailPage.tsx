@@ -5,6 +5,7 @@ import { useSettings } from '../context/SettingsContext';
 import { useCurrency } from '../hooks/useCurrency';
 import { useCart } from '../context/CartContext';
 import { getVariantByProductColorSize } from '../services/variants.service';
+import { Seo } from '../components/seo/Seo';
 import productsService from '../services/products.service';
 import type { Product } from '../types/product';
 import { RelatedProducts } from '../components/products/RelatedProducts';
@@ -334,6 +335,12 @@ export default function ProductDetailPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      <Seo
+        title={product.name}
+        description={product.description}
+        image={product.images.front}
+        type="product"
+      />
       {/* Header con gradiente */}
       <div className="text-white py-6 shadow-lg" style={{ background: gradientStyle }}>
         <div className="max-w-7xl mx-auto px-4">
