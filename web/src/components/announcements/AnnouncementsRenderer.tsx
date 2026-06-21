@@ -157,31 +157,63 @@ export function AnnouncementsRenderer() {
         );
       })}
 
-      {/* Tarjetas flotantes (esquina inferior derecha) */}
-      {floating.map((a, i) => (
-        <div
-          key={a.id}
-          style={{ marginBottom: i * 88 }}
-          className="fixed right-3 md:right-4 bottom-24 md:bottom-4 z-40 w-72 max-w-[calc(100vw-1.5rem)] bg-white rounded-xl shadow-2xl border border-gray-100 overflow-hidden animate-[annSlideUp_.5s_cubic-bezier(0.16,1,0.3,1)] motion-reduce:animate-none"
-        >
-          {a.imageUrl && <img src={a.imageUrl} alt={a.title || ''} loading="lazy" className="w-full h-28 object-cover" />}
-          <div className="p-3">
-            <div className="flex items-start justify-between gap-2">
-              {a.title && <p className="font-semibold text-gray-900 text-sm">{a.title}</p>}
+      {/* Tarjetas flotantes:
+          - Móvil: banner a ancho total pegado sobre el nav inferior, con ✕.
+          - Escritorio: tarjeta en la esquina inferior derecha. */}
+      {floating.map((a, i) =>
+        isMobile ? (
+          <div key={a.id} className="fixed inset-x-0 z-40" style={{ bottom: navH + i * 96 }}>
+            <div className="relative bg-white rounded-t-2xl shadow-[0_-8px_24px_rgba(0,0,0,0.12)] border-t border-x border-gray-100 overflow-hidden animate-[annSlideUp_.45s_cubic-bezier(0.16,1,0.3,1)] motion-reduce:animate-none">
+              <div className="h-1 w-full" style={{ backgroundImage: brandGradient }} />
               {a.dismissible && (
-                <button onClick={() => dismiss(a)} aria-label="Cerrar" className="text-gray-400 hover:text-gray-600 -mt-1">
+                <button onClick={() => dismiss(a)} aria-label="Cerrar" className="absolute top-1.5 right-1.5 z-10 p-1 text-gray-400 hover:text-gray-600">
                   <X className="w-4 h-4" />
                 </button>
               )}
-            </div>
-            {a.message && <p className="text-xs text-gray-600 mt-1">{a.message}</p>}
-            <div className="flex items-center gap-2 mt-2">
-              <Coupon code={a.couponCode} dark />
-              <Cta a={a} className="inline-flex items-center px-3 py-1 rounded-lg text-xs font-semibold text-white hover:opacity-90" style={{ backgroundColor: brand.primary }} />
+              <div className="flex items-center gap-3 p-3 pr-7">
+                {a.imageUrl && <img src={a.imageUrl} alt={a.title || ''} loading="lazy" className="w-14 h-14 rounded-lg object-cover flex-shrink-0" />}
+                <div className="min-w-0 flex-1">
+                  {a.title && <p className="font-semibold text-sm text-gray-900 truncate">{a.title}</p>}
+                  {a.message && <p className="text-xs text-gray-600 line-clamp-2">{a.message}</p>}
+                  <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                    {a.couponCode && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold border border-dashed" style={{ color: brand.primary, borderColor: brand.primary }}>
+                        <Tag className="w-3 h-3" /> {a.couponCode}
+                      </span>
+                    )}
+                    {a.ctaText && a.ctaUrl && (
+                      <Cta a={a} className="inline-flex items-center px-3 py-1 rounded-lg text-xs font-bold text-white shadow" style={{ backgroundImage: brandGradient }} />
+                    )}
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
-      ))}
+        ) : (
+          <div
+            key={a.id}
+            style={{ marginBottom: i * 88 }}
+            className="fixed right-4 bottom-4 z-40 w-72 max-w-[calc(100vw-1.5rem)] bg-white rounded-xl shadow-2xl border border-gray-100 overflow-hidden animate-[annSlideUp_.5s_cubic-bezier(0.16,1,0.3,1)] motion-reduce:animate-none"
+          >
+            {a.imageUrl && <img src={a.imageUrl} alt={a.title || ''} loading="lazy" className="w-full h-28 object-cover" />}
+            <div className="p-3">
+              <div className="flex items-start justify-between gap-2">
+                {a.title && <p className="font-semibold text-gray-900 text-sm">{a.title}</p>}
+                {a.dismissible && (
+                  <button onClick={() => dismiss(a)} aria-label="Cerrar" className="text-gray-400 hover:text-gray-600 -mt-1">
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+              {a.message && <p className="text-xs text-gray-600 mt-1">{a.message}</p>}
+              <div className="flex items-center gap-2 mt-2">
+                <Coupon code={a.couponCode} dark />
+                <Cta a={a} className="inline-flex items-center px-3 py-1 rounded-lg text-xs font-semibold text-white hover:opacity-90" style={{ backgroundColor: brand.primary }} />
+              </div>
+            </div>
+          </div>
+        )
+      )}
 
       {/* Popup / modal */}
       {popup && (() => {
