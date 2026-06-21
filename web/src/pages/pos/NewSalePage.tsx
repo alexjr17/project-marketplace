@@ -26,6 +26,10 @@ import {
   Info,
 } from 'lucide-react';
 
+// Cliente por defecto (consumidor final): siempre hay un cliente seleccionado
+// para poder cobrar. El cajero puede cambiarlo o crear otro.
+const DEFAULT_CUSTOMER: SelectedCustomer = { name: 'Consumidor Final' };
+
 export default function NewSalePage() {
   const {
     cart,
@@ -61,7 +65,7 @@ export default function NewSalePage() {
 
   // Payment state
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'transfer' | 'mixed' | 'debe'>('cash');
-  const [selectedCustomer, setSelectedCustomer] = useState<SelectedCustomer | null>(null);
+  const [selectedCustomer, setSelectedCustomer] = useState<SelectedCustomer | null>(DEFAULT_CUSTOMER);
   const [abonoAmount, setAbonoAmount] = useState('');
   const [abonoMethod, setAbonoMethod] = useState<'cash' | 'transfer'>('cash');
   const [cashAmount, setCashAmount] = useState('');
@@ -338,7 +342,7 @@ export default function NewSalePage() {
     setCashAmount('');
     setCardAmount('');
     setPaymentMethod('cash');
-    setSelectedCustomer(null);
+    setSelectedCustomer(DEFAULT_CUSTOMER);
     setAbonoAmount('');
     setAbonoMethod('cash');
     barcodeInputRef.current?.focus();
@@ -474,7 +478,7 @@ export default function NewSalePage() {
         {/* Cliente */}
         <div className="bg-white rounded-lg shadow-sm p-3 lg:p-4">
           <h3 className="font-semibold text-gray-900 mb-2 lg:mb-3">Cliente</h3>
-          <CustomerSelect value={selectedCustomer} onChange={setSelectedCustomer} />
+          <CustomerSelect value={selectedCustomer} onChange={(c) => setSelectedCustomer(c ?? DEFAULT_CUSTOMER)} />
         </div>
 
         {/* Catálogo de productos (acordeón con scroll infinito + búsqueda) */}
