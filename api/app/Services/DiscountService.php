@@ -148,13 +148,19 @@ class DiscountService
     {
         $now = now();
 
-        return Discount::where('isAuto', true)
-            ->where('isActive', true)
-            ->whereIn('channel', ['all', $channel])
-            ->whereIn('appliesTo', ['all', 'product', 'category'])
-            ->where(fn ($q) => $q->whereNull('startsAt')->orWhere('startsAt', '<=', $now))
-            ->where(fn ($q) => $q->whereNull('endsAt')->orWhere('endsAt', '>=', $now))
-            ->get();
+        try {
+            return Discount::where('isAuto', true)
+                ->where('isActive', true)
+                ->whereIn('channel', ['all', $channel])
+                ->whereIn('appliesTo', ['all', 'product', 'category'])
+                ->where(fn ($q) => $q->whereNull('startsAt')->orWhere('startsAt', '<=', $now))
+                ->where(fn ($q) => $q->whereNull('endsAt')->orWhere('endsAt', '>=', $now))
+                ->get();
+        } catch (\Throwable $e) {
+            // Si la tabla/columna aún no existe (migración pendiente), no rompemos
+            // el catálogo: simplemente no hay descuentos automáticos.
+            return collect();
+        }
     }
 
     /**
