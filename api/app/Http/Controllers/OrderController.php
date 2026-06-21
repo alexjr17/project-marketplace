@@ -44,6 +44,7 @@ class OrderController extends Controller
             'paymentMethod' => 'required|string',
             'paymentRef' => 'nullable|string',
             'notes' => 'nullable|string',
+            'couponCode' => 'nullable|string',
         ]);
 
         try {

@@ -157,6 +157,17 @@ Route::prefix('announcements')->middleware(['auth:sanctum', 'admin'])->group(fun
     Route::delete('{id}', [\App\Http\Controllers\AnnouncementController::class, 'destroy'])->whereNumber('id');
 });
 
+// ==================== CUPONES / DESCUENTOS ====================
+// Validar cupón: opcional autenticado (para límites por usuario) pero accesible a invitados.
+Route::post('discounts/validate', [\App\Http\Controllers\DiscountController::class, 'validateCoupon'])
+    ->middleware('auth.optional');
+Route::prefix('discounts')->middleware(['auth:sanctum', 'admin'])->group(function () {
+    Route::get('/', [\App\Http\Controllers\DiscountController::class, 'index']);
+    Route::post('/', [\App\Http\Controllers\DiscountController::class, 'store']);
+    Route::put('{id}', [\App\Http\Controllers\DiscountController::class, 'update'])->whereNumber('id');
+    Route::delete('{id}', [\App\Http\Controllers\DiscountController::class, 'destroy'])->whereNumber('id');
+});
+
 // ==================== PRODUCTOS ====================
 Route::prefix('products')->group(function () {
     // Lectura pública.

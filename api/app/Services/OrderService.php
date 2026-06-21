@@ -40,7 +40,10 @@ class OrderService
         'CANCELLED' => [],
     ];
 
-    public function __construct(private TemplateStockService $templateStock) {}
+    public function __construct(
+        private TemplateStockService $templateStock,
+        private DiscountService $discounts,
+    ) {}
 
     /** Primera imagen utilizable de un producto ({front,...} u array). */
     private function firstImage($images): string
@@ -98,6 +101,7 @@ class OrderService
             'subtotal' => (float) $order->subtotal,
             'shippingCost' => (float) $order->shippingCost,
             'discount' => (float) $order->discount,
+            'couponCode' => $order->couponCode,
             'tax' => (float) $order->tax,
             'total' => (float) $order->total,
             'status' => $order->status,
@@ -155,6 +159,7 @@ class OrderService
         $subtotal = 0;
         $orderItems = [];
         $stockUpdates = [];
+        $couponItems = []; // contexto para validar cupones (producto/categoría)
 
         foreach ($data['items'] as $item) {
             $product = Product::with('variants.color', 'variants.size')->find($item['productId']);
@@ -204,6 +209,13 @@ class OrderService
             $unitPrice = (float) $product->basePrice;
             $subtotal += $unitPrice * $item['quantity'];
 
+            $couponItems[] = [
+                'productId' => $product->id,
+                'categoryId' => $product->categoryId,
+                'price' => $unitPrice,
+                'quantity' => (int) $item['quantity'],
+            ];
+
             $firstImage = $this->firstImage($product->images);
 
             $orderItems[] = [
@@ -224,18 +236,38 @@ class OrderService
         $tax = ($settings['taxEnabled'] && ! $settings['taxIncluded'])
             ? round($subtotal * $settings['taxRate'])
             : 0;
-        $total = $subtotal + $shippingCost + $tax;
+
+        // Cupón (opcional): valida y calcula el descuento sobre el subtotal elegible.
+        $discount = 0;
+        $discountModel = null;
+        $couponCode = null;
+        if (! empty($data['couponCode'])) {
+            $result = $this->discounts->validate($data['couponCode'], [
+                'subtotal' => $subtotal,
+                'items' => $couponItems,
+                'userId' => $userId,
+                'channel' => 'online',
+            ]);
+            $discountModel = $result['discount'];
+            $discount = $result['amount'];
+            $couponCode = $discountModel->code;
+        }
+
+        $total = max(0, $subtotal + $shippingCost + $tax - $discount);
         $orderNumber = $this->generateOrderNumber();
 
         return DB::transaction(function () use (
-            $userId, $data, $orderNumber, $subtotal, $shippingCost, $tax, $total, $orderItems, $stockUpdates
+            $userId, $data, $orderNumber, $subtotal, $shippingCost, $tax, $total,
+            $discount, $discountModel, $couponCode, $orderItems, $stockUpdates
         ) {
             $order = Order::create([
                 'orderNumber' => $orderNumber,
                 'userId' => $userId,
                 'subtotal' => $subtotal,
                 'shippingCost' => $shippingCost,
-                'discount' => 0,
+                'discount' => $discount,
+                'discountId' => $discountModel?->id,
+                'couponCode' => $couponCode,
                 'tax' => $tax,
                 'total' => $total,
                 'status' => 'PENDING',
@@ -252,6 +284,11 @@ class OrderService
 
             foreach ($orderItems as $oi) {
                 OrderItem::create($oi + ['orderId' => $order->id]);
+            }
+
+            // Registrar el uso del cupón.
+            if ($discountModel) {
+                $this->discounts->redeem($discountModel);
             }
 
             // Descontar stock de productos regulares (los templates se consumen al pagar).
