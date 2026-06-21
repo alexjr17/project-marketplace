@@ -11,21 +11,22 @@ class UserSeeder extends Seeder
 {
     public function run(): void
     {
+        // Usuarios por defecto (genéricos, no personales). Se pueden cambiar luego.
         $users = [
             [
-                'email' => 'alexjose.r.r@gmail.com', 'password' => 'admin123', 'name' => 'Alex Rodríguez', 'phone' => '+57 300 000 0000', 'roleId' => 1,
+                'email' => 'admin@vexa.com', 'password' => 'admin123', 'name' => 'Administrador', 'phone' => '+57 300 000 0000', 'roleId' => 1,
                 'addresses' => [
                     ['label' => 'Casa - Sincelejo', 'address' => 'Calle 20 #15-30', 'city' => 'Sincelejo', 'department' => 'Sucre', 'postalCode' => '700001', 'country' => 'Colombia', 'isDefault' => true],
                 ],
             ],
-            ['email' => 'alexjose.r.r.17@gmail.com', 'password' => 'vendedor123', 'name' => 'Vendedor', 'phone' => '+57 300 111 1111', 'roleId' => 3],
+            ['email' => 'vendedor@vexa.com', 'password' => 'vendedor123', 'name' => 'Vendedor', 'phone' => '+57 300 111 1111', 'roleId' => 3],
             [
-                'email' => 'estilovexa@gmail.com', 'password' => 'cliente123', 'name' => 'Cliente Vexa', 'phone' => '+57 311 111 1111', 'roleId' => 2,
+                'email' => 'cliente@vexa.com', 'password' => 'cliente123', 'name' => 'Cliente Demo', 'phone' => '+57 311 111 1111', 'roleId' => 2,
                 'addresses' => [
                     ['label' => 'Casa', 'address' => 'Calle 80 #12-34', 'city' => 'Medellín', 'department' => 'Antioquia', 'postalCode' => '050001', 'country' => 'Colombia', 'isDefault' => true],
                 ],
             ],
-            ['email' => 'bystreamergames@gmail.com', 'password' => 'pos123', 'name' => 'Cajero POS', 'phone' => '+57 312 222 2222', 'roleId' => 4],
+            ['email' => 'pos@vexa.com', 'password' => 'pos123', 'name' => 'Cajero POS', 'phone' => '+57 312 222 2222', 'roleId' => 4],
         ];
 
         foreach ($users as $user) {

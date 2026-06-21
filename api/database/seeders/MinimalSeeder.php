@@ -88,7 +88,7 @@ class MinimalSeeder extends Seeder
                     [
                         'sku' => 'PRD-0001-'.strtoupper(substr($color->slug, 0, 3)).'-'.$size->abbreviation,
                         'barcode' => $this->ean13(),
-                        'stock' => 10,
+                        'stock' => 0, // arranca en 0; la única unidad entra por la compra de ejemplo
                         'minStock' => 3,
                         'isActive' => true,
                     ]
@@ -113,7 +113,7 @@ class MinimalSeeder extends Seeder
                 'categoryId' => $category?->id,
                 'typeId' => $type?->id,
                 'basePrice' => 25000,
-                'stock' => 30,
+                'stock' => 0,
                 'featured' => false,
                 'isActive' => true,
                 'isTemplate' => false,
@@ -129,7 +129,7 @@ class MinimalSeeder extends Seeder
             [
                 'sku' => 'PRD-0002-U',
                 'barcode' => $this->ean13(),
-                'stock' => 30,
+                'stock' => 0,
                 'minStock' => 5,
                 'isActive' => true,
             ]
@@ -218,23 +218,25 @@ class MinimalSeeder extends Seeder
     private function seedAnnouncements(): void
     {
         $items = [
+            // Único activo por defecto.
             [
                 'type' => 'bar', 'variant' => 'promo', 'title' => '¡Envío gratis desde $150.000!',
-                'message' => 'Aprovecha hoy en toda la tienda.', 'priority' => 10,
+                'message' => 'Aprovecha hoy en toda la tienda.', 'priority' => 10, 'isActive' => true,
             ],
+            // Los demás quedan creados pero INACTIVOS (ejemplos para activar luego).
             [
                 'type' => 'marquee', 'variant' => 'dark', 'title' => 'Nuevos diseños cada semana ✨',
-                'message' => 'Personaliza tu suéter como quieras.', 'priority' => 5,
+                'message' => 'Personaliza tu suéter como quieras.', 'priority' => 5, 'isActive' => false,
             ],
             [
                 'type' => 'popup', 'variant' => 'promo', 'title' => '¡Bienvenido!',
                 'message' => 'Usa el cupón BIENVENIDA10 y obtén 10% en tu primera compra.',
-                'couponCode' => 'BIENVENIDA10', 'frequency' => 'session', 'priority' => 8,
+                'couponCode' => 'BIENVENIDA10', 'frequency' => 'session', 'priority' => 8, 'isActive' => false,
             ],
             [
                 'type' => 'countdown', 'variant' => 'warning', 'title' => 'Oferta por tiempo limitado',
                 'message' => '¡Corre antes de que termine!', 'priority' => 7,
-                'endsAt' => now()->addDays(5),
+                'endsAt' => now()->addDays(5), 'isActive' => false,
             ],
         ];
 
