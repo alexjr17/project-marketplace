@@ -1,8 +1,14 @@
-import { Suspense, useMemo, useRef, useState, Component, type ReactNode } from 'react';
-import { type ThreeEvent } from '@react-three/fiber';
-import { Canvas } from '@react-three/fiber';
-import { OrbitControls, Decal, Bounds, useTexture, useGLTF } from '@react-three/drei';
+import { Suspense, useEffect, useMemo, useRef, useState, Component, type ReactNode } from 'react';
+import { Canvas, type ThreeEvent } from '@react-three/fiber';
+import { OrbitControls, Decal, Bounds, useTexture, useGLTF, useAnimations } from '@react-three/drei';
+import { clone as skeletonClone } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import * as THREE from 'three';
+
+interface DecalState {
+  position: [number, number, number];
+  rotation: [number, number, number];
+  scale: number;
+}
 
 /** Contiene errores del visor 3D para que un modelo incompatible no tumbe la app. */
 class ViewerBoundary extends Component<{ children: ReactNode; onReset: () => void }, { error: string | null }> {
@@ -28,12 +34,6 @@ class ViewerBoundary extends Component<{ children: ReactNode; onReset: () => voi
   }
 }
 
-interface DecalState {
-  position: [number, number, number];
-  rotation: [number, number, number];
-  scale: number;
-}
-
 /** Capa de decal (diseño) proyectada sobre la malla principal del modelo. */
 function DecalLayer({ meshRef, texUrl, decal }: { meshRef: React.RefObject<THREE.Mesh | null>; texUrl: string; decal: DecalState }) {
   const texture = useTexture(texUrl);
@@ -41,26 +41,24 @@ function DecalLayer({ meshRef, texUrl, decal }: { meshRef: React.RefObject<THREE
   return (
     // @ts-expect-error drei Decal acepta mesh como ref a la malla destino
     <Decal mesh={meshRef} position={decal.position} rotation={decal.rotation} scale={decal.scale}>
-      <meshBasicMaterial
-        map={texture}
-        transparent
-        polygonOffset
-        polygonOffsetFactor={-10}
-        toneMapped={false}
-      />
+      <meshBasicMaterial map={texture} transparent polygonOffset polygonOffsetFactor={-10} toneMapped={false} />
     </Decal>
   );
 }
 
-function Garment({ url, texUrl, decal, setDecal }: {
+function Garment({ url, texUrl, decal, setDecal, color, playing, onInfo }: {
   url: string;
   texUrl: string | null;
   decal: DecalState;
   setDecal: (d: DecalState) => void;
+  color: string | null;
+  playing: boolean;
+  onInfo: (info: { hasAnimations: boolean }) => void;
 }) {
-  // useGLTF configura Draco/Meshopt automáticamente (modelos comprimidos).
-  const gltf = useGLTF(url);
-  const scene = useMemo(() => gltf.scene.clone(true), [gltf]);
+  const gltf = useGLTF(url); // configura Draco/Meshopt automáticamente
+  // SkeletonUtils.clone conserva el esqueleto (necesario para animaciones).
+  const scene = useMemo(() => skeletonClone(gltf.scene), [gltf]);
+  const { actions, names } = useAnimations(gltf.animations, scene);
 
   // Malla principal = la de mayor número de vértices (el cuerpo de la prenda).
   const mainMesh = useMemo<THREE.Mesh | null>(() => {
@@ -78,6 +76,42 @@ function Garment({ url, texUrl, decal, setDecal }: {
 
   const meshRef = useRef<THREE.Mesh | null>(null);
   meshRef.current = mainMesh;
+
+  // Materiales de la malla principal (clonados para tintarlos sin afectar la caché).
+  const { materials, originals } = useMemo(() => {
+    if (!mainMesh) return { materials: [] as THREE.Material[], originals: [] as (THREE.Color | null)[] };
+    const list = Array.isArray(mainMesh.material) ? mainMesh.material : [mainMesh.material];
+    const cloned = list.map((m) => m.clone());
+    mainMesh.material = Array.isArray(mainMesh.material) ? cloned : cloned[0];
+    const orig = cloned.map((m) => ((m as THREE.MeshStandardMaterial).color ? (m as THREE.MeshStandardMaterial).color.clone() : null));
+    return { materials: cloned, originals: orig };
+  }, [mainMesh]);
+
+  // Aplicar/restaurar color.
+  useEffect(() => {
+    materials.forEach((m, i) => {
+      const mc = (m as THREE.MeshStandardMaterial).color;
+      if (!mc) return;
+      if (color) mc.set(color);
+      else if (originals[i]) mc.copy(originals[i] as THREE.Color);
+      m.needsUpdate = true;
+    });
+  }, [color, materials, originals]);
+
+  // Reproducir/parar la primera animación.
+  useEffect(() => {
+    const first = names[0] ? actions[names[0]] : null;
+    if (!first) return;
+    if (playing) { first.reset().fadeIn(0.25).play(); }
+    else { first.fadeOut(0.25); first.stop(); }
+    return () => { first?.stop(); };
+  }, [playing, actions, names]);
+
+  // Informar al padre si el modelo tiene animaciones.
+  const reported = useRef(false);
+  useEffect(() => {
+    if (!reported.current) { reported.current = true; onInfo({ hasAnimations: (gltf.animations?.length ?? 0) > 0 }); }
+  }, [gltf, onInfo]);
 
   // Clic sobre el modelo: coloca el decal en ese punto, orientado a la superficie.
   const handleClick = (e: ThreeEvent<MouseEvent>) => {
@@ -109,10 +143,15 @@ export default function Preview3D() {
   const [modelUrl, setModelUrl] = useState<string | null>(null);
   const [texUrl, setTexUrl] = useState<string | null>(null);
   const [decal, setDecal] = useState<DecalState>({ position: [0, 0, 0.1], rotation: [0, 0, 0], scale: 0.15 });
+  const [color, setColor] = useState<string | null>(null);
+  const [colorInput, setColorInput] = useState('#3b82f6');
+  const [playing, setPlaying] = useState(false);
+  const [autoRotate, setAutoRotate] = useState(false);
+  const [hasAnimations, setHasAnimations] = useState(false);
 
   const onModel = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
-    if (f) setModelUrl(URL.createObjectURL(f));
+    if (f) { setModelUrl(URL.createObjectURL(f)); setPlaying(false); setHasAnimations(false); setColor(null); }
   };
   const onImage = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
@@ -142,26 +181,71 @@ export default function Preview3D() {
           </div>
 
           <div className="bg-blue-50 border border-blue-100 rounded-lg p-3 text-xs text-blue-800">
-            Haz <strong>clic sobre el modelo</strong> para colocar el diseño en ese punto.
-            Arrastra para <strong>rotar</strong>, rueda para <strong>zoom</strong>.
+            Haz <strong>clic sobre el modelo</strong> para colocar el diseño. Arrastra para <strong>rotar</strong>, rueda para <strong>zoom</strong>.
           </div>
 
+          {/* Color del modelo */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Color de la prenda</label>
+            <div className="flex items-center gap-2">
+              <input
+                type="color"
+                value={colorInput}
+                onChange={(e) => { setColorInput(e.target.value); setColor(e.target.value); }}
+                className="w-10 h-9 rounded border border-gray-300 cursor-pointer"
+              />
+              <button
+                onClick={() => { setColor(colorInput); }}
+                className="px-3 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-200"
+              >
+                Aplicar
+              </button>
+              <button
+                onClick={() => setColor(null)}
+                className="px-3 py-2 text-gray-500 rounded-lg text-sm hover:bg-gray-100"
+                title="Restaurar color original"
+              >
+                Original
+              </button>
+            </div>
+          </div>
+
+          {/* Animación / movimiento */}
+          <div className="space-y-2">
+            <label className="block text-sm font-medium text-gray-700">Movimiento</label>
+            <button
+              onClick={() => setPlaying((p) => !p)}
+              disabled={!hasAnimations}
+              className={`w-full px-4 py-2.5 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                playing ? 'bg-red-600 text-white hover:bg-red-700' : 'bg-green-600 text-white hover:bg-green-700'
+              }`}
+            >
+              {playing ? '■ Detener animación' : '▶ Reproducir animación'}
+            </button>
+            {!hasAnimations && modelUrl && (
+              <p className="text-[11px] text-gray-400">Este modelo no trae animaciones; usa “Girar automático”.</p>
+            )}
+            <button
+              onClick={() => setAutoRotate((r) => !r)}
+              className={`w-full px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                autoRotate ? 'bg-indigo-600 text-white hover:bg-indigo-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              ⟳ {autoRotate ? 'Detener giro' : 'Girar automático'}
+            </button>
+          </div>
+
+          {/* Ajustes del diseño */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Tamaño del diseño: {decal.scale.toFixed(2)}</label>
             <input type="range" min={0.03} max={0.6} step={0.01} value={decal.scale}
               onChange={(e) => setDecal({ ...decal, scale: parseFloat(e.target.value) })} className="w-full" />
           </div>
-
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Girar diseño</label>
             <input type="range" min={-Math.PI} max={Math.PI} step={0.05} value={decal.rotation[2]}
               onChange={(e) => setDecal({ ...decal, rotation: [decal.rotation[0], decal.rotation[1], parseFloat(e.target.value)] })} className="w-full" />
           </div>
-
-          <p className="text-xs text-gray-400">
-            Esto es una prueba de concepto: subes el modelo y el diseño, lo posicionas y giras la prenda.
-            Si te convence, lo integramos al editor de plantillas y al preview del cliente.
-          </p>
         </aside>
 
         {/* Visor 3D */}
@@ -178,9 +262,18 @@ export default function Preview3D() {
                 <directionalLight position={[5, 5, 5]} intensity={1.4} />
                 <directionalLight position={[-5, 2, -5]} intensity={0.6} />
                 <Suspense fallback={null}>
-                  <Garment key={modelUrl} url={modelUrl} texUrl={texUrl} decal={decal} setDecal={setDecal} />
+                  <Garment
+                    key={modelUrl}
+                    url={modelUrl}
+                    texUrl={texUrl}
+                    decal={decal}
+                    setDecal={setDecal}
+                    color={color}
+                    playing={playing}
+                    onInfo={({ hasAnimations }) => setHasAnimations(hasAnimations)}
+                  />
                 </Suspense>
-                <OrbitControls makeDefault enablePan={false} minDistance={1} maxDistance={6} />
+                <OrbitControls makeDefault enablePan={false} minDistance={1} maxDistance={6} autoRotate={autoRotate} autoRotateSpeed={3} />
               </Canvas>
             </ViewerBoundary>
           )}
