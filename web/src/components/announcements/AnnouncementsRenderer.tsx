@@ -193,8 +193,9 @@ export function AnnouncementsRenderer() {
           <div
             key={a.id}
             style={{ marginBottom: i * 88 }}
-            className="fixed right-4 bottom-4 z-40 w-72 max-w-[calc(100vw-1.5rem)] bg-white rounded-xl shadow-2xl border border-gray-100 overflow-hidden animate-[annSlideUp_.5s_cubic-bezier(0.16,1,0.3,1)] motion-reduce:animate-none"
+            className="fixed right-4 bottom-4 z-40 w-72 max-w-[calc(100vw-1.5rem)] bg-white rounded-xl shadow-[0_20px_50px_-12px_rgba(0,0,0,0.45)] ring-1 ring-black/10 border border-gray-100 overflow-hidden animate-[annSlideUp_.5s_cubic-bezier(0.16,1,0.3,1)] motion-reduce:animate-none"
           >
+            <div className="h-1.5 w-full" style={{ backgroundImage: brandGradient }} />
             {a.imageUrl && <img src={a.imageUrl} alt={a.title || ''} loading="lazy" className="w-full h-28 object-cover" />}
             <div className="p-3">
               <div className="flex items-start justify-between gap-2">
