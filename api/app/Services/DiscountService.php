@@ -4,6 +4,8 @@ namespace App\Services;
 
 use App\Models\Discount;
 use App\Models\Order;
+use App\Models\Product;
+use Illuminate\Support\Collection;
 use RuntimeException;
 
 /**
@@ -134,5 +136,77 @@ class DiscountService
     {
         $discount->usedCount = (int) $discount->usedCount + 1;
         $discount->save();
+    }
+
+    // ==================== DESCUENTOS AUTOMÁTICOS (sin código) ====================
+
+    /**
+     * Descuentos automáticos vigentes para un canal ('online' | 'pos').
+     * Se consultan una sola vez y se reutilizan al formatear muchos productos.
+     */
+    public function activeAutoDiscounts(string $channel = 'online'): Collection
+    {
+        $now = now();
+
+        return Discount::where('isAuto', true)
+            ->where('isActive', true)
+            ->whereIn('channel', ['all', $channel])
+            ->whereIn('appliesTo', ['all', 'product', 'category'])
+            ->where(fn ($q) => $q->whereNull('startsAt')->orWhere('startsAt', '<=', $now))
+            ->where(fn ($q) => $q->whereNull('endsAt')->orWhere('endsAt', '>=', $now))
+            ->get();
+    }
+
+    /**
+     * Mejor descuento automático aplicable a un producto (el de mayor monto).
+     *
+     * @return array{discount: Discount, amount: float}|null
+     */
+    public function bestAutoFor(Product $product, Collection $autos): ?array
+    {
+        $base = (float) $product->basePrice;
+        $best = null;
+        $bestAmount = 0.0;
+
+        foreach ($autos as $d) {
+            if (! $this->autoMatches($d, $product)) {
+                continue;
+            }
+            $amount = $d->type === 'percent'
+                ? round($base * ($d->value / 100))
+                : min((float) $d->value, $base);
+            $amount = max(0.0, (float) $amount);
+            if ($amount > $bestAmount) {
+                $bestAmount = $amount;
+                $best = $d;
+            }
+        }
+
+        return $best ? ['discount' => $best, 'amount' => $bestAmount] : null;
+    }
+
+    /** Precio efectivo de un producto tras aplicar el mejor descuento automático. */
+    public function autoPrice(Product $product, Collection $autos): float
+    {
+        $best = $this->bestAutoFor($product, $autos);
+
+        return $best ? max(0.0, (float) $product->basePrice - $best['amount']) : (float) $product->basePrice;
+    }
+
+    /** ¿El descuento automático aplica a este producto (por alcance)? */
+    private function autoMatches(Discount $d, Product $product): bool
+    {
+        if ($d->appliesTo === 'all') {
+            return true;
+        }
+        $targets = array_map('intval', $d->targetIds ?? []);
+        if ($d->appliesTo === 'product') {
+            return in_array((int) $product->id, $targets, true);
+        }
+        if ($d->appliesTo === 'category') {
+            return in_array((int) $product->categoryId, $targets, true);
+        }
+
+        return false;
     }
 }

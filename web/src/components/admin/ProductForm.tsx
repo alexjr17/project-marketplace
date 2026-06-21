@@ -32,8 +32,6 @@ export const ProductForm = ({ product, onSubmit, onDelete }: ProductFormProps) =
     typeId: product?.typeId || null as number | null,
     categoryId: product?.categoryId || null as number | null,
     basePrice: product?.basePrice || 0,
-    discountType: (product?.discountType || 'none') as 'none' | 'percent' | 'fixed',
-    discountValue: product?.discountValue || 0,
     stock: product?.stock || 0,
     featured: product?.featured || false,
     rating: product?.rating || 0,
@@ -178,8 +176,6 @@ export const ProductForm = ({ product, onSubmit, onDelete }: ProductFormProps) =
       typeId: formData.typeId,
       categoryId: formData.categoryId,
       basePrice: Number(formData.basePrice),
-      discountType: formData.discountType,
-      discountValue: formData.discountType === 'none' ? 0 : Number(formData.discountValue) || 0,
       stock: Number(formData.stock),
       featured: formData.featured,
       rating: formData.rating || undefined,
@@ -303,43 +299,8 @@ export const ProductForm = ({ product, onSubmit, onDelete }: ProductFormProps) =
           />
         </div>
 
-        {/* Descuento directo del producto (oferta, sin cupón) */}
-        <div className="col-span-12 md:col-span-8">
-          <label className="block text-sm font-medium text-gray-700 mb-1">Descuento (oferta)</label>
-          <div className="flex gap-2">
-            <select
-              value={formData.discountType}
-              onChange={(e) => setFormData({ ...formData, discountType: e.target.value as 'none' | 'percent' | 'fixed' })}
-              className="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white"
-            >
-              <option value="none">Sin descuento</option>
-              <option value="percent">Porcentaje (%)</option>
-              <option value="fixed">Monto fijo ($)</option>
-            </select>
-            {formData.discountType !== 'none' && (
-              <Input
-                type="number"
-                step="0.01"
-                min="0"
-                value={formData.discountValue}
-                onChange={(e) => setFormData({ ...formData, discountValue: parseFloat(e.target.value) })}
-                placeholder={formData.discountType === 'percent' ? '% de descuento' : 'Monto a descontar'}
-              />
-            )}
-          </div>
-          {formData.discountType !== 'none' && Number(formData.discountValue) > 0 && (
-            <p className="text-xs text-emerald-600 mt-1">
-              Precio de oferta:{' '}
-              <b>
-                ${(formData.discountType === 'percent'
-                  ? Math.max(0, Math.round(Number(formData.basePrice) * (1 - Number(formData.discountValue) / 100)))
-                  : Math.max(0, Number(formData.basePrice) - Number(formData.discountValue))
-                ).toLocaleString('es-CO')}
-              </b>{' '}
-              <span className="line-through text-gray-400">${Number(formData.basePrice).toLocaleString('es-CO')}</span>
-            </p>
-          )}
-        </div>
+        {/* El descuento ya no se define aquí: se gestiona en Marketing →
+            Cupones / Descuentos (descuento automático por producto/categoría). */}
 
         {/* El stock se administra por variante (módulo Variantes/Inventario),
             no en el producto: por eso aquí no se edita. */}

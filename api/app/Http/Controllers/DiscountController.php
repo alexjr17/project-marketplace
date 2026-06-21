@@ -16,14 +16,19 @@ class DiscountController extends Controller
 
     public function __construct(private DiscountService $discounts) {}
 
-    private function rules(int $ignoreId = 0): array
+    private function rules(Request $request, int $ignoreId = 0): array
     {
+        $isAuto = $request->boolean('isAuto');
+
         return [
-            'code' => ['required', 'string', 'max:60', Rule::unique('discounts', 'code')->ignore($ignoreId)],
+            'isAuto' => 'boolean',
+            // Con código (canjeable) requiere code; automático no lo necesita.
+            'code' => [$isAuto ? 'nullable' : 'required', 'nullable', 'string', 'max:60', Rule::unique('discounts', 'code')->ignore($ignoreId)],
             'name' => 'nullable|string',
             'type' => 'required|in:percent,fixed',
             'value' => 'required|numeric|min:0',
-            'appliesTo' => 'nullable|in:all,product,category,user',
+            // Automático aplica a producto/categoría/todo (no por usuario).
+            'appliesTo' => $isAuto ? 'nullable|in:all,product,category' : 'nullable|in:all,product,category,user',
             'targetIds' => 'nullable|array',
             'targetIds.*' => 'integer',
             'channel' => 'nullable|in:all,online,pos',
@@ -36,6 +41,14 @@ class DiscountController extends Controller
         ];
     }
 
+    /** Normaliza el código: mayúsculas, o null si es automático. */
+    private function normalizeCode(array $data): array
+    {
+        $data['code'] = ! empty($data['code']) ? strtoupper(trim($data['code'])) : null;
+
+        return $data;
+    }
+
     // ==================== ADMIN ====================
 
     public function index()
@@ -45,23 +58,21 @@ class DiscountController extends Controller
 
     public function store(Request $request)
     {
-        $data = $request->validate($this->rules());
-        $data['code'] = strtoupper(trim($data['code']));
+        $data = $this->normalizeCode($request->validate($this->rules($request)));
 
-        return $this->created(Discount::create($data), 'Cupón creado');
+        return $this->created(Discount::create($data), 'Descuento creado');
     }
 
     public function update(Request $request, int $id)
     {
         $d = Discount::find($id);
         if (! $d) {
-            return $this->error('Cupón no encontrado', 404);
+            return $this->error('Descuento no encontrado', 404);
         }
-        $data = $request->validate($this->rules($id));
-        $data['code'] = strtoupper(trim($data['code']));
+        $data = $this->normalizeCode($request->validate($this->rules($request, $id)));
         $d->fill($data)->save();
 
-        return $this->success($d, 'Cupón actualizado');
+        return $this->success($d, 'Descuento actualizado');
     }
 
     public function destroy(int $id)
@@ -95,14 +106,16 @@ class DiscountController extends Controller
         // Resolver categoría/oferta y subtotal a partir de los ítems (no confiamos en el front).
         $items = [];
         $subtotal = 0;
+        $channel = $data['channel'] ?? 'online';
+        $autos = $this->discounts->activeAutoDiscounts($channel);
         $productIds = collect($data['items'] ?? [])->pluck('productId')->filter()->unique()->all();
         $products = Product::whereIn('id', $productIds)->get()->keyBy('id');
 
         foreach (($data['items'] ?? []) as $it) {
             $pid = (int) ($it['productId'] ?? 0);
             $product = $products[$pid] ?? null;
-            // Precio confiable: el precio efectivo del backend (oferta ya aplicada).
-            $price = $product ? $product->effectivePrice() : (float) ($it['price'] ?? 0);
+            // Precio confiable: el del backend con la oferta automática ya aplicada.
+            $price = $product ? $this->discounts->autoPrice($product, $autos) : (float) ($it['price'] ?? 0);
             $qty = (int) ($it['quantity'] ?? 0);
             $subtotal += $price * $qty;
             $items[] = [
@@ -110,8 +123,8 @@ class DiscountController extends Controller
                 'categoryId' => $product?->categoryId,
                 'price' => $price,
                 'quantity' => $qty,
-                // No acumulable: marcar si el producto ya tiene oferta propia.
-                'discounted' => $product ? $product->effectivePrice() < (float) $product->basePrice : false,
+                // No acumulable: marcar si el producto ya tiene oferta automática.
+                'discounted' => $product ? $price < (float) $product->basePrice : false,
             ];
         }
 
@@ -120,7 +133,7 @@ class DiscountController extends Controller
                 'subtotal' => $subtotal,
                 'items' => $items,
                 'userId' => $request->user()?->id,
-                'channel' => $data['channel'] ?? 'online',
+                'channel' => $channel,
             ]);
         } catch (RuntimeException $e) {
             return $this->error($e->getMessage(), 422);

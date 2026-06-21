@@ -21,7 +21,8 @@ export type DiscountChannel = 'all' | 'online' | 'pos';
 
 export interface Discount {
   id: number;
-  code: string;
+  isAuto: boolean;        // true = descuento automático (sin código)
+  code?: string | null;   // null cuando es automático
   name?: string | null;
   type: DiscountType;
   value: number;

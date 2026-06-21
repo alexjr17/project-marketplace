@@ -30,6 +30,7 @@ const CHANNEL_LABELS: Record<string, string> = {
 };
 
 const EMPTY: DiscountInput = {
+  isAuto: false,
   code: '',
   name: '',
   type: 'percent',
@@ -104,7 +105,7 @@ export default function DiscountsPage() {
   const set = <K extends keyof DiscountInput>(k: K, v: DiscountInput[K]) => setForm((p) => ({ ...p, [k]: v }));
 
   const save = async () => {
-    if (!form.code.trim()) { showToast('El código es obligatorio', 'error'); return; }
+    if (!form.isAuto && !(form.code ?? '').trim()) { showToast('El código es obligatorio', 'error'); return; }
     if (!(Number(form.value) > 0)) { showToast('El valor debe ser mayor a 0', 'error'); return; }
     if (form.appliesTo !== 'all' && (form.targetIds ?? []).length === 0) {
       showToast('Selecciona al menos un objetivo para el alcance elegido', 'error');
@@ -114,7 +115,7 @@ export default function DiscountsPage() {
     try {
       const payload: DiscountInput = {
         ...form,
-        code: form.code.trim().toUpperCase(),
+        code: form.isAuto ? null : ((form.code ?? '').trim().toUpperCase() || null),
         value: Number(form.value) || 0,
         minSubtotal: form.minSubtotal ? Number(form.minSubtotal) : null,
         maxUses: form.maxUses ? Number(form.maxUses) : null,
@@ -137,7 +138,7 @@ export default function DiscountsPage() {
   };
 
   const remove = async (d: Discount) => {
-    if (!window.confirm(`¿Eliminar el cupón ${d.code}?`)) return;
+    if (!window.confirm(`¿Eliminar "${d.code || d.name || 'este descuento'}"?`)) return;
     try {
       await deleteDiscount(d.id);
       showToast('Cupón eliminado', 'success');
@@ -205,7 +206,11 @@ export default function DiscountsPage() {
               {items.map((d) => (
                 <tr key={d.id} className="hover:bg-gray-50">
                   <td className="px-4 py-3">
-                    <span className="font-mono font-bold text-emerald-700">{d.code}</span>
+                    {d.isAuto ? (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 text-xs font-semibold">Automático</span>
+                    ) : (
+                      <span className="font-mono font-bold text-emerald-700">{d.code}</span>
+                    )}
                     {d.name && <p className="text-xs text-gray-500">{d.name}</p>}
                   </td>
                   <td className="px-4 py-3 font-semibold text-gray-900">{fmtValue(d)}</td>
@@ -243,10 +248,35 @@ export default function DiscountsPage() {
             </div>
 
             <div className="p-5 space-y-3 overflow-y-auto">
+              {/* Modo: automático (sin código) o con código (canjeable al pagar) */}
+              <div className="flex gap-2 p-1 bg-gray-100 rounded-lg">
+                <button
+                  type="button"
+                  onClick={() => { set('isAuto', true); if (form.appliesTo === 'user') { set('appliesTo', 'product'); set('targetIds', []); setLabels({}); } }}
+                  className={`flex-1 px-3 py-2 rounded-md text-sm font-semibold transition-colors ${form.isAuto ? 'bg-white shadow text-emerald-700' : 'text-gray-500'}`}
+                >
+                  Automático (sin código)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => set('isAuto', false)}
+                  className={`flex-1 px-3 py-2 rounded-md text-sm font-semibold transition-colors ${!form.isAuto ? 'bg-white shadow text-emerald-700' : 'text-gray-500'}`}
+                >
+                  Con código
+                </button>
+              </div>
+              <p className="text-xs text-gray-500 -mt-1">
+                {form.isAuto
+                  ? 'Se aplica solo al producto o categoría que elijas (sin que el cliente escriba nada) y se muestra el precio rebajado en toda la tienda.'
+                  : 'El cliente escribe el código al momento de pagar para canjearlo.'}
+              </p>
+
               <div className="grid grid-cols-2 gap-3">
-                <Field label="Código del cupón">
-                  <input value={form.code} onChange={(e) => set('code', e.target.value.toUpperCase())} placeholder="BIENVENIDA10" className="inp font-mono uppercase" />
-                </Field>
+                {!form.isAuto && (
+                  <Field label="Código del cupón">
+                    <input value={form.code || ''} onChange={(e) => set('code', e.target.value.toUpperCase())} placeholder="BIENVENIDA10" className="inp font-mono uppercase" />
+                  </Field>
+                )}
                 <Field label="Nombre interno (opcional)">
                   <input value={form.name || ''} onChange={(e) => set('name', e.target.value)} placeholder="Promo bienvenida" className="inp" />
                 </Field>
@@ -266,7 +296,9 @@ export default function DiscountsPage() {
               <div className="grid grid-cols-2 gap-3">
                 <Field label="Aplica a">
                   <select value={form.appliesTo} onChange={(e) => { set('appliesTo', e.target.value as DiscountInput['appliesTo']); set('targetIds', []); setLabels({}); }} className="sel">
-                    {Object.entries(APPLIES_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                    {Object.entries(APPLIES_LABELS)
+                      .filter(([k]) => !(form.isAuto && k === 'user'))
+                      .map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                   </select>
                 </Field>
                 <Field label="Canal">

@@ -156,6 +156,7 @@ class OrderService
     public function createOrder(int $userId, array $data): Order
     {
         $settings = $this->getSettings();
+        $autoDiscounts = $this->discounts->activeAutoDiscounts('online'); // ofertas automáticas vigentes
         $subtotal = 0;
         $orderItems = [];
         $stockUpdates = [];
@@ -206,8 +207,8 @@ class OrderService
                 'isTemplate' => $product->isTemplate,
             ];
 
-            // Precio con el descuento directo del producto (oferta) ya aplicado.
-            $unitPrice = $product->effectivePrice();
+            // Precio con la oferta automática aplicada (si alguna le aplica).
+            $unitPrice = $this->discounts->autoPrice($product, $autoDiscounts);
             $subtotal += $unitPrice * $item['quantity'];
 
             $couponItems[] = [
@@ -215,7 +216,7 @@ class OrderService
                 'categoryId' => $product->categoryId,
                 'price' => $unitPrice,
                 'quantity' => (int) $item['quantity'],
-                // Si el producto ya trae oferta propia, el cupón no se acumula.
+                // Si el producto ya trae oferta automática, el cupón no se acumula.
                 'discounted' => $unitPrice < (float) $product->basePrice,
             ];
 
