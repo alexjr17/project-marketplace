@@ -156,6 +156,14 @@ export default function ProductDetailPage() {
       if (!product) return;
       const needsColor = product.colors.length > 0;
       const needsSize = product.sizes.length > 0;
+
+      // Producto simple (sin color/talla): el stock ya viene en product.stock
+      // (suma de variantes activas). Evita el endpoint de variante (requiere login).
+      if (!needsColor && !needsSize) {
+        setAvailableStock(product.stock ?? 0);
+        return;
+      }
+
       if ((needsColor && !selectedColor) || (needsSize && !selectedSize)) return;
 
       setLoadingStock(true);
