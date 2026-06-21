@@ -118,9 +118,12 @@ class ProductController extends Controller
         $query = Product::with(self::PRODUCT_RELATIONS)->where('isTemplate', false);
 
         if (! empty($data['search'])) {
-            $s = $data['search'];
+            // Insensible a mayúsculas/minúsculas (en Postgres LIKE sí distingue).
+            $s = '%'.mb_strtolower($data['search']).'%';
             $query->where(function ($q) use ($s) {
-                $q->where('name', 'like', "%{$s}%")->orWhere('description', 'like', "%{$s}%");
+                $q->whereRaw('LOWER(name) LIKE ?', [$s])
+                    ->orWhereRaw('LOWER(description) LIKE ?', [$s])
+                    ->orWhereRaw('LOWER(sku) LIKE ?', [$s]);
             });
         }
         if (! empty($data['category'])) {

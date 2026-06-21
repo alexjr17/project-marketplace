@@ -27,8 +27,8 @@ class DiscountController extends Controller
             'name' => 'nullable|string',
             'type' => 'required|in:percent,fixed',
             'value' => 'required|numeric|min:0',
-            // Automático aplica a producto/categoría/todo (no por usuario).
-            'appliesTo' => $isAuto ? 'nullable|in:all,product,category' : 'nullable|in:all,product,category,user',
+            // Automático aplica solo a producto o categoría; con código admite todo.
+            'appliesTo' => $isAuto ? 'nullable|in:product,category' : 'nullable|in:all,product,category,user',
             'targetIds' => 'nullable|array',
             'targetIds.*' => 'integer',
             'channel' => 'nullable|in:all,online,pos',

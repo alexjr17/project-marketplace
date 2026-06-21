@@ -252,7 +252,7 @@ export default function DiscountsPage() {
               <div className="flex gap-2 p-1 bg-gray-100 rounded-lg">
                 <button
                   type="button"
-                  onClick={() => { set('isAuto', true); if (form.appliesTo === 'user') { set('appliesTo', 'product'); set('targetIds', []); setLabels({}); } }}
+                  onClick={() => { set('isAuto', true); if (form.appliesTo !== 'product' && form.appliesTo !== 'category') { set('appliesTo', 'product'); set('targetIds', []); setLabels({}); } }}
                   className={`flex-1 px-3 py-2 rounded-md text-sm font-semibold transition-colors ${form.isAuto ? 'bg-white shadow text-emerald-700' : 'text-gray-500'}`}
                 >
                   Automático (sin código)
@@ -297,7 +297,8 @@ export default function DiscountsPage() {
                 <Field label="Aplica a">
                   <select value={form.appliesTo} onChange={(e) => { set('appliesTo', e.target.value as DiscountInput['appliesTo']); set('targetIds', []); setLabels({}); }} className="sel">
                     {Object.entries(APPLIES_LABELS)
-                      .filter(([k]) => !(form.isAuto && k === 'user'))
+                      // Automático: solo Producto y Categoría. Con código: todas.
+                      .filter(([k]) => !form.isAuto || k === 'product' || k === 'category')
                       .map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                   </select>
                 </Field>
