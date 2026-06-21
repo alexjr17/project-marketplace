@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { User, Package, LogOut, X, ShoppingCart, LayoutGrid } from 'lucide-react';
+import { useFavorites } from '../../context/FavoritesContext';
+import { User, Package, LogOut, X, ShoppingCart, LayoutGrid, Heart, MessageSquare } from 'lucide-react';
 import { useEffect } from 'react';
 
 interface MobileUserMenuProps {
@@ -12,10 +13,12 @@ interface MobileUserMenuProps {
 
 export const MobileUserMenu = ({ isOpen, onClose, onLoginClick, onRegisterClick }: MobileUserMenuProps) => {
   const { user, isAuthenticated, logout, hasPermission, isAdmin } = useAuth();
+  const { count: favoritesCount } = useFavorites();
 
   // Acceso al panel admin según permisos (admin.access o módulos admin)
   const isAdminUser = isAdmin;
   const hasPosAccess = hasPermission('pos.access');
+  const hasMessagingAccess = hasPermission('messaging.access');
 
   useEffect(() => {
     if (isOpen) {
@@ -102,8 +105,24 @@ export const MobileUserMenu = ({ isOpen, onClose, onLoginClick, onRegisterClick 
                   <span>Mis Pedidos</span>
                 </Link>
 
+                <Link
+                  to="/favorites"
+                  onClick={handleLinkClick}
+                  className="flex items-center justify-between gap-3 px-4 py-3.5 text-gray-700 hover:bg-violet-50 hover:text-violet-700 rounded-xl transition-colors font-medium"
+                >
+                  <span className="flex items-center gap-3">
+                    <Heart className="w-5 h-5" />
+                    Mis Favoritos
+                  </span>
+                  {favoritesCount > 0 && (
+                    <span className="bg-red-500 text-white text-xs font-bold rounded-full min-w-[20px] h-5 px-1.5 flex items-center justify-center">
+                      {favoritesCount}
+                    </span>
+                  )}
+                </Link>
+
                 {/* Aplicaciones disponibles */}
-                {(hasPosAccess || isAdminUser) && (
+                {(hasPosAccess || isAdminUser || hasMessagingAccess) && (
                   <>
                     <div className="my-3 border-t border-gray-200"></div>
                     <p className="px-4 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">
@@ -123,6 +142,23 @@ export const MobileUserMenu = ({ isOpen, onClose, onLoginClick, onRegisterClick 
                         <div className="flex-1">
                           <span className="font-bold text-gray-900">Punto de Venta</span>
                           <p className="text-xs text-gray-500">Gestión de ventas y caja</p>
+                        </div>
+                      </Link>
+                    )}
+
+                    {/* Social Media */}
+                    {hasMessagingAccess && (
+                      <Link
+                        to="/messaging"
+                        onClick={handleLinkClick}
+                        className="flex items-center gap-3 px-4 py-3.5 hover:bg-pink-50 rounded-xl transition-colors"
+                      >
+                        <div className="p-2 bg-pink-100 rounded-lg">
+                          <MessageSquare className="w-5 h-5 text-pink-600" />
+                        </div>
+                        <div className="flex-1">
+                          <span className="font-bold text-gray-900">Social Media</span>
+                          <p className="text-xs text-gray-500">Inbox y publicaciones</p>
                         </div>
                       </Link>
                     )}

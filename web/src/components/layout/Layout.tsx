@@ -1,8 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Header } from './Header';
 import { Footer } from './Footer';
-import { WhatsAppButton } from '../common/WhatsAppButton';
-import { ChatWidget } from '../messaging/ChatWidget';
 import { AnnouncementsRenderer } from '../announcements/AnnouncementsRenderer';
 
 interface LayoutProps {
@@ -36,8 +34,6 @@ export const Layout = ({ children }: LayoutProps) => {
         {children}
       </main>
       <Footer />
-      <WhatsAppButton />
-      <ChatWidget />
     </div>
   );
 };

@@ -80,9 +80,13 @@ export function AnnouncementsRenderer() {
 
   const [items, setItems] = useState<Announcement[]>([]);
   const [dismissed, setDismissed] = useState<Set<number>>(new Set());
+  const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
 
   useEffect(() => {
     getActiveAnnouncements().then(setItems).catch(() => setItems([]));
+    const onResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
   }, []);
 
   const dismiss = (a: Announcement) => {
@@ -148,8 +152,8 @@ export function AnnouncementsRenderer() {
       {floating.map((a, i) => (
         <div
           key={a.id}
-          style={{ bottom: `${16 + i * 8}px` }}
-          className="fixed right-4 z-40 w-72 max-w-[85vw] bg-white rounded-xl shadow-2xl border border-gray-100 overflow-hidden animate-[annSlideUp_.5s_cubic-bezier(0.16,1,0.3,1)] motion-reduce:animate-none"
+          style={{ marginBottom: i * 88 }}
+          className="fixed right-3 md:right-4 bottom-24 md:bottom-4 z-40 w-72 max-w-[calc(100vw-1.5rem)] bg-white rounded-xl shadow-2xl border border-gray-100 overflow-hidden animate-[annSlideUp_.5s_cubic-bezier(0.16,1,0.3,1)] motion-reduce:animate-none"
         >
           {a.imageUrl && <img src={a.imageUrl} alt={a.title || ''} loading="lazy" className="w-full h-28 object-cover" />}
           <div className="p-3">
@@ -196,6 +200,39 @@ export function AnnouncementsRenderer() {
             <Cta a={p} className="inline-flex items-center px-6 py-2.5 rounded-lg text-sm font-bold text-white shadow-lg hover:opacity-90" style={{ backgroundImage: brandGradient }} />
           </span>
         ) : null;
+
+        // En móvil: banner inferior tipo alerta (sobre el menú de abajo), no bloquea.
+        if (isMobile) {
+          return (
+            <div className="fixed inset-x-0 bottom-16 z-[60] px-3">
+              <div className="relative bg-white rounded-xl shadow-2xl border border-gray-100 overflow-hidden animate-[annSlideUp_.45s_cubic-bezier(0.16,1,0.3,1)] motion-reduce:animate-none">
+                <div className="h-1 w-full" style={{ backgroundImage: brandGradient }} />
+                <button onClick={() => dismiss(p)} aria-label="Cerrar" className="absolute top-1.5 right-1.5 z-10 p-1 text-gray-400 hover:text-gray-600">
+                  <X className="w-4 h-4" />
+                </button>
+                <div className="flex items-center gap-3 p-3 pr-7">
+                  {p.imageUrl && <img src={p.imageUrl} alt={p.title || ''} className="w-14 h-14 rounded-lg object-cover flex-shrink-0" />}
+                  <div className="min-w-0 flex-1">
+                    {p.title && <p className="font-semibold text-sm text-gray-900 truncate">{p.title}</p>}
+                    {p.message && <p className="text-xs text-gray-600 line-clamp-2">{p.message}</p>}
+                    <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                      {p.couponCode && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold border border-dashed" style={{ color: brand.primary, borderColor: brand.primary }}>
+                          <Tag className="w-3 h-3" /> {p.couponCode}
+                        </span>
+                      )}
+                      {p.ctaText && p.ctaUrl && (
+                        <span onClick={() => markSeen(p)}>
+                          <Cta a={p} className="inline-flex items-center px-3 py-1 rounded-lg text-xs font-bold text-white shadow" style={{ backgroundImage: brandGradient }} />
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        }
 
         return (
           <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
