@@ -50,6 +50,10 @@ class OrderController extends Controller
             $order = $this->orders->createOrder($request->user()->id, $data);
         } catch (RuntimeException $e) {
             return $this->fail($e);
+        } catch (\Throwable $e) {
+            \Log::error('Error creando pedido', ['error' => $e->getMessage()]);
+
+            return $this->error('No se pudo crear el pedido. Intenta de nuevo.', 500);
         }
 
         return $this->created($this->orders->formatOrder($order), 'Pedido creado exitosamente');
