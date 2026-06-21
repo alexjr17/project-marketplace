@@ -40,6 +40,20 @@ class ImageUrls
         return null;
     }
 
+    /** URL servible de una imagen suelta por color (product_colors.image). */
+    public static function forColor(?string $image, int $productColorId, $version = null): ?string
+    {
+        if (! is_string($image) || $image === '') {
+            return null;
+        }
+        if (preg_match('#^https?://#i', $image)) {
+            return $image;
+        }
+        $v = $version instanceof \DateTimeInterface ? $version->getTimestamp() : (is_numeric($version) ? (int) $version : 0);
+
+        return url("api/img/color/{$productColorId}/front").($v ? "?v={$v}" : '');
+    }
+
     /** {front,back,side,extra1,extra2} con URLs servibles. */
     public static function forModel($images, string $type, int $id, $version = null): array
     {

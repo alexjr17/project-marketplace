@@ -78,6 +78,7 @@ class ProductController extends Controller
                 'name' => $pc->color?->name,
                 'slug' => $pc->color?->slug,
                 'hexCode' => $pc->color?->hexCode,
+                'image' => \App\Support\ImageUrls::forColor($pc->image, $pc->id, $product->updatedAt),
             ])->filter(fn ($c) => $c['id'] !== null)->values(),
             'sizes' => $product->productSizes->map(fn ($ps) => [
                 'id' => $ps->size?->id,
@@ -259,10 +260,11 @@ class ProductController extends Controller
             'slug' => 'nullable|string',
         ]);
 
-        $colorIds = collect($data['colors'] ?? [])->pluck('id')->filter()->all();
+        $colors = collect($data['colors'] ?? [])->filter(fn ($c) => ! empty($c['id']))->values();
+        $colorIds = $colors->pluck('id')->all();
         $sizeIds = collect($data['sizes'] ?? [])->pluck('id')->filter()->all();
 
-        $product = DB::transaction(function () use ($data, $colorIds, $sizeIds) {
+        $product = DB::transaction(function () use ($data, $colors, $colorIds, $sizeIds) {
             $sku = $data['sku'] ?? $this->generateProductSku($data['typeId'] ?? null);
             $slug = $data['slug'] ?? Str::slug($data['name']);
             if (Product::where('slug', $slug)->exists()) {
@@ -285,8 +287,12 @@ class ProductController extends Controller
                 'tags' => $data['tags'] ?? [],
             ]);
 
-            foreach ($colorIds as $colorId) {
-                ProductColor::create(['productId' => $product->id, 'colorId' => $colorId]);
+            foreach ($colors as $c) {
+                ProductColor::create([
+                    'productId' => $product->id,
+                    'colorId' => $c['id'],
+                    'image' => $c['image'] ?? null,
+                ]);
             }
             foreach ($sizeIds as $sizeId) {
                 ProductSize::create(['productId' => $product->id, 'sizeId' => $sizeId]);
@@ -330,11 +336,12 @@ class ProductController extends Controller
             'sizes' => 'nullable|array',
         ]);
 
-        $colorIds = collect($data['colors'] ?? [])->pluck('id')->filter()->all();
+        $colors = collect($data['colors'] ?? [])->filter(fn ($c) => ! empty($c['id']))->values();
+        $colorIds = $colors->pluck('id')->all();
         $sizeIds = collect($data['sizes'] ?? [])->pluck('id')->filter()->all();
         $variantsNeedUpdate = false;
 
-        DB::transaction(function () use ($product, $data, $colorIds, $sizeIds, &$variantsNeedUpdate) {
+        DB::transaction(function () use ($product, $data, $colors, $sizeIds, &$variantsNeedUpdate) {
             foreach (['name', 'description', 'categoryId', 'typeId', 'basePrice', 'stock',
                 'featured', 'isActive', 'isTemplate', 'images', 'tags'] as $field) {
                 if (array_key_exists($field, $data) && $data[$field] !== null) {
@@ -348,8 +355,12 @@ class ProductController extends Controller
             // envía la clave, no se tocan los colores existentes.
             if (array_key_exists('colors', $data)) {
                 ProductColor::where('productId', $product->id)->delete();
-                foreach ($colorIds as $colorId) {
-                    ProductColor::create(['productId' => $product->id, 'colorId' => $colorId]);
+                foreach ($colors as $c) {
+                    ProductColor::create([
+                        'productId' => $product->id,
+                        'colorId' => $c['id'],
+                        'image' => $c['image'] ?? null,
+                    ]);
                 }
                 $variantsNeedUpdate = true;
             }

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Product;
+use App\Models\ProductColor;
 use App\Support\ImageUrls;
 use Illuminate\Http\Request;
 
@@ -32,13 +33,15 @@ class ImageController extends Controller
             }
         }
 
-        // Templates son productos (isTemplate); ambos viven en la tabla products.
-        $model = $type === 'product' ? Product::find($id) : null;
-        if (! $model) {
-            abort(404);
+        // Resolver el valor de la imagen según el tipo.
+        if ($type === 'color') {
+            // Imagen por color: una sola imagen en product_colors.image.
+            $val = ProductColor::find($id)?->image;
+        } else {
+            // Templates son productos (isTemplate); ambos viven en products.
+            $model = $type === 'product' ? Product::find($id) : null;
+            $val = $model ? ImageUrls::slotValue($model->images, $slot) : null;
         }
-
-        $val = ImageUrls::slotValue($model->images, $slot);
         if (! $val) {
             abort(404);
         }

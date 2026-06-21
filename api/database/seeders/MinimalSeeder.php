@@ -45,8 +45,8 @@ class MinimalSeeder extends Seeder
         $this->seedProductWithVariants();
         $this->seedSimpleProduct();
         $this->seedGorra();
-        $this->seedTemplate('sueter-basico', 'Suéter Básico', 70000, 'TPL-0001');
-        $this->seedTemplate('sueter-oversize', 'Suéter Oversize', 78000, 'TPL-0002');
+        $this->seedTemplate('sueter-basico', 'Suéter Básico', 70000, 'TPL-0001', 'https://loremflickr.com/600/600/sweater?lock=24');
+        $this->seedTemplate('sueter-oversize', 'Suéter Oversize', 78000, 'TPL-0002', 'https://loremflickr.com/600/600/sweater,oversize?lock=25');
         $this->seedAnnouncements();
         $this->seedDiscounts();
         $this->seedCashRegister();
@@ -72,7 +72,7 @@ class MinimalSeeder extends Seeder
                 'featured' => true,
                 'isActive' => true,
                 'isTemplate' => false,
-                'images' => ['front' => '', 'back' => '', 'side' => ''],
+                'images' => ['front' => 'https://loremflickr.com/600/600/sweater?lock=21', 'back' => '', 'side' => ''],
                 'tags' => ['sueter', 'basico', 'catalogo'],
                 'reviewsCount' => 0,
             ]
@@ -123,7 +123,7 @@ class MinimalSeeder extends Seeder
                 'featured' => false,
                 'isActive' => true,
                 'isTemplate' => false,
-                'images' => ['front' => '', 'back' => '', 'side' => ''],
+                'images' => ['front' => 'https://loremflickr.com/600/600/tote,bag?lock=23', 'back' => '', 'side' => ''],
                 'tags' => ['accesorio', 'tote'],
                 'reviewsCount' => 0,
             ]
@@ -159,7 +159,7 @@ class MinimalSeeder extends Seeder
                 'featured' => false,
                 'isActive' => true,
                 'isTemplate' => false,
-                'images' => ['front' => '', 'back' => '', 'side' => ''],
+                'images' => ['front' => 'https://loremflickr.com/600/600/cap,hat?lock=22', 'back' => '', 'side' => ''],
                 'tags' => ['accesorio', 'gorra'],
                 'reviewsCount' => 0,
             ]
@@ -189,7 +189,7 @@ class MinimalSeeder extends Seeder
     }
 
     /** Plantilla personalizable (isTemplate) con zonas frente/espalda y variantes. */
-    private function seedTemplate(string $typeSlug, string $label, int $price, string $sku): void
+    private function seedTemplate(string $typeSlug, string $label, int $price, string $sku, string $image = ''): void
     {
         $type = ProductType::where('slug', $typeSlug)->first();
         $template = Product::updateOrCreate(
@@ -205,7 +205,7 @@ class MinimalSeeder extends Seeder
                 'featured' => true,
                 'isActive' => true,
                 'isTemplate' => true,
-                'images' => ['front' => '', 'back' => '', 'side' => ''],
+                'images' => ['front' => $image, 'back' => '', 'side' => ''],
                 'tags' => ['personalizable', $typeSlug, 'dama'],
                 'reviewsCount' => 0,
             ]

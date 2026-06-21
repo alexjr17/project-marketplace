@@ -56,6 +56,10 @@ export const ProductForm = ({ product, onSubmit, onDelete }: ProductFormProps) =
   const [selectedColorIds, setSelectedColorIds] = useState<number[]>(
     product?.colors?.map(c => c.id) || []
   );
+  // Imagen por color (colorId -> data URI o URL).
+  const [colorImages, setColorImages] = useState<Record<number, string>>(
+    () => Object.fromEntries((product?.colors || []).filter(c => c.image).map(c => [c.id, c.image as string]))
+  );
   const [selectedSizeIds, setSelectedSizeIds] = useState<number[]>(
     Array.isArray(product?.sizes)
       ? product.sizes.map(s => typeof s === 'string' ? 0 : s.id).filter(id => id > 0)
@@ -187,6 +191,7 @@ export const ProductForm = ({ product, onSubmit, onDelete }: ProductFormProps) =
         name: c.name,
         slug: c.slug,
         hexCode: c.hexCode,
+        image: colorImages[c.id] || undefined,
       })),
       sizes: selectedSizes.map(s => ({
         id: s.id,
@@ -204,6 +209,13 @@ export const ProductForm = ({ product, onSubmit, onDelete }: ProductFormProps) =
         ? prev.filter(id => id !== colorId)
         : [...prev, colorId]
     );
+  };
+
+  const onColorImage = (colorId: number, file?: File) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => setColorImages(prev => ({ ...prev, [colorId]: String(reader.result || '') }));
+    reader.readAsDataURL(file);
   };
 
   const toggleSize = (sizeId: number) => {
@@ -529,6 +541,41 @@ export const ProductForm = ({ product, onSubmit, onDelete }: ProductFormProps) =
             </p>
           )}
         </div>
+
+        {/* Imagen por color (se muestra al elegir el color en tienda/carrito/POS) */}
+        {selectedColorIds.length > 0 && (
+          <div className="col-span-12">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Imagen por color (opcional)</label>
+            <p className="text-xs text-gray-500 mb-2">Al elegir el color en la tienda se mostrará esta imagen en su lugar.</p>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+              {availableColors.filter(c => selectedColorIds.includes(c.id)).map(color => (
+                <div key={color.id} className="border border-gray-200 rounded-lg p-2">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="w-4 h-4 rounded-full border border-gray-300 flex-shrink-0" style={{ backgroundColor: color.hexCode }} />
+                    <span className="text-xs font-medium text-gray-700 truncate">{color.name}</span>
+                  </div>
+                  {colorImages[color.id] ? (
+                    <div className="relative">
+                      <img src={colorImages[color.id]} alt={color.name} className="w-full h-24 object-cover rounded" />
+                      <button
+                        type="button"
+                        onClick={() => setColorImages(prev => { const n = { ...prev }; delete n[color.id]; return n; })}
+                        className="absolute top-1 right-1 bg-white/90 rounded-full p-0.5 text-gray-600 hover:text-red-600 shadow"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ) : (
+                    <label className="flex flex-col items-center justify-center h-24 border-2 border-dashed border-gray-300 rounded cursor-pointer hover:border-orange-400 text-gray-400 text-xs">
+                      <input type="file" accept="image/*" className="hidden" onChange={(e) => onColorImage(color.id, e.target.files?.[0])} />
+                      + Imagen
+                    </label>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Tallas (selector con checkboxes) */}
         <div className="col-span-12 md:col-span-6">

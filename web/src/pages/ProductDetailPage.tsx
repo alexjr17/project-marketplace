@@ -506,7 +506,13 @@ export default function ProductDetailPage() {
                   {product.colors.map((color) => (
                     <button
                       key={color.hexCode}
-                      onClick={() => setSelectedColor(color.hexCode)}
+                      onClick={() => {
+                        setSelectedColor(color.hexCode);
+                        if (color.image) {
+                          const idx = productImages.findIndex((img) => img.url === color.image);
+                          if (idx >= 0) setCurrentImageIndex(idx);
+                        }
+                      }}
                       className={`relative w-8 h-8 rounded-full transition-all ${
                         selectedColor === color.hexCode
                           ? 'ring-2 ring-offset-1 ring-gray-800'
