@@ -38,6 +38,7 @@ import {
   Store,
   Star,
   Megaphone,
+  Ticket,
   MapPin,
   Plug,
 } from 'lucide-react';
@@ -176,6 +177,7 @@ const menuWithSubmenus: {
     basePath: '/admin-panel/announcements',
     submenu: [
       { path: '/admin-panel/announcements', label: 'Publicidad / Anuncios', icon: Megaphone },
+      { path: '/admin-panel/discounts', label: 'Cupones / Descuentos', icon: Ticket },
     ],
   },
   // 9. CONFIGURACIÓN - Ajustes del sistema

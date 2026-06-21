@@ -16,6 +16,7 @@ import {
   Phone,
   Edit3,
   Home,
+  Ticket,
 } from 'lucide-react';
 import { useCart } from '../context/CartContext';
 import { useOrders } from '../context/OrdersContext';
@@ -28,6 +29,7 @@ import { Button } from '../components/shared/Button';
 import { WompiCheckout } from '../components/payment/WompiCheckout';
 import { addressesService, type Address } from '../services/addresses.service';
 import { quoteShipping } from '../utils/shippingQuote';
+import { validateCoupon, type CouponResult } from '../services/discounts.service';
 
 interface FormData {
   customerName: string;
@@ -75,6 +77,12 @@ export const CheckoutPage = () => {
   // Direcciones guardadas del usuario. selectedAddressId = 'new' para escribir una nueva.
   const [savedAddresses, setSavedAddresses] = useState<Address[]>([]);
   const [selectedAddressId, setSelectedAddressId] = useState<number | 'new'>('new');
+
+  // Cupón de descuento (validado contra el backend, no se aplica hasta crear el pedido).
+  const [couponInput, setCouponInput] = useState('');
+  const [coupon, setCoupon] = useState<CouponResult | null>(null);
+  const [couponError, setCouponError] = useState('');
+  const [couponBusy, setCouponBusy] = useState(false);
 
   // Colores de marca dinámicos
   const brandColors = settings.appearance?.brandColors || settings.general?.brandColors || {
@@ -170,7 +178,46 @@ export const CheckoutPage = () => {
 
   // Costo de envío efectivo: el calculado por zona, o el estimado del carrito.
   const shippingCost = shippingQuote ? shippingQuote.cost : cart.shipping;
-  const orderTotal = cart.subtotal + cart.tax + shippingCost - cart.discount;
+  // Descuento efectivo: el del cupón validado, o el del carrito.
+  const discountAmount = coupon ? coupon.amount : cart.discount;
+  const orderTotal = Math.max(0, cart.subtotal + cart.tax + shippingCost - discountAmount);
+
+  // Ítems mínimos para validar un cupón (el backend resuelve categoría/subtotal).
+  const couponItems = useMemo(
+    () =>
+      cart.items.map((item) => {
+        const raw =
+          item.type === 'customized'
+            ? item.customizedProduct.productId
+            : (item as import('../types/cart').CartItem).product.id;
+        const productId = typeof raw === 'string' ? (Number.isNaN(Number(raw)) ? 0 : Number(raw)) : Number(raw);
+        return { productId, price: item.price, quantity: item.quantity };
+      }),
+    [cart.items]
+  );
+
+  const applyCoupon = async () => {
+    const code = couponInput.trim();
+    if (!code) return;
+    setCouponBusy(true);
+    setCouponError('');
+    try {
+      const result = await validateCoupon(code, couponItems, 'online');
+      setCoupon(result);
+      showToast(`Cupón ${result.code} aplicado`, 'success');
+    } catch (e) {
+      setCoupon(null);
+      setCouponError(e instanceof Error ? e.message : 'Cupón inválido');
+    } finally {
+      setCouponBusy(false);
+    }
+  };
+
+  const removeCoupon = () => {
+    setCoupon(null);
+    setCouponInput('');
+    setCouponError('');
+  };
 
   // Icono según tipo de método de pago
   const getPaymentIcon = (type: string) => {
@@ -282,8 +329,9 @@ export const CheckoutPage = () => {
       items: orderItems,
       subtotal: cart.subtotal,
       shippingCost: shippingCost,
-      discount: cart.discount,
+      discount: discountAmount,
       total: orderTotal,
+      couponCode: coupon?.code,
     });
 
     // Si el pago fue exitoso (Wompi), cambiar estado a pagado
@@ -1022,10 +1070,43 @@ export const CheckoutPage = () => {
                   </p>
                 )}
 
-                {cart.discount > 0 && (
+                {/* Cupón de descuento */}
+                <div className="pt-1">
+                  {coupon ? (
+                    <div className="flex items-center justify-between bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
+                      <span className="text-sm text-emerald-700 font-semibold flex items-center gap-1.5">
+                        <Ticket className="w-4 h-4" /> {coupon.code}
+                      </span>
+                      <button onClick={removeCoupon} className="text-xs text-emerald-700 hover:text-emerald-900 underline">Quitar</button>
+                    </div>
+                  ) : (
+                    <div className="flex gap-2">
+                      <div className="relative flex-1">
+                        <Ticket className="w-4 h-4 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                        <input
+                          value={couponInput}
+                          onChange={(e) => setCouponInput(e.target.value.toUpperCase())}
+                          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); applyCoupon(); } }}
+                          placeholder="Código de cupón"
+                          className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-lg text-sm uppercase placeholder:normal-case"
+                        />
+                      </div>
+                      <button
+                        onClick={applyCoupon}
+                        disabled={couponBusy || !couponInput.trim()}
+                        className="px-4 py-2 rounded-lg bg-gray-900 text-white text-sm font-semibold disabled:opacity-50"
+                      >
+                        {couponBusy ? '…' : 'Aplicar'}
+                      </button>
+                    </div>
+                  )}
+                  {couponError && <p className="text-xs text-red-500 mt-1">{couponError}</p>}
+                </div>
+
+                {discountAmount > 0 && (
                   <div className="flex justify-between text-green-600">
-                    <span>Descuento</span>
-                    <span className="font-medium">-{formatCurrency(cart.discount)}</span>
+                    <span>Descuento{coupon ? ` (${coupon.code})` : ''}</span>
+                    <span className="font-medium">-{formatCurrency(discountAmount)}</span>
                   </div>
                 )}
 

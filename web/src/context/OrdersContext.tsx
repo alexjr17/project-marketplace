@@ -48,6 +48,7 @@ interface CreateOrderData {
   shippingCost: number;
   discount: number;
   total: number;
+  couponCode?: string;
 }
 
 interface OrdersContextType {
@@ -386,6 +387,7 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
         notes: data.shippingNotes,
       },
       paymentMethod: data.paymentMethod,
+      couponCode: data.couponCode || undefined,
     };
 
     const apiOrder = await ordersService.create(input);

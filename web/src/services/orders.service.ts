@@ -105,6 +105,7 @@ export interface CreateOrderInput {
   paymentMethod: PaymentMethod;
   paymentRef?: string;
   notes?: string;
+  couponCode?: string;
 }
 
 // Backend espera estados en mayúsculas

@@ -78,6 +78,7 @@ const InventoryConversionFromTemplatePage = lazy(() => import('./pages/admin/Inv
 const TemplateRecipesPage = lazy(() => import('./pages/admin/TemplateRecipesPage'));
 const ReviewsPage = lazy(() => import('./pages/admin/ReviewsPage'));
 const AnnouncementsPage = lazy(() => import('./pages/admin/AnnouncementsPage'));
+const DiscountsPage = lazy(() => import('./pages/admin/DiscountsPage'));
 const SettingsGeneralPage = lazy(() => import('./pages/admin/settings').then(m => ({ default: m.SettingsGeneralPage })));
 const SettingsAppearancePage = lazy(() => import('./pages/admin/settings').then(m => ({ default: m.SettingsAppearancePage })));
 const SettingsShippingPage = lazy(() => import('./pages/admin/settings').then(m => ({ default: m.SettingsShippingPage })));
@@ -646,6 +647,9 @@ function App() {
 
                                     {/* Publicidad / Anuncios */}
                                     <Route path="/announcements" element={<AnnouncementsPage />} />
+
+                                    {/* Cupones / Descuentos */}
+                                    <Route path="/discounts" element={<DiscountsPage />} />
 
                                     {/* Configuración */}
                                     <Route
