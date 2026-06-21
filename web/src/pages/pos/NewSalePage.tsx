@@ -15,7 +15,6 @@ import {
   Plus,
   Minus,
   DollarSign,
-  CreditCard,
   Percent,
   X,
   Barcode as BarcodeIcon,
@@ -319,28 +318,16 @@ export default function NewSalePage() {
     setDiscountInput('');
   };
 
-  // Open checkout modal
-  const handleOpenCheckout = () => {
+  // Abrir el checkout ya seleccionando el método de pago.
+  const openCheckoutWith = (method: 'cash' | 'transfer' | 'mixed' | 'debe') => {
     if (cart.length === 0) {
       showToast('El carrito está vacío', 'error');
       return;
     }
-
-    // Para fiado (debe) no se recibe dinero ahora; el cliente se valida en el checkout.
-    if (paymentMethod !== 'debe') {
-      const totalPaid =
-        paymentMethod === 'cash'
-          ? parseFloat(cashAmount || '0')
-          : paymentMethod === 'card' || paymentMethod === 'transfer'
-          ? total
-          : parseFloat(cashAmount || '0') + parseFloat(cardAmount || '0');
-
-      if (totalPaid < total) {
-        showToast('El monto pagado es insuficiente', 'error');
-        return;
-      }
-    }
-
+    setPaymentMethod(method);
+    setCashAmount('');
+    setCardAmount('');
+    setAbonoAmount('');
     setShowCheckoutModal(true);
   };
 
@@ -428,10 +415,14 @@ export default function NewSalePage() {
       if (e.key === 'F9') {
         e.preventDefault();
         setShowDiscountModal(true);
-      } else if (e.key === 'F12') {
+        return;
+      }
+      if (e.key === 'F12') {
         e.preventDefault();
-        handleOpenCheckout();
-      } else if (e.key === 'Escape') {
+        openCheckoutWith('cash');
+        return;
+      }
+      if (e.key === 'Escape') {
         e.preventDefault();
         if (showDiscountModal) {
           setShowDiscountModal(false);
@@ -439,6 +430,26 @@ export default function NewSalePage() {
         if (showCheckoutModal) {
           setShowCheckoutModal(false);
         }
+        return;
+      }
+
+      // Atajos numéricos: solo si no se está escribiendo y no hay modales abiertos.
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+      if (showDiscountModal || showCheckoutModal) return;
+
+      if (e.key === '1') {
+        e.preventDefault();
+        openCheckoutWith('cash');
+      } else if (e.key === '2') {
+        e.preventDefault();
+        openCheckoutWith('transfer');
+      } else if (e.key === '3') {
+        e.preventDefault();
+        openCheckoutWith('mixed');
+      } else if (e.key === '4') {
+        e.preventDefault();
+        openCheckoutWith('debe');
       }
     };
 
@@ -747,223 +758,58 @@ export default function NewSalePage() {
           </div>
         </div>
 
-        {/* Payment Method */}
-        <div className="bg-white rounded-lg shadow-sm p-3 lg:p-4">
-          <h3 className="font-semibold text-gray-900 mb-2 lg:mb-3">Método de Pago</h3>
-
-          {/* Opciones principales en grid 2x2 */}
-          <div className="grid grid-cols-2 gap-1.5 lg:gap-2 mb-2">
-            <label className={`flex items-center gap-1.5 lg:gap-2 p-2 lg:p-2.5 border-2 rounded-lg cursor-pointer transition-colors ${paymentMethod === 'cash' ? 'border-green-500 bg-green-50' : 'border-gray-200 hover:bg-gray-50'}`}>
-              <input
-                type="radio"
-                name="paymentMethod"
-                value="cash"
-                checked={paymentMethod === 'cash'}
-                onChange={() => setPaymentMethod('cash')}
-                className="w-3.5 h-3.5 lg:w-4 lg:h-4 text-green-600"
-              />
-              <DollarSign className="w-3.5 h-3.5 lg:w-4 lg:h-4 text-green-600" />
-              <span className="text-xs lg:text-sm font-medium">Efectivo</span>
-            </label>
-
-            <label className={`flex items-center gap-1.5 lg:gap-2 p-2 lg:p-2.5 border-2 rounded-lg cursor-pointer transition-colors ${paymentMethod === 'transfer' ? 'border-purple-500 bg-purple-50' : 'border-gray-200 hover:bg-gray-50'}`}>
-              <input
-                type="radio"
-                name="paymentMethod"
-                value="transfer"
-                checked={paymentMethod === 'transfer'}
-                onChange={() => setPaymentMethod('transfer')}
-                className="w-3.5 h-3.5 lg:w-4 lg:h-4 text-purple-600"
-              />
-              <Smartphone className="w-3.5 h-3.5 lg:w-4 lg:h-4 text-purple-600" />
-              <span className="text-xs lg:text-sm font-medium">Transfer</span>
-            </label>
-
-            <label className={`flex items-center gap-1.5 lg:gap-2 p-2 lg:p-2.5 border-2 rounded-lg cursor-pointer transition-colors ${paymentMethod === 'mixed' ? 'border-orange-500 bg-orange-50' : 'border-gray-200 hover:bg-gray-50'}`}>
-              <input
-                type="radio"
-                name="paymentMethod"
-                value="mixed"
-                checked={paymentMethod === 'mixed'}
-                onChange={() => setPaymentMethod('mixed')}
-                className="w-3.5 h-3.5 lg:w-4 lg:h-4 text-orange-600"
-              />
-              <div className="flex -space-x-1">
-                <DollarSign className="w-3.5 h-3.5 lg:w-4 lg:h-4 text-green-600" />
-                <Smartphone className="w-3.5 h-3.5 lg:w-4 lg:h-4 text-purple-600" />
-              </div>
-              <span className="text-xs lg:text-sm font-medium">Mixto</span>
-            </label>
-
-            <label className="flex items-center gap-1.5 lg:gap-2 p-2 lg:p-2.5 border-2 border-gray-200 rounded-lg cursor-not-allowed opacity-40">
-              <input
-                type="radio"
-                name="paymentMethod"
-                value="card"
-                disabled
-                className="w-3.5 h-3.5 lg:w-4 lg:h-4"
-              />
-              <CreditCard className="w-3.5 h-3.5 lg:w-4 lg:h-4 text-blue-600" />
-              <span className="text-xs lg:text-sm font-medium text-gray-500">Tarjeta</span>
-            </label>
-          </div>
-
-          {/* Debe / Fiado */}
-          <label className={`flex items-center gap-1.5 lg:gap-2 p-2 lg:p-2.5 border-2 rounded-lg cursor-pointer transition-colors mb-2 ${paymentMethod === 'debe' ? 'border-amber-500 bg-amber-50' : 'border-gray-200 hover:bg-gray-50'}`}>
-            <input
-              type="radio"
-              name="paymentMethod"
-              value="debe"
-              checked={paymentMethod === 'debe'}
-              onChange={() => setPaymentMethod('debe')}
-              className="w-3.5 h-3.5 lg:w-4 lg:h-4 text-amber-600"
-            />
-            <Clock className="w-3.5 h-3.5 lg:w-4 lg:h-4 text-amber-600" />
-            <span className="text-xs lg:text-sm font-medium">Debe (fiado)</span>
-          </label>
-
-          {paymentMethod === 'debe' && (
-            <div className="bg-amber-50 border border-amber-200 rounded-lg p-2 lg:p-3 mb-2 space-y-2">
-              <p className="text-xs lg:text-sm text-amber-800">
-                Venta a crédito: elige/registra el cliente que queda debiendo. Se cobra después desde "Fiados".
-              </p>
-              <div>
-                <label className="block text-xs font-medium text-amber-900 mb-1">Abono ahora (opcional)</label>
-                <div className="flex gap-2">
-                  <input
-                    type="number"
-                    value={abonoAmount}
-                    onChange={(e) => setAbonoAmount(e.target.value)}
-                    placeholder="0"
-                    min="0"
-                    max={total}
-                    className="flex-1 px-3 py-2 border border-amber-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500"
-                  />
-                  <select
-                    value={abonoMethod}
-                    onChange={(e) => setAbonoMethod(e.target.value as 'cash' | 'transfer')}
-                    className="px-2 py-2 border border-amber-300 rounded-lg text-sm bg-white"
-                  >
-                    <option value="cash">Efectivo</option>
-                    <option value="transfer">Transfer</option>
-                  </select>
-                </div>
-                {parseFloat(abonoAmount || '0') > 0 && (
-                  <p className="text-xs text-amber-800 mt-1">
-                    Queda debiendo:{' '}
-                    <strong>${Math.max(0, total - parseFloat(abonoAmount || '0')).toLocaleString()}</strong>
-                  </p>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Info del método bloqueado - Hidden on mobile */}
-          <p className="hidden lg:block text-xs text-gray-400 text-center mb-3">
-            Tarjeta disponible próximamente con integración de datáfono
-          </p>
-
-          {/* Payment Inputs */}
-          {paymentMethod === 'cash' && (
-            <div className="space-y-2 lg:space-y-3 mt-2 lg:mt-0">
-              <div>
-                <label className="block text-xs lg:text-sm font-medium text-gray-700 mb-1">
-                  Monto Recibido
-                </label>
-                <input
-                  type="number"
-                  value={cashAmount}
-                  onChange={(e) => setCashAmount(e.target.value)}
-                  placeholder="0.00"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base"
-                  step="0.01"
-                  min="0"
-                />
-              </div>
-              {parseFloat(cashAmount || '0') > 0 && (
-                <div className="bg-green-50 border border-green-200 rounded-lg p-2 lg:p-3">
-                  <p className="text-xs lg:text-sm text-gray-600">Cambio:</p>
-                  <p className="text-xl lg:text-2xl font-bold text-green-600">
-                    ${change.toLocaleString()}
-                  </p>
-                </div>
-              )}
-            </div>
-          )}
-
-          {paymentMethod === 'mixed' && (
-            <div className="space-y-2 lg:space-y-3 mt-2 lg:mt-0">
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-xs lg:text-sm font-medium text-gray-700 mb-1">
-                    Efectivo
-                  </label>
-                  <input
-                    type="number"
-                    value={cashAmount}
-                    onChange={(e) => setCashAmount(e.target.value)}
-                    placeholder="0.00"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base"
-                    step="0.01"
-                    min="0"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs lg:text-sm font-medium text-gray-700 mb-1">
-                    Transfer
-                  </label>
-                  <input
-                    type="number"
-                    value={cardAmount}
-                    onChange={(e) => setCardAmount(e.target.value)}
-                    placeholder="0.00"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-base"
-                    step="0.01"
-                    min="0"
-                  />
-                </div>
-              </div>
-              {(parseFloat(cashAmount || '0') > 0 || parseFloat(cardAmount || '0') > 0) && (
-                <div className="bg-purple-50 border border-purple-200 rounded-lg p-2 lg:p-3">
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <p className="text-xs lg:text-sm text-gray-600">Total Pagado:</p>
-                      <p className="text-lg lg:text-xl font-bold text-purple-600">
-                        ${(parseFloat(cashAmount || '0') + parseFloat(cardAmount || '0')).toLocaleString()}
-                      </p>
-                    </div>
-                    {change > 0 && (
-                      <div className="text-right">
-                        <p className="text-xs lg:text-sm text-gray-600">Cambio:</p>
-                        <p className="text-lg lg:text-xl font-bold text-green-600">
-                          ${change.toLocaleString()}
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Action Buttons */}
+        {/* Action Buttons - Cobrar con método */}
         <div className="space-y-2 lg:space-y-3">
-          <button
-            onClick={handleOpenCheckout}
-            disabled={cart.length === 0 || isProcessingSale}
-            className="w-full py-3 lg:py-4 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed font-semibold text-base lg:text-lg flex items-center justify-center gap-2"
-          >
-            {isProcessingSale ? (
-              'Procesando...'
-            ) : (
-              <>
-                <DollarSign className="w-5 h-5 lg:w-6 lg:h-6" />
-                <span className="lg:hidden">COBRAR</span>
-                <span className="hidden lg:inline">COBRAR (F12)</span>
-              </>
+          <div className="bg-white rounded-lg shadow-sm p-3 lg:p-4">
+            <h3 className="font-semibold text-gray-900 mb-2 lg:mb-3">Cobrar con:</h3>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={() => openCheckoutWith('cash')}
+                disabled={cart.length === 0 || isProcessingSale}
+                className="relative flex items-center justify-center gap-2 py-3 border-2 border-green-200 rounded-lg hover:border-green-500 hover:bg-green-50 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-green-200 disabled:hover:bg-transparent transition-colors"
+              >
+                <DollarSign className="w-5 h-5 text-green-600" />
+                <span className="text-sm font-medium text-gray-900">Efectivo</span>
+                <span className="absolute top-1 right-1 px-1.5 py-0.5 bg-gray-100 text-gray-500 text-[10px] font-bold rounded">1</span>
+              </button>
+
+              <button
+                onClick={() => openCheckoutWith('transfer')}
+                disabled={cart.length === 0 || isProcessingSale}
+                className="relative flex items-center justify-center gap-2 py-3 border-2 border-purple-200 rounded-lg hover:border-purple-500 hover:bg-purple-50 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-purple-200 disabled:hover:bg-transparent transition-colors"
+              >
+                <Smartphone className="w-5 h-5 text-purple-600" />
+                <span className="text-sm font-medium text-gray-900">Transfer</span>
+                <span className="absolute top-1 right-1 px-1.5 py-0.5 bg-gray-100 text-gray-500 text-[10px] font-bold rounded">2</span>
+              </button>
+
+              <button
+                onClick={() => openCheckoutWith('mixed')}
+                disabled={cart.length === 0 || isProcessingSale}
+                className="relative flex items-center justify-center gap-2 py-3 border-2 border-orange-200 rounded-lg hover:border-orange-500 hover:bg-orange-50 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-orange-200 disabled:hover:bg-transparent transition-colors"
+              >
+                <div className="flex -space-x-1">
+                  <DollarSign className="w-4 h-4 text-green-600" />
+                  <Smartphone className="w-4 h-4 text-purple-600" />
+                </div>
+                <span className="text-sm font-medium text-gray-900">Mixto</span>
+                <span className="absolute top-1 right-1 px-1.5 py-0.5 bg-gray-100 text-gray-500 text-[10px] font-bold rounded">3</span>
+              </button>
+
+              <button
+                onClick={() => openCheckoutWith('debe')}
+                disabled={cart.length === 0 || isProcessingSale}
+                className="relative flex items-center justify-center gap-2 py-3 border-2 border-amber-200 rounded-lg hover:border-amber-500 hover:bg-amber-50 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-amber-200 disabled:hover:bg-transparent transition-colors"
+              >
+                <Clock className="w-5 h-5 text-amber-600" />
+                <span className="text-sm font-medium text-gray-900">Debe</span>
+                <span className="absolute top-1 right-1 px-1.5 py-0.5 bg-gray-100 text-gray-500 text-[10px] font-bold rounded">4</span>
+              </button>
+            </div>
+            {isProcessingSale && (
+              <p className="text-center text-sm text-gray-500 mt-2">Procesando...</p>
             )}
-          </button>
+          </div>
 
           <button
             onClick={clearCart}
@@ -979,8 +825,11 @@ export default function NewSalePage() {
         <div className="hidden lg:block bg-gray-50 rounded-lg p-3 text-xs text-gray-600">
           <p className="font-semibold mb-2">Atajos de Teclado:</p>
           <div className="space-y-1">
+            <p><kbd className="px-2 py-1 bg-white border rounded">1</kbd> Efectivo</p>
+            <p><kbd className="px-2 py-1 bg-white border rounded">2</kbd> Transfer</p>
+            <p><kbd className="px-2 py-1 bg-white border rounded">3</kbd> Mixto</p>
+            <p><kbd className="px-2 py-1 bg-white border rounded">4</kbd> Debe</p>
             <p><kbd className="px-2 py-1 bg-white border rounded">F9</kbd> Descuento</p>
-            <p><kbd className="px-2 py-1 bg-white border rounded">F12</kbd> Cobrar</p>
             <p><kbd className="px-2 py-1 bg-white border rounded">ESC</kbd> Cancelar</p>
           </div>
         </div>
@@ -1044,6 +893,17 @@ export default function NewSalePage() {
         initialCustomer={selectedCustomer}
         abono={paymentMethod === 'debe' ? parseFloat(abonoAmount || '0') : 0}
         taxRate={settings.payment?.taxRate || 19}
+        subtotal={subtotal}
+        discount={discount}
+        itemCount={cart.length}
+        cashAmount={cashAmount}
+        onCashAmountChange={setCashAmount}
+        cardAmount={cardAmount}
+        onCardAmountChange={setCardAmount}
+        abonoAmount={abonoAmount}
+        onAbonoAmountChange={setAbonoAmount}
+        abonoMethod={abonoMethod}
+        onAbonoMethodChange={setAbonoMethod}
       />
 
       {/* Zone Selection Modal */}

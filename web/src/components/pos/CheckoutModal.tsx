@@ -51,6 +51,17 @@ interface CheckoutModalProps {
   initialCustomer?: SelectedCustomer | null;
   abono?: number;
   taxRate?: number;
+  subtotal: number;
+  discount: number;
+  itemCount: number;
+  cashAmount: string;
+  onCashAmountChange: (v: string) => void;
+  cardAmount: string;
+  onCardAmountChange: (v: string) => void;
+  abonoAmount: string;
+  onAbonoAmountChange: (v: string) => void;
+  abonoMethod: 'cash' | 'transfer';
+  onAbonoMethodChange: (v: 'cash' | 'transfer') => void;
 }
 
 export const CheckoutModal = ({
@@ -62,8 +73,27 @@ export const CheckoutModal = ({
   initialCustomer,
   abono = 0,
   taxRate = 19,
+  subtotal,
+  discount,
+  itemCount,
+  cashAmount,
+  onCashAmountChange,
+  cardAmount,
+  onCardAmountChange,
+  abonoAmount,
+  onAbonoAmountChange,
+  abonoMethod,
+  onAbonoMethodChange,
 }: CheckoutModalProps) => {
   const [step, setStep] = useState<CheckoutStep>('customer');
+
+  // Payment amount calculations
+  const cashNum = parseFloat(cashAmount || '0');
+  const cardNum = parseFloat(cardAmount || '0');
+  const paid = paymentMethod === 'mixed' ? cashNum + cardNum : cashNum;
+  const change = (paymentMethod === 'cash' || paymentMethod === 'mixed') ? Math.max(0, paid - total) : 0;
+  const abonoNum = parseFloat(abonoAmount || '0');
+  const tax = Math.max(0, Math.round((total - (subtotal - discount)) * 100) / 100);
 
   // Customer data
   const [nitInput, setNitInput] = useState('');
@@ -103,6 +133,7 @@ export const CheckoutModal = ({
   const [sendingEmail, setSendingEmail] = useState(false);
 
   const nitInputRef = useRef<HTMLInputElement>(null);
+  const cashInputRef = useRef<HTMLInputElement>(null);
 
   // Reset state when modal opens
   useEffect(() => {
@@ -136,8 +167,14 @@ export const CheckoutModal = ({
       setCardType('');
       setCardLastFour('');
 
-      // Focus NIT input after a short delay
-      setTimeout(() => nitInputRef.current?.focus(), 100);
+      // Focus: cash input when paying in cash, otherwise the NIT input
+      setTimeout(() => {
+        if (paymentMethod === 'cash') {
+          cashInputRef.current?.focus();
+        } else {
+          nitInputRef.current?.focus();
+        }
+      }, 100);
     }
 
     return () => {
@@ -228,6 +265,16 @@ export const CheckoutModal = ({
     // Fiado: exige cliente identificado (seleccionado o por nombre).
     if (isDebt && !customerFound && !nameInput.trim()) {
       alert('Para una venta a crédito (Debe) debes seleccionar o registrar un cliente.');
+      return;
+    }
+
+    // Validar monto recibido para efectivo / mixto.
+    if (paymentMethod === 'cash' && cashNum < total) {
+      alert('El monto recibido es menor al total.');
+      return;
+    }
+    if (paymentMethod === 'mixed' && paid < total) {
+      alert('Lo pagado (efectivo + transfer) es menor al total.');
       return;
     }
 
@@ -641,37 +688,150 @@ export const CheckoutModal = ({
                   </div>
                 )}
 
-                {/* Payment Summary */}
-                <div className="bg-gray-50 rounded-lg p-4 mt-6">
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-600">Total a cobrar:</span>
-                    <span className="text-2xl font-bold text-gray-900">
-                      ${total.toLocaleString()}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center mt-2 text-sm">
-                    <span className="text-gray-500">Método de pago:</span>
-                    <span className="font-medium text-gray-700">
-                      {paymentMethod === 'cash' ? 'Efectivo' :
-                       paymentMethod === 'card' ? 'Tarjeta' :
-                       paymentMethod === 'transfer' ? 'Transferencia' :
-                       paymentMethod === 'debe' ? 'Debe (fiado)' : 'Mixto'}
-                    </span>
-                  </div>
-                  {isDebt && abono > 0 && (
-                    <>
-                      <div className="flex justify-between items-center mt-2 text-sm">
-                        <span className="text-gray-500">Abono ahora:</span>
-                        <span className="font-medium text-green-700">${abono.toLocaleString()}</span>
-                      </div>
-                      <div className="flex justify-between items-center mt-1 text-sm">
-                        <span className="text-gray-500">Queda debiendo:</span>
-                        <span className="font-bold text-amber-700">
-                          ${Math.max(0, total - abono).toLocaleString()}
-                        </span>
-                      </div>
-                    </>
+                {/* Pago + Resumen */}
+                <div className="bg-gray-50 rounded-lg p-4 mt-6 space-y-4">
+                  {/* Amount inputs (depending on method) */}
+                  {paymentMethod === 'cash' && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Monto recibido
+                      </label>
+                      <input
+                        ref={cashInputRef}
+                        type="number"
+                        value={cashAmount}
+                        onChange={(e) => onCashAmountChange(e.target.value)}
+                        placeholder="0.00"
+                        step="0.01"
+                        min="0"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent text-base"
+                      />
+                    </div>
                   )}
+
+                  {paymentMethod === 'mixed' && (
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Efectivo
+                        </label>
+                        <input
+                          type="number"
+                          value={cashAmount}
+                          onChange={(e) => onCashAmountChange(e.target.value)}
+                          placeholder="0.00"
+                          step="0.01"
+                          min="0"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent text-base"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Transfer
+                        </label>
+                        <input
+                          type="number"
+                          value={cardAmount}
+                          onChange={(e) => onCardAmountChange(e.target.value)}
+                          placeholder="0.00"
+                          step="0.01"
+                          min="0"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-base"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {paymentMethod === 'debe' && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Abono ahora (opcional)
+                      </label>
+                      <div className="flex gap-2">
+                        <input
+                          type="number"
+                          value={abonoAmount}
+                          onChange={(e) => onAbonoAmountChange(e.target.value)}
+                          placeholder="0"
+                          step="0.01"
+                          min="0"
+                          max={total}
+                          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent text-base"
+                        />
+                        <select
+                          value={abonoMethod}
+                          onChange={(e) => onAbonoMethodChange(e.target.value as 'cash' | 'transfer')}
+                          className="px-2 py-2 border border-gray-300 rounded-lg text-sm bg-white"
+                        >
+                          <option value="cash">Efectivo</option>
+                          <option value="transfer">Transfer</option>
+                        </select>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Summary */}
+                  <div className="space-y-1.5 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Productos:</span>
+                      <span className="font-medium text-gray-700">{itemCount}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Subtotal:</span>
+                      <span className="font-medium text-gray-700">${subtotal.toLocaleString()}</span>
+                    </div>
+                    {discount > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">Descuento:</span>
+                        <span className="font-medium text-red-600">-${discount.toLocaleString()}</span>
+                      </div>
+                    )}
+                    {tax > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">IVA:</span>
+                        <span className="font-medium text-gray-700">${tax.toLocaleString()}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between items-center border-t border-gray-300 pt-2 mt-2">
+                      <span className="text-gray-700 font-semibold">Total:</span>
+                      <span className="text-xl font-bold text-gray-900">${total.toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Método:</span>
+                      <span className="font-medium text-gray-700">
+                        {paymentMethod === 'cash' ? 'Efectivo' :
+                         paymentMethod === 'card' ? 'Tarjeta' :
+                         paymentMethod === 'transfer' ? 'Transferencia' :
+                         paymentMethod === 'debe' ? 'Debe (fiado)' : 'Mixto'}
+                      </span>
+                    </div>
+                    {(paymentMethod === 'cash' || paymentMethod === 'mixed') && paid > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">Recibido:</span>
+                        <span className="font-medium text-gray-700">${paid.toLocaleString()}</span>
+                      </div>
+                    )}
+                    {(paymentMethod === 'cash' || paymentMethod === 'mixed') && change > 0 && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-green-700 font-semibold">Vuelto:</span>
+                        <span className="text-lg font-bold text-green-600">${change.toLocaleString()}</span>
+                      </div>
+                    )}
+                    {paymentMethod === 'debe' && (
+                      <>
+                        <div className="flex justify-between">
+                          <span className="text-gray-500">Abono ahora:</span>
+                          <span className="font-medium text-green-700">${abonoNum.toLocaleString()}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-500">Queda debiendo:</span>
+                          <span className="font-bold text-amber-700">
+                            ${Math.max(0, total - abonoNum).toLocaleString()}
+                          </span>
+                        </div>
+                      </>
+                    )}
+                  </div>
                 </div>
 
                 {/* Action Buttons */}
@@ -684,7 +844,11 @@ export const CheckoutModal = ({
                   </button>
                   <button
                     onClick={handleConfirmSale}
-                    disabled={isDebt && !customerFound && !nameInput.trim()}
+                    disabled={
+                      (isDebt && !customerFound && !nameInput.trim()) ||
+                      (paymentMethod === 'cash' && cashNum < total) ||
+                      (paymentMethod === 'mixed' && paid < total)
+                    }
                     className="flex-1 px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium flex items-center justify-center gap-2 transition-colors"
                   >
                     <CheckCircle className="w-5 h-5" />
