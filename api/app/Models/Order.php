@@ -9,6 +9,7 @@ class Order extends BaseModel
     protected $casts = [
         'shipping' => 'array',
         'statusHistory' => 'array',
+        'editHistory' => 'array',
         'paidAt' => 'datetime',
         'shippedAt' => 'datetime',
         'deliveredAt' => 'datetime',

@@ -1136,6 +1136,52 @@ export default function SalesHistoryPage() {
                     </span>
                   </div>
                 </div>
+
+                {/* Historial de cambios */}
+                {Array.isArray(summarySale.editHistory) && summarySale.editHistory.length > 0 && (
+                  <div>
+                    <div className="flex items-center gap-2 text-gray-700 mb-2">
+                      <History className="w-4 h-4" />
+                      <span className="text-sm font-semibold">Historial de cambios</span>
+                    </div>
+                    <ol className="relative border-l-2 border-gray-100 ml-1.5 space-y-3">
+                      {[...summarySale.editHistory].reverse().map((e: any, idx: number) => {
+                        const actionLabel = e.action === 'created' ? 'Venta creada'
+                          : e.action === 'payment' ? 'Abono recibido' : 'Venta editada';
+                        const dot = e.action === 'created' ? 'bg-green-500'
+                          : e.action === 'payment' ? 'bg-emerald-500' : 'bg-blue-500';
+                        return (
+                          <li key={idx} className="ml-4">
+                            <span className={`absolute -left-[7px] w-3 h-3 rounded-full ${dot} border-2 border-white`} />
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-xs font-medium text-gray-800">{actionLabel}</span>
+                              <span className="text-[11px] text-gray-400">
+                                {e.timestamp ? new Date(e.timestamp).toLocaleString('es-CO') : ''}
+                              </span>
+                            </div>
+                            {e.action === 'created' && e.snapshot && (
+                              <p className="text-xs text-gray-500 mt-0.5">
+                                Total ${Number(e.snapshot.total ?? 0).toLocaleString()}
+                              </p>
+                            )}
+                            {Array.isArray(e.changes) && e.changes.length > 0 && (
+                              <ul className="mt-1 space-y-0.5">
+                                {e.changes.map((c: any, ci: number) => (
+                                  <li key={ci} className="text-xs text-gray-600">
+                                    <span className="text-gray-500">{c.label}:</span>{' '}
+                                    <span className="line-through text-gray-400">{String(c.from)}</span>
+                                    {' → '}
+                                    <span className="font-medium text-gray-800">{String(c.to)}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                          </li>
+                        );
+                      })}
+                    </ol>
+                  </div>
+                )}
               </div>
 
               {/* Acciones */}

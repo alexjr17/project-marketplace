@@ -509,6 +509,19 @@ class POSService
                 ]],
                 'paidAt' => $leavesDebt ? null : now(),
                 'notes' => $data['notes'] ?? null,
+                'editHistory' => [[
+                    'action' => 'created',
+                    'timestamp' => now()->toIso8601String(),
+                    'userId' => $data['sellerId'] ?? null,
+                    'changes' => [],
+                    'snapshot' => [
+                        'total' => $calculation['total'],
+                        'discount' => $calculation['discount'],
+                        'paymentMethod' => $data['paymentMethod'],
+                        'cashAmount' => (float) ($data['cashAmount'] ?? 0),
+                        'cardAmount' => (float) ($data['cardAmount'] ?? 0),
+                    ],
+                ]],
             ]);
 
             foreach ($data['items'] as $item) {
@@ -659,8 +672,23 @@ class POSService
             }
         }
 
-        return DB::transaction(function () use ($order, $data, $editItems) {
+        return DB::transaction(function () use ($order, $data, $editItems, $userId) {
             $oldTotal = (float) $order->total;
+            // Snapshot ANTES de aplicar cambios (para el historial de ediciones).
+            $before = [
+                'subtotal' => (float) $order->subtotal,
+                'discount' => (float) $order->discount,
+                'total' => (float) $order->total,
+                'paymentMethod' => (string) $order->paymentMethod,
+                'cashAmount' => (float) ($order->cashAmount ?? 0),
+                'cardAmount' => (float) ($order->cardAmount ?? 0),
+                'cardReference' => (string) ($order->cardReference ?? ''),
+                'cardType' => (string) ($order->cardType ?? ''),
+                'cardLastFour' => (string) ($order->cardLastFour ?? ''),
+                'customerName' => (string) ($order->customerName ?? ''),
+                'notes' => (string) ($order->notes ?? ''),
+                'itemsCount' => (int) $order->items->sum('quantity'),
+            ];
 
             if ($editItems) {
                 // Restituir stock de los ítems actuales y reemplazarlos.
@@ -764,6 +792,34 @@ class POSService
             $history = $order->statusHistory ?? [];
             $history[] = ['status' => $order->status, 'timestamp' => now()->toIso8601String(), 'note' => 'Venta editada'];
             $order->statusHistory = $history;
+
+            // Historial de ediciones: registrar los campos que cambiaron.
+            $after = [
+                'subtotal' => (float) $order->subtotal,
+                'discount' => (float) $order->discount,
+                'total' => (float) $order->total,
+                'paymentMethod' => (string) $order->paymentMethod,
+                'cashAmount' => (float) ($order->cashAmount ?? 0),
+                'cardAmount' => (float) ($order->cardAmount ?? 0),
+                'cardReference' => (string) ($order->cardReference ?? ''),
+                'cardType' => (string) ($order->cardType ?? ''),
+                'cardLastFour' => (string) ($order->cardLastFour ?? ''),
+                'customerName' => (string) ($order->customerName ?? ''),
+                'notes' => (string) ($order->notes ?? ''),
+                'itemsCount' => $editItems ? (int) collect($data['items'])->sum('quantity') : $before['itemsCount'],
+            ];
+            $changes = $this->buildSaleChanges($before, $after);
+            if (! empty($changes)) {
+                $editHistory = $order->editHistory ?? [];
+                $editHistory[] = [
+                    'action' => 'updated',
+                    'timestamp' => now()->toIso8601String(),
+                    'userId' => $userId,
+                    'changes' => $changes,
+                ];
+                $order->editHistory = $editHistory;
+            }
+
             $order->save();
 
             // Ajustar el total de la caja abierta por el cambio.
@@ -778,6 +834,66 @@ class POSService
 
             return $order->fresh(['items']);
         });
+    }
+
+    /**
+     * Construye la lista de cambios legibles entre dos snapshots de una venta.
+     * Devuelve [{ field, label, from, to }] solo para los campos que cambiaron.
+     */
+    private function buildSaleChanges(array $before, array $after): array
+    {
+        $money = ['subtotal', 'discount', 'total', 'cashAmount', 'cardAmount'];
+        $labels = [
+            'subtotal' => 'Subtotal',
+            'discount' => 'Descuento',
+            'total' => 'Total',
+            'cashAmount' => 'Efectivo recibido',
+            'cardAmount' => 'Transferencia/Tarjeta',
+            'paymentMethod' => 'Método de pago',
+            'cardReference' => 'Referencia',
+            'cardType' => 'Tipo de transacción',
+            'cardLastFour' => 'Últimos dígitos',
+            'customerName' => 'Cliente',
+            'notes' => 'Notas',
+            'itemsCount' => 'Cantidad de productos',
+        ];
+        $methods = [
+            'cash' => 'Efectivo', 'card' => 'Tarjeta', 'transfer' => 'Transferencia',
+            'mixed' => 'Mixto', 'debe' => 'Fiado',
+        ];
+
+        $changes = [];
+        foreach ($after as $field => $newVal) {
+            $oldVal = $before[$field] ?? null;
+
+            if (in_array($field, $money, true)) {
+                if (abs((float) $oldVal - (float) $newVal) < 0.01) {
+                    continue;
+                }
+                $from = '$'.number_format((float) $oldVal, 0, ',', '.');
+                $to = '$'.number_format((float) $newVal, 0, ',', '.');
+            } else {
+                if ((string) $oldVal === (string) $newVal) {
+                    continue;
+                }
+                if ($field === 'paymentMethod') {
+                    $from = $methods[$oldVal] ?? ($oldVal ?: '—');
+                    $to = $methods[$newVal] ?? ($newVal ?: '—');
+                } else {
+                    $from = ($oldVal === '' || $oldVal === null) ? '—' : $oldVal;
+                    $to = ($newVal === '' || $newVal === null) ? '—' : $newVal;
+                }
+            }
+
+            $changes[] = [
+                'field' => $field,
+                'label' => $labels[$field] ?? $field,
+                'from' => $from,
+                'to' => $to,
+            ];
+        }
+
+        return $changes;
     }
 
     /** Historial de ventas POS del vendedor (GET /pos/sales). */
@@ -1030,6 +1146,22 @@ class POSService
                 .($fullyPaid ? ' (saldado)' : ' (saldo $'.number_format($newRemaining, 0).')'),
         ];
         $order->statusHistory = $history;
+
+        // Historial de ediciones: registrar el abono (dinero añadido).
+        $editHistory = $order->editHistory ?? [];
+        $editHistory[] = [
+            'action' => 'payment',
+            'timestamp' => now()->toIso8601String(),
+            'userId' => $userId,
+            'changes' => [[
+                'field' => 'abono',
+                'label' => 'Abono recibido',
+                'from' => '$'.number_format($remaining, 0, ',', '.').' pendiente',
+                'to' => '+$'.number_format($collect, 0, ',', '.').' ('.($paymentMethod === 'cash' ? 'Efectivo' : 'Transferencia').')'
+                    .($fullyPaid ? ' · saldado' : ' · queda $'.number_format($newRemaining, 0, ',', '.')),
+            ]],
+        ];
+        $order->editHistory = $editHistory;
 
         if ($fullyPaid) {
             $order->status = 'PAID';
