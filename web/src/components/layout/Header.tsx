@@ -208,26 +208,28 @@ export const Header = () => {
                 </button>
               )}
 
-              {/* Favoritos */}
-              <Link
-                to="/favorites"
-                aria-label="Favoritos"
-                className={`relative p-2.5 rounded-lg transition-all group ${
-                  isActive('/favorites') ? 'bg-gray-100' : 'hover:bg-gray-100'
-                }`}
-              >
-                <Heart
-                  className={`w-6 h-6 transition-colors ${
-                    isActive('/favorites') ? 'text-red-500 fill-red-500' : 'text-gray-700 group-hover:text-gray-900'
+              {/* Favoritos — en el header solo para invitados (logueados lo ven en su menú) */}
+              {!isAuthenticated && (
+                <Link
+                  to="/favorites"
+                  aria-label="Favoritos"
+                  className={`relative p-2.5 rounded-lg transition-all group ${
+                    isActive('/favorites') ? 'bg-gray-100' : 'hover:bg-gray-100'
                   }`}
-                  strokeWidth={2}
-                />
-                {favoritesCount > 0 && (
-                  <span className="absolute top-1 right-1 bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[16px] h-4 px-1 flex items-center justify-center">
-                    {favoritesCount}
-                  </span>
-                )}
-              </Link>
+                >
+                  <Heart
+                    className={`w-6 h-6 transition-colors ${
+                      isActive('/favorites') ? 'text-red-500 fill-red-500' : 'text-gray-700 group-hover:text-gray-900'
+                    }`}
+                    strokeWidth={2}
+                  />
+                  {favoritesCount > 0 && (
+                    <span className="absolute top-1 right-1 bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[16px] h-4 px-1 flex items-center justify-center">
+                      {favoritesCount}
+                    </span>
+                  )}
+                </Link>
+              )}
 
               {/* Notifications */}
               <NotificationBell />

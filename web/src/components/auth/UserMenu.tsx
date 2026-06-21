@@ -2,7 +2,8 @@ import { useState, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useSettings } from '../../context/SettingsContext';
-import { User, Package, LogOut, ChevronDown } from 'lucide-react';
+import { User, Package, LogOut, ChevronDown, Heart } from 'lucide-react';
+import { useFavorites } from '../../context/FavoritesContext';
 
 interface UserMenuProps {
   onLoginClick: () => void;
@@ -12,6 +13,7 @@ interface UserMenuProps {
 export const UserMenu = ({ onLoginClick, onRegisterClick }: UserMenuProps) => {
   const { user, isAuthenticated, logout } = useAuth();
   const { settings } = useSettings();
+  const { count: favoritesCount } = useFavorites();
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -138,6 +140,22 @@ export const UserMenu = ({ onLoginClick, onRegisterClick }: UserMenuProps) => {
           >
             <Package className="w-4 h-4" />
             Mis Pedidos
+          </Link>
+
+          <Link
+            to="/favorites"
+            onClick={() => setIsOpen(false)}
+            className="w-full px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 hover:text-gray-900 transition-colors flex items-center justify-between gap-2"
+          >
+            <span className="flex items-center gap-2">
+              <Heart className="w-4 h-4" />
+              Mis Favoritos
+            </span>
+            {favoritesCount > 0 && (
+              <span className="bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center">
+                {favoritesCount}
+              </span>
+            )}
           </Link>
 
           <div className="my-2 border-t border-gray-100"></div>
