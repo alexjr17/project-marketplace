@@ -475,9 +475,8 @@ export default function NewSalePage() {
     <div className="lg:h-full flex flex-col lg:flex-row gap-4">
       {/* Left Column - Productos */}
       <div className="flex-1 flex flex-col min-h-0 lg:max-h-none gap-3 lg:gap-4">
-        {/* Cliente */}
-        <div className="bg-white rounded-lg shadow-sm p-3 lg:p-4">
-          <h3 className="font-semibold text-gray-900 mb-2 lg:mb-3">Cliente</h3>
+        {/* Cliente (sin label: el buscador/selector ya es explícito) */}
+        <div className="bg-white rounded-lg shadow-sm p-2.5 lg:p-3">
           <CustomerSelect value={selectedCustomer} onChange={(c) => setSelectedCustomer(c ?? DEFAULT_CUSTOMER)} />
         </div>
 
@@ -523,35 +522,25 @@ export default function NewSalePage() {
               </button>
             </form>
           </div>
-          <div className="w-full px-3 lg:px-4 py-3 flex items-center justify-between">
-            <div className="flex items-center gap-2 flex-1 min-w-0">
-              <Package className="w-4 h-4 lg:w-5 lg:h-5 text-gray-600 flex-shrink-0" />
-              <span className="text-base lg:text-lg font-semibold text-gray-900">Productos</span>
-              {browseItems.length > 0 && (
-                <span className="text-xs text-gray-500">({browseItems.length})</span>
-              )}
-              {browseSearch && (
-                <span className="text-xs text-blue-600 truncate">· filtro: "{browseSearch}"</span>
-              )}
+          {/* Barra de filtro fina: solo cuando hay una búsqueda activa */}
+          {browseSearch && (
+            <div className="px-3 py-1.5 flex items-center justify-between text-xs border-b border-gray-100 bg-gray-50">
+              <span className="text-blue-600 truncate">Filtro: "{browseSearch}" ({browseItems.length})</span>
+              <button
+                type="button"
+                onClick={clearCatalogSearch}
+                className="text-gray-500 hover:text-red-600 flex items-center gap-0.5 flex-shrink-0"
+                title="Quitar filtro"
+              >
+                <X className="w-3.5 h-3.5" />
+                Limpiar
+              </button>
             </div>
-            <div className="flex items-center gap-2 flex-shrink-0">
-              {browseSearch && (
-                <button
-                  type="button"
-                  onClick={clearCatalogSearch}
-                  className="text-xs text-gray-500 hover:text-red-600 flex items-center gap-0.5"
-                  title="Quitar filtro"
-                >
-                  <X className="w-3.5 h-3.5" />
-                  Limpiar
-                </button>
-              )}
-            </div>
-          </div>
+          )}
 
           <div
             onScroll={handleProductsScroll}
-            className="flex-1 min-h-0 overflow-y-auto border-t border-gray-200 p-3 max-h-[60vh] lg:max-h-none"
+            className="flex-1 min-h-0 overflow-y-auto p-3 max-h-[60vh] lg:max-h-none"
           >
               <div className="grid grid-cols-2 lg:grid-cols-3 gap-2">
                 {browseItems.map((item, index) => {
