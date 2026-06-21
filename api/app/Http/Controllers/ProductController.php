@@ -50,7 +50,7 @@ class ProductController extends Controller
             'stock' => (int) $product->variants()->where('isActive', true)->sum('stock'),
             'featured' => $product->featured,
             'isActive' => $product->isActive,
-            'images' => is_array($product->images) ? $product->images : ['front' => ''],
+            'images' => \App\Support\ImageUrls::forModel($product->images, 'product', $product->id, $product->updatedAt),
             'colors' => $product->productColors->map(fn ($pc) => [
                 'id' => $pc->color?->id,
                 'name' => $pc->color?->name,

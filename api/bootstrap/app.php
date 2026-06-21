@@ -22,6 +22,10 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // Detrás del proxy de Render: respeta X-Forwarded-* para que las URLs
+        // generadas (imágenes, etc.) salgan en https.
+        $middleware->trustProxies(at: '*');
+
         // Todas las rutas /api/* responden siempre en JSON.
         $middleware->api(prepend: [
             ForceJsonResponse::class,

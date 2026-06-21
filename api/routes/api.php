@@ -144,6 +144,10 @@ Route::prefix('catalogs')->group(function () {
     });
 });
 
+// ==================== IMÁGENES (servidas con cache) ====================
+Route::get('img/{type}/{id}/{slot}', [\App\Http\Controllers\ImageController::class, 'show'])
+    ->where('id', '[0-9]+');
+
 // ==================== PRODUCTOS ====================
 Route::prefix('products')->group(function () {
     // Lectura pública.
