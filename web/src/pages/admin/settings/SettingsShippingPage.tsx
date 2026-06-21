@@ -209,12 +209,16 @@ export const SettingsShippingPage = () => {
     setIsCarrierModalOpen(false);
   };
 
-  const handleDeleteCarrier = (id: string) => {
+  const handleDeleteCarrier = (id: string): boolean => {
     if (confirm('¿Eliminar esta transportadora?')) {
       deleteCarrier(id);
       if (connCarrierId === id) setConnCarrierId(null);
       toast.success('Transportadora eliminada');
+
+      return true;
     }
+
+    return false;
   };
 
   const handleSetDefaultCarrier = (id: string) => {
@@ -476,28 +480,12 @@ export const SettingsShippingPage = () => {
                       >
                         <DollarSign className="w-4 h-4" />
                       </button>
-                      {settings.shipping.defaultCarrierId !== carrier.id && carrier.isActive && (
-                        <button
-                          onClick={() => handleSetDefaultCarrier(carrier.id)}
-                          className="p-2 text-gray-500 hover:text-green-600 hover:bg-green-50 rounded-lg"
-                          title="Establecer como predeterminada"
-                        >
-                          <Check className="w-4 h-4" />
-                        </button>
-                      )}
                       <button
                         onClick={() => handleOpenCarrierModal(carrier)}
                         className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg"
                         title="Editar"
                       >
                         <Edit2 className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => handleDeleteCarrier(carrier.id)}
-                        className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg"
-                        title="Eliminar"
-                      >
-                        <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
                   </div>
@@ -1517,6 +1505,33 @@ export const SettingsShippingPage = () => {
               <span className="text-sm text-gray-700">Transportadora activa</span>
             </label>
           </div>
+
+          {/* Acciones de la transportadora (solo al editar): principal y eliminar */}
+          {editingCarrier && (
+            <div className="flex items-center justify-between gap-3 border-t pt-3">
+              {settings.shipping.defaultCarrierId === editingCarrier.id ? (
+                <span className="inline-flex items-center gap-1.5 text-sm font-medium text-green-700">
+                  <Check className="w-4 h-4" /> Transportadora principal
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => handleSetDefaultCarrier(editingCarrier.id)}
+                  className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-600 hover:text-green-700"
+                >
+                  <Check className="w-4 h-4" /> Marcar como principal
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => { if (handleDeleteCarrier(editingCarrier.id)) setIsCarrierModalOpen(false); }}
+                className="inline-flex items-center gap-1.5 text-sm font-medium text-red-600 hover:text-red-700"
+              >
+                <Trash2 className="w-4 h-4" /> Eliminar
+              </button>
+            </div>
+          )}
+
           <div className="flex gap-3 pt-4">
             <Button
               variant="admin-secondary"
