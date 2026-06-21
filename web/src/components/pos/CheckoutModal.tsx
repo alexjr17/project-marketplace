@@ -73,7 +73,6 @@ export const CheckoutModal = ({
   initialCustomer,
   onCustomerChange,
   abono = 0,
-  taxRate = 19,
   subtotal,
   discount,
   itemCount,
@@ -758,76 +757,10 @@ export const CheckoutModal = ({
           {/* STEP: Completed */}
           {step === 'completed' && completedData && (
             <>
-              {/* Left Panel - Summary and Actions */}
-              <div className="lg:w-80 border-b lg:border-b-0 lg:border-r border-gray-200 p-4 space-y-4 overflow-y-auto">
-                {/* Sale Summary */}
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <h3 className="font-semibold text-gray-700 mb-3 text-sm">Resumen</h3>
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between text-gray-600">
-                      <span>Subtotal:</span>
-                      <span>${completedData.subtotal.toLocaleString()}</span>
-                    </div>
-                    {completedData.discount > 0 && (
-                      <div className="flex justify-between text-red-600">
-                        <span>Descuento:</span>
-                        <span>-${completedData.discount.toLocaleString()}</span>
-                      </div>
-                    )}
-                    {completedData.tax > 0 && (
-                      <div className="flex justify-between text-gray-600">
-                        <span>IVA ({taxRate}%):</span>
-                        <span>${completedData.tax.toLocaleString()}</span>
-                      </div>
-                    )}
-                    <div className="border-t border-gray-300 pt-2 mt-2">
-                      <div className="flex justify-between text-lg font-bold text-gray-900">
-                        <span>Total:</span>
-                        <span>${completedData.total.toLocaleString()}</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Payment Info */}
-                <div className="bg-blue-50 rounded-lg p-4">
-                  <div className="flex justify-between items-center text-sm">
-                    <span className="text-gray-600">Método:</span>
-                    <span className="font-medium text-blue-700">
-                      {completedData.paymentMethod === 'cash' ? 'Efectivo' :
-                       completedData.paymentMethod === 'card' ? 'Tarjeta' :
-                       completedData.paymentMethod === 'transfer' ? 'Transferencia' :
-                       completedData.paymentMethod === 'debe' ? 'Debe (fiado)' : 'Mixto'}
-                    </span>
-                  </div>
-                  {isDebt && (
-                    <div className="mt-3 pt-3 border-t border-blue-200 space-y-1 text-sm">
-                      {abono > 0 && (
-                        <div className="flex justify-between">
-                          <span className="text-green-700">Abonó:</span>
-                          <span className="font-medium text-green-700">${abono.toLocaleString()}</span>
-                        </div>
-                      )}
-                      <div className="flex justify-between">
-                        <span className="text-amber-700 font-medium">Queda debiendo:</span>
-                        <span className="font-bold text-amber-700">
-                          ${Math.max(0, completedData.total - abono).toLocaleString()}
-                        </span>
-                      </div>
-                    </div>
-                  )}
-                  {completedData.paymentMethod !== 'card' && completedData.change > 0 && (
-                    <div className="flex justify-between items-center mt-3 pt-3 border-t border-blue-200">
-                      <span className="text-green-700 font-medium">Cambio:</span>
-                      <span className="text-xl font-bold text-green-600">
-                        ${completedData.change.toLocaleString()}
-                      </span>
-                    </div>
-                  )}
-                </div>
-
+              {/* Left Panel - Acciones compactas (el detalle ya va en el recibo) */}
+              <div className="lg:w-72 border-b lg:border-b-0 lg:border-r border-gray-200 p-4 space-y-3 overflow-y-auto">
                 {/* Email */}
-                <div className="bg-purple-50 rounded-lg p-4">
+                <div className="bg-purple-50 rounded-lg p-3">
                   <div className="flex items-center gap-2 mb-2">
                     <Mail className="w-4 h-4 text-purple-600" />
                     <span className="font-medium text-purple-800 text-sm">Enviar por email</span>
@@ -844,12 +777,12 @@ export const CheckoutModal = ({
                         value={emailInput}
                         onChange={(e) => setEmailInput(e.target.value)}
                         placeholder="cliente@email.com"
-                        className="flex-1 px-3 py-2 border border-purple-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
+                        className="flex-1 min-w-0 px-3 py-2 border border-purple-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
                       />
                       <button
                         onClick={handleSendEmail}
                         disabled={sendingEmail || !emailInput.trim()}
-                        className="px-3 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 text-sm"
+                        className="px-3 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 text-sm flex-shrink-0"
                       >
                         {sendingEmail ? (
                           <Loader2 className="w-4 h-4 animate-spin" />
@@ -861,46 +794,50 @@ export const CheckoutModal = ({
                   )}
                 </div>
 
-                {/* Action Buttons */}
-                <div className="space-y-2 pt-2">
+                {/* Acciones secundarias compactas: imprimir / descargar / whatsapp */}
+                <div className="grid grid-cols-3 gap-2">
                   <button
                     onClick={handlePrint}
                     disabled={loadingPdf || printing}
-                    className="w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center gap-2 font-medium transition-colors"
+                    title="Imprimir"
+                    className="flex flex-col items-center justify-center gap-1 px-2 py-2.5 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 disabled:opacity-50 text-xs font-medium transition-colors"
                   >
                     {printing ? (
                       <Loader2 className="w-5 h-5 animate-spin" />
                     ) : (
                       <Printer className="w-5 h-5" />
                     )}
-                    {printing ? 'Imprimiendo...' : 'Imprimir'}
+                    {printing ? 'Imprimiendo' : 'Imprimir'}
                   </button>
 
                   <button
                     onClick={handleDownload}
                     disabled={!pdfUrl || loadingPdf}
-                    className="w-full px-4 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 disabled:opacity-50 flex items-center justify-center gap-2 font-medium transition-colors"
+                    title="Descargar PDF"
+                    className="flex flex-col items-center justify-center gap-1 px-2 py-2.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 disabled:opacity-50 text-xs font-medium transition-colors"
                   >
                     <Download className="w-5 h-5" />
-                    Descargar PDF
+                    Descargar
                   </button>
 
                   <button
                     onClick={handleWhatsApp}
-                    className="w-full px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center justify-center gap-2 font-medium transition-colors"
+                    title="Enviar por WhatsApp"
+                    className="flex flex-col items-center justify-center gap-1 px-2 py-2.5 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 text-xs font-medium transition-colors"
                   >
                     <MessageCircle className="w-5 h-5" />
-                    Enviar por WhatsApp
-                  </button>
-
-                  <button
-                    onClick={onClose}
-                    className="w-full px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center justify-center gap-2 font-medium transition-colors"
-                  >
-                    Nueva Venta
-                    <ArrowRight className="w-5 h-5" />
+                    WhatsApp
                   </button>
                 </div>
+
+                {/* Nueva Venta — fila completa */}
+                <button
+                  onClick={onClose}
+                  className="w-full px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center justify-center gap-2 font-semibold transition-colors"
+                >
+                  Nueva Venta
+                  <ArrowRight className="w-5 h-5" />
+                </button>
               </div>
 
               {/* Right Panel - PDF Preview */}
