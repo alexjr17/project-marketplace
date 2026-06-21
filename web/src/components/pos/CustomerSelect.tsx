@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { User, Search, X, UserPlus, Loader2 } from 'lucide-react';
+import { Search, UserPlus, Loader2 } from 'lucide-react';
 import * as posService from '../../services/pos.service';
 import type { CustomerSearchResult } from '../../services/pos.service';
 
@@ -81,68 +81,23 @@ export default function CustomerSelect({ value, onChange }: Props) {
 
   return (
     <div className="relative" ref={boxRef}>
-      {value && !open ? (
-        // Cliente seleccionado: 2 columnas (foto/avatar | cédula + datos)
-        <div className="border-2 border-blue-200 bg-blue-50 rounded-lg p-3">
-          <div className="grid grid-cols-2 gap-3 items-center">
-            {/* col-6: foto / avatar */}
-            <div className="flex items-center justify-center">
-              {value.photo ? (
-                <img src={value.photo} alt={value.name} className="w-16 h-16 rounded-full object-cover border border-blue-200" />
-              ) : (
-                <div className="w-16 h-16 rounded-full bg-blue-600 text-white flex items-center justify-center text-2xl font-bold">
-                  {value.name.trim().charAt(0).toUpperCase() || <User className="w-7 h-7" />}
-                </div>
-              )}
-            </div>
-            {/* col-6: cédula y datos relevantes */}
-            <div className="min-w-0">
-              <p className="text-sm font-semibold text-gray-900 truncate" title={value.name}>{value.name}</p>
-              {value.cedula && (
-                <p className="text-xs text-gray-600 truncate">CC/NIT: {value.cedula}</p>
-              )}
-              {value.phone && (
-                <p className="text-xs text-gray-600 truncate">Tel: {value.phone}</p>
-              )}
-              {value.email && (
-                <p className="text-xs text-gray-600 truncate" title={value.email}>{value.email}</p>
-              )}
-              <p className="text-[11px] text-gray-400 mt-0.5">
-                {value.id ? 'Cliente existente' : 'Nuevo · se registra al cobrar'}
-              </p>
-            </div>
-          </div>
-          {/* acciones */}
-          <div className="flex items-center justify-end gap-3 mt-2 pt-2 border-t border-blue-100">
-            <button
-              onClick={() => { setOpen(true); setTimeout(() => inputRef.current?.focus(), 50); }}
-              className="text-xs font-medium text-blue-600 hover:text-blue-800"
-            >
-              Cambiar
-            </button>
-            <button onClick={() => onChange(null)} className="text-xs font-medium text-gray-500 hover:text-red-600 flex items-center gap-1" title="Quitar cliente">
-              <X className="w-3.5 h-3.5" /> Quitar
-            </button>
-          </div>
-        </div>
-      ) : (
-        // Buscador
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
-          <input
-            ref={inputRef}
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onFocus={() => setOpen(true)}
-            placeholder="Buscar o registrar cliente..."
-            autoComplete="off"
-            className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          />
-        </div>
-      )}
+      {/* Input simple: muestra el cliente actual; al enfocar se limpia para
+          buscar; al cerrar sin elegir, queda el que estaba (por defecto). */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+        <input
+          ref={inputRef}
+          type="text"
+          value={open ? query : (value?.name ?? '')}
+          onChange={(e) => setQuery(e.target.value)}
+          onFocus={() => { setQuery(''); setOpen(true); }}
+          placeholder="Buscar o registrar cliente..."
+          autoComplete="off"
+          className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+        />
+      </div>
 
-      {open && (!value || query) && (
+      {open && (
         <div className="absolute z-30 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
           {loading && (
             <div className="px-3 py-2 text-sm text-gray-400 flex items-center gap-2">
