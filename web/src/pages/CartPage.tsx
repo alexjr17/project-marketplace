@@ -1,5 +1,5 @@
 import { ShoppingBag, Truck, Heart, AlertTriangle } from 'lucide-react';
-import { BackButton } from '../components/shared/BackButton';
+import { PageHeader } from '../components/shared/PageHeader';
 import { useNavigate } from 'react-router-dom';
 import { useState, useCallback } from 'react';
 import { useCart } from '../context/CartContext';
@@ -69,17 +69,12 @@ export const CartPage = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header con gradiente dinámico */}
-      <div className="text-white py-4 shadow-md" style={{ background: gradientStyle }}>
-        <div className="max-w-7xl mx-auto px-4 flex items-center gap-3">
-          <BackButton label="Seguir comprando" onClick={handleContinueShopping} />
-          <div className="min-w-0">
-            <h1 className="text-xl md:text-2xl font-bold">Carrito</h1>
-            <p className="text-sm text-white/80">
-              {isEmpty ? 'Tu carrito de compras' : `${cart.totalItems} ${cart.totalItems === 1 ? 'producto' : 'productos'}`}
-            </p>
-          </div>
-        </div>
-      </div>
+      <PageHeader
+        title="Carrito"
+        subtitle={isEmpty ? 'Tu carrito de compras' : `${cart.totalItems} ${cart.totalItems === 1 ? 'producto' : 'productos'}`}
+        backLabel="Seguir comprando"
+        onBack={handleContinueShopping}
+      />
 
       <div className="max-w-7xl mx-auto px-4 py-4 lg:py-8">
         {isEmpty ? (

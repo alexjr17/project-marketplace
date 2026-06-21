@@ -31,7 +31,7 @@ import { addressesService, type Address } from '../services/addresses.service';
 import { quoteShipping } from '../utils/shippingQuote';
 import { validateCoupon, type CouponResult } from '../services/discounts.service';
 import { CitySelect } from '../components/shared/CitySelect';
-import { BackButton } from '../components/shared/BackButton';
+import { PageHeader } from '../components/shared/PageHeader';
 
 interface FormData {
   customerName: string;
@@ -456,17 +456,12 @@ export const CheckoutPage = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header con gradiente dinámico */}
-      <div className="text-white py-4 shadow-md" style={{ background: gradientStyle }}>
-        <div className="max-w-6xl mx-auto px-4 flex items-center gap-3">
-          <BackButton label="Carrito" to="/cart" />
-          <div className="min-w-0">
-            <h1 className="text-xl md:text-2xl font-bold">Finalizar Compra</h1>
-            <p className="text-sm text-white/80">
-              {step === 'info' ? 'Completa tu información' : 'Selecciona método de pago'}
-            </p>
-          </div>
-        </div>
-      </div>
+      <PageHeader
+        title="Finalizar Compra"
+        subtitle={step === 'info' ? 'Completa tu información' : 'Selecciona método de pago'}
+        backLabel="Carrito"
+        backTo="/cart"
+      />
 
       <div className="max-w-6xl mx-auto px-4 py-6">
         {/* Progress Steps */}

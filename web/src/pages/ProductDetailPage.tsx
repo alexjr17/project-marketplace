@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ShoppingCart, Check, ZoomIn, Star, Loader2, Share2, X, Copy } from 'lucide-react';
-import { BackButton } from '../components/shared/BackButton';
+import { PageHeader } from '../components/shared/PageHeader';
 import { useSettings } from '../context/SettingsContext';
 import { useCurrency } from '../hooks/useCurrency';
 import { useCart } from '../context/CartContext';
@@ -343,16 +343,8 @@ export default function ProductDetailPage() {
         image={product.images.front}
         type="product"
       />
-      {/* Header con gradiente */}
-      <div className="text-white py-4 shadow-md" style={{ background: gradientStyle }}>
-        <div className="max-w-7xl mx-auto px-4 flex items-center gap-3">
-          <BackButton />
-          <div className="min-w-0">
-            <p className="text-[11px] uppercase tracking-wide text-white/70">Detalle del producto</p>
-            <p className="text-lg font-bold capitalize truncate">{categoryName}</p>
-          </div>
-        </div>
-      </div>
+      {/* Cabecera estándar compacta */}
+      <PageHeader title="Detalle del producto" subtitle={categoryName} />
 
       {/* Contenido principal - altura limitada al viewport */}
       <div className="max-w-6xl w-full mx-auto px-4 py-3">
