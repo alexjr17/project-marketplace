@@ -156,6 +156,26 @@ export const CheckoutModal = ({
   const [sendingEmail, setSendingEmail] = useState(false);
 
   const cashInputRef = useRef<HTMLInputElement>(null);
+  const emailRef = useRef<HTMLInputElement>(null);
+
+  // Atajos de teclado en la pantalla de venta exitosa.
+  useEffect(() => {
+    if (!isOpen || step !== 'completed') return;
+    const handler = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement)?.tagName;
+      const typing = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+      const key = e.key.toLowerCase();
+      if (key === 'enter' && !typing) { e.preventDefault(); onClose(); return; }
+      if (typing) return;
+      if (key === 'i') { e.preventDefault(); handlePrint(); }
+      else if (key === 'd') { e.preventDefault(); handleDownload(); }
+      else if (key === 'w') { e.preventDefault(); handleWhatsApp(); }
+      else if (key === 'e') { e.preventDefault(); emailRef.current?.focus(); }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, step, pdfUrl, completedData, printing, loadingPdf]);
 
   // Reset state when modal opens
   useEffect(() => {
@@ -773,10 +793,13 @@ export const CheckoutModal = ({
                   ) : (
                     <div className="flex gap-2">
                       <input
+                        ref={emailRef}
                         type="email"
                         value={emailInput}
                         onChange={(e) => setEmailInput(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleSendEmail()}
                         placeholder="cliente@email.com"
+                        title="Email — atajo: E para enfocar"
                         className="flex-1 min-w-0 px-3 py-2 border border-purple-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
                       />
                       <button
@@ -799,9 +822,10 @@ export const CheckoutModal = ({
                   <button
                     onClick={handlePrint}
                     disabled={loadingPdf || printing}
-                    title="Imprimir"
-                    className="flex flex-col items-center justify-center gap-1 px-2 py-2.5 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 disabled:opacity-50 text-xs font-medium transition-colors"
+                    title="Imprimir — atajo: I"
+                    className="relative flex flex-col items-center justify-center gap-1 px-2 py-2.5 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 disabled:opacity-50 text-xs font-medium transition-colors"
                   >
+                    <span className="absolute top-1 right-1.5 text-[10px] font-bold text-blue-300">I</span>
                     {printing ? (
                       <Loader2 className="w-5 h-5 animate-spin" />
                     ) : (
@@ -813,18 +837,20 @@ export const CheckoutModal = ({
                   <button
                     onClick={handleDownload}
                     disabled={!pdfUrl || loadingPdf}
-                    title="Descargar PDF"
-                    className="flex flex-col items-center justify-center gap-1 px-2 py-2.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 disabled:opacity-50 text-xs font-medium transition-colors"
+                    title="Descargar PDF — atajo: D"
+                    className="relative flex flex-col items-center justify-center gap-1 px-2 py-2.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 disabled:opacity-50 text-xs font-medium transition-colors"
                   >
+                    <span className="absolute top-1 right-1.5 text-[10px] font-bold text-gray-400">D</span>
                     <Download className="w-5 h-5" />
                     Descargar
                   </button>
 
                   <button
                     onClick={handleWhatsApp}
-                    title="Enviar por WhatsApp"
-                    className="flex flex-col items-center justify-center gap-1 px-2 py-2.5 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 text-xs font-medium transition-colors"
+                    title="Enviar por WhatsApp — atajo: W"
+                    className="relative flex flex-col items-center justify-center gap-1 px-2 py-2.5 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 text-xs font-medium transition-colors"
                   >
+                    <span className="absolute top-1 right-1.5 text-[10px] font-bold text-green-300">W</span>
                     <MessageCircle className="w-5 h-5" />
                     WhatsApp
                   </button>
@@ -833,10 +859,12 @@ export const CheckoutModal = ({
                 {/* Nueva Venta — fila completa */}
                 <button
                   onClick={onClose}
+                  title="Nueva venta — atajo: Enter"
                   className="w-full px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center justify-center gap-2 font-semibold transition-colors"
                 >
                   Nueva Venta
                   <ArrowRight className="w-5 h-5" />
+                  <span className="text-[10px] font-bold bg-white/20 rounded px-1.5 py-0.5 ml-1">Enter</span>
                 </button>
               </div>
 
