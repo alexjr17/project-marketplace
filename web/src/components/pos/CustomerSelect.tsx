@@ -9,6 +9,7 @@ export interface SelectedCustomer {
   phone?: string | null;
   email?: string | null;
   cedula?: string | null;
+  photo?: string | null;
 }
 
 interface Props {
@@ -81,26 +82,46 @@ export default function CustomerSelect({ value, onChange }: Props) {
   return (
     <div className="relative" ref={boxRef}>
       {value && !open ? (
-        // Cliente seleccionado
-        <div className="flex items-center justify-between gap-2 px-3 py-2 border-2 border-blue-200 bg-blue-50 rounded-lg">
-          <div className="flex items-center gap-2 min-w-0">
-            <User className="w-4 h-4 text-blue-600 flex-shrink-0" />
+        // Cliente seleccionado: 2 columnas (foto/avatar | cédula + datos)
+        <div className="border-2 border-blue-200 bg-blue-50 rounded-lg p-3">
+          <div className="grid grid-cols-2 gap-3 items-center">
+            {/* col-6: foto / avatar */}
+            <div className="flex items-center justify-center">
+              {value.photo ? (
+                <img src={value.photo} alt={value.name} className="w-16 h-16 rounded-full object-cover border border-blue-200" />
+              ) : (
+                <div className="w-16 h-16 rounded-full bg-blue-600 text-white flex items-center justify-center text-2xl font-bold">
+                  {value.name.trim().charAt(0).toUpperCase() || <User className="w-7 h-7" />}
+                </div>
+              )}
+            </div>
+            {/* col-6: cédula y datos relevantes */}
             <div className="min-w-0">
-              <p className="text-sm font-medium text-gray-900 truncate">{value.name}</p>
-              <p className="text-xs text-gray-500 truncate">
-                {value.id ? (value.cedula ? `CC/NIT ${value.cedula}` : 'Cliente existente') : 'Nuevo · se registra al cobrar'}
+              <p className="text-sm font-semibold text-gray-900 truncate" title={value.name}>{value.name}</p>
+              {value.cedula && (
+                <p className="text-xs text-gray-600 truncate">CC/NIT: {value.cedula}</p>
+              )}
+              {value.phone && (
+                <p className="text-xs text-gray-600 truncate">Tel: {value.phone}</p>
+              )}
+              {value.email && (
+                <p className="text-xs text-gray-600 truncate" title={value.email}>{value.email}</p>
+              )}
+              <p className="text-[11px] text-gray-400 mt-0.5">
+                {value.id ? 'Cliente existente' : 'Nuevo · se registra al cobrar'}
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-1 flex-shrink-0">
+          {/* acciones */}
+          <div className="flex items-center justify-end gap-3 mt-2 pt-2 border-t border-blue-100">
             <button
               onClick={() => { setOpen(true); setTimeout(() => inputRef.current?.focus(), 50); }}
-              className="text-xs text-blue-600 hover:text-blue-800 px-1"
+              className="text-xs font-medium text-blue-600 hover:text-blue-800"
             >
               Cambiar
             </button>
-            <button onClick={() => onChange(null)} className="text-gray-400 hover:text-red-500 p-1" title="Quitar cliente">
-              <X className="w-4 h-4" />
+            <button onClick={() => onChange(null)} className="text-xs font-medium text-gray-500 hover:text-red-600 flex items-center gap-1" title="Quitar cliente">
+              <X className="w-3.5 h-3.5" /> Quitar
             </button>
           </div>
         </div>
