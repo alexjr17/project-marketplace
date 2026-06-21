@@ -367,11 +367,10 @@ export const AdminLayout = ({ children }: AdminLayoutProps) => {
         {/* Sidebar */}
         <aside
           className={`
-            fixed lg:relative inset-y-0 left-0 z-50 lg:z-30
-            w-64 bg-white border-r border-gray-200 flex flex-col flex-shrink-0
-            transform transition-transform duration-300 ease-in-out
-            ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0 lg:w-0 lg:border-0 lg:overflow-hidden'}
-            ${!sidebarOpen && !isMobile ? 'lg:hidden' : ''}
+            group fixed lg:relative inset-y-0 left-0 z-50 lg:z-40
+            w-64 lg:w-16 lg:hover:w-64 bg-white border-r border-gray-200 flex flex-col flex-shrink-0
+            transform transition-all duration-300 ease-in-out
+            ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
             ${isMobile ? 'h-full' : ''}
           `}
         >
@@ -451,8 +450,8 @@ export const AdminLayout = ({ children }: AdminLayoutProps) => {
                         : 'text-gray-700 hover:bg-gray-50'
                     }`}
                   >
-                    <Icon className={`w-5 h-5 ${active ? 'text-orange-600' : 'text-gray-500'}`} />
-                    {item.label}
+                    <Icon className={`w-5 h-5 flex-shrink-0 ${active ? 'text-orange-600' : 'text-gray-500'}`} />
+                    <span className="whitespace-nowrap lg:hidden lg:group-hover:inline">{item.label}</span>
                   </Link>
                 );
               })}
@@ -476,16 +475,16 @@ export const AdminLayout = ({ children }: AdminLayoutProps) => {
                       }`}
                     >
                       <div className="flex items-center gap-3">
-                        <Icon className={`w-5 h-5 ${moduleActive ? 'text-orange-600' : 'text-gray-500'}`} />
-                        <span>{module.label}</span>
+                        <Icon className={`w-5 h-5 flex-shrink-0 ${moduleActive ? 'text-orange-600' : 'text-gray-500'}`} />
+                        <span className="whitespace-nowrap lg:hidden lg:group-hover:inline">{module.label}</span>
                       </div>
                       <ChevronRight
-                        className={`w-4 h-4 transition-transform ${openSubmenus[module.id] ? 'rotate-90' : ''}`}
+                        className={`w-4 h-4 transition-transform lg:hidden lg:group-hover:block ${openSubmenus[module.id] ? 'rotate-90' : ''}`}
                       />
                     </button>
 
                     {openSubmenus[module.id] && (
-                      <div className="ml-4 mt-1 space-y-1 border-l-2 border-gray-100 pl-2">
+                      <div className="ml-4 mt-1 space-y-1 border-l-2 border-gray-100 pl-2 lg:hidden lg:group-hover:block">
                         {module.submenu.map((subItem) => {
                           const subActive = isActive(subItem.path);
                           const SubIcon = subItem.icon;
