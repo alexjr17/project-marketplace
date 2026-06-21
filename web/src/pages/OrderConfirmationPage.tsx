@@ -352,7 +352,7 @@ export const OrderConfirmationPage = () => {
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-gray-900">{item.productName}</p>
                     <p className="text-sm text-gray-500">
-                      {item.size} / {item.color} • x{item.quantity}
+                      {[item.size, item.color].filter(Boolean).join(' / ')}{(item.size || item.color) ? ' • ' : ''}x{item.quantity}
                     </p>
                     {item.customization && (
                       <span className="inline-block mt-1 px-2 py-0.5 bg-purple-100 text-purple-700 text-xs rounded-full">

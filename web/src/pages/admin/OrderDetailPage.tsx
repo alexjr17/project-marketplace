@@ -537,10 +537,12 @@ export const OrderDetailPage = () => {
                     />
                     <div className="flex-1">
                       <h4 className="font-medium text-gray-900">{item.productName}</h4>
-                      <div className="flex gap-4 mt-1 text-sm text-gray-500">
-                        <span>Talla: {item.size}</span>
-                        <span>Color: {item.color}</span>
-                      </div>
+                      {(item.size || item.color) && (
+                        <div className="flex gap-4 mt-1 text-sm text-gray-500">
+                          {item.size && <span>Talla: {item.size}</span>}
+                          {item.color && <span>Color: {item.color}</span>}
+                        </div>
+                      )}
                       {item.customization && (
                         <span className="inline-flex items-center gap-1 mt-2 px-2 py-0.5 bg-purple-100 text-purple-700 text-xs font-medium rounded">
                           <Printer className="w-3 h-3" />

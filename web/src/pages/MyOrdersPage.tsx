@@ -380,7 +380,7 @@ export const MyOrdersPage = () => {
                       )}
                       <div className="flex-1 min-w-0">
                         <p className="font-medium text-gray-900">{item.productName}</p>
-                        <p className="text-sm text-gray-500">Talla: {item.size} | Color: {item.color} | Cant: {item.quantity}</p>
+                        <p className="text-sm text-gray-500">{[item.size && `Talla: ${item.size}`, item.color && `Color: ${item.color}`, `Cant: ${item.quantity}`].filter(Boolean).join(' | ')}</p>
                         {item.customization && <p className="text-xs text-gray-600 font-medium mt-1">✨ Personalizado</p>}
                       </div>
                       <div className="text-right">

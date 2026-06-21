@@ -138,13 +138,17 @@ export const CartItem = ({ item, onUpdateQuantity, onRemove, onStockChange }: Ca
 
             {/* Variantes */}
             <div className="flex flex-wrap items-center gap-2 mt-1 lg:mt-2 text-xs lg:text-sm">
-              <div className="flex items-center gap-1">
-                <div
-                  className="w-4 h-4 rounded border border-gray-300"
-                  style={{ backgroundColor: item.selectedColor }}
-                />
-                <span className="text-gray-600">{item.selectedSize}</span>
-              </div>
+              {(item.selectedColor || item.selectedSize) && (
+                <div className="flex items-center gap-1">
+                  {item.selectedColor && (
+                    <div
+                      className="w-4 h-4 rounded border border-gray-300"
+                      style={{ backgroundColor: item.selectedColor }}
+                    />
+                  )}
+                  {item.selectedSize && <span className="text-gray-600">{item.selectedSize}</span>}
+                </div>
+              )}
               {/* Precio unitario - móvil */}
               <span className="lg:hidden text-gray-500">• {format(item.price)} c/u</span>
               {/* Indicador de stock */}

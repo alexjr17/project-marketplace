@@ -969,18 +969,22 @@ export const CheckoutPage = () => {
                       <img src={image} alt={name} className="w-12 h-12 object-cover rounded-lg" />
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-gray-900 truncate">{name}</p>
-                        <div className="flex items-center gap-2 mt-0.5">
-                          <div className="flex items-center gap-1">
-                            <span
-                              className="w-3 h-3 rounded-full border border-gray-300"
-                              style={{ backgroundColor: colorHex }}
-                              title={color}
-                            />
-                            <span className="text-xs text-gray-500">{color}</span>
+                        {(colorHex || size) && (
+                          <div className="flex items-center gap-2 mt-0.5">
+                            {colorHex && (
+                              <div className="flex items-center gap-1">
+                                <span
+                                  className="w-3 h-3 rounded-full border border-gray-300"
+                                  style={{ backgroundColor: colorHex }}
+                                  title={color}
+                                />
+                                <span className="text-xs text-gray-500">{color}</span>
+                              </div>
+                            )}
+                            {colorHex && size && <span className="text-xs text-gray-400">•</span>}
+                            {size && <span className="text-xs text-gray-500">Talla: {size}</span>}
                           </div>
-                          <span className="text-xs text-gray-400">•</span>
-                          <span className="text-xs text-gray-500">Talla: {size}</span>
-                        </div>
+                        )}
                         <p className="text-xs text-gray-400">x{item.quantity}</p>
                       </div>
                       <p className="text-sm font-medium">{formatCurrency(item.subtotal)}</p>
