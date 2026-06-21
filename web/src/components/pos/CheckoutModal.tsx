@@ -16,7 +16,6 @@ import {
 } from 'lucide-react';
 import * as posService from '../../services/pos.service';
 import type { SelectedCustomer } from './CustomerSelect';
-import CustomerFormModal from './CustomerFormModal';
 
 type CheckoutStep = 'customer' | 'processing' | 'completed';
 
@@ -89,9 +88,37 @@ export const CheckoutModal = ({
 }: CheckoutModalProps) => {
   const [step, setStep] = useState<CheckoutStep>('customer');
 
-  // Cliente local: se inicializa del padre pero puede editarse/registrarse aquí.
+  // Cliente local: se inicializa del padre pero puede editarse/registrarse aquí (inline).
   const [customer, setCustomer] = useState<SelectedCustomer | null | undefined>(initialCustomer);
-  const [showCustomerForm, setShowCustomerForm] = useState(false);
+  const [editingCustomer, setEditingCustomer] = useState(false);
+  const [custName, setCustName] = useState('');
+  const [custCedula, setCustCedula] = useState('');
+  const [custPhone, setCustPhone] = useState('');
+  const [custEmail, setCustEmail] = useState('');
+
+  // Abre el editor inline precargando los datos del cliente actual.
+  const startEditCustomer = () => {
+    const isDefault = !customer?.id && (customer?.name ?? '') === 'Consumidor Final';
+    setCustName(isDefault ? '' : (customer?.name ?? ''));
+    setCustCedula(customer?.cedula ?? '');
+    setCustPhone(customer?.phone ?? '');
+    setCustEmail(customer?.email ?? '');
+    setEditingCustomer(true);
+  };
+
+  const saveCustomerInline = () => {
+    if (!custName.trim()) return;
+    const updated: SelectedCustomer = {
+      id: customer?.id,
+      name: custName.trim(),
+      cedula: custCedula.trim() || null,
+      phone: custPhone.trim() || null,
+      email: custEmail.trim() || null,
+    };
+    setCustomer(updated);
+    onCustomerChange?.(updated);
+    setEditingCustomer(false);
+  };
 
   // Payment amount calculations
   const cashNum = parseFloat(cashAmount || '0');
@@ -136,7 +163,7 @@ export const CheckoutModal = ({
     if (isOpen) {
       setStep('customer');
       setCustomer(initialCustomer);
-      setShowCustomerForm(false);
+      setEditingCustomer(false);
       setEmailInput(initialCustomer?.email || '');
       setCompletedData(null);
       setPdfUrl(null);
@@ -358,8 +385,66 @@ export const CheckoutModal = ({
           {step === 'customer' && (
             <div className="flex-1 p-4 lg:p-5 overflow-y-auto">
               <div className="space-y-4">
-                {/* Cliente: con botón de editar/completar datos */}
-                {customer ? (
+                {/* Cliente: editor inline (sin modal encima) */}
+                {editingCustomer ? (
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-2.5">
+                    <div className="flex items-center gap-2 text-blue-700">
+                      <UserCog className="w-4 h-4" />
+                      <span className="text-sm font-semibold">Datos del cliente</span>
+                    </div>
+                    <div>
+                      <input
+                        autoFocus
+                        type="text"
+                        value={custName}
+                        onChange={(e) => setCustName(e.target.value)}
+                        placeholder="Nombre *"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <input
+                        type="text"
+                        value={custCedula}
+                        onChange={(e) => setCustCedula(e.target.value)}
+                        placeholder="Cédula / NIT"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                      <input
+                        type="tel"
+                        value={custPhone}
+                        onChange={(e) => setCustPhone(e.target.value)}
+                        placeholder="Teléfono"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                    <input
+                      type="email"
+                      value={custEmail}
+                      onChange={(e) => setCustEmail(e.target.value)}
+                      placeholder="Email (opcional)"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                    <p className="text-xs text-gray-500">Solo el nombre es obligatorio. Lo demás es opcional.</p>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setEditingCustomer(false)}
+                        className="flex-1 px-3 py-1.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 text-sm font-medium"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={saveCustomerInline}
+                        disabled={!custName.trim()}
+                        className="flex-1 px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 text-sm font-medium"
+                      >
+                        Guardar
+                      </button>
+                    </div>
+                  </div>
+                ) : customer ? (
                   <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex items-start gap-3">
                     <User className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
                     <div className="min-w-0 flex-1">
@@ -376,7 +461,7 @@ export const CheckoutModal = ({
                     </div>
                     <button
                       type="button"
-                      onClick={() => setShowCustomerForm(true)}
+                      onClick={startEditCustomer}
                       title="Editar / completar datos del cliente"
                       className="flex-shrink-0 inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-blue-700 bg-white border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors"
                     >
@@ -396,7 +481,7 @@ export const CheckoutModal = ({
                     </div>
                     <button
                       type="button"
-                      onClick={() => setShowCustomerForm(true)}
+                      onClick={startEditCustomer}
                       className="flex-shrink-0 inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
                     >
                       <UserPlus className="w-3.5 h-3.5" />
@@ -845,18 +930,6 @@ export const CheckoutModal = ({
           )}
         </div>
       </div>
-
-      {/* Formulario para registrar/editar cliente con datos completos */}
-      <CustomerFormModal
-        isOpen={showCustomerForm}
-        initial={customer}
-        onClose={() => setShowCustomerForm(false)}
-        onSave={(c) => {
-          setCustomer(c);
-          onCustomerChange?.(c);
-          setShowCustomerForm(false);
-        }}
-      />
     </div>
   );
 };
