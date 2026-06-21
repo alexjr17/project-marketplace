@@ -37,6 +37,7 @@ import {
   Building2,
   Store,
   Star,
+  Megaphone,
   MapPin,
   Plug,
 } from 'lucide-react';
@@ -167,7 +168,17 @@ const menuWithSubmenus: {
       { path: '/admin-panel/roles', label: 'Roles y Permisos', icon: Key, permission: 'roles.view' },
     ],
   },
-  // 8. CONFIGURACIÓN - Ajustes del sistema
+  // 8. MARKETING - Publicidad / anuncios en la tienda
+  {
+    id: 'marketing',
+    label: 'Marketing',
+    icon: Megaphone,
+    basePath: '/admin-panel/announcements',
+    submenu: [
+      { path: '/admin-panel/announcements', label: 'Publicidad / Anuncios', icon: Megaphone },
+    ],
+  },
+  // 9. CONFIGURACIÓN - Ajustes del sistema
   {
     id: 'settings',
     label: 'Configuración',

@@ -148,6 +148,15 @@ Route::prefix('catalogs')->group(function () {
 Route::get('img/{type}/{id}/{slot}', [\App\Http\Controllers\ImageController::class, 'show'])
     ->where('id', '[0-9]+');
 
+// ==================== PUBLICIDAD / ANUNCIOS ====================
+Route::get('announcements/active', [\App\Http\Controllers\AnnouncementController::class, 'active']);
+Route::prefix('announcements')->middleware(['auth:sanctum', 'admin'])->group(function () {
+    Route::get('/', [\App\Http\Controllers\AnnouncementController::class, 'index']);
+    Route::post('/', [\App\Http\Controllers\AnnouncementController::class, 'store']);
+    Route::put('{id}', [\App\Http\Controllers\AnnouncementController::class, 'update'])->whereNumber('id');
+    Route::delete('{id}', [\App\Http\Controllers\AnnouncementController::class, 'destroy'])->whereNumber('id');
+});
+
 // ==================== PRODUCTOS ====================
 Route::prefix('products')->group(function () {
     // Lectura pública.
