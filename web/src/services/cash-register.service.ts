@@ -23,6 +23,8 @@ export interface CashRegister {
   name: string;
   location: string;
   code: string;
+  /** Categorías que la caja puede vender. Vacío/null = todas. */
+  categoryIds?: number[] | null;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -121,6 +123,7 @@ export async function createCashRegister(data: {
   name: string;
   location: string;
   code: string;
+  categoryIds?: number[];
 }): Promise<CashRegister> {
   const response = await axios.post(`${API_URL}/cash-registers`, data, {
     headers: {
@@ -140,6 +143,7 @@ export async function updateCashRegister(
     location?: string;
     code?: string;
     isActive?: boolean;
+    categoryIds?: number[];
   }
 ): Promise<CashRegister> {
   const response = await axios.patch(`${API_URL}/cash-registers/${id}`, data, {

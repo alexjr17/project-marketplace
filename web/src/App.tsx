@@ -55,6 +55,7 @@ import { OrderDetailPage } from './pages/admin/OrderDetailPage';
 import { ShippingPage } from './pages/admin/ShippingPage';
 import { PaymentsPage } from './pages/admin/PaymentsPage';
 import CashRegistersPage from './pages/admin/CashRegistersPage';
+import CashRegisterFormPage from './pages/admin/CashRegisterFormPage';
 import BarcodePrintPage from './pages/admin/BarcodePrintPage';
 import SuppliersPage from './pages/admin/SuppliersPage';
 import SupplierDetailPage from './pages/admin/SupplierDetailPage';
@@ -501,6 +502,22 @@ function App() {
                                       element={
                                         <PermissionRoute permission="pos.cash_register">
                                           <CashRegistersPage />
+                                        </PermissionRoute>
+                                      }
+                                    />
+                                    <Route
+                                      path="/cash-registers/new"
+                                      element={
+                                        <PermissionRoute permission="pos.cash_register">
+                                          <CashRegisterFormPage />
+                                        </PermissionRoute>
+                                      }
+                                    />
+                                    <Route
+                                      path="/cash-registers/:id/edit"
+                                      element={
+                                        <PermissionRoute permission="pos.cash_register">
+                                          <CashRegisterFormPage />
                                         </PermissionRoute>
                                       }
                                     />

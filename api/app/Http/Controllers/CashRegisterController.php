@@ -62,6 +62,8 @@ class CashRegisterController extends Controller
             'name' => 'required|string',
             'location' => 'required|string',
             'code' => 'required|string',
+            'categoryIds' => 'nullable|array',
+            'categoryIds.*' => 'integer',
         ]);
 
         if (CashRegister::where('code', $data['code'])->exists()) {
@@ -72,6 +74,7 @@ class CashRegisterController extends Controller
             'name' => $data['name'],
             'location' => $data['location'],
             'code' => $data['code'],
+            'categoryIds' => $data['categoryIds'] ?? [],
             'isActive' => true,
         ]);
 
@@ -86,6 +89,8 @@ class CashRegisterController extends Controller
             'location' => 'sometimes|string',
             'code' => 'sometimes|string',
             'isActive' => 'sometimes|boolean',
+            'categoryIds' => 'sometimes|nullable|array',
+            'categoryIds.*' => 'integer',
         ]);
 
         $cashRegister = CashRegister::find($id);

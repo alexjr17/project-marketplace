@@ -53,7 +53,7 @@ class POSController extends Controller
         }
 
         try {
-            return $this->success($this->pos->search($query));
+            return $this->success($this->pos->search($query, $request->user()->id));
         } catch (\RuntimeException $e) {
             return $this->error($e->getMessage(), 400);
         }
@@ -66,7 +66,7 @@ class POSController extends Controller
         $perPage = min(50, max(1, (int) $request->query('perPage', 12)));
         $search = $request->query('search');
 
-        return $this->success($this->pos->browseProducts($page, $perPage, $search));
+        return $this->success($this->pos->browseProducts($page, $perPage, $search, $request->user()->id));
     }
 
     /** POST /api/pos/calculate */

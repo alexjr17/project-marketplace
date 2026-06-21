@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\CashRegister;
 use App\Models\CashSession;
 use App\Models\InputVariant;
 use App\Models\InputVariantMovement;
@@ -37,6 +38,26 @@ class POSService
     private function currentSession(int $sellerId): ?CashSession
     {
         return CashSession::where('sellerId', $sellerId)->where('status', 'OPEN')->first();
+    }
+
+    /**
+     * Categorías que la caja de la sesión activa puede vender.
+     * Devuelve null si no hay sesión, no hay caja, o la caja no tiene categorías
+     * asignadas (en cuyo caso puede vender TODOS los productos).
+     */
+    private function sessionCategoryIds(?int $sellerId): ?array
+    {
+        if (! $sellerId) {
+            return null;
+        }
+        $session = $this->currentSession($sellerId);
+        if (! $session) {
+            return null;
+        }
+        $caja = CashRegister::find($session->cashRegisterId);
+        $ids = $caja?->categoryIds;
+
+        return (is_array($ids) && count($ids) > 0) ? $ids : null;
     }
 
     /** Genera un número de orden POS (POS-AAMMDD-NNNN). */
@@ -165,7 +186,7 @@ class POSService
     }
 
     /** Lista paginada de productos y templates para el POS (GET /pos/products). */
-    public function browseProducts(int $page, int $perPage, ?string $search = null): array
+    public function browseProducts(int $page, int $perPage, ?string $search = null, ?int $sellerId = null): array
     {
         $query = Product::with([
             'variants' => fn ($q) => $q->where('isActive', true)->with('color', 'size')->limit(1),
@@ -173,6 +194,12 @@ class POSService
             'productColors.color',
             'productSizes.size',
         ])->where('isActive', true);
+
+        // Si la caja de la sesión tiene categorías asignadas, solo esos productos.
+        $catIds = $this->sessionCategoryIds($sellerId);
+        if ($catIds) {
+            $query->whereIn('categoryId', $catIds);
+        }
 
         if ($search !== null && trim($search) !== '') {
             $term = trim($search);
@@ -209,18 +236,22 @@ class POSService
     }
 
     /** Busca productos y templates por código de barras o nombre (POST /pos/search). */
-    public function search(string $query): array
+    public function search(string $query, ?int $sellerId = null): array
     {
         $query = trim($query);
         if ($query === '') {
             return ['type' => 'list', 'results' => []];
         }
 
+        // Categorías que la caja de la sesión puede vender (null = todas).
+        $catIds = $this->sessionCategoryIds($sellerId);
+        $inCaja = fn (?int $categoryId) => ! $catIds || in_array($categoryId, $catIds, true);
+
         // 1) Variante de producto por código de barras exacto.
         $variant = ProductVariant::with(['product', 'color', 'size'])
             ->where('barcode', $query)->first();
 
-        if ($variant) {
+        if ($variant && $inCaja($variant->product->categoryId)) {
             if ($variant->product->isTemplate) {
                 $template = $this->loadTemplate($variant->product->id);
                 if ($template) {
@@ -263,7 +294,7 @@ class POSService
         // 2) Template por código de barras exacto.
         $templateByBarcode = Product::where('barcode', $query)
             ->where('isActive', true)->where('isTemplate', true)->first();
-        if ($templateByBarcode) {
+        if ($templateByBarcode && $inCaja($templateByBarcode->categoryId)) {
             $template = $this->loadTemplate($templateByBarcode->id);
             if ($template) {
                 return ['type' => 'single', 'result' => $this->formatTemplate($template)];
@@ -276,6 +307,7 @@ class POSService
         $products = Product::with(['variants' => fn ($q) => $q->where('isActive', true)
             ->with('color', 'size')->limit(1)])
             ->where('isActive', true)->where('isTemplate', false)
+            ->when($catIds, fn ($q) => $q->whereIn('categoryId', $catIds))
             ->where(fn ($q) => $q->where('name', 'like', "%{$query}%")
                 ->orWhere('sku', 'like', "%{$query}%"))
             ->limit(20)->get();
@@ -293,6 +325,7 @@ class POSService
             'productSizes.size',
         ])
             ->where('isActive', true)->where('isTemplate', true)
+            ->when($catIds, fn ($q) => $q->whereIn('categoryId', $catIds))
             ->where(fn ($q) => $q->where('name', 'like', "%{$query}%")
                 ->orWhere('sku', 'like', "%{$query}%")
                 ->orWhere('barcode', 'like', "%{$query}%"))

@@ -10,6 +10,7 @@ import {
   type SortingState,
 } from '@tanstack/react-table';
 import { Plus, Settings, Trash2, Power, Monitor, MapPin, Users, Search, ChevronLeft, ChevronRight, ArrowUpDown } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useToast } from '../../context/ToastContext';
 import { Modal } from '../../components/shared/Modal';
 import { Button } from '../../components/shared/Button';
@@ -21,24 +22,13 @@ const columnHelper = createColumnHelper<CashRegister>();
 
 export default function CashRegistersPage() {
   const { showToast } = useToast();
+  const navigate = useNavigate();
   const [cashRegisters, setCashRegisters] = useState<CashRegister[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showModal, setShowModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [editingRegister, setEditingRegister] = useState<CashRegister | null>(null);
   const [deletingRegister, setDeletingRegister] = useState<CashRegister | null>(null);
   const [sorting, setSorting] = useState<SortingState>([]);
   const [globalFilter, setGlobalFilter] = useState('');
-
-  // Form state
-  const [formData, setFormData] = useState({
-    name: '',
-    location: '',
-    code: '',
-    isActive: true,
-  });
-  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
-  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     loadCashRegisters();
@@ -58,27 +48,11 @@ export default function CashRegistersPage() {
   };
 
   const handleCreate = () => {
-    setEditingRegister(null);
-    setFormData({ name: '', location: '', code: '', isActive: true });
-    setFormErrors({});
-    setShowModal(true);
+    navigate('/admin-panel/cash-registers/new');
   };
 
   const handleEdit = (register: CashRegister) => {
-    setEditingRegister(register);
-    setFormData({
-      name: register.name,
-      location: register.location,
-      code: register.code,
-      isActive: register.isActive,
-    });
-    setFormErrors({});
-    setShowModal(true);
-  };
-
-  const handleDeleteClick = (register: CashRegister) => {
-    setDeletingRegister(register);
-    setShowDeleteModal(true);
+    navigate(`/admin-panel/cash-registers/${register.id}/edit`);
   };
 
   const handleDeleteConfirm = async () => {
@@ -93,56 +67,6 @@ export default function CashRegistersPage() {
     } catch (error: any) {
       console.error('Error deleting register:', error);
       showToast(error.response?.data?.message || 'Error al eliminar la caja', 'error');
-    }
-  };
-
-  const validateForm = () => {
-    const errors: Record<string, string> = {};
-
-    if (!formData.name.trim()) {
-      errors.name = 'El nombre es requerido';
-    }
-
-    if (!formData.location.trim()) {
-      errors.location = 'La ubicacion es requerida';
-    }
-
-    if (!formData.code.trim()) {
-      errors.code = 'El codigo es requerido';
-    } else if (formData.code.length < 3) {
-      errors.code = 'El codigo debe tener al menos 3 caracteres';
-    }
-
-    setFormErrors(errors);
-    return Object.keys(errors).length === 0;
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!validateForm()) {
-      return;
-    }
-
-    try {
-      setSubmitting(true);
-
-      if (editingRegister) {
-        await cashRegisterService.updateCashRegister(editingRegister.id, formData);
-        showToast('Caja actualizada correctamente', 'success');
-      } else {
-        await cashRegisterService.createCashRegister(formData);
-        showToast('Caja creada correctamente', 'success');
-      }
-
-      await loadCashRegisters();
-      setShowModal(false);
-      setFormData({ name: '', location: '', code: '', isActive: true });
-    } catch (error: any) {
-      console.error('Error saving register:', error);
-      showToast(error.response?.data?.message || 'Error al guardar la caja registradora', 'error');
-    } finally {
-      setSubmitting(false);
     }
   };
 
@@ -469,112 +393,6 @@ export default function CashRegistersPage() {
           </div>
         )}
       </div>
-
-      {/* Create/Edit Modal */}
-      <Modal
-        isOpen={showModal}
-        onClose={() => setShowModal(false)}
-        title={editingRegister ? 'Editar Caja Registradora' : 'Nueva Caja Registradora'}
-        size="sm"
-      >
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Name */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Nombre <span className="text-red-500">*</span>
-            </label>
-            <Input
-              type="text"
-              value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              placeholder="Ej: Caja Principal"
-              error={formErrors.name}
-            />
-          </div>
-
-          {/* Location */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Ubicacion <span className="text-red-500">*</span>
-            </label>
-            <Input
-              type="text"
-              value={formData.location}
-              onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-              placeholder="Ej: Piso 1 - Entrada Principal"
-              error={formErrors.location}
-            />
-          </div>
-
-          {/* Code */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Codigo <span className="text-red-500">*</span>
-            </label>
-            <Input
-              type="text"
-              value={formData.code}
-              onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase() })}
-              placeholder="Ej: CAJA-01"
-              error={formErrors.code}
-              className="font-mono"
-            />
-            <p className="mt-1 text-xs text-gray-500">
-              Codigo unico para identificar la caja
-            </p>
-          </div>
-
-          {/* Estado Activo */}
-          <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-            <div>
-              <p className="text-sm font-medium text-gray-700">Estado de la caja</p>
-              <p className="text-xs text-gray-500">
-                {formData.isActive ? 'La caja esta activa y disponible' : 'La caja esta inactiva'}
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => setFormData({ ...formData, isActive: !formData.isActive })}
-              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                formData.isActive ? 'bg-green-500' : 'bg-gray-300'
-              }`}
-            >
-              <span
-                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                  formData.isActive ? 'translate-x-6' : 'translate-x-1'
-                }`}
-              />
-            </button>
-          </div>
-
-          {/* Actions */}
-          <div className="flex gap-3 pt-4">
-            {editingRegister && (
-              <Button
-                type="button"
-                variant="admin-danger"
-                onClick={() => {
-                  setShowModal(false);
-                  handleDeleteClick(editingRegister);
-                }}
-                disabled={submitting}
-                className="flex-1"
-              >
-                <Trash2 className="w-4 h-4 mr-2" />
-                Eliminar
-              </Button>
-            )}
-            <Button
-              type="submit"
-              variant="admin-primary"
-              disabled={submitting}
-              className="flex-1"
-            >
-              {submitting ? 'Guardando...' : editingRegister ? 'Guardar' : 'Crear'}
-            </Button>
-          </div>
-        </form>
-      </Modal>
 
       {/* Delete Confirmation Modal */}
       <Modal

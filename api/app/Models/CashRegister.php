@@ -8,6 +8,8 @@ class CashRegister extends BaseModel
 
     protected $casts = [
         'isActive' => 'boolean',
+        // Categorías que la caja puede vender. Vacío/null = todas.
+        'categoryIds' => 'array',
     ];
 
     public function orders()
