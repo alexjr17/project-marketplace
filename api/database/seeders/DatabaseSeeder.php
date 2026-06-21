@@ -11,7 +11,7 @@ class DatabaseSeeder extends Seeder
      * Versión del set de datos por defecto. Al cambiarla (cuando se ajustan los
      * seeders), el siguiente deploy limpia y resiembra automáticamente (una vez).
      */
-    public const SEED_VERSION = '2026-06-22.4';
+    public const SEED_VERSION = '2026-06-22.5';
 
     /**
      * Datos iniciales de la aplicación.

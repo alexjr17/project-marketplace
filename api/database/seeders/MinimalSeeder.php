@@ -7,6 +7,11 @@ use App\Models\CashRegister;
 use App\Models\Category;
 use App\Models\Color;
 use App\Models\Discount;
+use App\Models\Input;
+use App\Models\InputBatch;
+use App\Models\InputBatchMovement;
+use App\Models\InputVariant;
+use App\Models\InputVariantMovement;
 use App\Models\Product;
 use App\Models\ProductColor;
 use App\Models\ProductSize;
@@ -45,7 +50,7 @@ class MinimalSeeder extends Seeder
         $this->seedAnnouncements();
         $this->seedDiscounts();
         $this->seedCashRegister();
-        $this->seedSupplierAndPurchase();
+        $this->seedPurchases();
 
         $this->command?->info('MinimalSeeder: datos mínimos sembrados.');
     }
@@ -341,82 +346,143 @@ class MinimalSeeder extends Seeder
         );
     }
 
-    /**
-     * Compra inicial RECIBIDA que surte el stock de los productos de catálogo:
-     * 2 unidades por variante. Así el stock concuerda exactamente con la compra.
-     */
-    private function seedSupplierAndPurchase(): void
+    /** Tres compras recibidas: productos, plantillas e insumos. */
+    private function seedPurchases(): void
     {
-        // El proveedor lo crea InventorySeeder (PROV-0001); si no, lo creamos.
         $supplier = Supplier::firstOrCreate(
             ['code' => 'PROV-0001'],
             ['name' => 'Textiles del Norte S.A.S.', 'country' => 'Colombia', 'isActive' => true]
         );
-
         $adminId = User::where('email', 'admin@vexa.com')->value('id');
-        $qtyPerVariant = 2;
-        $unitCost = 18000;
 
-        // Variantes de los productos de catálogo (no plantillas).
-        $variants = ProductVariant::whereIn('productId', function ($q) {
-            $q->select('id')->from('products')
-                ->whereIn('slug', ['sueter-basico', 'gorra-clasica', 'tote-bag-lienzo']);
+        // 1) Productos de catálogo (2 unidades por variante).
+        $this->receiveProductVariants('OC-2026-0001', $supplier->id, $adminId,
+            ['sueter-basico', 'gorra-clasica', 'tote-bag-lienzo'],
+            'Compra de productos (2 unidades por variante).', 18000, 2);
+
+        // 2) Plantillas personalizables (2 unidades por variante).
+        $this->receiveProductVariants('OC-2026-0002', $supplier->id, $adminId,
+            ['sueter-basico-personalizable', 'sueter-oversize-personalizable'],
+            'Compra de plantillas (2 unidades por variante).', 22000, 2);
+
+        // 3) Insumos / materia prima.
+        $this->receiveInputs('OC-2026-0003', $supplier->id, $adminId);
+    }
+
+    /** Compra RECIBIDA de las variantes de los productos con esos slugs. */
+    private function receiveProductVariants(string $number, int $supplierId, ?int $adminId, array $slugs, string $notes, int $unitCost, int $qty): void
+    {
+        $variants = ProductVariant::whereIn('productId', function ($q) use ($slugs) {
+            $q->select('id')->from('products')->whereIn('slug', $slugs);
         })->with('product')->get();
-
         if ($variants->isEmpty()) {
             return;
         }
 
-        $subtotal = $variants->count() * $qtyPerVariant * $unitCost;
-
         $order = PurchaseOrder::updateOrCreate(
-            ['orderNumber' => 'OC-2026-0001'],
+            ['orderNumber' => $number],
             [
-                'supplierId' => $supplier->id,
-                'status' => 'RECEIVED',
-                'subtotal' => $subtotal,
-                'tax' => 0,
-                'discount' => 0,
-                'total' => $subtotal,
-                'orderDate' => now(),
-                'expectedDate' => now()->addDays(3),
-                'receivedDate' => now(),
-                'notes' => 'Compra inicial de inventario (2 unidades por variante).',
-                'createdById' => $adminId,
+                'supplierId' => $supplierId, 'status' => 'RECEIVED',
+                'subtotal' => $variants->count() * $qty * $unitCost, 'tax' => 0, 'discount' => 0,
+                'total' => $variants->count() * $qty * $unitCost,
+                'orderDate' => now(), 'expectedDate' => now()->addDays(3), 'receivedDate' => now(),
+                'notes' => $notes, 'createdById' => $adminId,
             ]
         );
-
-        // Idempotente: si ya tiene ítems, no volver a recibir/sumar.
         if (PurchaseOrderItem::where('purchaseOrderId', $order->id)->exists()) {
             return;
         }
 
         foreach ($variants as $variant) {
             PurchaseOrderItem::create([
-                'purchaseOrderId' => $order->id,
-                'variantId' => $variant->id,
+                'purchaseOrderId' => $order->id, 'variantId' => $variant->id,
                 'description' => ($variant->product?->name ?? 'Producto').' ('.$variant->sku.')',
-                'quantity' => $qtyPerVariant,
-                'quantityReceived' => $qtyPerVariant,
-                'unitCost' => $unitCost,
-                'subtotal' => $qtyPerVariant * $unitCost,
+                'quantity' => $qty, 'quantityReceived' => $qty,
+                'unitCost' => $unitCost, 'subtotal' => $qty * $unitCost,
             ]);
-
             $previous = (int) $variant->stock;
-            $variant->stock = $previous + $qtyPerVariant;
+            $variant->stock = $previous + $qty;
             $variant->save();
-
             VariantMovement::create([
-                'variantId' => $variant->id,
-                'movementType' => 'PURCHASE',
-                'quantity' => $qtyPerVariant,
-                'previousStock' => $previous,
-                'newStock' => $variant->stock,
-                'referenceType' => 'purchase_order',
-                'referenceId' => $order->id,
-                'reason' => 'Recepción de OC-2026-0001 (compra inicial)',
-                'userId' => $adminId,
-                'unitCost' => $unitCost,
+                'variantId' => $variant->id, 'movementType' => 'PURCHASE', 'quantity' => $qty,
+                'previousStock' => $previous, 'newStock' => $variant->stock,
+                'referenceType' => 'purchase_order', 'referenceId' => $order->id,
+                'reason' => "Recepción de {$number}", 'userId' => $adminId, 'unitCost' => $unitCost,
+            ]);
+        }
+    }
+
+    /** Compra RECIBIDA de insumos: prendas base (por variante) + consumibles. */
+    private function receiveInputs(string $number, int $supplierId, ?int $adminId): void
+    {
+        $inputVariants = InputVariant::with('input')->get();
+        $consumibles = Input::whereIn('code', ['INS-0003', 'INS-0004', 'INS-0005', 'INS-0006', 'INS-0007'])->get();
+        if ($inputVariants->isEmpty() && $consumibles->isEmpty()) {
+            return;
+        }
+
+        $qtyVariant = 5;
+        $consumibleQty = ['INS-0003' => 200, 'INS-0004' => 10, 'INS-0005' => 200, 'INS-0006' => 100, 'INS-0007' => 200];
+        $subtotal = $inputVariants->sum(fn ($iv) => $qtyVariant * (float) $iv->unitCost)
+            + $consumibles->sum(fn ($i) => ($consumibleQty[$i->code] ?? 0) * (float) $i->unitCost);
+
+        $order = PurchaseOrder::updateOrCreate(
+            ['orderNumber' => $number],
+            [
+                'supplierId' => $supplierId, 'status' => 'RECEIVED',
+                'subtotal' => $subtotal, 'tax' => 0, 'discount' => 0, 'total' => $subtotal,
+                'orderDate' => now(), 'expectedDate' => now()->addDays(5), 'receivedDate' => now(),
+                'notes' => 'Compra de insumos (prendas base y consumibles).', 'createdById' => $adminId,
+            ]
+        );
+        if (PurchaseOrderItem::where('purchaseOrderId', $order->id)->exists()) {
+            return;
+        }
+
+        // Prendas base: por variante de insumo.
+        foreach ($inputVariants as $iv) {
+            PurchaseOrderItem::create([
+                'purchaseOrderId' => $order->id, 'inputVariantId' => $iv->id, 'inputId' => $iv->inputId,
+                'description' => ($iv->input?->name ?? 'Insumo').' ('.$iv->sku.')',
+                'quantity' => $qtyVariant, 'quantityReceived' => $qtyVariant,
+                'unitCost' => (float) $iv->unitCost, 'subtotal' => $qtyVariant * (float) $iv->unitCost,
+            ]);
+            $previous = (float) $iv->currentStock;
+            $iv->currentStock = $previous + $qtyVariant;
+            $iv->save();
+            InputVariantMovement::create([
+                'inputVariantId' => $iv->id, 'movementType' => 'ENTRADA', 'quantity' => $qtyVariant,
+                'previousStock' => $previous, 'newStock' => $iv->currentStock,
+                'referenceType' => 'purchase_order', 'referenceId' => $order->id,
+                'reason' => "Recepción de {$number}", 'userId' => $adminId, 'unitCost' => (float) $iv->unitCost,
+            ]);
+        }
+        // El stock del insumo prenda base = suma de sus variantes.
+        foreach ($inputVariants->pluck('inputId')->unique() as $inputId) {
+            Input::where('id', $inputId)->update(['currentStock' => InputVariant::where('inputId', $inputId)->sum('currentStock')]);
+        }
+
+        // Consumibles: por lote.
+        foreach ($consumibles as $i => $input) {
+            $qty = $consumibleQty[$input->code] ?? 0;
+            PurchaseOrderItem::create([
+                'purchaseOrderId' => $order->id, 'inputId' => $input->id,
+                'description' => $input->name,
+                'quantity' => $qty, 'quantityReceived' => $qty,
+                'unitCost' => (float) $input->unitCost, 'subtotal' => $qty * (float) $input->unitCost,
+            ]);
+            $input->currentStock = (float) $input->currentStock + $qty;
+            $input->save();
+            $batch = InputBatch::create([
+                'inputId' => $input->id, 'batchNumber' => "{$number}-".($i + 1),
+                'supplier' => 'Textiles del Norte S.A.S.', 'initialQuantity' => $qty, 'currentQuantity' => $qty,
+                'reservedQuantity' => 0, 'unitCost' => (float) $input->unitCost, 'totalCost' => $qty * (float) $input->unitCost,
+                'purchaseDate' => now(), 'notes' => "Lote de {$number}.", 'isActive' => true,
+            ]);
+            InputBatchMovement::create([
+                'inputId' => $input->id, 'inputBatchId' => $batch->id, 'movementType' => 'ENTRADA',
+                'quantity' => $qty, 'referenceType' => 'purchase_order', 'referenceId' => $order->id,
+                'reason' => "Recepción de {$number}", 'userId' => $adminId,
             ]);
         }
     }
