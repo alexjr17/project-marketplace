@@ -745,45 +745,6 @@ export const CheckoutPage = () => {
                   </div>
                 </div>
 
-                {/* Cupón de descuento — canjear al momento de pagar */}
-                <div className="bg-white rounded-xl shadow-sm p-6">
-                  <h2 className="text-lg font-bold text-gray-900 mb-3 flex items-center gap-2">
-                    <Ticket className="w-5 h-5" style={{ color: brandColors.accent }} />
-                    ¿Tienes un cupón?
-                  </h2>
-                  {coupon ? (
-                    <div className="flex items-center justify-between bg-emerald-50 border border-emerald-200 rounded-lg px-4 py-3">
-                      <span className="text-sm text-emerald-700 font-semibold flex items-center gap-2">
-                        <Ticket className="w-4 h-4" /> {coupon.code}
-                        <span className="font-normal text-emerald-600">— descuento de {formatCurrency(coupon.amount)}</span>
-                      </span>
-                      <button onClick={removeCoupon} className="text-xs text-emerald-700 hover:text-emerald-900 underline">Quitar</button>
-                    </div>
-                  ) : (
-                    <div className="flex gap-2">
-                      <div className="relative flex-1">
-                        <Ticket className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                        <input
-                          value={couponInput}
-                          onChange={(e) => setCouponInput(e.target.value.toUpperCase())}
-                          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); applyCoupon(); } }}
-                          placeholder="Código de cupón"
-                          className="w-full pl-9 pr-3 py-3 border-2 border-gray-300 rounded-xl text-sm uppercase placeholder:normal-case focus:outline-none focus:border-gray-500"
-                        />
-                      </div>
-                      <button
-                        onClick={applyCoupon}
-                        disabled={couponBusy || !couponInput.trim()}
-                        className="px-5 py-3 rounded-xl text-white text-sm font-semibold disabled:opacity-50"
-                        style={{ backgroundColor: brandColors.primary }}
-                      >
-                        {couponBusy ? '…' : 'Canjear'}
-                      </button>
-                    </div>
-                  )}
-                  {couponError && <p className="text-xs text-red-500 mt-2">{couponError}</p>}
-                </div>
-
                 {/* Selección de método de pago */}
                 {activePaymentMethods.length > 0 && (
                   <div className="bg-white rounded-xl shadow-sm p-6">
@@ -1023,7 +984,12 @@ export const CheckoutPage = () => {
           {/* Order Summary Sidebar */}
           <div className="lg:col-span-1">
             <div className="bg-white rounded-xl shadow-sm p-6 sticky top-4">
-              <h2 className="text-lg font-bold text-gray-900 mb-4">Resumen del Pedido</h2>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-bold text-gray-900">Resumen del Pedido</h2>
+                <span className="text-xs font-medium text-gray-500 bg-gray-100 rounded-full px-2.5 py-1">
+                  {cart.totalItems} {cart.totalItems === 1 ? 'artículo' : 'artículos'}
+                </span>
+              </div>
 
               {/* Lista de productos */}
               <div className="space-y-3 mb-4 max-h-60 overflow-y-auto">
@@ -1100,17 +1066,14 @@ export const CheckoutPage = () => {
                   </span>
                 </div>
                 {shippingQuote && (
-                  <div className="-mt-1 text-xs text-gray-400 space-y-0.5">
-                    <p>{shippingQuote.carrierName} · {shippingQuote.zoneName}</p>
-                    <p>
-                      Entrega estimada:{' '}
-                      <span className="text-gray-700 font-medium">
-                        {handlingDays + shippingQuote.estimatedDays.min}–{handlingDays + shippingQuote.estimatedDays.max} días hábiles
-                      </span>
+                  <div className="mt-1 rounded-lg bg-gray-50 px-3 py-2">
+                    <p className="flex items-center gap-1.5 text-sm font-semibold text-gray-800">
+                      <Clock className="w-4 h-4 text-gray-500" />
+                      Llega en {handlingDays + shippingQuote.estimatedDays.min}–{handlingDays + shippingQuote.estimatedDays.max} días hábiles
                     </p>
-                    <p>
-                      {handlingDays > 0 && <>Preparación {handlingDays} {handlingDays === 1 ? 'día' : 'días'} + </>}
-                      envío {shippingQuote.estimatedDays.min}–{shippingQuote.estimatedDays.max} días
+                    <p className="text-xs text-gray-400 mt-0.5 pl-5">
+                      {shippingQuote.carrierName} · {shippingQuote.zoneName}
+                      {handlingDays > 0 && ` · ${handlingDays} ${handlingDays === 1 ? 'día' : 'días'} de preparación + ${shippingQuote.estimatedDays.min}–${shippingQuote.estimatedDays.max} de envío`}
                     </p>
                   </div>
                 )}
@@ -1120,6 +1083,37 @@ export const CheckoutPage = () => {
                     Tarifa estimada — "{formData.shippingCity}" aún no está en una zona de cobertura
                   </p>
                 )}
+
+                {/* Cupón (compacto, dentro del resumen) */}
+                <div className="pt-1">
+                  {coupon ? (
+                    <div className="flex items-center justify-between rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-2">
+                      <span className="text-xs font-semibold text-emerald-700 flex items-center gap-1.5">
+                        <Ticket className="w-3.5 h-3.5" /> {coupon.code}
+                      </span>
+                      <button onClick={removeCoupon} className="text-xs text-emerald-700 hover:text-emerald-900 underline">Quitar</button>
+                    </div>
+                  ) : (
+                    <div className="flex gap-2">
+                      <input
+                        value={couponInput}
+                        onChange={(e) => setCouponInput(e.target.value.toUpperCase())}
+                        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); applyCoupon(); } }}
+                        placeholder="Código de cupón"
+                        className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-lg text-sm uppercase placeholder:normal-case focus:outline-none focus:border-gray-400"
+                      />
+                      <button
+                        onClick={applyCoupon}
+                        disabled={couponBusy || !couponInput.trim()}
+                        className="px-3 py-2 rounded-lg text-white text-xs font-semibold disabled:opacity-50"
+                        style={{ backgroundColor: brandColors.primary }}
+                      >
+                        {couponBusy ? '…' : 'Aplicar'}
+                      </button>
+                    </div>
+                  )}
+                  {couponError && <p className="text-xs text-red-500 mt-1">{couponError}</p>}
+                </div>
 
                 {discountAmount > 0 && (
                   <div className="flex justify-between text-green-600">
