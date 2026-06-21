@@ -23,6 +23,7 @@ import {
   Package,
   Loader2,
   Clock,
+  Info,
 } from 'lucide-react';
 
 export default function NewSalePage() {
@@ -761,7 +762,21 @@ export default function NewSalePage() {
         {/* Action Buttons - Cobrar con método */}
         <div className="space-y-2 lg:space-y-3">
           <div className="bg-white rounded-lg shadow-sm p-3 lg:p-4">
-            <h3 className="font-semibold text-gray-900 mb-2 lg:mb-3">Cobrar con:</h3>
+            <div className="flex items-center justify-between mb-2 lg:mb-3">
+              <h3 className="font-semibold text-gray-900">Cobrar con:</h3>
+              <div className="relative group">
+                <Info className="w-4 h-4 text-gray-400 cursor-help" />
+                <div className="absolute right-0 top-6 z-20 hidden group-hover:block bg-gray-900 text-white text-xs rounded-lg p-3 w-52 shadow-xl">
+                  <p className="font-semibold mb-1.5">Atajos de teclado</p>
+                  <div className="space-y-1 text-gray-200">
+                    <p><kbd className="px-1.5 py-0.5 bg-white/15 rounded">1</kbd> Efectivo · <kbd className="px-1.5 py-0.5 bg-white/15 rounded">2</kbd> Transfer</p>
+                    <p><kbd className="px-1.5 py-0.5 bg-white/15 rounded">3</kbd> Mixto · <kbd className="px-1.5 py-0.5 bg-white/15 rounded">4</kbd> Debe</p>
+                    <p><kbd className="px-1.5 py-0.5 bg-white/15 rounded">F9</kbd> Descuento · <kbd className="px-1.5 py-0.5 bg-white/15 rounded">F12</kbd> Efectivo</p>
+                    <p><kbd className="px-1.5 py-0.5 bg-white/15 rounded">ESC</kbd> Cerrar</p>
+                  </div>
+                </div>
+              </div>
+            </div>
             <div className="grid grid-cols-2 gap-2">
               <button
                 onClick={() => openCheckoutWith('cash')}
@@ -821,18 +836,6 @@ export default function NewSalePage() {
           </button>
         </div>
 
-        {/* Shortcuts Help - Hidden on mobile */}
-        <div className="hidden lg:block bg-gray-50 rounded-lg p-3 text-xs text-gray-600">
-          <p className="font-semibold mb-2">Atajos de Teclado:</p>
-          <div className="space-y-1">
-            <p><kbd className="px-2 py-1 bg-white border rounded">1</kbd> Efectivo</p>
-            <p><kbd className="px-2 py-1 bg-white border rounded">2</kbd> Transfer</p>
-            <p><kbd className="px-2 py-1 bg-white border rounded">3</kbd> Mixto</p>
-            <p><kbd className="px-2 py-1 bg-white border rounded">4</kbd> Debe</p>
-            <p><kbd className="px-2 py-1 bg-white border rounded">F9</kbd> Descuento</p>
-            <p><kbd className="px-2 py-1 bg-white border rounded">ESC</kbd> Cancelar</p>
-          </div>
-        </div>
       </div>
 
       {/* Discount Modal */}
