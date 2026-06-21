@@ -145,6 +145,8 @@ export const CustomizedCartItem = ({ item, onUpdateQuantity, onRemove, onStockCh
               <img
                 src={customizedProduct.previewImages.front}
                 alt={`Preview de ${customizedProduct.productName}`}
+                loading="lazy"
+                decoding="async"
                 className="max-w-full max-h-full object-contain rounded"
               />
             ) : (

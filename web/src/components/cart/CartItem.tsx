@@ -113,6 +113,8 @@ export const CartItem = ({ item, onUpdateQuantity, onRemove, onStockChange }: Ca
             <img
               src={item.product.images.front}
               alt={item.product.name}
+              loading="lazy"
+              decoding="async"
               className="w-full h-full object-cover"
             />
           </div>

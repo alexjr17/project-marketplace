@@ -28,6 +28,8 @@ export const ProductCard = ({ product }: ProductCardProps) => {
         <img
           src={product.images.front}
           alt={product.name}
+          loading="lazy"
+          decoding="async"
           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
         />
         {product.featured && (

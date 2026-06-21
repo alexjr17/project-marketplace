@@ -196,6 +196,7 @@ export const Header = () => {
               ) : (
                 <button
                   onClick={() => setShowSearchDesktop(true)}
+                  aria-label="Buscar"
                   className="p-2.5 rounded-lg hover:bg-gray-100 transition-all group"
                 >
                   <Search
@@ -211,6 +212,7 @@ export const Header = () => {
               {/* Cart Icon */}
               <Link
                 to="/cart"
+                aria-label="Carrito"
                 className={`relative p-2.5 rounded-lg transition-all group ${
                   isActive('/cart') ? 'bg-gray-100' : 'hover:bg-gray-100'
                 }`}
