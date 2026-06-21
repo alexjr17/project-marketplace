@@ -18,9 +18,14 @@ const authHeader = () => {
 export type AnnouncementType = 'bar' | 'popup' | 'marquee' | 'floating';
 export type AnnouncementVariant = 'info' | 'promo' | 'warning' | 'success' | 'dark';
 
+export type AnnouncementLayout = 'standard' | 'image' | 'overlay';
+export type AnnouncementSize = 'sm' | 'md' | 'lg' | 'xl';
+
 export interface Announcement {
   id: number;
   type: AnnouncementType;
+  layout?: AnnouncementLayout | null;
+  size?: AnnouncementSize | null;
   title?: string | null;
   message?: string | null;
   imageUrl?: string | null;

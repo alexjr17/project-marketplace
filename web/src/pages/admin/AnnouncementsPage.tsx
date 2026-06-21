@@ -23,6 +23,8 @@ const VARIANT_LABELS: Record<string, string> = {
 
 const EMPTY: AnnouncementInput = {
   type: 'bar',
+  layout: 'standard',
+  size: 'md',
   title: '',
   message: '',
   imageUrl: '',
@@ -232,6 +234,26 @@ export default function AnnouncementsPage() {
               <Field label="Mensaje">
                 <textarea value={form.message || ''} onChange={(e) => set('message', e.target.value)} rows={2} placeholder="Texto del anuncio" className="inp" />
               </Field>
+
+              {form.type === 'popup' && (
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label="Diseño del popup">
+                    <select value={form.layout || 'standard'} onChange={(e) => set('layout', e.target.value as AnnouncementInput['layout'])} className="sel">
+                      <option value="standard">Estándar (imagen + texto)</option>
+                      <option value="image">Solo imagen (botón encima)</option>
+                      <option value="overlay">Imagen con texto encima</option>
+                    </select>
+                  </Field>
+                  <Field label="Tamaño del modal">
+                    <select value={form.size || 'md'} onChange={(e) => set('size', e.target.value as AnnouncementInput['size'])} className="sel">
+                      <option value="sm">Pequeño</option>
+                      <option value="md">Mediano</option>
+                      <option value="lg">Grande</option>
+                      <option value="xl">Extra grande</option>
+                    </select>
+                  </Field>
+                </div>
+              )}
 
               {(form.type === 'popup' || form.type === 'floating') && (
                 <Field label="Imagen (popup/flotante)">

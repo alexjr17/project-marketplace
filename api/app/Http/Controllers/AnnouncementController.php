@@ -14,6 +14,8 @@ class AnnouncementController extends Controller
     {
         return [
             'type' => 'required|in:bar,popup,marquee,floating',
+            'layout' => 'nullable|in:standard,image,overlay',
+            'size' => 'nullable|in:sm,md,lg,xl',
             'title' => 'nullable|string',
             'message' => 'nullable|string',
             'imageUrl' => 'nullable|string',

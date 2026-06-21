@@ -4,6 +4,10 @@ import { X, Tag } from 'lucide-react';
 import { getActiveAnnouncements, type Announcement } from '../../services/announcements.service';
 import { useSettings } from '../../context/SettingsContext';
 
+const SIZE_CLASS: Record<string, string> = {
+  sm: 'max-w-sm', md: 'max-w-md', lg: 'max-w-lg', xl: 'max-w-2xl',
+};
+
 const VARIANT_BAR: Record<string, string> = {
   info: 'bg-blue-600 text-white',
   promo: 'bg-gradient-to-r from-violet-600 to-pink-600 text-white',
@@ -167,48 +171,86 @@ export function AnnouncementsRenderer() {
       ))}
 
       {/* Popup / modal */}
-      {popup && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/60 animate-[annFadeIn_.3s_ease-out] motion-reduce:animate-none" onClick={() => dismiss(popup)} />
-          <div className="relative bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden animate-[annPopIn_.4s_cubic-bezier(0.16,1,0.3,1)] motion-reduce:animate-none">
-            {/* Borde superior con el color de la marca */}
-            <div className="h-1.5 w-full" style={{ backgroundImage: brandGradient }} />
-            <button onClick={() => dismiss(popup)} aria-label="Cerrar" className="absolute top-3 right-3 z-10 p-1.5 bg-white/90 rounded-full text-gray-600 hover:bg-white shadow">
-              <X className="w-5 h-5" />
-            </button>
-            {popup.imageUrl && (
-              <div className="group w-full h-60 bg-gradient-to-b from-gray-50 to-gray-100 flex items-center justify-center overflow-hidden">
-                {/* Recortada por defecto; al pasar el cursor se ajusta para verla completa */}
-                <img
-                  src={popup.imageUrl}
-                  alt={popup.title || ''}
-                  className="w-full h-full object-cover group-hover:object-contain transition-all duration-300"
-                />
+      {popup && (() => {
+        const p = popup;
+        const lay = p.layout || 'standard';
+        const cardCls = `relative bg-white rounded-2xl shadow-2xl w-full overflow-hidden ${SIZE_CLASS[p.size || 'md'] || SIZE_CLASS.md} animate-[annPopIn_.4s_cubic-bezier(0.16,1,0.3,1)] motion-reduce:animate-none`;
+
+        const closeBtn = (
+          <button onClick={() => dismiss(p)} aria-label="Cerrar" className="absolute top-3 right-3 z-10 p-1.5 bg-white/90 rounded-full text-gray-600 hover:bg-white shadow">
+            <X className="w-5 h-5" />
+          </button>
+        );
+        const coupon = (onDark: boolean) => p.couponCode ? (
+          <span
+            className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-base font-extrabold border-2 border-dashed"
+            style={onDark
+              ? { color: '#fff', borderColor: 'rgba(255,255,255,.7)', backgroundColor: 'rgba(255,255,255,.12)' }
+              : { color: brand.primary, borderColor: brand.primary, backgroundColor: `${brand.primary}1a` }}
+          >
+            <Tag className="w-4 h-4" /> {p.couponCode}
+          </span>
+        ) : null;
+        const cta = p.ctaText && p.ctaUrl ? (
+          <span onClick={() => markSeen(p)}>
+            <Cta a={p} className="inline-flex items-center px-6 py-2.5 rounded-lg text-sm font-bold text-white shadow-lg hover:opacity-90" style={{ backgroundImage: brandGradient }} />
+          </span>
+        ) : null;
+
+        return (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/60 animate-[annFadeIn_.3s_ease-out] motion-reduce:animate-none" onClick={() => dismiss(p)} />
+
+            {lay === 'image' ? (
+              <div className={cardCls}>
+                {closeBtn}
+                {p.imageUrl && <img src={p.imageUrl} alt={p.title || ''} className="w-full max-h-[78vh] object-contain bg-gray-50" />}
+                {(coupon(false) || cta) && (
+                  <div className="absolute bottom-5 left-0 right-0 flex flex-col items-center gap-2 px-4">
+                    {coupon(false)}
+                    {cta}
+                  </div>
+                )}
+              </div>
+            ) : lay === 'overlay' ? (
+              <div className={cardCls}>
+                {closeBtn}
+                <div className="relative min-h-[22rem]">
+                  {p.imageUrl && <img src={p.imageUrl} alt={p.title || ''} className="absolute inset-0 w-full h-full object-cover" />}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/40 to-black/10" />
+                  <div className="relative flex flex-col justify-end p-6 text-center text-white min-h-[22rem]">
+                    {p.title && <h3 className="text-2xl font-bold">{p.title}</h3>}
+                    {p.message && <p className="mt-2 text-white/90">{p.message}</p>}
+                    {coupon(true) && <div className="mt-3 flex justify-center">{coupon(true)}</div>}
+                    {cta && <div className="mt-4 flex justify-center">{cta}</div>}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className={cardCls}>
+                <div className="h-1.5 w-full" style={{ backgroundImage: brandGradient }} />
+                {closeBtn}
+                {p.imageUrl && (
+                  <div className="w-full h-60 bg-gray-50 overflow-hidden">
+                    <img src={p.imageUrl} alt={p.title || ''} className="w-full h-full object-cover" />
+                  </div>
+                )}
+                <div className="p-6 text-center">
+                  {p.title && <h3 className="text-2xl font-bold text-gray-900">{p.title}</h3>}
+                  {p.message && <p className="text-gray-600 mt-2">{p.message}</p>}
+                  {coupon(false) && (
+                    <div className="mt-4 flex flex-col items-center gap-1">
+                      <span className="text-[11px] uppercase tracking-wide text-gray-400 font-semibold">Tu cupón</span>
+                      {coupon(false)}
+                    </div>
+                  )}
+                  {cta && <div className="mt-5">{cta}</div>}
+                </div>
               </div>
             )}
-            <div className="p-6 text-center">
-              {popup.title && <h3 className="text-2xl font-bold text-gray-900">{popup.title}</h3>}
-              {popup.message && <p className="text-gray-600 mt-2">{popup.message}</p>}
-              {popup.couponCode && (
-                <div className="mt-4 flex flex-col items-center gap-1">
-                  <span className="text-[11px] uppercase tracking-wide text-gray-400 font-semibold">Tu cupón</span>
-                  <span
-                    className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-base font-extrabold border-2 border-dashed"
-                    style={{ color: brand.primary, borderColor: brand.primary, backgroundColor: `${brand.primary}10` }}
-                  >
-                    <Tag className="w-4 h-4" /> {popup.couponCode}
-                  </span>
-                </div>
-              )}
-              {popup.ctaText && popup.ctaUrl && (
-                <div className="mt-5" onClick={() => markSeen(popup)}>
-                  <Cta a={popup} className="inline-flex items-center px-5 py-2.5 rounded-lg text-sm font-semibold text-white hover:opacity-90" style={{ backgroundImage: brandGradient }} />
-                </div>
-              )}
-            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       <style>{`
         @keyframes annMarquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
