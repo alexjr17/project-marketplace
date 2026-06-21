@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { X, Tag } from 'lucide-react';
 import { getActiveAnnouncements, type Announcement } from '../../services/announcements.service';
+import { useSettings } from '../../context/SettingsContext';
 
 const VARIANT_BAR: Record<string, string> = {
   info: 'bg-blue-600 text-white',
@@ -34,14 +35,14 @@ function matchesPage(a: Announcement, path: string): boolean {
 }
 
 /** Botón/enlace de llamado a la acción. */
-function Cta({ a, className }: { a: Announcement; className?: string }) {
+function Cta({ a, className, style }: { a: Announcement; className?: string; style?: CSSProperties }) {
   if (!a.ctaText || !a.ctaUrl) return null;
   const internal = a.ctaUrl.startsWith('/');
   const cls = className ?? 'inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-white/20 hover:bg-white/30';
   return internal ? (
-    <Link to={a.ctaUrl} className={cls}>{a.ctaText}</Link>
+    <Link to={a.ctaUrl} className={cls} style={style}>{a.ctaText}</Link>
   ) : (
-    <a href={a.ctaUrl} target="_blank" rel="noopener noreferrer" className={cls}>{a.ctaText}</a>
+    <a href={a.ctaUrl} target="_blank" rel="noopener noreferrer" className={cls} style={style}>{a.ctaText}</a>
   );
 }
 
@@ -56,6 +57,18 @@ function Coupon({ code, dark = false }: { code?: string | null; dark?: boolean }
 
 export function AnnouncementsRenderer() {
   const location = useLocation();
+  const { settings } = useSettings();
+  const brand = settings.appearance?.brandColors || settings.general?.brandColors || {
+    primary: '#7c3aed', secondary: '#ec4899', accent: '#f59e0b',
+  };
+  const brandGradient = `linear-gradient(to right, ${brand.primary}, ${brand.secondary})`;
+
+  // El estilo "promo" usa los colores configurados de la marca.
+  const barProps = (a: Announcement): { className: string; style?: CSSProperties } =>
+    a.variant === 'promo'
+      ? { className: 'text-sm text-white', style: { backgroundImage: brandGradient } }
+      : { className: `${VARIANT_BAR[a.variant] || VARIANT_BAR.info} text-sm` };
+
   const [items, setItems] = useState<Announcement[]>([]);
   const [dismissed, setDismissed] = useState<Set<number>>(new Set());
 
@@ -80,13 +93,22 @@ export function AnnouncementsRenderer() {
     <>
       {/* Barras / marquesina (en flujo, debajo del header) */}
       {bars.map((a) => (
-        <div key={a.id} className={`${VARIANT_BAR[a.variant] || VARIANT_BAR.info} text-sm`}>
+        <div key={a.id} {...barProps(a)}>
           <div className="max-w-7xl mx-auto px-4 py-2 flex items-center gap-3">
             {a.type === 'marquee' ? (
               <div className="flex-1 overflow-hidden">
-                <div className="whitespace-nowrap animate-[annMarquee_18s_linear_infinite]">
-                  {a.title && <strong className="mr-2">{a.title}</strong>}{a.message}
-                  {a.couponCode ? <span className="ml-3">· Código: {a.couponCode}</span> : null}
+                {/* Loop continuo: 2 copias y se desplaza -50% (sin huecos).
+                    Se pausa al pasar el cursor y se detiene si el sistema
+                    pide reducir movimiento (evita marear). */}
+                <div className="inline-flex w-max whitespace-nowrap animate-[annMarquee_30s_linear_infinite] hover:[animation-play-state:paused] motion-reduce:animate-none motion-reduce:w-full motion-reduce:justify-center">
+                  {[0, 1].map((k) => (
+                    <span key={k} className="px-6 flex items-center gap-2" aria-hidden={k === 1} {...(k === 1 ? { 'data-dup': true } : {})}>
+                      {a.title && <strong>{a.title}</strong>}
+                      {a.message && <span>{a.message}</span>}
+                      {a.couponCode ? <span className="font-semibold">· Cupón: {a.couponCode}</span> : null}
+                      <Cta a={a} />
+                    </span>
+                  ))}
                 </div>
               </div>
             ) : (
@@ -126,7 +148,7 @@ export function AnnouncementsRenderer() {
             {a.message && <p className="text-xs text-gray-600 mt-1">{a.message}</p>}
             <div className="flex items-center gap-2 mt-2">
               <Coupon code={a.couponCode} dark />
-              <Cta a={a} className="inline-flex items-center px-3 py-1 rounded-lg text-xs font-semibold bg-gray-900 text-white hover:bg-gray-800" />
+              <Cta a={a} className="inline-flex items-center px-3 py-1 rounded-lg text-xs font-semibold text-white hover:opacity-90" style={{ backgroundColor: brand.primary }} />
             </div>
           </div>
         </div>
@@ -149,7 +171,7 @@ export function AnnouncementsRenderer() {
               )}
               {popup.ctaText && popup.ctaUrl && (
                 <div className="mt-5" onClick={() => markSeen(popup)}>
-                  <Cta a={popup} className="inline-flex items-center px-5 py-2.5 rounded-lg text-sm font-semibold text-white bg-gradient-to-r from-violet-600 to-pink-600 hover:opacity-90" />
+                  <Cta a={popup} className="inline-flex items-center px-5 py-2.5 rounded-lg text-sm font-semibold text-white hover:opacity-90" style={{ backgroundImage: brandGradient }} />
                 </div>
               )}
             </div>
@@ -157,7 +179,10 @@ export function AnnouncementsRenderer() {
         </div>
       )}
 
-      <style>{`@keyframes annMarquee { 0% { transform: translateX(100%); } 100% { transform: translateX(-100%); } }`}</style>
+      <style>{`
+        @keyframes annMarquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+        @media (prefers-reduced-motion: reduce) { [data-dup="true"] { display: none; } }
+      `}</style>
     </>
   );
 }
