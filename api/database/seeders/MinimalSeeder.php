@@ -39,6 +39,7 @@ class MinimalSeeder extends Seeder
     {
         $this->seedProductWithVariants();
         $this->seedSimpleProduct();
+        $this->seedGorra();
         $this->seedTemplate('sueter-basico', 'Suéter Básico', 70000, 'TPL-0001');
         $this->seedTemplate('sueter-oversize', 'Suéter Oversize', 78000, 'TPL-0002');
         $this->seedAnnouncements();
@@ -49,25 +50,25 @@ class MinimalSeeder extends Seeder
         $this->command?->info('MinimalSeeder: datos mínimos sembrados.');
     }
 
-    /** Producto de catálogo CON variantes (3 colores × 4 tallas). */
+    /** Producto de catálogo CON variantes (3 colores × 4 tallas): Suéter Básico. */
     private function seedProductWithVariants(): void
     {
-        $type = ProductType::where('slug', 'buso')->first();
+        $type = ProductType::where('slug', 'sueter-basico')->first();
         $product = Product::updateOrCreate(
-            ['slug' => 'buso-clasico'],
+            ['slug' => 'sueter-basico'],
             [
                 'sku' => 'PRD-0001',
-                'name' => 'Buso Clásico',
-                'description' => 'Buso para dama en algodón perchado. Disponible en varios colores y tallas.',
+                'name' => 'Suéter Básico',
+                'description' => 'Suéter de corte clásico en algodón perchado. Disponible en varios colores y tallas.',
                 'categoryId' => $type?->categoryId,
                 'typeId' => $type?->id,
-                'basePrice' => 70000,
+                'basePrice' => 58000,
                 'stock' => 0,
                 'featured' => true,
                 'isActive' => true,
                 'isTemplate' => false,
                 'images' => ['front' => '', 'back' => '', 'side' => ''],
-                'tags' => ['buso', 'dama', 'catalogo'],
+                'tags' => ['sueter', 'basico', 'catalogo'],
                 'reviewsCount' => 0,
             ]
         );
@@ -88,7 +89,7 @@ class MinimalSeeder extends Seeder
                     [
                         'sku' => 'PRD-0001-'.strtoupper(substr($color->slug, 0, 3)).'-'.$size->abbreviation,
                         'barcode' => $this->ean13(),
-                        'stock' => 0, // arranca en 0; la única unidad entra por la compra de ejemplo
+                        'stock' => 2, // 2 unidades por variante (demo)
                         'minStock' => 3,
                         'isActive' => true,
                     ]
@@ -113,7 +114,7 @@ class MinimalSeeder extends Seeder
                 'categoryId' => $category?->id,
                 'typeId' => $type?->id,
                 'basePrice' => 25000,
-                'stock' => 0,
+                'stock' => 2,
                 'featured' => false,
                 'isActive' => true,
                 'isTemplate' => false,
@@ -129,11 +130,57 @@ class MinimalSeeder extends Seeder
             [
                 'sku' => 'PRD-0002-U',
                 'barcode' => $this->ean13(),
-                'stock' => 0,
+                'stock' => 2,
                 'minStock' => 5,
                 'isActive' => true,
             ]
         );
+    }
+
+    /** Producto Gorra (3 colores, talla única): variantes por color. */
+    private function seedGorra(): void
+    {
+        $type = ProductType::where('slug', 'gorra')->first();
+        $product = Product::updateOrCreate(
+            ['slug' => 'gorra-clasica'],
+            [
+                'sku' => 'PRD-0003',
+                'name' => 'Gorra Clásica',
+                'description' => 'Gorra ajustable para bordado o estampado. Talla única.',
+                'categoryId' => $type?->categoryId,
+                'typeId' => $type?->id,
+                'basePrice' => 30000,
+                'stock' => 0,
+                'featured' => false,
+                'isActive' => true,
+                'isTemplate' => false,
+                'images' => ['front' => '', 'back' => '', 'side' => ''],
+                'tags' => ['accesorio', 'gorra'],
+                'reviewsCount' => 0,
+            ]
+        );
+
+        $colors = Color::whereIn('slug', ['blanco', 'negro', 'azul-marino'])->get();
+        $sizeU = Size::where('abbreviation', 'U')->first();
+
+        foreach ($colors as $color) {
+            ProductColor::updateOrCreate(['productId' => $product->id, 'colorId' => $color->id]);
+        }
+        if ($sizeU) {
+            ProductSize::updateOrCreate(['productId' => $product->id, 'sizeId' => $sizeU->id]);
+        }
+        foreach ($colors as $color) {
+            ProductVariant::updateOrCreate(
+                ['productId' => $product->id, 'colorId' => $color->id, 'sizeId' => $sizeU?->id],
+                [
+                    'sku' => 'PRD-0003-'.strtoupper(substr($color->slug, 0, 3)),
+                    'barcode' => $this->ean13(),
+                    'stock' => 2,
+                    'minStock' => 3,
+                    'isActive' => true,
+                ]
+            );
+        }
     }
 
     /** Plantilla personalizable (isTemplate) con zonas frente/espalda y variantes. */
@@ -294,7 +341,7 @@ class MinimalSeeder extends Seeder
         );
     }
 
-    /** Una compra recibida de ejemplo (1 unidad) al proveedor ya sembrado. */
+    /** Una compra de ejemplo (1 unidad, pendiente de recibir) al proveedor sembrado. */
     private function seedSupplierAndPurchase(): void
     {
         // El proveedor lo crea InventorySeeder (PROV-0001); si no, lo creamos.
@@ -303,33 +350,32 @@ class MinimalSeeder extends Seeder
             ['name' => 'Textiles del Norte S.A.S.', 'country' => 'Colombia', 'isActive' => true]
         );
 
-        $product = Product::where('slug', 'buso-clasico')->first();
+        $product = Product::where('slug', 'sueter-basico')->first();
         $variant = $product ? ProductVariant::where('productId', $product->id)->orderBy('id')->first() : null;
         if (! $variant) {
             return;
         }
 
-        $adminId = User::where('email', 'alexjose.r.r@gmail.com')->value('id');
-        $unitCost = 40000;
+        $adminId = User::where('email', 'admin@vexa.com')->value('id');
+        $unitCost = 32000;
 
         $order = PurchaseOrder::updateOrCreate(
             ['orderNumber' => 'OC-2026-0001'],
             [
                 'supplierId' => $supplier->id,
-                'status' => 'RECEIVED',
+                'status' => 'CONFIRMED', // pendiente de recibir: no altera el stock
                 'subtotal' => $unitCost,
                 'tax' => 0,
                 'discount' => 0,
                 'total' => $unitCost,
                 'orderDate' => now(),
                 'expectedDate' => now()->addDays(3),
-                'receivedDate' => now(),
-                'notes' => 'Compra de ejemplo: 1 unidad.',
+                'receivedDate' => null,
+                'notes' => 'Compra de ejemplo: 1 unidad (pendiente de recibir).',
                 'createdById' => $adminId,
             ]
         );
 
-        // Idempotente: no duplicar el ítem ni volver a sumar stock.
         if (PurchaseOrderItem::where('purchaseOrderId', $order->id)->exists()) {
             return;
         }
@@ -339,27 +385,9 @@ class MinimalSeeder extends Seeder
             'variantId' => $variant->id,
             'description' => $product->name.' ('.$variant->sku.')',
             'quantity' => 1,
-            'quantityReceived' => 1,
+            'quantityReceived' => 0,
             'unitCost' => $unitCost,
             'subtotal' => $unitCost,
-        ]);
-
-        // Recepción: suma 1 unidad al stock de la variante y registra el movimiento.
-        $previous = (int) $variant->stock;
-        $variant->stock = $previous + 1;
-        $variant->save();
-
-        VariantMovement::create([
-            'variantId' => $variant->id,
-            'movementType' => 'PURCHASE',
-            'quantity' => 1,
-            'previousStock' => $previous,
-            'newStock' => $variant->stock,
-            'referenceType' => 'purchase_order',
-            'referenceId' => $order->id,
-            'reason' => 'Recepción de OC-2026-0001 (compra de ejemplo)',
-            'userId' => $adminId,
-            'unitCost' => $unitCost,
         ]);
     }
 

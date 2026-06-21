@@ -2,7 +2,9 @@
 
 namespace App\Console\Commands;
 
+use App\Models\Setting;
 use App\Models\User;
+use Database\Seeders\DatabaseSeeder;
 use Illuminate\Console\Command;
 
 /**
@@ -45,9 +47,10 @@ class SeedIfEmpty extends Command
     /**
      * ¿Hay que limpiar y resembrar desde cero?
      *  - Si FRESH_SEED está activo (forzado por variable de entorno), o
-     *  - Una sola vez automáticamente: mientras siga existiendo el usuario demo
-     *    ANTIGUO (admin@marketplace.com). Tras el reseed ese usuario desaparece,
-     *    así que el reinicio siguiente ya NO vuelve a borrar la base.
+     *  - Si la versión de datos sembrada NO coincide con DatabaseSeeder::SEED_VERSION
+     *    (se cambiaron los seeders). El reseed graba la versión nueva, así que el
+     *    reinicio siguiente ya NO vuelve a borrar la base hasta el próximo cambio.
+     *  Sólo aplica si ya hay datos; en una BD vacía se siembra normal (db:seed).
      */
     private function shouldFreshSeed(): bool
     {
@@ -56,9 +59,15 @@ class SeedIfEmpty extends Command
         }
 
         try {
-            return User::where('email', 'admin@marketplace.com')->exists();
+            if (User::count() === 0) {
+                return false; // BD vacía: se siembra normal, no hace falta limpiar
+            }
+            $stored = Setting::where('key', 'seedVersion')->value('value');
+            $current = is_array($stored) ? ($stored['v'] ?? null) : null;
+
+            return $current !== DatabaseSeeder::SEED_VERSION;
         } catch (\Throwable $e) {
-            // La tabla aún no existe (BD nueva): no hace falta limpiar.
+            // Alguna tabla aún no existe (BD nueva): no hace falta limpiar.
             return false;
         }
     }
