@@ -159,6 +159,11 @@ class POSController extends Controller
             'paymentMethod' => 'nullable|in:cash,card,transfer,mixed,debe',
             'discount' => 'nullable|numeric|min:0',
             'notes' => 'nullable|string',
+            'cashAmount' => 'nullable|numeric|min:0',
+            'cardAmount' => 'nullable|numeric|min:0',
+            'cardReference' => 'nullable|string',
+            'cardType' => 'nullable|string',
+            'cardLastFour' => 'nullable|string',
         ]);
 
         $isAdmin = ((int) $request->user()->roleId === 1);

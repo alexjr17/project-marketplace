@@ -62,6 +62,10 @@ interface CheckoutModalProps {
   onAbonoAmountChange: (v: string) => void;
   abonoMethod: 'cash' | 'transfer';
   onAbonoMethodChange: (v: 'cash' | 'transfer') => void;
+  // Datos de transacción precargados (al editar una venta existente).
+  initialCardReference?: string;
+  initialCardType?: string;
+  initialCardLastFour?: string;
 }
 
 export const CheckoutModal = ({
@@ -84,6 +88,9 @@ export const CheckoutModal = ({
   onAbonoAmountChange,
   abonoMethod,
   onAbonoMethodChange,
+  initialCardReference,
+  initialCardType,
+  initialCardLastFour,
 }: CheckoutModalProps) => {
   const [step, setStep] = useState<CheckoutStep>('customer');
 
@@ -188,10 +195,10 @@ export const CheckoutModal = ({
       setPdfUrl(null);
       setEmailSent(false);
       setSendInvoiceEmail(!!initialCustomer?.email);
-      // Reset card data
-      setCardReference('');
-      setCardType('');
-      setCardLastFour('');
+      // Datos de tarjeta/transferencia: precargados si se edita, si no vacíos.
+      setCardReference(initialCardReference || '');
+      setCardType(initialCardType || '');
+      setCardLastFour(initialCardLastFour || '');
 
       // Enfocar y seleccionar el campo de monto al abrir (efectivo/mixto)
       setTimeout(() => {

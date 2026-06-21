@@ -62,6 +62,8 @@ export default function NewSalePage() {
   const navigate = useNavigate();
   const editParam = searchParams.get('edit');
   const editLoadedRef = useRef(false);
+  // Datos de transacción (transferencia/tarjeta) de la venta que se edita.
+  const [editTxn, setEditTxn] = useState<{ reference: string; type: string; lastFour: string } | null>(null);
 
   // Cargar una venta para editar cuando se entra con ?edit=<id>
   useEffect(() => {
@@ -83,6 +85,14 @@ export default function NewSalePage() {
         if (['cash', 'card', 'transfer', 'mixed', 'debe'].includes(sale.paymentMethod)) {
           setPaymentMethod(sale.paymentMethod as typeof paymentMethod);
         }
+        // Precargar datos de transacción y montos de la venta.
+        setEditTxn({
+          reference: sale.cardReference || '',
+          type: sale.cardType || '',
+          lastFour: sale.cardLastFour || '',
+        });
+        if (sale.cashAmount) setCashAmount(String(sale.cashAmount));
+        if (sale.cardAmount) setCardAmount(String(sale.cardAmount));
         showToast(`Editando venta ${sale.orderNumber}`, 'info');
       } catch (error) {
         console.error('Error cargando la venta a editar:', error);
@@ -965,6 +975,9 @@ export default function NewSalePage() {
         onAbonoAmountChange={setAbonoAmount}
         abonoMethod={abonoMethod}
         onAbonoMethodChange={setAbonoMethod}
+        initialCardReference={editTxn?.reference}
+        initialCardType={editTxn?.type}
+        initialCardLastFour={editTxn?.lastFour}
       />
 
       {/* Zone Selection Modal */}

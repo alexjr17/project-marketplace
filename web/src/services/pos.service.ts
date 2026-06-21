@@ -422,10 +422,17 @@ export interface UpdateSalePayload {
   customerId?: number;
   customerName?: string;
   customerPhone?: string;
+  customerEmail?: string;
   customerCedula?: string;
   paymentMethod?: 'cash' | 'card' | 'transfer' | 'mixed' | 'debe';
   discount?: number;
   notes?: string;
+  // Datos de pago/transacción (al editar conservar/actualizar).
+  cashAmount?: number;
+  cardAmount?: number;
+  cardReference?: string;
+  cardType?: string;
+  cardLastFour?: string;
 }
 
 /** Edita una venta POS (ítems, cliente, método de pago, notas). */

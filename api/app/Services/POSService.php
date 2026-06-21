@@ -734,6 +734,23 @@ class POSService
                 $order->notes = $data['notes'];
             }
 
+            // Datos de pago / transacción (referencia, tipo, montos).
+            if (array_key_exists('cashAmount', $data) && $data['cashAmount'] !== null) {
+                $order->cashAmount = (float) $data['cashAmount'];
+            }
+            if (array_key_exists('cardAmount', $data) && $data['cardAmount'] !== null) {
+                $order->cardAmount = (float) $data['cardAmount'];
+            }
+            if (array_key_exists('cardReference', $data)) {
+                $order->cardReference = $data['cardReference'];
+            }
+            if (array_key_exists('cardType', $data)) {
+                $order->cardType = $data['cardType'];
+            }
+            if (array_key_exists('cardLastFour', $data)) {
+                $order->cardLastFour = $data['cardLastFour'];
+            }
+
             // Estado según pago / abono acumulado.
             $paid = (float) ($order->cashAmount ?? 0) + (float) ($order->cardAmount ?? 0);
             if ($order->paymentMethod === 'debe') {

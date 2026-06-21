@@ -359,10 +359,16 @@ export function POSProvider({ children }: { children: React.ReactNode }) {
             customerId: data.customerId,
             customerName: data.customerName,
             customerPhone: data.customerPhone,
+            customerEmail: data.customerEmail,
             customerCedula: data.customerCedula,
             paymentMethod: data.paymentMethod,
             discount,
             notes: data.notes,
+            cashAmount: data.cashAmount,
+            cardAmount: data.cardAmount,
+            cardReference: data.cardReference,
+            cardType: data.cardType,
+            cardLastFour: data.cardLastFour,
           });
           setEditingSaleId(null);
         } else {
