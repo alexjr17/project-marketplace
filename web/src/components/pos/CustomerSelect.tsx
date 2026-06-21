@@ -71,7 +71,17 @@ export default function CustomerSelect({ value, onChange }: Props) {
     setQuery('');
   };
 
-  // Abre el formulario completo (registrar nuevo con datos reales).
+  // Tomar el nombre escrito como cliente nuevo (solo nombre); los datos
+  // completos quedan opcionales y pueden añadirse luego en el cobro.
+  const selectTypedName = () => {
+    const name = query.trim();
+    if (!name) return;
+    onChange({ name });
+    setOpen(false);
+    setQuery('');
+  };
+
+  // Abre el formulario completo (registrar nuevo con datos reales, opcional).
   const openNewForm = (prefillName?: string) => {
     setFormInitial(prefillName ? { name: prefillName } : null);
     setShowForm(true);
@@ -149,11 +159,11 @@ export default function CustomerSelect({ value, onChange }: Props) {
             <button
               type="button"
               onMouseDown={(e) => e.preventDefault()}
-              onClick={() => openNewForm(query.trim())}
+              onClick={selectTypedName}
               className="w-full text-left px-3 py-2 hover:bg-green-50 flex items-center gap-2 text-green-700 border-t"
             >
               <UserPlus className="w-4 h-4 flex-shrink-0" />
-              <span className="text-sm">Registrar con datos: <strong>{query.trim()}</strong></span>
+              <span className="text-sm">Usar cliente: <strong>{query.trim()}</strong></span>
             </button>
           )}
           {!loading && query.trim().length < 2 && (
@@ -163,11 +173,11 @@ export default function CustomerSelect({ value, onChange }: Props) {
           <button
             type="button"
             onMouseDown={(e) => e.preventDefault()}
-            onClick={() => openNewForm()}
+            onClick={() => openNewForm(query.trim() || undefined)}
             className="w-full text-left px-3 py-2.5 hover:bg-blue-50 flex items-center gap-2 text-blue-700 border-t bg-gray-50 font-medium"
           >
             <UserPlus className="w-4 h-4 flex-shrink-0" />
-            <span className="text-sm">Registrar cliente nuevo (datos completos)</span>
+            <span className="text-sm">Registrar con datos completos (opcional)</span>
           </button>
         </div>
       )}
