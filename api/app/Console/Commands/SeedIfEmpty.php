@@ -18,14 +18,10 @@ class SeedIfEmpty extends Command
 
     public function handle(): int
     {
-        // Reseteo total bajo demanda: si FRESH_SEED está activo, recrea la base
-        // y siembra el set mínimo (sirve para "limpiar" la data en producción).
-        // IMPORTANTE: quitar la variable después del primer deploy, o cada
-        // reinicio borrará la base de datos.
-        if (filter_var(getenv('FRESH_SEED'), FILTER_VALIDATE_BOOLEAN)) {
-            $this->warn('FRESH_SEED activo — recreando la base de datos y sembrando datos mínimos...');
+        if ($this->shouldFreshSeed()) {
+            $this->warn('Limpiando la base de datos y sembrando TODOS los datos por defecto...');
             $this->call('migrate:fresh', ['--force' => true, '--seed' => true]);
-            $this->warn('Listo. RECUERDA quitar FRESH_SEED para no borrar la base en el próximo reinicio.');
+            $this->info('Listo: base reiniciada con catálogo, insumos, apariencia y usuarios por defecto.');
 
             return self::SUCCESS;
         }
@@ -44,5 +40,26 @@ class SeedIfEmpty extends Command
         $this->call('db:seed', ['--force' => true]);
 
         return self::SUCCESS;
+    }
+
+    /**
+     * ¿Hay que limpiar y resembrar desde cero?
+     *  - Si FRESH_SEED está activo (forzado por variable de entorno), o
+     *  - Una sola vez automáticamente: mientras siga existiendo el usuario demo
+     *    ANTIGUO (admin@marketplace.com). Tras el reseed ese usuario desaparece,
+     *    así que el reinicio siguiente ya NO vuelve a borrar la base.
+     */
+    private function shouldFreshSeed(): bool
+    {
+        if (filter_var(getenv('FRESH_SEED'), FILTER_VALIDATE_BOOLEAN)) {
+            return true;
+        }
+
+        try {
+            return User::where('email', 'admin@marketplace.com')->exists();
+        } catch (\Throwable $e) {
+            // La tabla aún no existe (BD nueva): no hace falta limpiar.
+            return false;
+        }
     }
 }
