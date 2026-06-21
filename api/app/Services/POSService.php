@@ -13,6 +13,7 @@ use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\TemplateRecipe;
 use App\Models\VariantMovement;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
@@ -22,7 +23,18 @@ use RuntimeException;
  */
 class POSService
 {
-    public function __construct(private TemplateStockService $templateStock) {}
+    public function __construct(
+        private TemplateStockService $templateStock,
+        private DiscountService $discounts,
+    ) {}
+
+    /** Ofertas automáticas vigentes para el POS, cacheadas por request. */
+    private ?Collection $posAutos = null;
+
+    private function posAutoDiscounts(): Collection
+    {
+        return $this->posAutos ??= $this->discounts->activeAutoDiscounts('pos');
+    }
 
     /** Primera imagen de un producto, o null. */
     private function firstImage($images): ?string
@@ -167,7 +179,11 @@ class POSService
         if (! $v) {
             return null;
         }
-        $finalPrice = (float) $product->basePrice + (float) ($v->priceAdjustment ?? 0);
+        $base = (float) $product->basePrice + (float) ($v->priceAdjustment ?? 0);
+        // Aplica la oferta automática vigente (canal POS), si corresponde.
+        $best = $this->discounts->bestAutoFor($product, $this->posAutoDiscounts());
+        $amount = $best ? $best['amount'] : 0.0;
+        $finalPrice = max(0.0, $base - $amount);
 
         return [
             'type' => 'product',
@@ -180,6 +196,8 @@ class POSService
             'sku' => $v->sku ?? $product->sku,
             'barcode' => $v->barcode,
             'price' => $finalPrice,
+            'basePrice' => $base,
+            'hasDiscount' => $amount > 0,
             'stock' => (int) $v->stock,
             'available' => (int) $v->stock > 0,
         ];
@@ -207,12 +225,13 @@ class POSService
         }
 
         if ($search !== null && trim($search) !== '') {
-            $term = trim($search);
-            $query->where(fn ($q) => $q->where('name', 'like', "%{$term}%")
-                ->orWhere('sku', 'like', "%{$term}%")
-                ->orWhere('barcode', 'like', "%{$term}%")
-                ->orWhereHas('variants', fn ($v) => $v->where('barcode', 'like', "%{$term}%")
-                    ->orWhere('sku', 'like', "%{$term}%")));
+            // Insensible a mayúsculas (en Postgres LIKE distingue).
+            $term = '%'.mb_strtolower(trim($search)).'%';
+            $query->where(fn ($q) => $q->whereRaw('LOWER(name) LIKE ?', [$term])
+                ->orWhereRaw('LOWER(sku) LIKE ?', [$term])
+                ->orWhereRaw('LOWER(barcode) LIKE ?', [$term])
+                ->orWhereHas('variants', fn ($v) => $v->whereRaw('LOWER(barcode) LIKE ?', [$term])
+                    ->orWhereRaw('LOWER(sku) LIKE ?', [$term])));
         }
 
         $total = (clone $query)->count();

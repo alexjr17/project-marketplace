@@ -6,12 +6,16 @@ use App\Models\Cart;
 use App\Models\CartItem;
 use App\Models\Product;
 use App\Models\ProductVariant;
+use App\Services\DiscountService;
 use App\Services\TemplateStockService;
 use Illuminate\Http\Request;
 
 class CartController extends Controller
 {
-    public function __construct(private TemplateStockService $templateStock) {}
+    public function __construct(
+        private TemplateStockService $templateStock,
+        private DiscountService $discounts,
+    ) {}
 
     /** Obtiene o crea el carrito del usuario. */
     private function cartFor(int $userId): Cart
@@ -44,12 +48,14 @@ class CartController extends Controller
     {
         $cart = $this->cartFor($userId);
         $items = $cart->items()->orderBy('createdAt')->get();
+        $autos = $this->discounts->activeAutoDiscounts('online'); // ofertas vigentes
 
         $result = [];
         foreach ($items as $item) {
             $availableStock = 0;
             $product = null;
             $variant = null;
+            $effectivePrice = (float) $item->unitPrice; // precio mostrado (puede actualizarse con oferta)
 
             if ($item->isCustomized && $item->customization) {
                 $custom = $item->customization;
@@ -71,12 +77,18 @@ class CartController extends Controller
                 $v = ProductVariant::with(['product', 'color', 'size'])->find($item->variantId);
                 if ($v) {
                     $availableStock = $v->stock ?? 0;
+                    $sale = $this->discounts->autoPrice($v->product, $autos);
+                    if (! $item->isCustomized) {
+                        $effectivePrice = $sale; // refleja la oferta vigente
+                    }
                     $product = [
                         'id' => $v->product->id,
                         'name' => $v->product->name,
                         'description' => $v->product->description,
                         'images' => $this->normalizeImages($v->product->images),
                         'basePrice' => (float) $v->product->basePrice,
+                        'salePrice' => $sale,
+                        'hasDiscount' => $sale < (float) $v->product->basePrice,
                     ];
                     $variant = [
                         'id' => $v->id,
@@ -90,12 +102,18 @@ class CartController extends Controller
                 $p = Product::find($item->productId);
                 if ($p) {
                     $availableStock = $p->stock ?? 0;
+                    $sale = $this->discounts->autoPrice($p, $autos);
+                    if (! $item->isCustomized) {
+                        $effectivePrice = $sale;
+                    }
                     $product = [
                         'id' => $p->id,
                         'name' => $p->name,
                         'description' => $p->description,
                         'images' => $this->normalizeImages($p->images),
                         'basePrice' => (float) $p->basePrice,
+                        'salePrice' => $sale,
+                        'hasDiscount' => $sale < (float) $p->basePrice,
                     ];
                 }
             }
@@ -107,7 +125,7 @@ class CartController extends Controller
                 'isCustomized' => $item->isCustomized,
                 'customization' => $item->customization,
                 'quantity' => $item->quantity,
-                'unitPrice' => (float) $item->unitPrice,
+                'unitPrice' => $effectivePrice,
                 'availableStock' => $availableStock,
                 'hasStock' => $availableStock >= $item->quantity,
                 'product' => $product,

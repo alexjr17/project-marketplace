@@ -309,6 +309,8 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
             name: dbItem.product.name,
             description: dbItem.product.description || '',
             basePrice: dbItem.product.basePrice,
+            salePrice: dbItem.product.salePrice,
+            hasDiscount: dbItem.product.hasDiscount,
             images: normalizedImages,
             // Campos requeridos con valores por defecto
             featured: false,
