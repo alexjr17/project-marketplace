@@ -570,53 +570,6 @@ export const SettingsShippingPage = () => {
             </div>
           </div>
 
-          {/* Tarifas por transportadora */}
-          <div className="bg-white rounded-lg shadow-sm p-6">
-            <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2 mb-1">
-              <DollarSign className="w-5 h-5 text-orange-500" />
-              Tarifas por Transportadora
-            </h3>
-            <p className="text-sm text-gray-500 mb-4">
-              Costo base + costo por kg para cada zona (modo Tabla o respaldo de las API).
-            </p>
-            <div className="space-y-3">
-              {settings.shipping.carriers.map((carrier) => (
-                <div key={carrier.id} className="border border-gray-200 rounded-lg p-4">
-                  <div className="flex justify-between items-center">
-                    <div className="flex items-center gap-2">
-                      <h4 className="font-medium text-gray-900">{carrier.name}</h4>
-                      <span className="text-xs text-gray-500">
-                        {carrier.zoneRates.length} tarifas
-                      </span>
-                    </div>
-                    <Button variant="admin-secondary" onClick={() => handleOpenRatesModal(carrier)}>
-                      <Edit2 className="w-4 h-4 mr-2" />
-                      Editar tarifas
-                    </Button>
-                  </div>
-                  {carrier.zoneRates.length > 0 && (
-                    <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                      {carrier.zoneRates.map((rate) => (
-                        <div key={rate.zoneId} className="bg-gray-50 rounded px-3 py-2 text-xs">
-                          <div className="font-medium text-gray-700">{getZoneName(rate.zoneId)}</div>
-                          <div className="text-gray-500 mt-0.5">
-                            Base: ${rate.baseCost.toLocaleString()} • +$
-                            {rate.costPerKg.toLocaleString()}/kg • {rate.estimatedDays.min}-
-                            {rate.estimatedDays.max} días
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ))}
-              {settings.shipping.carriers.length === 0 && (
-                <div className="text-center py-8 text-gray-500">
-                  Crea una transportadora en la pestaña Transportadoras
-                </div>
-              )}
-            </div>
-          </div>
         </div>
       )}
 
