@@ -81,12 +81,21 @@ export function AnnouncementsRenderer() {
   const [items, setItems] = useState<Announcement[]>([]);
   const [dismissed, setDismissed] = useState<Set<number>>(new Set());
   const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
+  const [navH, setNavH] = useState(0); // alto del nav inferior móvil
 
   useEffect(() => {
     getActiveAnnouncements().then(setItems).catch(() => setItems([]));
-    const onResize = () => setIsMobile(window.innerWidth < 768);
-    window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
+    const measure = () => {
+      setIsMobile(window.innerWidth < 768);
+      const nav = Array.from(document.querySelectorAll('nav')).find((n) => {
+        const s = getComputedStyle(n);
+        return s.position === 'fixed' && s.bottom === '0px';
+      });
+      setNavH(nav ? Math.round(nav.getBoundingClientRect().height) : 0);
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
   }, []);
 
   const dismiss = (a: Announcement) => {
@@ -204,8 +213,8 @@ export function AnnouncementsRenderer() {
         // En móvil: banner inferior tipo alerta (sobre el menú de abajo), no bloquea.
         if (isMobile) {
           return (
-            <div className="fixed inset-x-0 bottom-16 z-[60] px-3">
-              <div className="relative bg-white rounded-xl shadow-2xl border border-gray-100 overflow-hidden animate-[annSlideUp_.45s_cubic-bezier(0.16,1,0.3,1)] motion-reduce:animate-none">
+            <div className="fixed inset-x-0 z-[60]" style={{ bottom: navH }}>
+              <div className="relative bg-white rounded-t-2xl shadow-[0_-8px_24px_rgba(0,0,0,0.12)] border-t border-x border-gray-100 overflow-hidden animate-[annSlideUp_.45s_cubic-bezier(0.16,1,0.3,1)] motion-reduce:animate-none">
                 <div className="h-1 w-full" style={{ backgroundImage: brandGradient }} />
                 <button onClick={() => dismiss(p)} aria-label="Cerrar" className="absolute top-1.5 right-1.5 z-10 p-1 text-gray-400 hover:text-gray-600">
                   <X className="w-4 h-4" />
