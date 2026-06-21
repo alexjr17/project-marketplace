@@ -124,23 +124,9 @@ export const CatalogPage = () => {
 
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 py-8">
-        {/* Search Bar */}
-        <div className="mb-6">
-          <div className="relative max-w-2xl">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Buscar productos..."
-              value={searchQuery}
-              onChange={handleSearchChange}
-              className="w-full pl-12 pr-4 py-3 bg-white border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-400 focus:border-transparent shadow-sm"
-            />
-          </div>
-        </div>
-
-        {/* Toolbar */}
-        <div className="flex items-center justify-between mb-6 flex-wrap gap-4">
-          <div className="text-sm text-gray-600">
+        {/* Toolbar: contador + buscador + ordenar */}
+        <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
+          <div className="text-sm text-gray-600 order-2 sm:order-1 w-full sm:w-auto">
             {isLoading ? (
               <span>Cargando productos...</span>
             ) : (
@@ -150,7 +136,19 @@ export const CatalogPage = () => {
               </span>
             )}
           </div>
-          <ProductSort value={sortOption} onChange={setSortOption} />
+          <div className="flex items-center gap-3 order-1 sm:order-2 w-full sm:w-auto">
+            <div className="relative flex-1 sm:w-64">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Buscar productos..."
+                value={searchQuery}
+                onChange={handleSearchChange}
+                className="w-full pl-9 pr-3 py-2 bg-white border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-300 focus:border-transparent shadow-sm"
+              />
+            </div>
+            <ProductSort value={sortOption} onChange={setSortOption} />
+          </div>
         </div>
 
         {/* Layout: Sidebar + Grid */}
