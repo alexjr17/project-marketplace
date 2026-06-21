@@ -218,9 +218,9 @@ export const FeaturedProducts = ({ title, subtitle, section }: FeaturedProductsP
                 ref={scrollContainerRef}
                 className="flex gap-3 overflow-x-auto scrollbar-hide scroll-smooth"
               >
-                {products.map((product) => (
+                {products.map((product, i) => (
                   <div key={product.id} className="flex-shrink-0 w-[160px] sm:w-[180px] md:w-[200px]">
-                    <ProductCard product={product} />
+                    <ProductCard product={product} priority={i < 4} />
                   </div>
                 ))}
               </div>

@@ -7,9 +7,9 @@ use App\Support\ImageUrls;
 use Illuminate\Http\Request;
 
 /**
- * Sirve las imágenes de producto (almacenadas como data URI en la BD) por una
- * URL cacheable, redimensionadas y comprimidas para no inlinear base64 ni
- * mandar PNG enormes en cada respuesta.
+ * Sirve las imágenes de producto (data URI en la BD) por una URL cacheable,
+ * redimensionadas/comprimidas (WebP o JPEG) y con caché en disco para no
+ * redecodificar base64 ni reprocesar con GD en cada petición.
  */
 class ImageController extends Controller
 {
@@ -17,6 +17,19 @@ class ImageController extends Controller
     {
         if (! in_array($slot, ImageUrls::SLOTS, true)) {
             abort(404);
+        }
+
+        $width = max(50, min(1600, (int) $request->query('w', 1000)));
+        $v = preg_replace('/[^A-Za-z0-9]/', '', (string) $request->query('v', 'x')) ?: 'x';
+        $key = "{$type}-{$id}-{$slot}-{$width}-{$v}";
+        $dir = storage_path('app/imgcache');
+
+        // Cache hit: servir sin tocar la BD ni GD.
+        foreach (['webp' => 'image/webp', 'jpg' => 'image/jpeg'] as $ext => $mime) {
+            $path = "{$dir}/{$key}.{$ext}";
+            if (is_file($path)) {
+                return $this->imageResponse((string) file_get_contents($path), $mime);
+            }
         }
 
         // Templates son productos (isTemplate); ambos viven en la tabla products.
@@ -30,12 +43,10 @@ class ImageController extends Controller
             abort(404);
         }
 
-        // Si ya es una URL externa, redirigir.
         if (preg_match('#^https?://#i', $val)) {
             return redirect()->away($val);
         }
 
-        // data URI -> decodificar.
         if (! preg_match('#^data:([^;]+);base64,(.+)$#s', $val, $m)) {
             abort(404);
         }
@@ -44,14 +55,23 @@ class ImageController extends Controller
             abort(404);
         }
 
-        $width = (int) $request->query('w', 1000);
-        $width = max(50, min(1600, $width));
-
         [$out, $mime] = $this->optimize($bytes, $m[1], $width);
 
-        return response($out, 200)
+        // Guardar en caché (disco efímero: se regenera tras cada deploy).
+        if (! is_dir($dir)) {
+            @mkdir($dir, 0775, true);
+        }
+        $ext = $mime === 'image/webp' ? 'webp' : 'jpg';
+        @file_put_contents("{$dir}/{$key}.{$ext}", $out);
+
+        return $this->imageResponse($out, $mime);
+    }
+
+    private function imageResponse(string $bytes, string $mime)
+    {
+        return response($bytes, 200)
             ->header('Content-Type', $mime)
-            ->header('Content-Length', (string) strlen($out))
+            ->header('Content-Length', (string) strlen($bytes))
             ->header('Cache-Control', 'public, max-age=31536000, immutable');
     }
 
@@ -86,7 +106,6 @@ class ImageController extends Controller
         }
 
         ob_start();
-        $mime = $originalMime;
         if (function_exists('imagewebp')) {
             imagewebp($src, null, 80);
             $mime = 'image/webp';

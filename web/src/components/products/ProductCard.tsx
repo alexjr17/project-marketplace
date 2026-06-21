@@ -5,6 +5,8 @@ import type { Product } from '../../types/product';
 
 interface ProductCardProps {
   product: Product;
+  /** Imágenes "above the fold" (primeras del grid): cargan con prioridad para mejorar el LCP. */
+  priority?: boolean;
 }
 
 const categoryLabels: Record<string, string> = {
@@ -15,7 +17,13 @@ const categoryLabels: Record<string, string> = {
   office: 'Oficina',
 };
 
-export const ProductCard = ({ product }: ProductCardProps) => {
+// Para imágenes servidas por nuestro endpoint, pide un ancho acorde a la card.
+function sizedImage(url: string | undefined, w: number): string {
+  if (!url || !url.includes('/api/img/')) return url || '';
+  return url + (url.includes('?') ? '&' : '?') + 'w=' + w;
+}
+
+export const ProductCard = ({ product, priority = false }: ProductCardProps) => {
   const { format } = useCurrency();
 
   return (
@@ -26,10 +34,14 @@ export const ProductCard = ({ product }: ProductCardProps) => {
       {/* Image */}
       <div className="relative overflow-hidden aspect-square bg-gray-100">
         <img
-          src={product.images.front}
+          src={sizedImage(product.images.front, 400)}
           alt={product.name}
-          loading="lazy"
+          loading={priority ? 'eager' : 'lazy'}
+          // @ts-expect-error fetchpriority es válido en HTML pero falta en los tipos de React
+          fetchpriority={priority ? 'high' : 'auto'}
           decoding="async"
+          width={400}
+          height={400}
           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
         />
         {product.featured && (

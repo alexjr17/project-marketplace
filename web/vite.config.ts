@@ -50,7 +50,8 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
-    sourcemap: false,
+    // Source maps: mejora "Prácticas recomendadas" de Lighthouse (mapas de origen).
+    sourcemap: true,
     rollupOptions: {
       output: {
         manualChunks: {

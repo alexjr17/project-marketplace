@@ -25,10 +25,11 @@ export const ProductGrid = ({ products }: ProductGridProps) => {
 
   return (
     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
-      {products.map((product) => (
+      {products.map((product, i) => (
         <ProductCard
           key={product.id}
           product={product}
+          priority={i < 4}
         />
       ))}
     </div>
