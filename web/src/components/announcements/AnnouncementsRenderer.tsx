@@ -97,8 +97,14 @@ export function AnnouncementsRenderer() {
   return (
     <>
       {/* Barras / marquesina (en flujo, debajo del header) */}
-      {bars.map((a) => (
-        <div key={a.id} {...barProps(a)}>
+      {bars.map((a) => {
+        const bp = barProps(a);
+        return (
+        <div
+          key={a.id}
+          className={`${bp.className} overflow-hidden animate-[annSlideDown_.5s_cubic-bezier(0.16,1,0.3,1)] motion-reduce:animate-none`}
+          style={bp.style}
+        >
           <div className="max-w-7xl mx-auto px-4 py-2 flex items-center gap-3">
             {a.type === 'marquee' ? (
               <div className="flex-1 overflow-hidden">
@@ -131,14 +137,15 @@ export function AnnouncementsRenderer() {
             )}
           </div>
         </div>
-      ))}
+        );
+      })}
 
       {/* Tarjetas flotantes (esquina inferior derecha) */}
       {floating.map((a, i) => (
         <div
           key={a.id}
           style={{ bottom: `${16 + i * 8}px` }}
-          className="fixed right-4 z-40 w-72 max-w-[85vw] bg-white rounded-xl shadow-2xl border border-gray-100 overflow-hidden animate-fade-in-up"
+          className="fixed right-4 z-40 w-72 max-w-[85vw] bg-white rounded-xl shadow-2xl border border-gray-100 overflow-hidden animate-[annSlideUp_.5s_cubic-bezier(0.16,1,0.3,1)] motion-reduce:animate-none"
         >
           {a.imageUrl && <img src={a.imageUrl} alt={a.title || ''} loading="lazy" className="w-full h-28 object-cover" />}
           <div className="p-3">
@@ -162,8 +169,8 @@ export function AnnouncementsRenderer() {
       {/* Popup / modal */}
       {popup && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/60" onClick={() => dismiss(popup)} />
-          <div className="relative bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden">
+          <div className="absolute inset-0 bg-black/60 animate-[annFadeIn_.3s_ease-out] motion-reduce:animate-none" onClick={() => dismiss(popup)} />
+          <div className="relative bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden animate-[annPopIn_.4s_cubic-bezier(0.16,1,0.3,1)] motion-reduce:animate-none">
             {/* Borde superior con el color de la marca */}
             <div className="h-1.5 w-full" style={{ backgroundImage: brandGradient }} />
             <button onClick={() => dismiss(popup)} aria-label="Cerrar" className="absolute top-3 right-3 z-10 p-1.5 bg-white/90 rounded-full text-gray-600 hover:bg-white shadow">
@@ -205,6 +212,10 @@ export function AnnouncementsRenderer() {
 
       <style>{`
         @keyframes annMarquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+        @keyframes annSlideDown { from { transform: translateY(-100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        @keyframes annSlideUp { from { transform: translateY(24px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        @keyframes annFadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes annPopIn { from { transform: scale(.96) translateY(10px); opacity: 0; } to { transform: scale(1) translateY(0); opacity: 1; } }
         @media (prefers-reduced-motion: reduce) { [data-dup="true"] { display: none; } }
       `}</style>
     </>
