@@ -255,24 +255,9 @@ export default function POSLayout({ children }: POSLayoutProps) {
             </div>
           )}
 
-          {/* Logo - Desktop only */}
-          <div className="hidden lg:block border-b border-gray-200 p-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-indigo-600 rounded-lg flex items-center justify-center flex-shrink-0">
-                <CreditCard className="w-6 h-6 text-white" />
-              </div>
-              <div className={`min-w-0 transition-opacity duration-200 ${expanded ? 'opacity-100' : 'opacity-0'}`}>
-                <h1 className="text-xl font-bold text-gray-900 whitespace-nowrap">POS</h1>
-                <p className="text-sm text-gray-500 whitespace-nowrap">Punto de Venta</p>
-              </div>
-            </div>
-
-            {/* App Switcher (solo expandido) */}
-            {expanded && (
-              <div className="mt-4">
-                <AppSwitcher />
-              </div>
-            )}
+          {/* Encabezado = selector de aplicación (POS / Punto de Venta) */}
+          <div className="hidden lg:block border-b border-gray-200 p-2">
+            <AppSwitcher variant="sidebar" collapsed={!expanded} />
           </div>
 
           {/* Session Info */}
