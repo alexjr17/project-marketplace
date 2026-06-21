@@ -92,21 +92,26 @@ class DiscountController extends Controller
             'items.*.quantity' => 'nullable|integer',
         ]);
 
-        // Resolver categoría y subtotal a partir de los ítems (no confiamos en el front).
+        // Resolver categoría/oferta y subtotal a partir de los ítems (no confiamos en el front).
         $items = [];
         $subtotal = 0;
         $productIds = collect($data['items'] ?? [])->pluck('productId')->filter()->unique()->all();
-        $categories = Product::whereIn('id', $productIds)->pluck('categoryId', 'id');
+        $products = Product::whereIn('id', $productIds)->get()->keyBy('id');
 
         foreach (($data['items'] ?? []) as $it) {
-            $price = (float) ($it['price'] ?? 0);
+            $pid = (int) ($it['productId'] ?? 0);
+            $product = $products[$pid] ?? null;
+            // Precio confiable: el precio efectivo del backend (oferta ya aplicada).
+            $price = $product ? $product->effectivePrice() : (float) ($it['price'] ?? 0);
             $qty = (int) ($it['quantity'] ?? 0);
             $subtotal += $price * $qty;
             $items[] = [
-                'productId' => (int) ($it['productId'] ?? 0),
-                'categoryId' => $categories[$it['productId'] ?? 0] ?? null,
+                'productId' => $pid,
+                'categoryId' => $product?->categoryId,
                 'price' => $price,
                 'quantity' => $qty,
+                // No acumulable: marcar si el producto ya tiene oferta propia.
+                'discounted' => $product ? $product->effectivePrice() < (float) $product->basePrice : false,
             ];
         }
 

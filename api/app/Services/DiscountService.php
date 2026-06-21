@@ -80,7 +80,7 @@ class DiscountService
         // Subtotal elegible (según el alcance del cupón).
         $base = $this->eligibleBase($discount, $context, $subtotal);
         if ($base <= 0) {
-            throw new RuntimeException('El cupón no aplica a los productos del carrito');
+            throw new RuntimeException('El cupón no aplica: los productos no califican o ya tienen una oferta (no se acumulan descuentos)');
         }
 
         $amount = $discount->type === 'percent'
@@ -90,23 +90,36 @@ class DiscountService
         return ['discount' => $discount, 'amount' => max(0.0, (float) $amount)];
     }
 
-    /** Calcula el subtotal sobre el que aplica el cupón según su alcance. */
+    /**
+     * Calcula el subtotal sobre el que aplica el cupón según su alcance.
+     *
+     * Los descuentos NO son acumulables: los ítems que ya tienen una oferta
+     * propia del producto ('discounted' = true) quedan excluidos de la base
+     * del cupón.
+     */
     private function eligibleBase(Discount $discount, array $context, float $subtotal): float
     {
-        // "Todo" y "por usuario" aplican sobre el subtotal completo.
-        if (in_array($discount->appliesTo, ['all', 'user'], true)) {
-            return $subtotal;
+        $items = $context['items'] ?? [];
+
+        // Sin ítems no podemos saber qué está en oferta: usamos el subtotal
+        // para alcances globales (compatibilidad) y 0 para los segmentados.
+        if (empty($items)) {
+            return in_array($discount->appliesTo, ['all', 'user'], true) ? $subtotal : 0;
         }
 
         $targets = array_map('intval', $discount->targetIds ?? []);
-        if (empty($targets)) {
-            return 0;
-        }
-
         $base = 0;
-        foreach (($context['items'] ?? []) as $it) {
+
+        foreach ($items as $it) {
+            // No acumulable: si el producto ya trae oferta, el cupón no lo toca.
+            if (! empty($it['discounted'])) {
+                continue;
+            }
             $line = (float) ($it['price'] ?? 0) * (int) ($it['quantity'] ?? 0);
-            if ($discount->appliesTo === 'product' && in_array((int) ($it['productId'] ?? 0), $targets, true)) {
+
+            if (in_array($discount->appliesTo, ['all', 'user'], true)) {
+                $base += $line;
+            } elseif ($discount->appliesTo === 'product' && in_array((int) ($it['productId'] ?? 0), $targets, true)) {
                 $base += $line;
             } elseif ($discount->appliesTo === 'category' && in_array((int) ($it['categoryId'] ?? 0), $targets, true)) {
                 $base += $line;

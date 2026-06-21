@@ -215,6 +215,8 @@ class OrderService
                 'categoryId' => $product->categoryId,
                 'price' => $unitPrice,
                 'quantity' => (int) $item['quantity'],
+                // Si el producto ya trae oferta propia, el cupón no se acumula.
+                'discounted' => $unitPrice < (float) $product->basePrice,
             ];
 
             $firstImage = $this->firstImage($product->images);
