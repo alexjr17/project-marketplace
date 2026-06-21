@@ -753,7 +753,7 @@ export default function NewSalePage() {
             onScroll={handleProductsScroll}
             className="flex-1 min-h-0 overflow-y-auto p-3 max-h-[60vh] lg:max-h-none"
           >
-              <div className="grid grid-cols-2 lg:grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
                 {browseItems.map((item, index) => {
                   const isProduct = item.type === 'product';
                   const prod = isProduct ? (item as ProductSearchResult) : null;
@@ -803,16 +803,16 @@ export default function NewSalePage() {
                         )}
                       </div>
                       {/* Info */}
-                      <div className="p-2">
-                        <p className="text-xs lg:text-sm font-medium text-gray-900 leading-tight line-clamp-2 min-h-[2.1em]">
+                      <div className="p-1.5">
+                        <p className="text-[11px] lg:text-xs font-medium text-gray-900 leading-tight line-clamp-2 min-h-[2em]">
                           {item.name}
                         </p>
-                        <div className="flex items-baseline gap-1.5 mt-1">
-                          <span className={`text-sm lg:text-base font-bold ${onSale ? 'text-emerald-600' : isProduct ? 'text-gray-900' : 'text-purple-600'}`}>
+                        <div className="flex items-baseline gap-1 mt-0.5">
+                          <span className={`text-xs lg:text-sm font-bold ${onSale ? 'text-emerald-600' : isProduct ? 'text-gray-900' : 'text-purple-600'}`}>
                             ${price.toLocaleString()}
                           </span>
                           {onSale && (
-                            <span className="text-[10px] text-gray-400 line-through">
+                            <span className="text-[9px] text-gray-400 line-through">
                               ${(prod!.basePrice as number).toLocaleString()}
                             </span>
                           )}

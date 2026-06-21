@@ -185,6 +185,9 @@ class POSService
         $amount = $best ? $best['amount'] : 0.0;
         $finalPrice = max(0.0, $base - $amount);
 
+        // Stock total (suma de las variantes activas), no solo la representativa.
+        $totalStock = (int) $product->variants()->where('isActive', true)->sum('stock');
+
         // Imagen por color de la variante (si existe); si no, la del producto.
         $image = $this->firstImage($product->images);
         if ($v->colorId) {
@@ -208,8 +211,9 @@ class POSService
             'price' => $finalPrice,
             'basePrice' => $base,
             'hasDiscount' => $amount > 0,
-            'stock' => (int) $v->stock,
-            'available' => (int) $v->stock > 0,
+            // Stock total del producto (suma de todas sus variantes activas).
+            'stock' => $totalStock,
+            'available' => $totalStock > 0,
             // Si el producto tiene colores/tallas, hay que elegir variante.
             'hasOptions' => $product->productColors->isNotEmpty() || $product->productSizes->isNotEmpty(),
         ];
