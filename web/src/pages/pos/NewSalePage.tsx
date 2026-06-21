@@ -762,37 +762,53 @@ export default function NewSalePage() {
                     : Number((item as TemplateSearchResult).basePrice);
                   const onSale = !!(prod?.hasDiscount && prod.basePrice && prod.basePrice > price);
                   const offPct = onSale ? Math.round((1 - price / (prod!.basePrice as number)) * 100) : 0;
+                  const stock = isProduct ? prod!.stock : null;
                   return (
                     <button
                       key={index}
                       type="button"
                       onClick={() => handleTileClick(item)}
-                      className="relative text-left border border-gray-200 rounded-lg p-2 hover:border-blue-400 hover:shadow-sm transition-all"
+                      className="group relative text-left bg-white border border-gray-200 rounded-xl overflow-hidden hover:border-blue-400 hover:shadow-md transition-all"
                     >
-                      {onSale && (
-                        <span className="absolute top-1 left-1 z-10 bg-emerald-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded">
-                          -{offPct}%
-                        </span>
-                      )}
-                      {item.image ? (
-                        <img
-                          src={item.image}
-                          alt={item.name}
-                          className="w-full h-28 lg:h-20 object-cover rounded mb-1.5"
-                        />
-                      ) : (
-                        <div className="w-full h-28 lg:h-20 bg-gray-100 rounded mb-1.5 flex items-center justify-center">
-                          <Package className="w-8 h-8 lg:w-6 lg:h-6 text-gray-300" />
-                        </div>
-                      )}
-                      <p className="text-sm lg:text-xs font-medium text-gray-900 leading-tight line-clamp-2">
-                        {item.name}
-                      </p>
-                      <div className="flex items-center justify-between mt-1">
-                        <span className="flex items-baseline gap-1">
-                          <span
-                            className={`text-base lg:text-sm font-bold ${onSale ? 'text-emerald-600' : isProduct ? 'text-gray-900' : 'text-purple-600'}`}
-                          >
+                      {/* Imagen cuadrada */}
+                      <div className="relative aspect-square bg-gray-100 overflow-hidden">
+                        {item.image ? (
+                          <img
+                            src={item.image}
+                            alt={item.name}
+                            loading="lazy"
+                            className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center">
+                            <Package className="w-10 h-10 text-gray-300" />
+                          </div>
+                        )}
+                        {/* Badges sobre la imagen */}
+                        {onSale ? (
+                          <span className="absolute top-1.5 left-1.5 bg-emerald-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-md shadow">
+                            -{offPct}%
+                          </span>
+                        ) : !isProduct ? (
+                          <span className="absolute top-1.5 left-1.5 bg-purple-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-md shadow">
+                            Plantilla
+                          </span>
+                        ) : null}
+                        {isProduct && (
+                          <span className={`absolute top-1.5 right-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded-md shadow ${
+                            (stock ?? 0) > 0 ? 'bg-white/90 text-gray-700' : 'bg-red-600 text-white'
+                          }`}>
+                            {(stock ?? 0) > 0 ? `Stock ${stock}` : 'Agotado'}
+                          </span>
+                        )}
+                      </div>
+                      {/* Info */}
+                      <div className="p-2">
+                        <p className="text-xs lg:text-sm font-medium text-gray-900 leading-tight line-clamp-2 min-h-[2.1em]">
+                          {item.name}
+                        </p>
+                        <div className="flex items-baseline gap-1.5 mt-1">
+                          <span className={`text-sm lg:text-base font-bold ${onSale ? 'text-emerald-600' : isProduct ? 'text-gray-900' : 'text-purple-600'}`}>
                             ${price.toLocaleString()}
                           </span>
                           {onSale && (
@@ -800,12 +816,7 @@ export default function NewSalePage() {
                               ${(prod!.basePrice as number).toLocaleString()}
                             </span>
                           )}
-                        </span>
-                        {isProduct && (
-                          <span className="text-[10px] text-gray-500">
-                            Stock: {(item as ProductSearchResult).stock}
-                          </span>
-                        )}
+                        </div>
                       </div>
                     </button>
                   );
