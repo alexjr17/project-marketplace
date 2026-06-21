@@ -464,7 +464,6 @@ export const SettingsShippingPage = () => {
                           )}
                         </div>
                         <div className="flex items-center gap-4 mt-1 text-sm text-gray-500">
-                          <span>Factor vol: {carrier.volumetricFactor}</span>
                           <span>{carrier.zoneRates.length} tarifas configuradas</span>
                         </div>
                       </div>
@@ -1276,7 +1275,7 @@ export const SettingsShippingPage = () => {
             <p className="text-sm text-gray-500 mb-4">
               Valores por defecto para calcular el costo de envío basado en peso y volumen.
             </p>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div>
                 <label className="block text-xs font-medium text-gray-700 mb-1">Largo (cm)</label>
                 <Input
@@ -1344,26 +1343,10 @@ export const SettingsShippingPage = () => {
                   }
                 />
               </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Factor Vol.</label>
-                <Input
-                  type="number"
-                  min="1000"
-                  value={settings.shipping.packageDefaults.volumetricDivisor}
-                  onChange={(e) =>
-                    updateShippingSettings({
-                      packageDefaults: {
-                        ...settings.shipping.packageDefaults,
-                        volumetricDivisor: parseInt(e.target.value) || 5000,
-                      },
-                    })
-                  }
-                />
-              </div>
             </div>
             <p className="text-xs text-gray-400 mt-2">
-              Peso volumétrico = (Largo x Ancho x Alto) / Factor. Se usa el mayor entre peso real y
-              volumétrico.
+              Estas dimensiones por defecto se usan para estimar el peso volumétrico. El factor
+              volumétrico se configura en cada tarifa (Zonas y Tarifas).
             </p>
           </div>
         </div>
@@ -1512,44 +1495,6 @@ export const SettingsShippingPage = () => {
                 onChange={(e) => setCarrierForm({ ...carrierForm, code: e.target.value.toUpperCase() })}
                 placeholder="Ej: SERVI"
               />
-            </div>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Factor Volumétrico</label>
-            <div className="flex items-center gap-4">
-              <Input
-                type="number"
-                min="1000"
-                value={carrierForm.volumetricFactor}
-                onChange={(e) =>
-                  setCarrierForm({ ...carrierForm, volumetricFactor: parseInt(e.target.value) || 5000 })
-                }
-                className="w-32"
-              />
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => setCarrierForm({ ...carrierForm, volumetricFactor: 5000 })}
-                  className={`px-3 py-1 text-xs rounded ${
-                    carrierForm.volumetricFactor === 5000
-                      ? 'bg-orange-100 text-orange-700'
-                      : 'bg-gray-100 text-gray-600'
-                  }`}
-                >
-                  5000 (Aéreo)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setCarrierForm({ ...carrierForm, volumetricFactor: 6000 })}
-                  className={`px-3 py-1 text-xs rounded ${
-                    carrierForm.volumetricFactor === 6000
-                      ? 'bg-orange-100 text-orange-700'
-                      : 'bg-gray-100 text-gray-600'
-                  }`}
-                >
-                  6000 (Terrestre)
-                </button>
-              </div>
             </div>
           </div>
           <div>

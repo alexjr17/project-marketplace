@@ -178,6 +178,8 @@ export const CheckoutPage = () => {
 
   // Costo de envío efectivo: el calculado por zona, o el estimado del carrito.
   const shippingCost = shippingQuote ? shippingQuote.cost : cart.shipping;
+  // Días de preparación (alistamiento). La entrega estimada = preparación + tránsito de la transportadora.
+  const handlingDays = settings.shipping?.handlingTime ?? 0;
   // Descuento efectivo: el del cupón validado, o el del carrito.
   const discountAmount = coupon ? coupon.amount : cart.discount;
   const orderTotal = Math.max(0, cart.subtotal + cart.tax + shippingCost - discountAmount);
@@ -1098,13 +1100,23 @@ export const CheckoutPage = () => {
                   </span>
                 </div>
                 {shippingQuote && (
-                  <p className="text-xs text-gray-400 -mt-1">
-                    {shippingQuote.carrierName} · {shippingQuote.zoneName} ·{' '}
-                    {shippingQuote.estimatedDays.min}-{shippingQuote.estimatedDays.max} días hábiles
-                  </p>
+                  <div className="-mt-1 text-xs text-gray-400 space-y-0.5">
+                    <p>{shippingQuote.carrierName} · {shippingQuote.zoneName}</p>
+                    <p>
+                      Entrega estimada:{' '}
+                      <span className="text-gray-700 font-medium">
+                        {handlingDays + shippingQuote.estimatedDays.min}–{handlingDays + shippingQuote.estimatedDays.max} días hábiles
+                      </span>
+                    </p>
+                    <p>
+                      {handlingDays > 0 && <>Preparación {handlingDays} {handlingDays === 1 ? 'día' : 'días'} + </>}
+                      envío {shippingQuote.estimatedDays.min}–{shippingQuote.estimatedDays.max} días
+                    </p>
+                  </div>
                 )}
                 {!shippingQuote && formData.shippingCity.trim() !== '' && (
                   <p className="text-xs text-amber-500 -mt-1">
+                    {handlingDays > 0 && <>Preparación {handlingDays} {handlingDays === 1 ? 'día' : 'días'}. </>}
                     Tarifa estimada — "{formData.shippingCity}" aún no está en una zona de cobertura
                   </p>
                 )}
