@@ -1,8 +1,32 @@
-import { Suspense, useMemo, useRef, useState } from 'react';
-import { Canvas, useLoader, type ThreeEvent } from '@react-three/fiber';
-import { OrbitControls, Environment, Decal, Bounds, useTexture } from '@react-three/drei';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { Suspense, useMemo, useRef, useState, Component, type ReactNode } from 'react';
+import { type ThreeEvent } from '@react-three/fiber';
+import { Canvas } from '@react-three/fiber';
+import { OrbitControls, Decal, Bounds, useTexture, useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
+
+/** Contiene errores del visor 3D para que un modelo incompatible no tumbe la app. */
+class ViewerBoundary extends Component<{ children: ReactNode; onReset: () => void }, { error: string | null }> {
+  state = { error: null as string | null };
+  static getDerivedStateFromError(err: Error) { return { error: err?.message || 'Error al renderizar el modelo' }; }
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-6 gap-3">
+          <p className="text-gray-700 font-medium">No se pudo renderizar este modelo 3D</p>
+          <p className="text-xs text-gray-500 max-w-sm">Puede no ser compatible (malla con esqueleto o sin coordenadas). Prueba con otro .glb más sencillo.</p>
+          <p className="text-[11px] text-red-500 font-mono">{this.state.error}</p>
+          <button
+            onClick={() => { this.setState({ error: null }); this.props.onReset(); }}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700"
+          >
+            Probar con otro modelo
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 interface DecalState {
   position: [number, number, number];
@@ -34,7 +58,8 @@ function Garment({ url, texUrl, decal, setDecal }: {
   decal: DecalState;
   setDecal: (d: DecalState) => void;
 }) {
-  const gltf = useLoader(GLTFLoader, url);
+  // useGLTF configura Draco/Meshopt automáticamente (modelos comprimidos).
+  const gltf = useGLTF(url);
   const scene = useMemo(() => gltf.scene.clone(true), [gltf]);
 
   // Malla principal = la de mayor número de vértices (el cuerpo de la prenda).
@@ -146,16 +171,18 @@ export default function Preview3D() {
               Sube un modelo 3D (.glb) para empezar.
             </div>
           ) : (
-            <Canvas camera={{ position: [0, 0, 2.5], fov: 35 }} dpr={[1, 2]}>
-              <ambientLight intensity={0.7} />
-              <directionalLight position={[5, 5, 5]} intensity={1.2} />
-              <directionalLight position={[-5, 2, -5]} intensity={0.5} />
-              <Suspense fallback={null}>
-                <Garment key={modelUrl} url={modelUrl} texUrl={texUrl} decal={decal} setDecal={setDecal} />
-                <Environment preset="city" />
-              </Suspense>
-              <OrbitControls makeDefault enablePan={false} minDistance={1} maxDistance={6} />
-            </Canvas>
+            <ViewerBoundary key={modelUrl} onReset={() => { setModelUrl(null); setTexUrl(null); }}>
+              <Canvas camera={{ position: [0, 0, 2.5], fov: 35 }} dpr={[1, 2]}>
+                <ambientLight intensity={0.8} />
+                <hemisphereLight intensity={0.6} />
+                <directionalLight position={[5, 5, 5]} intensity={1.4} />
+                <directionalLight position={[-5, 2, -5]} intensity={0.6} />
+                <Suspense fallback={null}>
+                  <Garment key={modelUrl} url={modelUrl} texUrl={texUrl} decal={decal} setDecal={setDecal} />
+                </Suspense>
+                <OrbitControls makeDefault enablePan={false} minDistance={1} maxDistance={6} />
+              </Canvas>
+            </ViewerBoundary>
           )}
         </main>
       </div>
