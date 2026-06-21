@@ -15,7 +15,15 @@ const authHeader = () => {
   return token ? { Authorization: `Bearer ${token}` } : {};
 };
 
-export type AnnouncementType = 'bar' | 'popup' | 'marquee' | 'floating';
+export type AnnouncementType =
+  | 'bar'
+  | 'popup'
+  | 'marquee'
+  | 'floating'
+  | 'banner'
+  | 'countdown'
+  | 'toast'
+  | 'slidein';
 export type AnnouncementVariant = 'info' | 'promo' | 'warning' | 'success' | 'dark';
 
 export type AnnouncementLayout = 'standard' | 'image' | 'overlay';

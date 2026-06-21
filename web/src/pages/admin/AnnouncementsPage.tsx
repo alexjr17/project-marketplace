@@ -16,6 +16,10 @@ const TYPE_LABELS: Record<string, string> = {
   popup: 'Popup',
   marquee: 'Marquesina',
   floating: 'Flotante',
+  banner: 'Banner destacado',
+  countdown: 'Cuenta regresiva',
+  toast: 'Notificación',
+  slidein: 'Panel lateral',
 };
 const VARIANT_LABELS: Record<string, string> = {
   info: 'Info (azul)', promo: 'Promo (degradado)', warning: 'Alerta (ámbar)', success: 'Éxito (verde)', dark: 'Oscuro',
@@ -255,8 +259,14 @@ export default function AnnouncementsPage() {
                 </div>
               )}
 
-              {(form.type === 'popup' || form.type === 'floating') && (
-                <Field label="Imagen (popup/flotante)">
+              {form.type === 'countdown' && (
+                <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                  ⏳ La fecha <b>«Hasta»</b> (más abajo) se usa como meta del contador. Cuando llega a 0, el anuncio deja de mostrarse.
+                </p>
+              )}
+
+              {['popup', 'floating', 'banner', 'toast', 'slidein'].includes(form.type) && (
+                <Field label="Imagen (opcional)">
                   <div className="flex items-center gap-2">
                     <input type="file" accept="image/*" onChange={onImage} className="text-sm file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-blue-50 file:text-blue-700" />
                     {form.imageUrl && <img src={form.imageUrl} alt="" className="w-10 h-10 object-cover rounded border" />}

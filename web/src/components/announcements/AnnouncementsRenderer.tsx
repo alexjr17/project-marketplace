@@ -82,6 +82,8 @@ export function AnnouncementsRenderer() {
   const [dismissed, setDismissed] = useState<Set<number>>(new Set());
   const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
   const [navH, setNavH] = useState(0); // alto del nav inferior móvil
+  const [headerH, setHeaderH] = useState(0); // alto del header fijo (para toasts)
+  const [now, setNow] = useState(() => Date.now()); // reloj para la cuenta regresiva
 
   useEffect(() => {
     getActiveAnnouncements().then(setItems).catch(() => setItems([]));
@@ -92,11 +94,20 @@ export function AnnouncementsRenderer() {
         return s.position === 'fixed' && s.bottom === '0px';
       });
       setNavH(nav ? Math.round(nav.getBoundingClientRect().height) : 0);
+      const header = document.querySelector('header');
+      setHeaderH(header ? Math.round(header.getBoundingClientRect().height) : 0);
     };
     measure();
     window.addEventListener('resize', measure);
     return () => window.removeEventListener('resize', measure);
   }, []);
+
+  // Tic-tac de 1s solo si hay alguna cuenta regresiva activa.
+  useEffect(() => {
+    if (!items.some((a) => a.type === 'countdown')) return;
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [items]);
 
   const dismiss = (a: Announcement) => {
     markSeen(a);
@@ -108,8 +119,26 @@ export function AnnouncementsRenderer() {
   );
 
   const bars = visible.filter((a) => a.type === 'bar' || a.type === 'marquee');
+  const banners = visible.filter((a) => a.type === 'banner');
+  const countdowns = visible.filter((a) => a.type === 'countdown');
   const floating = visible.filter((a) => a.type === 'floating');
+  const toasts = visible.filter((a) => a.type === 'toast');
+  const slideins = visible.filter((a) => a.type === 'slidein');
   const popup = visible.find((a) => a.type === 'popup');
+
+  // Tiempo restante para una cuenta regresiva (o null si no aplica / ya venció).
+  const countdownParts = (a: Announcement) => {
+    if (!a.endsAt) return null;
+    const diff = new Date(a.endsAt).getTime() - now;
+    if (isNaN(diff) || diff <= 0) return null;
+    const s = Math.floor(diff / 1000);
+    return {
+      d: Math.floor(s / 86400),
+      h: Math.floor((s % 86400) / 3600),
+      m: Math.floor((s % 3600) / 60),
+      s: s % 60,
+    };
+  };
 
   return (
     <>
@@ -154,6 +183,66 @@ export function AnnouncementsRenderer() {
             )}
           </div>
         </div>
+        );
+      })}
+
+      {/* Banner destacado (franja grande en flujo, con imagen de fondo opcional) */}
+      {banners.map((a) => (
+        <div key={a.id} className="relative overflow-hidden animate-[annSlideDown_.5s_cubic-bezier(0.16,1,0.3,1)] motion-reduce:animate-none">
+          {a.imageUrl && <img src={a.imageUrl} alt={a.title || ''} className="absolute inset-0 w-full h-full object-cover" />}
+          <div className="absolute inset-0" style={a.imageUrl ? { background: 'linear-gradient(to right, rgba(0,0,0,.7), rgba(0,0,0,.25))' } : { backgroundImage: brandGradient }} />
+          <div className="relative max-w-7xl mx-auto px-5 py-7 md:py-10 text-white">
+            <div className="max-w-2xl">
+              {a.title && <h3 className="text-2xl md:text-3xl font-extrabold drop-shadow">{a.title}</h3>}
+              {a.message && <p className="mt-1.5 text-white/90 md:text-lg">{a.message}</p>}
+              <div className="mt-4 flex flex-wrap items-center gap-3">
+                <Cta a={a} className="inline-flex items-center px-5 py-2.5 rounded-lg text-sm font-bold bg-white text-gray-900 hover:bg-white/90 shadow-lg" />
+                {a.couponCode && (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-bold border-2 border-dashed border-white/70 bg-white/10">
+                    <Tag className="w-4 h-4" /> {a.couponCode}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+          {a.dismissible && (
+            <button onClick={() => dismiss(a)} aria-label="Cerrar" className="absolute top-3 right-3 p-1.5 bg-black/30 hover:bg-black/50 rounded-full text-white">
+              <X className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+      ))}
+
+      {/* Cuenta regresiva (barra en flujo con temporizador hasta "Hasta") */}
+      {countdowns.map((a) => {
+        const t = countdownParts(a);
+        const bp = barProps(a);
+        return (
+          <div key={a.id} className={`${bp.className} relative overflow-hidden animate-[annSlideDown_.5s_cubic-bezier(0.16,1,0.3,1)] motion-reduce:animate-none`} style={bp.style}>
+            <div className="max-w-7xl mx-auto px-4 py-2.5 pr-10 flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5 text-center">
+              <span className="flex items-center gap-2">
+                {a.title && <strong className="font-bold">{a.title}</strong>}
+                {a.message && <span className="opacity-95 text-sm">{a.message}</span>}
+              </span>
+              {t && (
+                <span className="flex items-center gap-1.5">
+                  {([['Días', t.d], ['Hrs', t.h], ['Min', t.m], ['Seg', t.s]] as const).map(([k, v]) => (
+                    <span key={k} className="inline-flex flex-col items-center bg-black/20 rounded px-2 py-0.5 leading-none min-w-[2.4rem]">
+                      <span className="text-base font-extrabold tabular-nums">{String(v).padStart(2, '0')}</span>
+                      <span className="text-[9px] uppercase tracking-wide opacity-80">{k}</span>
+                    </span>
+                  ))}
+                </span>
+              )}
+              {a.couponCode && <Coupon code={a.couponCode} />}
+              <Cta a={a} className="inline-flex items-center px-3.5 py-1 rounded-full text-xs font-bold bg-white text-gray-900 hover:bg-white/90 shadow-sm" />
+            </div>
+            {a.dismissible && (
+              <button onClick={() => dismiss(a)} aria-label="Cerrar" className="absolute top-1/2 right-3 -translate-y-1/2 p-1 hover:bg-white/20 rounded">
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
         );
       })}
 
@@ -211,6 +300,92 @@ export function AnnouncementsRenderer() {
                 <Coupon code={a.couponCode} dark />
                 <Cta a={a} className="inline-flex items-center px-3 py-1 rounded-lg text-xs font-semibold text-white hover:opacity-90" style={{ backgroundColor: brand.primary }} />
               </div>
+            </div>
+          </div>
+        )
+      )}
+
+      {/* Notificaciones tipo toast (esquina superior, bajo el header) */}
+      {toasts.map((a, i) => (
+        <div key={a.id} className="fixed z-[55] right-3 left-3 md:left-auto md:right-4 md:w-80" style={{ top: headerH + 12 + i * 92 }}>
+          <div className="relative bg-white rounded-xl shadow-[0_12px_30px_-8px_rgba(0,0,0,0.4)] ring-1 ring-black/10 overflow-hidden animate-[annSlideDown_.4s_cubic-bezier(0.16,1,0.3,1)] motion-reduce:animate-none">
+            <div className="flex gap-3 p-3 pr-7">
+              <div className="w-1 self-stretch rounded-full flex-shrink-0" style={{ backgroundImage: brandGradient }} />
+              {a.imageUrl && <img src={a.imageUrl} alt="" className="w-10 h-10 rounded-lg object-cover flex-shrink-0" />}
+              <div className="min-w-0 flex-1">
+                {a.title && <p className="font-semibold text-sm text-gray-900">{a.title}</p>}
+                {a.message && <p className="text-xs text-gray-600 mt-0.5 line-clamp-3">{a.message}</p>}
+                <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                  {a.couponCode && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold border border-dashed" style={{ color: brand.primary, borderColor: brand.primary }}>
+                      <Tag className="w-3 h-3" /> {a.couponCode}
+                    </span>
+                  )}
+                  {a.ctaText && a.ctaUrl && (
+                    <Cta a={a} className="inline-flex items-center px-3 py-1 rounded-lg text-xs font-bold text-white shadow" style={{ backgroundImage: brandGradient }} />
+                  )}
+                </div>
+              </div>
+            </div>
+            {a.dismissible && (
+              <button onClick={() => dismiss(a)} aria-label="Cerrar" className="absolute top-1.5 right-1.5 p-1 text-gray-400 hover:text-gray-600">
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+        </div>
+      ))}
+
+      {/* Panel lateral:
+          - Móvil: banner a ancho total sobre el nav inferior.
+          - Escritorio: panel que entra desde la derecha, centrado vertical. */}
+      {slideins.map((a, i) =>
+        isMobile ? (
+          <div key={a.id} className="fixed inset-x-0 z-40" style={{ bottom: navH + (floating.length + i) * 96 }}>
+            <div className="relative bg-white rounded-t-2xl shadow-[0_-8px_24px_rgba(0,0,0,0.12)] border-t border-x border-gray-100 overflow-hidden animate-[annSlideUp_.45s_cubic-bezier(0.16,1,0.3,1)] motion-reduce:animate-none">
+              <div className="h-1 w-full" style={{ backgroundImage: brandGradient }} />
+              {a.dismissible && (
+                <button onClick={() => dismiss(a)} aria-label="Cerrar" className="absolute top-1.5 right-1.5 z-10 p-1 text-gray-400 hover:text-gray-600">
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+              <div className="flex items-center gap-3 p-3 pr-7">
+                {a.imageUrl && <img src={a.imageUrl} alt={a.title || ''} className="w-14 h-14 rounded-lg object-cover flex-shrink-0" />}
+                <div className="min-w-0 flex-1">
+                  {a.title && <p className="font-semibold text-sm text-gray-900 truncate">{a.title}</p>}
+                  {a.message && <p className="text-xs text-gray-600 line-clamp-2">{a.message}</p>}
+                  <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                    {a.couponCode && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold border border-dashed" style={{ color: brand.primary, borderColor: brand.primary }}>
+                        <Tag className="w-3 h-3" /> {a.couponCode}
+                      </span>
+                    )}
+                    {a.ctaText && a.ctaUrl && (
+                      <Cta a={a} className="inline-flex items-center px-3 py-1 rounded-lg text-xs font-bold text-white shadow" style={{ backgroundImage: brandGradient }} />
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div key={a.id} className="fixed right-0 top-1/2 -translate-y-1/2 z-40 w-80 max-w-[calc(100vw-1rem)]" style={{ marginTop: i * 20 }}>
+            <div className="relative bg-white rounded-l-2xl shadow-[0_20px_50px_-12px_rgba(0,0,0,0.45)] ring-1 ring-black/10 overflow-hidden animate-[annSlideInRight_.5s_cubic-bezier(0.16,1,0.3,1)] motion-reduce:animate-none">
+              <div className="h-1.5 w-full" style={{ backgroundImage: brandGradient }} />
+              {a.imageUrl && <img src={a.imageUrl} alt={a.title || ''} className="w-full h-32 object-cover" />}
+              <div className="p-4">
+                {a.title && <p className="font-bold text-gray-900">{a.title}</p>}
+                {a.message && <p className="text-sm text-gray-600 mt-1">{a.message}</p>}
+                <div className="flex items-center gap-2 mt-3 flex-wrap">
+                  <Coupon code={a.couponCode} dark />
+                  <Cta a={a} className="inline-flex items-center px-4 py-1.5 rounded-lg text-sm font-semibold text-white hover:opacity-90" style={{ backgroundColor: brand.primary }} />
+                </div>
+              </div>
+              {a.dismissible && (
+                <button onClick={() => dismiss(a)} aria-label="Cerrar" className="absolute top-2 right-2 p-1 bg-white/90 rounded-full text-gray-500 hover:text-gray-700 shadow">
+                  <X className="w-4 h-4" />
+                </button>
+              )}
             </div>
           </div>
         )
@@ -337,6 +512,7 @@ export function AnnouncementsRenderer() {
         @keyframes annSlideUp { from { transform: translateY(24px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
         @keyframes annFadeIn { from { opacity: 0; } to { opacity: 1; } }
         @keyframes annPopIn { from { transform: scale(.96) translateY(10px); opacity: 0; } to { transform: scale(1) translateY(0); opacity: 1; } }
+        @keyframes annSlideInRight { from { transform: translate(100%, -50%); opacity: 0; } to { transform: translate(0, -50%); opacity: 1; } }
         @media (prefers-reduced-motion: reduce) { [data-dup="true"] { display: none; } }
       `}</style>
     </>
