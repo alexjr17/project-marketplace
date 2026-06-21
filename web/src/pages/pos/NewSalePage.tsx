@@ -464,7 +464,7 @@ export default function NewSalePage() {
 
   return (
     <div className="lg:h-full flex flex-col lg:flex-row gap-4">
-      {/* Left Column - Cart */}
+      {/* Left Column - Productos */}
       <div className="flex-1 flex flex-col min-h-0 lg:max-h-none">
         {/* Scanner Input */}
         <div className="bg-white rounded-lg shadow-sm p-3 sm:p-4 mb-3 sm:mb-4">
@@ -505,6 +505,12 @@ export default function NewSalePage() {
               {isSearching ? '...' : 'Buscar'}
             </button>
           </form>
+        </div>
+
+        {/* Cliente */}
+        <div className="bg-white rounded-lg shadow-sm p-3 lg:p-4">
+          <h3 className="font-semibold text-gray-900 mb-2 lg:mb-3">Cliente</h3>
+          <CustomerSelect value={selectedCustomer} onChange={setSelectedCustomer} />
         </div>
 
         {/* Catálogo de productos (acordeón con scroll infinito + búsqueda) */}
@@ -612,6 +618,10 @@ export default function NewSalePage() {
           )}
         </div>
 
+      </div>
+
+      {/* Right Column - Payment */}
+      <div className="w-full lg:w-96 flex flex-col gap-3 lg:gap-4">
         {/* Cart Items */}
         <div className="flex-1 bg-white rounded-lg shadow-sm overflow-hidden flex flex-col min-h-[200px]">
           <div className="p-3 lg:p-4 border-b border-gray-200 flex items-center justify-between">
@@ -719,10 +729,7 @@ export default function NewSalePage() {
             )}
           </div>
         </div>
-      </div>
 
-      {/* Right Column - Payment */}
-      <div className="w-full lg:w-96 flex flex-col gap-3 lg:gap-4">
         {/* Totals */}
         <div className="bg-white rounded-lg shadow-sm p-3 lg:p-4">
           <h3 className="font-semibold text-gray-900 mb-2 lg:mb-4">Resumen</h3>
@@ -761,12 +768,6 @@ export default function NewSalePage() {
               </div>
             </div>
           </div>
-        </div>
-
-        {/* Cliente */}
-        <div className="bg-white rounded-lg shadow-sm p-3 lg:p-4">
-          <h3 className="font-semibold text-gray-900 mb-2 lg:mb-3">Cliente</h3>
-          <CustomerSelect value={selectedCustomer} onChange={setSelectedCustomer} />
         </div>
 
         {/* Payment Method */}
