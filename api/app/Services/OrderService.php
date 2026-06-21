@@ -186,8 +186,10 @@ class OrderService
                 'productId' => $product->id,
                 'productName' => $product->name,
                 'productImage' => $firstImage,
-                'size' => $item['size'],
-                'color' => $item['color'],
+                // Columnas NOT NULL: productos simples van con cadena vacía.
+                'size' => (string) ($item['size'] ?? ''),
+                'color' => (string) ($item['color'] ?? ''),
+                'variantId' => $variant->id,
                 'quantity' => $item['quantity'],
                 'unitPrice' => $unitPrice,
                 'customization' => $item['customization'] ?? null,
