@@ -92,7 +92,10 @@
                 <tr>
                     <td>{{ $item['name'] }}</td>
                     <td class="right">{{ $item['quantity'] }}</td>
-                    <td class="right">${{ number_format($item['unitPrice'], 0, ',', '.') }}</td>
+                    <td class="right">
+                        @if(!empty($item['hasDiscount']))<s style="font-size:8px;color:#888">${{ number_format($item['basePrice'], 0, ',', '.') }}</s><br>@endif
+                        ${{ number_format($item['unitPrice'], 0, ',', '.') }}
+                    </td>
                     <td class="right">${{ number_format($item['subtotal'], 0, ',', '.') }}</td>
                 </tr>
             @endforeach
@@ -101,6 +104,9 @@
 
     <table class="totals">
         <tr><td>Subtotal</td><td class="right">${{ number_format($invoice['subtotal'], 0, ',', '.') }}</td></tr>
+        @if(!empty($invoice['savings']) && $invoice['savings'] > 0)
+            <tr><td>Ahorro en ofertas</td><td class="right">-${{ number_format($invoice['savings'], 0, ',', '.') }}</td></tr>
+        @endif
         @if($invoice['discount'] > 0)
             <tr><td>Descuento</td><td class="right">-${{ number_format($invoice['discount'], 0, ',', '.') }}</td></tr>
         @endif

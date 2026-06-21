@@ -309,15 +309,32 @@ class POSController extends Controller
                         .($item->variant->size->abbreviation ?? $item->variant->size->name ?? '').')'
                     : $item->productName;
 
+                // Precio original del producto para mostrar el ahorro por oferta.
+                $base = $item->variant?->product?->basePrice
+                    ?? optional(\App\Models\Product::find($item->productId))->basePrice;
+                $base = (float) ($base ?? $item->unitPrice);
+                $unit = (float) $item->unitPrice;
+                $saved = $base > $unit ? ($base - $unit) * $item->quantity : 0;
+
                 return [
                     'name' => $name,
                     'quantity' => $item->quantity,
-                    'unitPrice' => (float) $item->unitPrice,
-                    'subtotal' => (float) $item->unitPrice * $item->quantity,
+                    'unitPrice' => $unit,
+                    'basePrice' => $base,
+                    'hasDiscount' => $base > $unit,
+                    'saved' => $saved,
+                    'subtotal' => $unit * $item->quantity,
                 ];
             })->all(),
             'subtotal' => (float) $order->subtotal,
             'discount' => (float) ($order->discount ?? 0),
+            'savings' => (float) $order->items->sum(function ($item) {
+                $base = $item->variant?->product?->basePrice
+                    ?? optional(\App\Models\Product::find($item->productId))->basePrice;
+                $base = (float) ($base ?? $item->unitPrice);
+
+                return $base > (float) $item->unitPrice ? ($base - (float) $item->unitPrice) * $item->quantity : 0;
+            }),
             'tax' => (float) ($order->tax ?? 0),
             'total' => (float) $order->total,
             'paymentMethod' => self::PAYMENT_LABELS[$order->paymentMethod ?? 'cash'] ?? 'Efectivo',
