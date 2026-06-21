@@ -89,7 +89,7 @@ class MinimalSeeder extends Seeder
                     [
                         'sku' => 'PRD-0001-'.strtoupper(substr($color->slug, 0, 3)).'-'.$size->abbreviation,
                         'barcode' => $this->ean13(),
-                        'stock' => 2, // 2 unidades por variante (demo)
+                        'stock' => 0, // el stock entra por la compra recibida
                         'minStock' => 3,
                         'isActive' => true,
                     ]
@@ -114,7 +114,7 @@ class MinimalSeeder extends Seeder
                 'categoryId' => $category?->id,
                 'typeId' => $type?->id,
                 'basePrice' => 25000,
-                'stock' => 2,
+                'stock' => 0,
                 'featured' => false,
                 'isActive' => true,
                 'isTemplate' => false,
@@ -124,13 +124,13 @@ class MinimalSeeder extends Seeder
             ]
         );
 
-        // Producto simple: una única variante con color/talla nulos.
+        // Producto simple: una única variante con color/talla nulos. Stock por compra.
         ProductVariant::updateOrCreate(
             ['productId' => $product->id, 'colorId' => null, 'sizeId' => null],
             [
                 'sku' => 'PRD-0002-U',
                 'barcode' => $this->ean13(),
-                'stock' => 2,
+                'stock' => 0,
                 'minStock' => 5,
                 'isActive' => true,
             ]
@@ -175,7 +175,7 @@ class MinimalSeeder extends Seeder
                 [
                     'sku' => 'PRD-0003-'.strtoupper(substr($color->slug, 0, 3)),
                     'barcode' => $this->ean13(),
-                    'stock' => 2,
+                    'stock' => 0, // el stock entra por la compra recibida
                     'minStock' => 3,
                     'isActive' => true,
                 ]
@@ -341,7 +341,10 @@ class MinimalSeeder extends Seeder
         );
     }
 
-    /** Una compra de ejemplo (1 unidad, pendiente de recibir) al proveedor sembrado. */
+    /**
+     * Compra inicial RECIBIDA que surte el stock de los productos de catálogo:
+     * 2 unidades por variante. Así el stock concuerda exactamente con la compra.
+     */
     private function seedSupplierAndPurchase(): void
     {
         // El proveedor lo crea InventorySeeder (PROV-0001); si no, lo creamos.
@@ -350,45 +353,72 @@ class MinimalSeeder extends Seeder
             ['name' => 'Textiles del Norte S.A.S.', 'country' => 'Colombia', 'isActive' => true]
         );
 
-        $product = Product::where('slug', 'sueter-basico')->first();
-        $variant = $product ? ProductVariant::where('productId', $product->id)->orderBy('id')->first() : null;
-        if (! $variant) {
+        $adminId = User::where('email', 'admin@vexa.com')->value('id');
+        $qtyPerVariant = 2;
+        $unitCost = 18000;
+
+        // Variantes de los productos de catálogo (no plantillas).
+        $variants = ProductVariant::whereIn('productId', function ($q) {
+            $q->select('id')->from('products')
+                ->whereIn('slug', ['sueter-basico', 'gorra-clasica', 'tote-bag-lienzo']);
+        })->with('product')->get();
+
+        if ($variants->isEmpty()) {
             return;
         }
 
-        $adminId = User::where('email', 'admin@vexa.com')->value('id');
-        $unitCost = 32000;
+        $subtotal = $variants->count() * $qtyPerVariant * $unitCost;
 
         $order = PurchaseOrder::updateOrCreate(
             ['orderNumber' => 'OC-2026-0001'],
             [
                 'supplierId' => $supplier->id,
-                'status' => 'CONFIRMED', // pendiente de recibir: no altera el stock
-                'subtotal' => $unitCost,
+                'status' => 'RECEIVED',
+                'subtotal' => $subtotal,
                 'tax' => 0,
                 'discount' => 0,
-                'total' => $unitCost,
+                'total' => $subtotal,
                 'orderDate' => now(),
                 'expectedDate' => now()->addDays(3),
-                'receivedDate' => null,
-                'notes' => 'Compra de ejemplo: 1 unidad (pendiente de recibir).',
+                'receivedDate' => now(),
+                'notes' => 'Compra inicial de inventario (2 unidades por variante).',
                 'createdById' => $adminId,
             ]
         );
 
+        // Idempotente: si ya tiene ítems, no volver a recibir/sumar.
         if (PurchaseOrderItem::where('purchaseOrderId', $order->id)->exists()) {
             return;
         }
 
-        PurchaseOrderItem::create([
-            'purchaseOrderId' => $order->id,
-            'variantId' => $variant->id,
-            'description' => $product->name.' ('.$variant->sku.')',
-            'quantity' => 1,
-            'quantityReceived' => 0,
-            'unitCost' => $unitCost,
-            'subtotal' => $unitCost,
-        ]);
+        foreach ($variants as $variant) {
+            PurchaseOrderItem::create([
+                'purchaseOrderId' => $order->id,
+                'variantId' => $variant->id,
+                'description' => ($variant->product?->name ?? 'Producto').' ('.$variant->sku.')',
+                'quantity' => $qtyPerVariant,
+                'quantityReceived' => $qtyPerVariant,
+                'unitCost' => $unitCost,
+                'subtotal' => $qtyPerVariant * $unitCost,
+            ]);
+
+            $previous = (int) $variant->stock;
+            $variant->stock = $previous + $qtyPerVariant;
+            $variant->save();
+
+            VariantMovement::create([
+                'variantId' => $variant->id,
+                'movementType' => 'PURCHASE',
+                'quantity' => $qtyPerVariant,
+                'previousStock' => $previous,
+                'newStock' => $variant->stock,
+                'referenceType' => 'purchase_order',
+                'referenceId' => $order->id,
+                'reason' => 'Recepción de OC-2026-0001 (compra inicial)',
+                'userId' => $adminId,
+                'unitCost' => $unitCost,
+            ]);
+        }
     }
 
     /** Código de barras EAN-13 válido (12 dígitos + verificador). */

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { MapPin, Plus, Star, Edit2, Trash2, Save, X, Loader2, Home, CheckCircle2 } from 'lucide-react';
 import { addressesService, type Address, type AddressInput } from '../../services/addresses.service';
+import { CitySelect, CountrySelect } from '../shared/CitySelect';
 import { Button } from '../shared/Button';
 import { Input } from '../shared/Input';
 import { useToast } from '../../context/ToastContext';
@@ -162,20 +163,11 @@ export const AddressesSection = ({ brandColor }: AddressesSectionProps) => {
             onChange={(e) => setForm({ ...form, address: e.target.value })}
             placeholder="Calle 123 #45-67, Apto 301"
           />
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Input
-              label="Ciudad *"
-              value={form.city}
-              onChange={(e) => setForm({ ...form, city: e.target.value })}
-              placeholder="Bogotá"
-            />
-            <Input
-              label="Departamento"
-              value={form.department || ''}
-              onChange={(e) => setForm({ ...form, department: e.target.value })}
-              placeholder="Cundinamarca"
-            />
-          </div>
+          <CitySelect
+            city={form.city}
+            onChange={(city, department) => setForm({ ...form, city, department })}
+            required
+          />
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input
               label="Código postal"
@@ -183,12 +175,7 @@ export const AddressesSection = ({ brandColor }: AddressesSectionProps) => {
               onChange={(e) => setForm({ ...form, postalCode: e.target.value })}
               placeholder="110111"
             />
-            <Input
-              label="País"
-              value={form.country || ''}
-              onChange={(e) => setForm({ ...form, country: e.target.value })}
-              placeholder="Colombia"
-            />
+            <CountrySelect value={form.country || 'Colombia'} onChange={(country) => setForm({ ...form, country })} />
           </div>
 
           <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">

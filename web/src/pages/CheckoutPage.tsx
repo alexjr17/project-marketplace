@@ -30,6 +30,7 @@ import { WompiCheckout } from '../components/payment/WompiCheckout';
 import { addressesService, type Address } from '../services/addresses.service';
 import { quoteShipping } from '../utils/shippingQuote';
 import { validateCoupon, type CouponResult } from '../services/discounts.service';
+import { CitySelect } from '../components/shared/CitySelect';
 
 interface FormData {
   customerName: string;
@@ -665,15 +666,16 @@ export const CheckoutPage = () => {
                           placeholder="Calle 123 #45-67, Apto 301"
                         />
 
+                        <CitySelect
+                          city={formData.shippingCity}
+                          onChange={(city) => {
+                            setFormData((prev) => ({ ...prev, shippingCity: city }));
+                            setErrors((prev) => ({ ...prev, shippingCity: undefined }));
+                          }}
+                          error={errors.shippingCity}
+                          required
+                        />
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <Input
-                            label="Ciudad *"
-                            name="shippingCity"
-                            value={formData.shippingCity}
-                            onChange={handleInputChange}
-                            error={errors.shippingCity}
-                            placeholder="Bogotá"
-                          />
                           <Input
                             label="Código postal"
                             name="shippingPostalCode"
