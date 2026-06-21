@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Concerns\ApiResponse;
+use App\Models\Setting;
 use App\Services\POSService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
@@ -288,6 +289,91 @@ class POSController extends Controller
         ];
     }
 
+    /**
+     * Configuración de impresión del recibo a partir de las settings guardadas
+     * (Configuración → Impresión + datos generales de la empresa).
+     */
+    private function printConfig(): array
+    {
+        $printing = $this->readSettingValue('printing_settings');
+        $general = $this->readSettingValue('general_settings');
+        $fiscal = is_array($general['fiscal'] ?? null) ? $general['fiscal'] : [];
+
+        $width = (float) ($printing['ticketWidth'] ?? 80);
+        $height = (float) ($printing['ticketHeight'] ?? 0); // 0 = continuo (térmico)
+        $thermal = $width <= 80;
+
+        $margins = is_array($printing['ticketMargins'] ?? null)
+            ? $printing['ticketMargins']
+            : ['top' => 5, 'right' => 5, 'bottom' => 10, 'left' => 5];
+
+        $fontMap = ['small' => 10, 'medium' => 12, 'large' => 14];
+        $baseFont = $fontMap[$printing['fontSize'] ?? 'medium'] ?? 12;
+
+        return [
+            'width' => $width,
+            'height' => $height,
+            'thermal' => $thermal,
+            'margins' => [
+                'top' => (float) ($margins['top'] ?? 5),
+                'right' => (float) ($margins['right'] ?? 5),
+                'bottom' => (float) ($margins['bottom'] ?? 10),
+                'left' => (float) ($margins['left'] ?? 5),
+            ],
+            'baseFont' => $baseFont,
+            'showLogo' => (bool) ($printing['showLogo'] ?? true),
+            'showStoreName' => (bool) ($printing['showStoreName'] ?? true),
+            'showNit' => (bool) ($printing['showNit'] ?? true),
+            'showQR' => (bool) ($printing['showQR'] ?? false),
+            'logo' => $printing['ticketLogo'] ?: ($general['logo'] ?? ''),
+            'storeName' => $general['siteName'] ?? '',
+            'nit' => $fiscal['nit'] ?? '',
+            'address' => $general['address'] ?? '',
+            'phone' => $general['contactPhone'] ?? '',
+        ];
+    }
+
+    private function readSettingValue(string $key): array
+    {
+        $setting = Setting::where('key', $key)->first();
+
+        return is_array($setting?->value) ? $setting->value : [];
+    }
+
+    /** Genera el PDF del recibo aplicando el formato de papel configurado. */
+    private function buildInvoicePdf(array $invoiceData, array $cfg)
+    {
+        // Código escaneable del recibo (Code128) si está activado en la config.
+        $cfg['codeImg'] = '';
+        if ($cfg['showQR']) {
+            try {
+                $generator = new \Picqer\Barcode\BarcodeGeneratorPNG();
+                $png = $generator->getBarcode((string) $invoiceData['orderNumber'], $generator::TYPE_CODE_128, 2, 50);
+                $cfg['codeImg'] = 'data:image/png;base64,'.base64_encode($png);
+            } catch (\Throwable $e) {
+                $cfg['codeImg'] = '';
+            }
+        }
+
+        $pdf = Pdf::loadView('pdf.pos-invoice', ['invoice' => $invoiceData, 'cfg' => $cfg]);
+
+        $mmToPt = 2.834645669;
+        $wPt = $cfg['width'] * $mmToPt;
+        if ($cfg['height'] > 0) {
+            $hPt = $cfg['height'] * $mmToPt;
+        } else {
+            // Térmico continuo: estimar alto según contenido para no dejar
+            // una hoja enorme en blanco.
+            $lines = count($invoiceData['items']);
+            $mm = 70 + ($lines * 7) + (! empty($invoiceData['isCredit']) ? 14 : 0)
+                + ($cfg['showLogo'] && $cfg['logo'] ? 20 : 0)
+                + ($cfg['showQR'] ? 22 : 0);
+            $hPt = max(180, $mm) * $mmToPt;
+        }
+
+        return $pdf->setPaper([0, 0, $wPt, $hPt]);
+    }
+
     /** POST /api/pos/sale/{id}/send-invoice */
     public function sendInvoice(Request $request, int $id)
     {
@@ -303,7 +389,7 @@ class POSController extends Controller
         }
 
         $data = $this->invoiceData($order);
-        $pdf = Pdf::loadView('pdf.pos-invoice', ['invoice' => $data]);
+        $pdf = $this->buildInvoicePdf($data, $this->printConfig());
 
         try {
             Mail::send('emails.pos-invoice', ['invoice' => $data], function ($message) use ($email, $data, $pdf) {
@@ -334,7 +420,7 @@ class POSController extends Controller
             return $this->error($e->getMessage(), 400);
         }
 
-        $pdf = Pdf::loadView('pdf.pos-invoice', ['invoice' => $this->invoiceData($order)]);
+        $pdf = $this->buildInvoicePdf($this->invoiceData($order), $this->printConfig());
 
         return $pdf->stream('Recibo_'.$order->orderNumber.'.pdf');
     }
