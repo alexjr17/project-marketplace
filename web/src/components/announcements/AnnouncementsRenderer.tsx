@@ -119,11 +119,9 @@ export function AnnouncementsRenderer() {
   );
 
   const bars = visible.filter((a) => a.type === 'bar' || a.type === 'marquee');
-  const banners = visible.filter((a) => a.type === 'banner');
   const countdowns = visible.filter((a) => a.type === 'countdown');
   const floating = visible.filter((a) => a.type === 'floating');
   const toasts = visible.filter((a) => a.type === 'toast');
-  const slideins = visible.filter((a) => a.type === 'slidein');
   const popup = visible.find((a) => a.type === 'popup');
 
   // Tiempo restante para una cuenta regresiva (o null si no aplica / ya venció).
@@ -185,33 +183,6 @@ export function AnnouncementsRenderer() {
         </div>
         );
       })}
-
-      {/* Banner destacado (franja grande en flujo, con imagen de fondo opcional) */}
-      {banners.map((a) => (
-        <div key={a.id} className="relative overflow-hidden animate-[annSlideDown_.5s_cubic-bezier(0.16,1,0.3,1)] motion-reduce:animate-none">
-          {a.imageUrl && <img src={a.imageUrl} alt={a.title || ''} className="absolute inset-0 w-full h-full object-cover" />}
-          <div className="absolute inset-0" style={a.imageUrl ? { background: 'linear-gradient(to right, rgba(0,0,0,.7), rgba(0,0,0,.25))' } : { backgroundImage: brandGradient }} />
-          <div className="relative max-w-7xl mx-auto px-5 py-7 md:py-10 text-white">
-            <div className="max-w-2xl">
-              {a.title && <h3 className="text-2xl md:text-3xl font-extrabold drop-shadow">{a.title}</h3>}
-              {a.message && <p className="mt-1.5 text-white/90 md:text-lg">{a.message}</p>}
-              <div className="mt-4 flex flex-wrap items-center gap-3">
-                <Cta a={a} className="inline-flex items-center px-5 py-2.5 rounded-lg text-sm font-bold bg-white text-gray-900 hover:bg-white/90 shadow-lg" />
-                {a.couponCode && (
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-bold border-2 border-dashed border-white/70 bg-white/10">
-                    <Tag className="w-4 h-4" /> {a.couponCode}
-                  </span>
-                )}
-              </div>
-            </div>
-          </div>
-          {a.dismissible && (
-            <button onClick={() => dismiss(a)} aria-label="Cerrar" className="absolute top-3 right-3 p-1.5 bg-black/30 hover:bg-black/50 rounded-full text-white">
-              <X className="w-4 h-4" />
-            </button>
-          )}
-        </div>
-      ))}
 
       {/* Cuenta regresiva (barra en flujo con temporizador hasta "Hasta") */}
       {countdowns.map((a) => {
@@ -336,61 +307,6 @@ export function AnnouncementsRenderer() {
         </div>
       ))}
 
-      {/* Panel lateral:
-          - Móvil: banner a ancho total sobre el nav inferior.
-          - Escritorio: panel que entra desde la derecha, centrado vertical. */}
-      {slideins.map((a, i) =>
-        isMobile ? (
-          <div key={a.id} className="fixed inset-x-0 z-40" style={{ bottom: navH + (floating.length + i) * 96 }}>
-            <div className="relative bg-white rounded-t-2xl shadow-[0_-8px_24px_rgba(0,0,0,0.12)] border-t border-x border-gray-100 overflow-hidden animate-[annSlideUp_.45s_cubic-bezier(0.16,1,0.3,1)] motion-reduce:animate-none">
-              <div className="h-1 w-full" style={{ backgroundImage: brandGradient }} />
-              {a.dismissible && (
-                <button onClick={() => dismiss(a)} aria-label="Cerrar" className="absolute top-1.5 right-1.5 z-10 p-1 text-gray-400 hover:text-gray-600">
-                  <X className="w-4 h-4" />
-                </button>
-              )}
-              <div className="flex items-center gap-3 p-3 pr-7">
-                {a.imageUrl && <img src={a.imageUrl} alt={a.title || ''} className="w-14 h-14 rounded-lg object-cover flex-shrink-0" />}
-                <div className="min-w-0 flex-1">
-                  {a.title && <p className="font-semibold text-sm text-gray-900 truncate">{a.title}</p>}
-                  {a.message && <p className="text-xs text-gray-600 line-clamp-2">{a.message}</p>}
-                  <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                    {a.couponCode && (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold border border-dashed" style={{ color: brand.primary, borderColor: brand.primary }}>
-                        <Tag className="w-3 h-3" /> {a.couponCode}
-                      </span>
-                    )}
-                    {a.ctaText && a.ctaUrl && (
-                      <Cta a={a} className="inline-flex items-center px-3 py-1 rounded-lg text-xs font-bold text-white shadow" style={{ backgroundImage: brandGradient }} />
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div key={a.id} className="fixed right-0 top-1/2 -translate-y-1/2 z-40 w-80 max-w-[calc(100vw-1rem)]" style={{ marginTop: i * 20 }}>
-            <div className="relative bg-white rounded-l-2xl shadow-[0_20px_50px_-12px_rgba(0,0,0,0.45)] ring-1 ring-black/10 overflow-hidden animate-[annSlideInRight_.5s_cubic-bezier(0.16,1,0.3,1)] motion-reduce:animate-none">
-              <div className="h-1.5 w-full" style={{ backgroundImage: brandGradient }} />
-              {a.imageUrl && <img src={a.imageUrl} alt={a.title || ''} className="w-full h-32 object-cover" />}
-              <div className="p-4">
-                {a.title && <p className="font-bold text-gray-900">{a.title}</p>}
-                {a.message && <p className="text-sm text-gray-600 mt-1">{a.message}</p>}
-                <div className="flex items-center gap-2 mt-3 flex-wrap">
-                  <Coupon code={a.couponCode} dark />
-                  <Cta a={a} className="inline-flex items-center px-4 py-1.5 rounded-lg text-sm font-semibold text-white hover:opacity-90" style={{ backgroundColor: brand.primary }} />
-                </div>
-              </div>
-              {a.dismissible && (
-                <button onClick={() => dismiss(a)} aria-label="Cerrar" className="absolute top-2 right-2 p-1 bg-white/90 rounded-full text-gray-500 hover:text-gray-700 shadow">
-                  <X className="w-4 h-4" />
-                </button>
-              )}
-            </div>
-          </div>
-        )
-      )}
-
       {/* Popup / modal */}
       {popup && (() => {
         const p = popup;
@@ -512,7 +428,6 @@ export function AnnouncementsRenderer() {
         @keyframes annSlideUp { from { transform: translateY(24px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
         @keyframes annFadeIn { from { opacity: 0; } to { opacity: 1; } }
         @keyframes annPopIn { from { transform: scale(.96) translateY(10px); opacity: 0; } to { transform: scale(1) translateY(0); opacity: 1; } }
-        @keyframes annSlideInRight { from { transform: translate(100%, -50%); opacity: 0; } to { transform: translate(0, -50%); opacity: 1; } }
         @media (prefers-reduced-motion: reduce) { [data-dup="true"] { display: none; } }
       `}</style>
     </>

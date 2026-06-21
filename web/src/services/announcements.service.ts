@@ -20,10 +20,8 @@ export type AnnouncementType =
   | 'popup'
   | 'marquee'
   | 'floating'
-  | 'banner'
   | 'countdown'
-  | 'toast'
-  | 'slidein';
+  | 'toast';
 export type AnnouncementVariant = 'info' | 'promo' | 'warning' | 'success' | 'dark';
 
 export type AnnouncementLayout = 'standard' | 'image' | 'overlay';

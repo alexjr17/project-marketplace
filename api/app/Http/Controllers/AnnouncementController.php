@@ -13,7 +13,7 @@ class AnnouncementController extends Controller
     private function rules(): array
     {
         return [
-            'type' => 'required|in:bar,popup,marquee,floating,banner,countdown,toast,slidein',
+            'type' => 'required|in:bar,popup,marquee,floating,countdown,toast',
             'layout' => 'nullable|in:standard,image,overlay',
             'size' => 'nullable|in:sm,md,lg,xl',
             'title' => 'nullable|string',

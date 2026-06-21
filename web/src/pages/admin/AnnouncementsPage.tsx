@@ -16,10 +16,8 @@ const TYPE_LABELS: Record<string, string> = {
   popup: 'Popup',
   marquee: 'Marquesina',
   floating: 'Flotante',
-  banner: 'Banner destacado',
   countdown: 'Cuenta regresiva',
   toast: 'Notificación',
-  slidein: 'Panel lateral',
 };
 const VARIANT_LABELS: Record<string, string> = {
   info: 'Info (azul)', promo: 'Promo (degradado)', warning: 'Alerta (ámbar)', success: 'Éxito (verde)', dark: 'Oscuro',
@@ -265,7 +263,7 @@ export default function AnnouncementsPage() {
                 </p>
               )}
 
-              {['popup', 'floating', 'banner', 'toast', 'slidein'].includes(form.type) && (
+              {['popup', 'floating', 'toast'].includes(form.type) && (
                 <Field label="Imagen (opcional)">
                   <div className="flex items-center gap-2">
                     <input type="file" accept="image/*" onChange={onImage} className="text-sm file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-blue-50 file:text-blue-700" />
