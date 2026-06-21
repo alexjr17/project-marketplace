@@ -71,6 +71,11 @@ export const CartItem = ({ item, onUpdateQuantity, onRemove, onStockChange }: Ca
   const isOutOfStock = availableStock !== null && availableStock === 0;
   const hasInsufficientStock = availableStock !== null && availableStock > 0 && availableStock < item.quantity;
 
+  // Oferta: precio original tachado + ahorro por unidad.
+  const original = item.product.basePrice ?? item.price;
+  const onSale = (item.product.hasDiscount ?? false) && original > item.price;
+  const savedEach = onSale ? original - item.price : 0;
+
   const handleDecrease = () => {
     if (item.quantity > 1) {
       onUpdateQuantity(item.id, item.quantity - 1);
@@ -152,7 +157,13 @@ export const CartItem = ({ item, onUpdateQuantity, onRemove, onStockChange }: Ca
                 </div>
               )}
               {/* Precio unitario - móvil */}
-              <span className="lg:hidden text-gray-500">• {format(item.price)} c/u</span>
+              <span className="lg:hidden text-gray-500">
+                {onSale ? (
+                  <>• <span className="line-through">{format(original)}</span> <span className="text-emerald-600 font-semibold">{format(item.price)}</span> c/u</>
+                ) : (
+                  <>• {format(item.price)} c/u</>
+                )}
+              </span>
               {/* Indicador de stock */}
               {!loadingStock && availableStock !== null && (
                 <span className={`text-xs font-medium ${
@@ -166,7 +177,15 @@ export const CartItem = ({ item, onUpdateQuantity, onRemove, onStockChange }: Ca
             {/* Desktop: Precio y cantidad en línea */}
             <div className="hidden lg:flex items-center justify-between mt-3">
               <div className="text-sm text-gray-500">
-                {format(item.price)} c/u
+                {onSale ? (
+                  <span className="flex items-center gap-2">
+                    <span className="line-through">{format(original)}</span>
+                    <span className="text-emerald-600 font-bold">{format(item.price)}</span>
+                    <span className="text-xs text-emerald-600">c/u · ahorras {format(savedEach)}</span>
+                  </span>
+                ) : (
+                  <>{format(item.price)} c/u</>
+                )}
               </div>
 
               {/* Control de cantidad - Desktop */}

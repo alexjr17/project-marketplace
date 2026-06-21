@@ -251,6 +251,8 @@ export default function NewSalePage() {
         sku: productResult.sku,
         barcode: productResult.barcode,
         price: productResult.price,
+        basePrice: productResult.basePrice ?? productResult.price,
+        hasDiscount: productResult.hasDiscount ?? false,
         stock: productResult.stock,
         available: productResult.available,
       };
@@ -673,16 +675,24 @@ export default function NewSalePage() {
               <div className="grid grid-cols-2 lg:grid-cols-3 gap-2">
                 {browseItems.map((item, index) => {
                   const isProduct = item.type === 'product';
+                  const prod = isProduct ? (item as ProductSearchResult) : null;
                   const price = isProduct
                     ? (item as ProductSearchResult).price
                     : Number((item as TemplateSearchResult).basePrice);
+                  const onSale = !!(prod?.hasDiscount && prod.basePrice && prod.basePrice > price);
+                  const offPct = onSale ? Math.round((1 - price / (prod!.basePrice as number)) * 100) : 0;
                   return (
                     <button
                       key={index}
                       type="button"
                       onClick={() => handleSelectSearchResult(item)}
-                      className="text-left border border-gray-200 rounded-lg p-2 hover:border-blue-400 hover:shadow-sm transition-all"
+                      className="relative text-left border border-gray-200 rounded-lg p-2 hover:border-blue-400 hover:shadow-sm transition-all"
                     >
+                      {onSale && (
+                        <span className="absolute top-1 left-1 z-10 bg-emerald-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded">
+                          -{offPct}%
+                        </span>
+                      )}
                       {item.image ? (
                         <img
                           src={item.image}
@@ -698,10 +708,17 @@ export default function NewSalePage() {
                         {item.name}
                       </p>
                       <div className="flex items-center justify-between mt-1">
-                        <span
-                          className={`text-base lg:text-sm font-bold ${isProduct ? 'text-gray-900' : 'text-purple-600'}`}
-                        >
-                          ${price.toLocaleString()}
+                        <span className="flex items-baseline gap-1">
+                          <span
+                            className={`text-base lg:text-sm font-bold ${onSale ? 'text-emerald-600' : isProduct ? 'text-gray-900' : 'text-purple-600'}`}
+                          >
+                            ${price.toLocaleString()}
+                          </span>
+                          {onSale && (
+                            <span className="text-[10px] text-gray-400 line-through">
+                              ${(prod!.basePrice as number).toLocaleString()}
+                            </span>
+                          )}
                         </span>
                         {isProduct && (
                           <span className="text-[10px] text-gray-500">
@@ -790,11 +807,19 @@ export default function NewSalePage() {
                               )}
                             </h3>
                             {item.itemType === 'product' ? (
-                              ((item.color && item.color !== 'N/A') || (item.size && item.size !== 'N/A')) ? (
-                                <p className="text-xs lg:text-sm text-gray-500 truncate">
-                                  {[item.color, item.size].filter((x) => x && x !== 'N/A').join(' - ')}
-                                </p>
-                              ) : null
+                              <>
+                                {((item.color && item.color !== 'N/A') || (item.size && item.size !== 'N/A')) ? (
+                                  <p className="text-xs lg:text-sm text-gray-500 truncate">
+                                    {[item.color, item.size].filter((x) => x && x !== 'N/A').join(' - ')}
+                                  </p>
+                                ) : null}
+                                {item.hasDiscount && (item.basePrice ?? 0) > item.price ? (
+                                  <p className="text-xs mt-0.5">
+                                    <span className="text-gray-400 line-through">${(item.basePrice as number).toLocaleString()}</span>{' '}
+                                    <span className="text-emerald-600 font-semibold">${item.price.toLocaleString()} c/u</span>
+                                  </p>
+                                ) : null}
+                              </>
                             ) : (
                               <p className="text-xs text-gray-500">
                                 Base: ${item.basePrice.toLocaleString()}
@@ -848,6 +873,21 @@ export default function NewSalePage() {
               <span>Subtotal:</span>
               <span>${subtotal.toLocaleString()}</span>
             </div>
+
+            {(() => {
+              const offerSavings = cart.reduce((s, it) => {
+                if (it.itemType === 'product' && it.hasDiscount && (it.basePrice ?? 0) > it.price) {
+                  return s + ((it.basePrice as number) - it.price) * it.quantity;
+                }
+                return s;
+              }, 0);
+              return offerSavings > 0 ? (
+                <div className="flex justify-between text-emerald-600">
+                  <span>Ahorro en ofertas:</span>
+                  <span>-${offerSavings.toLocaleString()}</span>
+                </div>
+              ) : null;
+            })()}
 
             <div className="flex justify-between text-gray-600">
               <span>Descuento:</span>

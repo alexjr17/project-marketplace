@@ -30,6 +30,8 @@ export interface ScanProductResponse {
   sku: string;
   barcode: string | null;
   price: number;
+  basePrice?: number;
+  hasDiscount?: boolean;
   stock: number;
   available: boolean;
 }
@@ -127,7 +129,9 @@ export interface ProductSearchResult {
   size: string;
   sku: string;
   barcode: string | null;
-  price: number;
+  price: number;        // precio con la oferta automática ya aplicada
+  basePrice?: number;   // precio original (para mostrar tachado)
+  hasDiscount?: boolean;
   stock: number;
   available: boolean;
 }
