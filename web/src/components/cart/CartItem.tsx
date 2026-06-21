@@ -71,10 +71,10 @@ export const CartItem = ({ item, onUpdateQuantity, onRemove, onStockChange }: Ca
   const isOutOfStock = availableStock !== null && availableStock === 0;
   const hasInsufficientStock = availableStock !== null && availableStock > 0 && availableStock < item.quantity;
 
-  // Oferta: precio original tachado + ahorro por unidad.
+  // Oferta: precio original tachado + porcentaje de descuento.
   const original = item.product.basePrice ?? item.price;
   const onSale = (item.product.hasDiscount ?? false) && original > item.price;
-  const savedEach = onSale ? original - item.price : 0;
+  const offPct = onSale ? Math.round((1 - item.price / original) * 100) : 0;
 
   const handleDecrease = () => {
     if (item.quantity > 1) {
@@ -181,7 +181,8 @@ export const CartItem = ({ item, onUpdateQuantity, onRemove, onStockChange }: Ca
                   <span className="flex items-center gap-2">
                     <span className="line-through">{format(original)}</span>
                     <span className="text-emerald-600 font-bold">{format(item.price)}</span>
-                    <span className="text-xs text-emerald-600">c/u · ahorras {format(savedEach)}</span>
+                    <span className="text-[11px] font-bold bg-emerald-600 text-white px-1.5 py-0.5 rounded">-{offPct}%</span>
+                    <span className="text-xs text-gray-500">c/u</span>
                   </span>
                 ) : (
                   <>{format(item.price)} c/u</>
