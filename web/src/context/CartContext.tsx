@@ -386,6 +386,8 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     size: string,
     quantity: number = 1
   ) => {
+    // Precio efectivo: usa el precio de oferta del producto si lo tiene.
+    const effPrice = product.salePrice ?? product.basePrice;
     const newItem: CartItemType = {
       id: `${product.id}-${color}-${size}-${Date.now()}`,
       type: 'standard',
@@ -393,8 +395,8 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
       selectedColor: color,
       selectedSize: size,
       quantity,
-      price: product.basePrice,
-      subtotal: product.basePrice * quantity,
+      price: effPrice,
+      subtotal: effPrice * quantity,
       addedAt: new Date(),
     };
 
@@ -420,7 +422,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
           variantId: variant.id,
           isCustomized: false,
           quantity,
-          unitPrice: product.basePrice,
+          unitPrice: effPrice,
         });
         console.log('[Cart] Producto agregado a DB con variantId:', variant.id);
         // Recargar carrito desde DB

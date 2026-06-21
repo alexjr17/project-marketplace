@@ -15,7 +15,26 @@ class Product extends BaseModel
         'featured' => 'boolean',
         'isActive' => 'boolean',
         'isTemplate' => 'boolean',
+        'discountValue' => 'float',
     ];
+
+    /** Precio efectivo aplicando el descuento directo del producto (si lo hay). */
+    public function effectivePrice(): float
+    {
+        $base = (float) $this->basePrice;
+        $value = (float) $this->discountValue;
+        if ($value <= 0) {
+            return $base;
+        }
+        if ($this->discountType === 'percent') {
+            return max(0, round($base - $base * ($value / 100)));
+        }
+        if ($this->discountType === 'fixed') {
+            return max(0, $base - $value);
+        }
+
+        return $base;
+    }
 
     public function category()
     {

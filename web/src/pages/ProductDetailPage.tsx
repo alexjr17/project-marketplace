@@ -452,9 +452,19 @@ export default function ProductDetailPage() {
 
               {/* Precio y Rating en línea */}
               <div className="flex items-center justify-between mb-3">
-                <span className="text-2xl md:text-3xl font-bold" style={{ color: brandColors.primary }}>
-                  {format(product.basePrice)}
-                </span>
+                {product.hasDiscount && product.salePrice != null ? (
+                  <span className="flex items-baseline gap-2">
+                    <span className="text-2xl md:text-3xl font-bold text-emerald-600">{format(product.salePrice)}</span>
+                    <span className="text-base text-gray-400 line-through">{format(product.basePrice)}</span>
+                    {product.discountType === 'percent' && product.discountValue ? (
+                      <span className="text-xs font-bold bg-emerald-600 text-white px-2 py-0.5 rounded">-{Math.round(product.discountValue)}%</span>
+                    ) : null}
+                  </span>
+                ) : (
+                  <span className="text-2xl md:text-3xl font-bold" style={{ color: brandColors.primary }}>
+                    {format(product.basePrice)}
+                  </span>
+                )}
                 {product.rating && (
                   <span className="inline-flex items-center gap-1 text-sm text-gray-600">
                     <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
@@ -613,7 +623,7 @@ export default function ProductDetailPage() {
                   ) : (
                     <>
                       <ShoppingCart className="w-5 h-5" />
-                      Agregar al carrito - {format(product.basePrice * quantity)}
+                      Agregar al carrito - {format((product.salePrice ?? product.basePrice) * quantity)}
                     </>
                   )}
                 </button>

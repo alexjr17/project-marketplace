@@ -206,7 +206,8 @@ class OrderService
                 'isTemplate' => $product->isTemplate,
             ];
 
-            $unitPrice = (float) $product->basePrice;
+            // Precio con el descuento directo del producto (oferta) ya aplicado.
+            $unitPrice = $product->effectivePrice();
             $subtotal += $unitPrice * $item['quantity'];
 
             $couponItems[] = [

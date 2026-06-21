@@ -45,6 +45,11 @@ class ProductController extends Controller
             'typeSlug' => $product->productType?->slug,
             'typeName' => $product->productType?->name,
             'basePrice' => (float) $product->basePrice,
+            // Descuento directo del producto (sin cupón) y precio efectivo.
+            'discountType' => $product->discountType ?? 'none',
+            'discountValue' => (float) $product->discountValue,
+            'salePrice' => $product->effectivePrice(),
+            'hasDiscount' => $product->effectivePrice() < (float) $product->basePrice,
             // El stock real se maneja por variante; se reporta la suma de las
             // variantes activas (el campo product.stock es solo de respaldo).
             'stock' => (int) $product->variants()->where('isActive', true)->sum('stock'),
@@ -222,6 +227,8 @@ class ProductController extends Controller
             'categoryId' => 'nullable|integer',
             'typeId' => 'nullable|integer',
             'basePrice' => 'required|numeric|min:0',
+            'discountType' => 'nullable|in:none,percent,fixed',
+            'discountValue' => 'nullable|numeric|min:0',
             'stock' => 'nullable|integer|min:0',
             'featured' => 'nullable|boolean',
             'isActive' => 'nullable|boolean',
@@ -252,6 +259,8 @@ class ProductController extends Controller
                 'categoryId' => $data['categoryId'] ?? null,
                 'typeId' => $data['typeId'] ?? null,
                 'basePrice' => $data['basePrice'],
+                'discountType' => $data['discountType'] ?? 'none',
+                'discountValue' => $data['discountValue'] ?? 0,
                 'stock' => $data['stock'] ?? 0,
                 'featured' => $data['featured'] ?? false,
                 'isActive' => $data['isActive'] ?? true,
@@ -295,6 +304,8 @@ class ProductController extends Controller
             'categoryId' => 'nullable|integer',
             'typeId' => 'nullable|integer',
             'basePrice' => 'nullable|numeric|min:0',
+            'discountType' => 'nullable|in:none,percent,fixed',
+            'discountValue' => 'nullable|numeric|min:0',
             'stock' => 'nullable|integer|min:0',
             'featured' => 'nullable|boolean',
             'isActive' => 'nullable|boolean',
@@ -310,7 +321,7 @@ class ProductController extends Controller
         $variantsNeedUpdate = false;
 
         DB::transaction(function () use ($product, $data, $colorIds, $sizeIds, &$variantsNeedUpdate) {
-            foreach (['name', 'description', 'categoryId', 'typeId', 'basePrice', 'stock',
+            foreach (['name', 'description', 'categoryId', 'typeId', 'basePrice', 'discountType', 'discountValue', 'stock',
                 'featured', 'isActive', 'isTemplate', 'images', 'tags'] as $field) {
                 if (array_key_exists($field, $data) && $data[$field] !== null) {
                     $product->{$field} = $data[$field];

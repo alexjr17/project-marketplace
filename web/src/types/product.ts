@@ -92,6 +92,11 @@ export interface Product {
   category?: ProductCategory | string;
   isTemplate?: boolean;   // Si es true, es un modelo/plantilla para personalización
   basePrice: number;
+  // Descuento directo del producto (sin cupón).
+  discountType?: 'none' | 'percent' | 'fixed';
+  discountValue?: number;
+  salePrice?: number;     // precio efectivo ya con el descuento aplicado (lo calcula el backend)
+  hasDiscount?: boolean;
   images: {
     front: string;
     back?: string;
