@@ -52,6 +52,7 @@ export default function NewSalePage() {
     processSale,
     isProcessingSale,
     currentSession,
+    isLoadingSession,
     editingSaleId,
     loadSaleForEditing,
     cancelEditing,
@@ -527,6 +528,16 @@ export default function NewSalePage() {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [showDiscountModal, showCheckoutModal, cart, cashAmount, cardAmount, paymentMethod, total]);
+
+  // Esperar la validación de sesión para no mostrar un falso "Sin Sesión".
+  if (isLoadingSession) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 text-gray-500">
+        <Loader2 className="w-10 h-10 animate-spin text-indigo-500 mb-3" />
+        <p className="text-sm">Validando sesión de caja…</p>
+      </div>
+    );
+  }
 
   if (!currentSession) {
     return (

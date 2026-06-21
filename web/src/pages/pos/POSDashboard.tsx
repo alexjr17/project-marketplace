@@ -41,7 +41,7 @@ const METHOD_COLORS: Record<string, string> = {
 
 export default function POSDashboard() {
   const navigate = useNavigate();
-  const { currentSession } = usePOS();
+  const { currentSession, isLoadingSession } = usePOS();
   const [range, setRange] = useState<Range>('today');
   const [stats, setStats] = useState<PosStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -55,6 +55,15 @@ export default function POSDashboard() {
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [range]);
+
+  if (isLoadingSession) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 text-gray-500">
+        <Loader2 className="w-10 h-10 animate-spin text-indigo-500 mb-3" />
+        <p className="text-sm">Validando sesión de caja…</p>
+      </div>
+    );
+  }
 
   if (!currentSession) {
     return (

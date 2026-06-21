@@ -22,7 +22,7 @@ function statusInfo(status: string): { label: string; cls: string } {
 }
 
 export default function SalesHistoryPage() {
-  const { currentSession } = usePOS();
+  const { currentSession, isLoadingSession } = usePOS();
   const { showToast } = useToast();
   const navigate = useNavigate();
   const [sales, setSales] = useState<any[]>([]);
@@ -455,6 +455,15 @@ export default function SalesHistoryPage() {
       setCurrentPage(1);
     }
   }, [sales.length, totalPages, currentPage]);
+
+  if (isLoadingSession) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 text-gray-500">
+        <Loader2 className="w-10 h-10 animate-spin text-indigo-500 mb-3" />
+        <p className="text-sm">Validando sesión de caja…</p>
+      </div>
+    );
+  }
 
   if (!currentSession) {
     return (
