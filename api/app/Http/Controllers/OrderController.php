@@ -35,8 +35,9 @@ class OrderController extends Controller
         $data = $request->validate([
             'items' => 'required|array|min:1',
             'items.*.productId' => 'required|integer',
-            'items.*.size' => 'required|string',
-            'items.*.color' => 'required|string',
+            // Vacío = producto simple (sin talla/color → variante por defecto).
+            'items.*.size' => 'nullable|string',
+            'items.*.color' => 'nullable|string',
             'items.*.quantity' => 'required|integer|min:1',
             'items.*.customization' => 'nullable',
             'shipping' => 'required|array',

@@ -135,9 +135,13 @@ class OrderService
                 throw new RuntimeException("El producto \"{$product->name}\" no está disponible");
             }
 
-            $variant = $product->variants->first(function ($v) use ($item) {
-                $colorMatch = strtolower((string) $v->color?->hexCode) === strtolower((string) $item['color']);
-                $sizeMatch = $v->size?->name === $item['size'] || $v->size?->abbreviation === $item['size'];
+            $itemColor = strtolower((string) ($item['color'] ?? ''));
+            $itemSize = (string) ($item['size'] ?? '');
+            $variant = $product->variants->first(function ($v) use ($itemColor, $itemSize) {
+                // Vacío/null se tratan igual (producto simple sin color/talla).
+                $colorMatch = strtolower((string) $v->color?->hexCode) === $itemColor;
+                $sizeMatch = (string) ($v->size?->name ?? '') === $itemSize
+                    || (string) ($v->size?->abbreviation ?? '') === $itemSize;
 
                 return $colorMatch && $sizeMatch;
             });
@@ -400,9 +404,13 @@ class OrderService
     /** Busca la variante de un order item por color (hex) y talla. */
     private function findVariant(Product $product, OrderItem $item): ?ProductVariant
     {
-        return $product->variants->first(function ($v) use ($item) {
-            $colorMatch = strtolower((string) $v->color?->hexCode) === strtolower((string) $item->color);
-            $sizeMatch = $v->size?->name === $item->size || $v->size?->abbreviation === $item->size;
+        $itemColor = strtolower((string) ($item->color ?? ''));
+        $itemSize = (string) ($item->size ?? '');
+
+        return $product->variants->first(function ($v) use ($itemColor, $itemSize) {
+            $colorMatch = strtolower((string) $v->color?->hexCode) === $itemColor;
+            $sizeMatch = (string) ($v->size?->name ?? '') === $itemSize
+                || (string) ($v->size?->abbreviation ?? '') === $itemSize;
 
             return $colorMatch && $sizeMatch;
         });
