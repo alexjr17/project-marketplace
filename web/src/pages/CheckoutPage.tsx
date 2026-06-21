@@ -743,6 +743,45 @@ export const CheckoutPage = () => {
                   </div>
                 </div>
 
+                {/* Cupón de descuento — canjear al momento de pagar */}
+                <div className="bg-white rounded-xl shadow-sm p-6">
+                  <h2 className="text-lg font-bold text-gray-900 mb-3 flex items-center gap-2">
+                    <Ticket className="w-5 h-5" style={{ color: brandColors.accent }} />
+                    ¿Tienes un cupón?
+                  </h2>
+                  {coupon ? (
+                    <div className="flex items-center justify-between bg-emerald-50 border border-emerald-200 rounded-lg px-4 py-3">
+                      <span className="text-sm text-emerald-700 font-semibold flex items-center gap-2">
+                        <Ticket className="w-4 h-4" /> {coupon.code}
+                        <span className="font-normal text-emerald-600">— descuento de {formatCurrency(coupon.amount)}</span>
+                      </span>
+                      <button onClick={removeCoupon} className="text-xs text-emerald-700 hover:text-emerald-900 underline">Quitar</button>
+                    </div>
+                  ) : (
+                    <div className="flex gap-2">
+                      <div className="relative flex-1">
+                        <Ticket className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                        <input
+                          value={couponInput}
+                          onChange={(e) => setCouponInput(e.target.value.toUpperCase())}
+                          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); applyCoupon(); } }}
+                          placeholder="Código de cupón"
+                          className="w-full pl-9 pr-3 py-3 border-2 border-gray-300 rounded-xl text-sm uppercase placeholder:normal-case focus:outline-none focus:border-gray-500"
+                        />
+                      </div>
+                      <button
+                        onClick={applyCoupon}
+                        disabled={couponBusy || !couponInput.trim()}
+                        className="px-5 py-3 rounded-xl text-white text-sm font-semibold disabled:opacity-50"
+                        style={{ backgroundColor: brandColors.primary }}
+                      >
+                        {couponBusy ? '…' : 'Canjear'}
+                      </button>
+                    </div>
+                  )}
+                  {couponError && <p className="text-xs text-red-500 mt-2">{couponError}</p>}
+                </div>
+
                 {/* Selección de método de pago */}
                 {activePaymentMethods.length > 0 && (
                   <div className="bg-white rounded-xl shadow-sm p-6">
@@ -1069,39 +1108,6 @@ export const CheckoutPage = () => {
                     Tarifa estimada — "{formData.shippingCity}" aún no está en una zona de cobertura
                   </p>
                 )}
-
-                {/* Cupón de descuento */}
-                <div className="pt-1">
-                  {coupon ? (
-                    <div className="flex items-center justify-between bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
-                      <span className="text-sm text-emerald-700 font-semibold flex items-center gap-1.5">
-                        <Ticket className="w-4 h-4" /> {coupon.code}
-                      </span>
-                      <button onClick={removeCoupon} className="text-xs text-emerald-700 hover:text-emerald-900 underline">Quitar</button>
-                    </div>
-                  ) : (
-                    <div className="flex gap-2">
-                      <div className="relative flex-1">
-                        <Ticket className="w-4 h-4 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
-                        <input
-                          value={couponInput}
-                          onChange={(e) => setCouponInput(e.target.value.toUpperCase())}
-                          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); applyCoupon(); } }}
-                          placeholder="Código de cupón"
-                          className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-lg text-sm uppercase placeholder:normal-case"
-                        />
-                      </div>
-                      <button
-                        onClick={applyCoupon}
-                        disabled={couponBusy || !couponInput.trim()}
-                        className="px-4 py-2 rounded-lg bg-gray-900 text-white text-sm font-semibold disabled:opacity-50"
-                      >
-                        {couponBusy ? '…' : 'Aplicar'}
-                      </button>
-                    </div>
-                  )}
-                  {couponError && <p className="text-xs text-red-500 mt-1">{couponError}</p>}
-                </div>
 
                 {discountAmount > 0 && (
                   <div className="flex justify-between text-green-600">
