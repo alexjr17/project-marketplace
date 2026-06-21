@@ -235,10 +235,11 @@ export interface BrowseProductsResponse {
 export async function browseProducts(
   page: number = 1,
   perPage: number = 12,
-  search: string = ''
+  search: string = '',
+  categoryId: number | null = null
 ): Promise<BrowseProductsResponse> {
   const response = await axios.get(`${API_URL}/pos/products`, {
-    params: { page, perPage, search: search || undefined },
+    params: { page, perPage, search: search || undefined, categoryId: categoryId || undefined },
     headers: {
       Authorization: `Bearer ${getAuthToken()}`,
     },

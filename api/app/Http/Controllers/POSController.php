@@ -66,8 +66,9 @@ class POSController extends Controller
         $page = max(1, (int) $request->query('page', 1));
         $perPage = min(50, max(1, (int) $request->query('perPage', 12)));
         $search = $request->query('search');
+        $categoryId = $request->query('categoryId') ? (int) $request->query('categoryId') : null;
 
-        return $this->success($this->pos->browseProducts($page, $perPage, $search, $request->user()->id));
+        return $this->success($this->pos->browseProducts($page, $perPage, $search, $request->user()->id, $categoryId));
     }
 
     /** POST /api/pos/calculate */

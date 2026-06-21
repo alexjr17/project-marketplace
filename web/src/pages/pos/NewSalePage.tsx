@@ -5,6 +5,7 @@ import { useToast } from '../../context/ToastContext';
 import { useSettings } from '../../context/SettingsContext';
 import * as posService from '../../services/pos.service';
 import type { SearchResult, TemplateSearchResult, ProductSearchResult, TemplateZoneInfo } from '../../services/pos.service';
+import { catalogsService, type Category } from '../../services/catalogs.service';
 import OpenSessionPrompt from '../../components/pos/OpenSessionPrompt';
 import ZoneSelectionModal from '../../components/pos/ZoneSelectionModal';
 import CheckoutModal from '../../components/pos/CheckoutModal';
@@ -155,6 +156,8 @@ export default function NewSalePage() {
   const [browseTotalPages, setBrowseTotalPages] = useState(1);
   const [browseLoading, setBrowseLoading] = useState(false);
   const [browseSearch, setBrowseSearch] = useState('');
+  const [browseCategory, setBrowseCategory] = useState<number | null>(null);
+  const [categories, setCategories] = useState<Category[]>([]);
 
   // Detect mobile device
   const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
@@ -274,12 +277,12 @@ export default function NewSalePage() {
     }
   };
 
-  // Catálogo de productos: trae una página (con o sin término de búsqueda).
-  const fetchProducts = async (page: number, term: string) => {
+  // Catálogo de productos: trae una página (con término y/o categoría).
+  const fetchProducts = async (page: number, term: string, categoryId: number | null) => {
     if (browseLoading) return;
     setBrowseLoading(true);
     try {
-      const res = await posService.browseProducts(page, 12, term);
+      const res = await posService.browseProducts(page, 12, term, categoryId);
       setBrowseItems((prev) => (page === 1 ? res.results : [...prev, ...res.results]));
       setBrowsePage(res.page);
       setBrowseTotalPages(res.totalPages);
@@ -291,12 +294,13 @@ export default function NewSalePage() {
   };
 
   // Ejecuta una búsqueda en el catálogo: lo abre y recarga desde la página 1.
-  const runCatalogSearch = (term: string) => {
+  const runCatalogSearch = (term: string, categoryId: number | null = browseCategory) => {
     setBrowseSearch(term);
+    setBrowseCategory(categoryId);
     setBrowseItems([]);
     setBrowsePage(0);
     setBrowseTotalPages(1);
-    fetchProducts(1, term);
+    fetchProducts(1, term, categoryId);
   };
 
   // Limpia el filtro de búsqueda del catálogo y recarga todo.
@@ -304,9 +308,15 @@ export default function NewSalePage() {
     runCatalogSearch('');
   };
 
-  // Carga inicial del catálogo de productos al entrar al POS.
+  // Seleccionar una categoría (chip). null = todas.
+  const selectCategory = (categoryId: number | null) => {
+    runCatalogSearch(browseSearch, categoryId);
+  };
+
+  // Carga inicial del catálogo + categorías al entrar al POS.
   useEffect(() => {
     runCatalogSearch('');
+    catalogsService.getCategories().then(setCategories).catch(() => setCategories([]));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -315,7 +325,7 @@ export default function NewSalePage() {
     const el = e.currentTarget;
     if (el.scrollHeight - el.scrollTop - el.clientHeight < 80) {
       if (!browseLoading && browsePage < browseTotalPages) {
-        fetchProducts(browsePage + 1, browseSearch);
+        fetchProducts(browsePage + 1, browseSearch, browseCategory);
       }
     }
   };
@@ -595,6 +605,34 @@ export default function NewSalePage() {
               </button>
             </form>
           </div>
+
+          {/* Chips de categoría para toque rápido */}
+          {categories.length > 0 && (
+            <div className="flex gap-1.5 overflow-x-auto px-3 py-2 border-b border-gray-100 bg-gray-50/60">
+              <button
+                type="button"
+                onClick={() => selectCategory(null)}
+                className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors ${
+                  browseCategory === null ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-100'
+                }`}
+              >
+                Todas
+              </button>
+              {categories.map((cat) => (
+                <button
+                  key={cat.id}
+                  type="button"
+                  onClick={() => selectCategory(cat.id)}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors ${
+                    browseCategory === cat.id ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-100'
+                  }`}
+                >
+                  {cat.name}
+                </button>
+              ))}
+            </div>
+          )}
+
           {/* Barra de filtro fina: solo cuando hay una búsqueda activa */}
           {browseSearch && (
             <div className="px-3 py-1.5 flex items-center justify-between text-xs border-b border-gray-100 bg-gray-50">

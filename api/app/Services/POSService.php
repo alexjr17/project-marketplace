@@ -186,7 +186,7 @@ class POSService
     }
 
     /** Lista paginada de productos y templates para el POS (GET /pos/products). */
-    public function browseProducts(int $page, int $perPage, ?string $search = null, ?int $sellerId = null): array
+    public function browseProducts(int $page, int $perPage, ?string $search = null, ?int $sellerId = null, ?int $categoryId = null): array
     {
         $query = Product::with([
             'variants' => fn ($q) => $q->where('isActive', true)->with('color', 'size')->limit(1),
@@ -199,6 +199,11 @@ class POSService
         $catIds = $this->sessionCategoryIds($sellerId);
         if ($catIds) {
             $query->whereIn('categoryId', $catIds);
+        }
+
+        // Filtro por categoría puntual (chips del POS).
+        if ($categoryId) {
+            $query->where('categoryId', $categoryId);
         }
 
         if ($search !== null && trim($search) !== '') {
