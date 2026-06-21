@@ -1,5 +1,9 @@
+import { lazy, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Layout } from './components/layout/Layout';
+
+// POC 3D (carga diferida: las librerías 3D no entran al bundle principal)
+const Preview3D = lazy(() => import('./pages/Preview3D'));
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { RolesProvider } from './context/RolesContext';
 import { ProductsProvider } from './context/ProductsContext';
@@ -741,6 +745,16 @@ function App() {
 
                           {/* Página de reset password (sin Layout) */}
                           <Route path="/reset-password" element={<ResetPasswordPage />} />
+
+                          {/* Prueba de concepto 3D (pantalla completa) */}
+                          <Route
+                            path="/preview-3d"
+                            element={
+                              <Suspense fallback={<div className="p-8 text-gray-500">Cargando visor 3D…</div>}>
+                                <Preview3D />
+                              </Suspense>
+                            }
+                          />
 
                           {/* Selector de aplicaciones — pantalla completa propia */}
                           <Route
