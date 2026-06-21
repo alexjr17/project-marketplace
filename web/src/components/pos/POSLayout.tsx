@@ -189,8 +189,8 @@ export default function POSLayout({ children }: POSLayoutProps) {
           onMouseLeave={() => setHovered(false)}
           className={`
             fixed lg:relative inset-y-0 left-0 z-50 lg:z-auto
-            w-64 ${expanded ? 'lg:w-64' : 'lg:w-20'} bg-white shadow-lg flex flex-col
-            transform transition-all duration-300 ease-in-out
+            w-64 ${expanded ? 'lg:w-64' : 'lg:w-20'} bg-white shadow-lg flex flex-col lg:overflow-x-hidden
+            transform transition-[width,transform] duration-300 ease-in-out
             ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
             ${isMobile ? 'pt-0' : ''}
           `}
@@ -256,20 +256,18 @@ export default function POSLayout({ children }: POSLayoutProps) {
           )}
 
           {/* Logo - Desktop only */}
-          <div className={`hidden lg:block border-b border-gray-200 ${expanded ? 'p-6' : 'p-3'}`}>
-            <div className={`flex items-center ${expanded ? 'space-x-3' : 'justify-center'}`}>
+          <div className="hidden lg:block border-b border-gray-200 p-4">
+            <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-indigo-600 rounded-lg flex items-center justify-center flex-shrink-0">
                 <CreditCard className="w-6 h-6 text-white" />
               </div>
-              {expanded && (
-                <div>
-                  <h1 className="text-xl font-bold text-gray-900">POS</h1>
-                  <p className="text-sm text-gray-500">Punto de Venta</p>
-                </div>
-              )}
+              <div className={`min-w-0 transition-opacity duration-200 ${expanded ? 'opacity-100' : 'opacity-0'}`}>
+                <h1 className="text-xl font-bold text-gray-900 whitespace-nowrap">POS</h1>
+                <p className="text-sm text-gray-500 whitespace-nowrap">Punto de Venta</p>
+              </div>
             </div>
 
-            {/* App Switcher */}
+            {/* App Switcher (solo expandido) */}
             {expanded && (
               <div className="mt-4">
                 <AppSwitcher />
@@ -279,43 +277,29 @@ export default function POSLayout({ children }: POSLayoutProps) {
 
           {/* Session Info */}
           {currentSession && (
-            expanded ? (
-              <div className="p-4 bg-green-50 border-b border-green-200">
-                <div className="text-sm">
-                  <p className="font-medium text-green-900">Sesión Activa</p>
-                  <p className="text-green-700">{currentSession.cashRegister?.name}</p>
-                  <p className="text-green-600 text-xs mt-1">
-                    {currentSession.salesCount} ventas - $
-                    {currentSession.totalSales.toLocaleString()}
-                  </p>
-                </div>
+            <div className="flex items-center gap-2.5 px-4 py-3 bg-green-50 border-b border-green-200" title="Sesión activa">
+              <div className="w-2.5 h-2.5 bg-green-500 rounded-full animate-pulse flex-shrink-0" />
+              <div className={`min-w-0 transition-opacity duration-200 ${expanded ? 'opacity-100' : 'opacity-0'}`}>
+                <p className="text-sm font-medium text-green-900 whitespace-nowrap">Sesión Activa</p>
+                <p className="text-green-700 text-xs whitespace-nowrap truncate">
+                  {currentSession.cashRegister?.name} · {currentSession.salesCount} ventas
+                </p>
               </div>
-            ) : (
-              <div className="flex justify-center p-3 bg-green-50 border-b border-green-200" title="Sesión activa">
-                <div className="w-2.5 h-2.5 bg-green-500 rounded-full animate-pulse" />
-              </div>
-            )
+            </div>
           )}
 
           {!currentSession && (
-            expanded ? (
-              <div className="p-4 bg-yellow-50 border-b border-yellow-200">
-                <div className="text-sm">
-                  <p className="font-medium text-yellow-900">Sin Sesión</p>
-                  <p className="text-yellow-700 text-xs">
-                    Debes abrir una sesión de caja
-                  </p>
-                </div>
+            <div className="flex items-center gap-2.5 px-4 py-3 bg-yellow-50 border-b border-yellow-200" title="Sin sesión de caja">
+              <div className="w-2.5 h-2.5 bg-yellow-500 rounded-full flex-shrink-0" />
+              <div className={`min-w-0 transition-opacity duration-200 ${expanded ? 'opacity-100' : 'opacity-0'}`}>
+                <p className="text-sm font-medium text-yellow-900 whitespace-nowrap">Sin Sesión</p>
+                <p className="text-yellow-700 text-xs whitespace-nowrap">Abre una sesión de caja</p>
               </div>
-            ) : (
-              <div className="flex justify-center p-3 bg-yellow-50 border-b border-yellow-200" title="Sin sesión de caja">
-                <div className="w-2.5 h-2.5 bg-yellow-500 rounded-full" />
-              </div>
-            )
+            </div>
           )}
 
           {/* Navigation */}
-          <nav className={`flex-1 ${expanded ? 'p-4' : 'p-2'}`}>
+          <nav className="flex-1 px-3 py-4">
             <ul className="space-y-2">
               {menuItems.map((item) => {
                 const Icon = item.icon;
@@ -328,8 +312,7 @@ export default function POSLayout({ children }: POSLayoutProps) {
                       onClick={() => isMobile && setSidebarOpen(false)}
                       title={!expanded ? item.label : undefined}
                       className={`
-                        flex items-center py-3 rounded-lg transition-colors
-                        ${expanded ? 'space-x-3 px-4' : 'justify-center px-2'}
+                        flex items-center gap-3 px-2.5 py-3 rounded-lg transition-colors
                         ${
                           active
                             ? 'bg-indigo-50 text-indigo-700 font-medium'
@@ -338,7 +321,9 @@ export default function POSLayout({ children }: POSLayoutProps) {
                       `}
                     >
                       <Icon className="w-5 h-5 flex-shrink-0" />
-                      {expanded && <span>{item.label}</span>}
+                      <span className={`whitespace-nowrap transition-opacity duration-200 ${expanded ? 'opacity-100' : 'opacity-0'}`}>
+                        {item.label}
+                      </span>
                     </Link>
                   </li>
                 );
@@ -347,40 +332,23 @@ export default function POSLayout({ children }: POSLayoutProps) {
           </nav>
 
           {/* User Info - Desktop */}
-          <div className={`hidden lg:block border-t border-gray-200 ${expanded ? 'p-4' : 'p-2'}`}>
-            {expanded ? (
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center flex-shrink-0">
-                    <User className="w-5 h-5 text-gray-600" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-gray-900">{user?.name}</p>
-                    <p className="text-xs text-gray-500">Cajero</p>
-                  </div>
-                </div>
-                <button
-                  onClick={handleLogout}
-                  className="p-2 text-gray-500 hover:text-red-600 transition-colors"
-                  title="Cerrar sesión"
-                >
-                  <LogOut className="w-5 h-5" />
-                </button>
+          <div className="hidden lg:block border-t border-gray-200 p-3">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center flex-shrink-0" title={user?.name}>
+                <User className="w-5 h-5 text-gray-600" />
               </div>
-            ) : (
-              <div className="flex flex-col items-center gap-2">
-                <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center" title={user?.name}>
-                  <User className="w-5 h-5 text-gray-600" />
-                </div>
-                <button
-                  onClick={handleLogout}
-                  className="p-2 text-gray-500 hover:text-red-600 transition-colors"
-                  title="Cerrar sesión"
-                >
-                  <LogOut className="w-5 h-5" />
-                </button>
+              <div className={`min-w-0 flex-1 transition-opacity duration-200 ${expanded ? 'opacity-100' : 'opacity-0'}`}>
+                <p className="text-sm font-medium text-gray-900 whitespace-nowrap truncate">{user?.name}</p>
+                <p className="text-xs text-gray-500 whitespace-nowrap">Cajero</p>
               </div>
-            )}
+              <button
+                onClick={handleLogout}
+                className={`p-2 text-gray-500 hover:text-red-600 transition-opacity duration-200 flex-shrink-0 ${expanded ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+                title="Cerrar sesión"
+              >
+                <LogOut className="w-5 h-5" />
+              </button>
+            </div>
           </div>
         </aside>
       </>
