@@ -244,6 +244,12 @@ export default function NewSalePage() {
     runCatalogSearch('');
   };
 
+  // Carga inicial del catálogo de productos al entrar al POS.
+  useEffect(() => {
+    runCatalogSearch('');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Al hacer scroll cerca del fondo, cargar más productos.
   const handleProductsScroll = (e: React.UIEvent<HTMLDivElement>) => {
     const el = e.currentTarget;
@@ -453,47 +459,6 @@ export default function NewSalePage() {
     <div className="lg:h-full flex flex-col lg:flex-row gap-4">
       {/* Left Column - Productos */}
       <div className="flex-1 flex flex-col min-h-0 lg:max-h-none gap-3 lg:gap-4">
-        {/* Scanner Input */}
-        <div className="bg-white rounded-lg shadow-sm p-3 sm:p-4">
-          <form onSubmit={handleScan} className="flex gap-2">
-            <div className="flex-1">
-              <div className="relative">
-                <BarcodeIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-                <input
-                  ref={barcodeInputRef}
-                  type="text"
-                  value={barcodeInput}
-                  onChange={(e) => setBarcodeInput(e.target.value)}
-                  placeholder="Escanea o busca..."
-                  className="w-full pl-10 pr-4 py-2.5 sm:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base sm:text-lg"
-                  disabled={isSearching}
-                />
-              </div>
-            </div>
-
-            {/* Camera button for mobile */}
-            {isMobile && (
-              <button
-                type="button"
-                onClick={() => setShowBarcodeScanner(true)}
-                className="px-3 py-2.5 sm:py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 transition-colors"
-                disabled={isSearching}
-                title="Escanear con cámara"
-              >
-                <Camera className="w-5 h-5" />
-              </button>
-            )}
-
-            <button
-              type="submit"
-              className="px-4 lg:px-6 py-2.5 sm:py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors text-sm lg:text-base"
-              disabled={isSearching}
-            >
-              {isSearching ? '...' : 'Buscar'}
-            </button>
-          </form>
-        </div>
-
         {/* Cliente */}
         <div className="bg-white rounded-lg shadow-sm p-3 lg:p-4">
           <h3 className="font-semibold text-gray-900 mb-2 lg:mb-3">Cliente</h3>
@@ -502,6 +467,46 @@ export default function NewSalePage() {
 
         {/* Catálogo de productos (acordeón con scroll infinito + búsqueda) */}
         <div className="bg-white rounded-lg shadow-sm overflow-hidden flex-1 flex flex-col min-h-0">
+          {/* Buscador / escáner dentro de la card */}
+          <div className="p-3 border-b border-gray-200">
+            <form onSubmit={handleScan} className="flex gap-2">
+              <div className="flex-1">
+                <div className="relative">
+                  <BarcodeIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                  <input
+                    ref={barcodeInputRef}
+                    type="text"
+                    value={barcodeInput}
+                    onChange={(e) => setBarcodeInput(e.target.value)}
+                    placeholder="Escanea o busca..."
+                    className="w-full pl-10 pr-4 py-2.5 sm:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base sm:text-lg"
+                    disabled={isSearching}
+                  />
+                </div>
+              </div>
+
+              {/* Camera button for mobile */}
+              {isMobile && (
+                <button
+                  type="button"
+                  onClick={() => setShowBarcodeScanner(true)}
+                  className="px-3 py-2.5 sm:py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 transition-colors"
+                  disabled={isSearching}
+                  title="Escanear con cámara"
+                >
+                  <Camera className="w-5 h-5" />
+                </button>
+              )}
+
+              <button
+                type="submit"
+                className="px-4 lg:px-6 py-2.5 sm:py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors text-sm lg:text-base"
+                disabled={isSearching}
+              >
+                {isSearching ? '...' : 'Buscar'}
+              </button>
+            </form>
+          </div>
           <div className="w-full px-3 lg:px-4 py-3 flex items-center justify-between">
             <div className="flex items-center gap-2 flex-1 min-w-0">
               <Package className="w-4 h-4 lg:w-5 lg:h-5 text-gray-600 flex-shrink-0" />
