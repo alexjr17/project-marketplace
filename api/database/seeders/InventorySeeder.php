@@ -60,10 +60,15 @@ class InventorySeeder extends Seeder
             ['name' => 'Material de Transferencia', 'description' => 'Materiales para estampado y sublimación',
                 'sortOrder' => 2, 'isActive' => true, 'hasVariants' => false]
         );
-        $confeccion = InputType::updateOrCreate(
-            ['slug' => 'insumo-confeccion'],
-            ['name' => 'Insumo de Confección', 'description' => 'Materiales de costura y terminado de prendas',
+        $etiquetado = InputType::updateOrCreate(
+            ['slug' => 'etiquetado'],
+            ['name' => 'Etiquetado / Marquillas', 'description' => 'Marquillas y etiquetas para la prenda',
                 'sortOrder' => 3, 'isActive' => true, 'hasVariants' => false]
+        );
+        $empaque = InputType::updateOrCreate(
+            ['slug' => 'empaque'],
+            ['name' => 'Empaque', 'description' => 'Cajas y bolsas para empacar el pedido',
+                'sortOrder' => 4, 'isActive' => true, 'hasVariants' => false]
         );
 
         // Tallas que puede manejar el tipo Prenda Base (unión de todas las prendas).
@@ -125,24 +130,21 @@ class InventorySeeder extends Seeder
 
         // ---- Consumibles: insumos normales, en stock cero ----
         $consumibles = [
+            ['code' => 'INS-0003', 'name' => 'Marquilla de Tela', 'typeId' => $etiquetado->id,
+                'description' => 'Marquilla/etiqueta de tela para identificar la prenda.',
+                'unit' => 'unidad', 'cost' => 90, 'min' => 300, 'max' => 6000],
+            ['code' => 'INS-0004', 'name' => 'Rollo de Etiquetas', 'typeId' => $etiquetado->id,
+                'description' => 'Rollo de etiquetas adhesivas para precio/código de barras.',
+                'unit' => 'rollo', 'cost' => 12000, 'min' => 5, 'max' => 100],
             ['code' => 'INS-0005', 'name' => 'Cinta Térmica', 'typeId' => $transferencia->id,
                 'description' => 'Cinta de transferencia térmica para fijar diseños.',
                 'unit' => 'metro', 'cost' => 350, 'min' => 100, 'max' => 2000],
-            ['code' => 'INS-0006', 'name' => 'Papel Transfer Sublimación', 'typeId' => $transferencia->id,
-                'description' => 'Hojas de papel transfer para sublimación de diseños.',
-                'unit' => 'hoja', 'cost' => 280, 'min' => 150, 'max' => 3000],
-            ['code' => 'INS-0007', 'name' => 'Vinilo Textil', 'typeId' => $transferencia->id,
-                'description' => 'Vinilo textil de corte para estampado por termofijado.',
-                'unit' => 'metro', 'cost' => 4500, 'min' => 30, 'max' => 400],
-            ['code' => 'INS-0008', 'name' => 'Tinta de Sublimación', 'typeId' => $transferencia->id,
-                'description' => 'Tinta para impresión de diseños sublimables.',
-                'unit' => 'mililitro', 'cost' => 120, 'min' => 500, 'max' => 12000],
-            ['code' => 'INS-0009', 'name' => 'Hilo de Costura', 'typeId' => $confeccion->id,
-                'description' => 'Cono de hilo de poliéster para confección y terminado.',
-                'unit' => 'cono', 'cost' => 6500, 'min' => 10, 'max' => 150],
-            ['code' => 'INS-0010', 'name' => 'Marquilla de Tela', 'typeId' => $confeccion->id,
-                'description' => 'Marquilla/etiqueta de tela para identificar la prenda.',
-                'unit' => 'unidad', 'cost' => 90, 'min' => 300, 'max' => 6000],
+            ['code' => 'INS-0006', 'name' => 'Caja de Empaque', 'typeId' => $empaque->id,
+                'description' => 'Caja de cartón para empacar el pedido.',
+                'unit' => 'unidad', 'cost' => 800, 'min' => 50, 'max' => 1000],
+            ['code' => 'INS-0007', 'name' => 'Bolsa de Empaque', 'typeId' => $empaque->id,
+                'description' => 'Bolsa para empacar y entregar la prenda.',
+                'unit' => 'unidad', 'cost' => 150, 'min' => 200, 'max' => 4000],
         ];
 
         foreach ($consumibles as $i) {
