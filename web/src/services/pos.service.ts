@@ -134,6 +134,25 @@ export interface ProductSearchResult {
   hasDiscount?: boolean;
   stock: number;
   available: boolean;
+  hasOptions?: boolean; // tiene colores/tallas: hay que elegir variante
+}
+
+export interface PosVariant {
+  variantId: number;
+  productId: number;
+  name: string;
+  colorName: string | null;
+  colorHex: string | null;
+  size: string | null;
+  sizeName: string | null;
+  sku: string | null;
+  barcode: string | null;
+  image: string | null;
+  price: number;
+  basePrice: number;
+  hasDiscount: boolean;
+  stock: number;
+  available: boolean;
 }
 
 export interface TemplateZoneInfo {
@@ -240,15 +259,24 @@ export async function browseProducts(
   page: number = 1,
   perPage: number = 12,
   search: string = '',
-  categoryId: number | null = null
+  categoryId: number | null = null,
+  type: 'product' | 'template' | null = null
 ): Promise<BrowseProductsResponse> {
   const response = await axios.get(`${API_URL}/pos/products`, {
-    params: { page, perPage, search: search || undefined, categoryId: categoryId || undefined },
+    params: { page, perPage, search: search || undefined, categoryId: categoryId || undefined, type: type || undefined },
     headers: {
       Authorization: `Bearer ${getAuthToken()}`,
     },
   });
   return response.data.data;
+}
+
+/** Variantes (color/talla) de un producto, para elegir en el POS. */
+export async function getProductVariants(productId: number): Promise<PosVariant[]> {
+  const response = await axios.get(`${API_URL}/pos/product/${productId}/variants`, {
+    headers: { Authorization: `Bearer ${getAuthToken()}` },
+  });
+  return response.data.data || [];
 }
 
 /**

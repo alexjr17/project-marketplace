@@ -67,8 +67,15 @@ class POSController extends Controller
         $perPage = min(50, max(1, (int) $request->query('perPage', 12)));
         $search = $request->query('search');
         $categoryId = $request->query('categoryId') ? (int) $request->query('categoryId') : null;
+        $type = in_array($request->query('type'), ['product', 'template'], true) ? $request->query('type') : null;
 
-        return $this->success($this->pos->browseProducts($page, $perPage, $search, $request->user()->id, $categoryId));
+        return $this->success($this->pos->browseProducts($page, $perPage, $search, $request->user()->id, $categoryId, $type));
+    }
+
+    /** GET /api/pos/product/{productId}/variants — variantes para elegir color/talla. */
+    public function productVariants(int $productId)
+    {
+        return $this->success($this->pos->productVariants($productId));
     }
 
     /** POST /api/pos/calculate */

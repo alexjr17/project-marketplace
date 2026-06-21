@@ -564,6 +564,7 @@ Route::prefix('pos')->middleware('auth:sanctum')->group(function () {
     Route::post('scan', [POSController::class, 'scan'])->middleware('permission:pos.access,pos.create_sale');
     Route::post('search', [POSController::class, 'search'])->middleware('permission:pos.access,pos.create_sale');
     Route::get('products', [POSController::class, 'products'])->middleware('permission:pos.access,pos.create_sale');
+    Route::get('product/{productId}/variants', [POSController::class, 'productVariants'])->whereNumber('productId')->middleware('permission:pos.access,pos.create_sale');
     Route::post('calculate', [POSController::class, 'calculate'])->middleware('permission:pos.access,pos.create_sale');
     Route::post('sale', [POSController::class, 'createSale'])->middleware('permission:pos.access,pos.create_sale');
     Route::post('sale/{id}/cancel', [POSController::class, 'cancelSale'])->whereNumber('id')->middleware('permission:pos.access,pos.cancel_sale');

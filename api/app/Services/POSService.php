@@ -210,11 +210,56 @@ class POSService
             'hasDiscount' => $amount > 0,
             'stock' => (int) $v->stock,
             'available' => (int) $v->stock > 0,
+            // Si el producto tiene colores/tallas, hay que elegir variante.
+            'hasOptions' => $product->productColors->isNotEmpty() || $product->productSizes->isNotEmpty(),
         ];
     }
 
+    /** Variantes activas de un producto, para elegir color/talla en el POS. */
+    public function productVariants(int $productId): array
+    {
+        $product = Product::with(['variants' => fn ($q) => $q->where('isActive', true)->with('color', 'size')])
+            ->find($productId);
+        if (! $product) {
+            return [];
+        }
+
+        $best = $this->discounts->bestAutoFor($product, $this->posAutoDiscounts());
+        $amount = $best ? $best['amount'] : 0.0;
+
+        return $product->variants->map(function ($v) use ($product, $amount) {
+            $base = (float) $product->basePrice + (float) ($v->priceAdjustment ?? 0);
+            $image = $this->firstImage($product->images);
+            if ($v->colorId) {
+                $pc = \App\Models\ProductColor::where('productId', $product->id)->where('colorId', $v->colorId)->first();
+                $colorImg = $pc ? \App\Support\ImageUrls::forColor($pc->image, $pc->id, $product->updatedAt) : null;
+                if ($colorImg) {
+                    $image = $colorImg;
+                }
+            }
+
+            return [
+                'variantId' => $v->id,
+                'productId' => $product->id,
+                'name' => $product->name,
+                'colorName' => $v->color?->name,
+                'colorHex' => $v->color?->hexCode,
+                'size' => $v->size?->abbreviation ?? $v->size?->name,
+                'sizeName' => $v->size?->name,
+                'sku' => $v->sku ?? $product->sku,
+                'barcode' => $v->barcode,
+                'image' => $image,
+                'price' => max(0.0, $base - $amount),
+                'basePrice' => $base,
+                'hasDiscount' => $amount > 0,
+                'stock' => (int) $v->stock,
+                'available' => (int) $v->stock > 0,
+            ];
+        })->values()->all();
+    }
+
     /** Lista paginada de productos y templates para el POS (GET /pos/products). */
-    public function browseProducts(int $page, int $perPage, ?string $search = null, ?int $sellerId = null, ?int $categoryId = null): array
+    public function browseProducts(int $page, int $perPage, ?string $search = null, ?int $sellerId = null, ?int $categoryId = null, ?string $type = null): array
     {
         $query = Product::with([
             'variants' => fn ($q) => $q->where('isActive', true)->with('color', 'size')->limit(1),
@@ -222,6 +267,13 @@ class POSService
             'productColors.color',
             'productSizes.size',
         ])->where('isActive', true);
+
+        // Filtro por tipo: 'product' (catálogo) o 'template' (plantillas).
+        if ($type === 'product') {
+            $query->where('isTemplate', false);
+        } elseif ($type === 'template') {
+            $query->where('isTemplate', true);
+        }
 
         // Si la caja de la sesión tiene categorías asignadas, solo esos productos.
         $catIds = $this->sessionCategoryIds($sellerId);

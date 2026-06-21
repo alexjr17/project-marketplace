@@ -4,7 +4,8 @@ import { usePOS } from '../../context/POSContext';
 import { useToast } from '../../context/ToastContext';
 import { useSettings } from '../../context/SettingsContext';
 import * as posService from '../../services/pos.service';
-import type { SearchResult, TemplateSearchResult, ProductSearchResult, TemplateZoneInfo } from '../../services/pos.service';
+import type { SearchResult, TemplateSearchResult, ProductSearchResult, TemplateZoneInfo, PosVariant } from '../../services/pos.service';
+import { VariantSelectModal } from '../../components/pos/VariantSelectModal';
 import { catalogsService, type Category } from '../../services/catalogs.service';
 import OpenSessionPrompt from '../../components/pos/OpenSessionPrompt';
 import ZoneSelectionModal from '../../components/pos/ZoneSelectionModal';
@@ -120,6 +121,7 @@ export default function NewSalePage() {
 
   // Template zone selection
   const [selectedTemplate, setSelectedTemplate] = useState<TemplateSearchResult | null>(null);
+  const [variantModal, setVariantModal] = useState<{ name: string; variants: PosVariant[] } | null>(null);
 
   // Payment state
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'transfer' | 'mixed' | 'debe'>('cash');
@@ -158,6 +160,8 @@ export default function NewSalePage() {
   const [browseLoading, setBrowseLoading] = useState(false);
   const [browseSearch, setBrowseSearch] = useState('');
   const [browseCategory, setBrowseCategory] = useState<number | null>(null);
+  const [browseType, setBrowseType] = useState<'product' | 'template'>('product');
+  const [browseTotal, setBrowseTotal] = useState(0);
   const [categories, setCategories] = useState<Category[]>([]);
 
   // Detect mobile device
@@ -280,15 +284,61 @@ export default function NewSalePage() {
     }
   };
 
-  // Catálogo de productos: trae una página (con término y/o categoría).
-  const fetchProducts = async (page: number, term: string, categoryId: number | null) => {
+  // Click en una tarjeta del grid: si el producto tiene variantes (color/talla),
+  // abre el selector; si no, lo agrega directo (o la plantilla a su modal).
+  const handleTileClick = async (item: SearchResult) => {
+    if (item.type === 'product' && (item as ProductSearchResult).hasOptions) {
+      const p = item as ProductSearchResult;
+      try {
+        const variants = await posService.getProductVariants(p.productId);
+        if (variants.length <= 1) {
+          handleSelectSearchResult(item);
+          return;
+        }
+        setVariantModal({ name: p.name, variants });
+      } catch {
+        showToast('No se pudieron cargar las variantes', 'error');
+      }
+      return;
+    }
+    handleSelectSearchResult(item);
+  };
+
+  // Agrega al carrito la variante elegida en el modal.
+  const addVariantToCart = (v: PosVariant) => {
+    if (v.stock <= 0) {
+      showToast('Sin stock', 'error');
+      return;
+    }
+    addToCart(
+      {
+        variantId: v.variantId,
+        product: { id: v.productId, name: v.name, image: v.image || '' },
+        color: v.colorName || 'N/A',
+        size: v.size || 'N/A',
+        sku: v.sku,
+        barcode: v.barcode,
+        price: v.price,
+        basePrice: v.basePrice,
+        hasDiscount: v.hasDiscount,
+        stock: v.stock,
+        available: v.available,
+      },
+      1
+    );
+    setVariantModal(null);
+  };
+
+  // Catálogo: trae una página (término, categoría y tipo producto/plantilla).
+  const fetchProducts = async (page: number, term: string, categoryId: number | null, type: 'product' | 'template' = browseType) => {
     if (browseLoading) return;
     setBrowseLoading(true);
     try {
-      const res = await posService.browseProducts(page, 12, term, categoryId);
+      const res = await posService.browseProducts(page, 12, term, categoryId, type);
       setBrowseItems((prev) => (page === 1 ? res.results : [...prev, ...res.results]));
       setBrowsePage(res.page);
       setBrowseTotalPages(res.totalPages);
+      setBrowseTotal(res.total);
     } catch {
       showToast('Error al cargar el catálogo de productos', 'error');
     } finally {
@@ -297,13 +347,19 @@ export default function NewSalePage() {
   };
 
   // Ejecuta una búsqueda en el catálogo: lo abre y recarga desde la página 1.
-  const runCatalogSearch = (term: string, categoryId: number | null = browseCategory) => {
+  const runCatalogSearch = (term: string, categoryId: number | null = browseCategory, type: 'product' | 'template' = browseType) => {
     setBrowseSearch(term);
     setBrowseCategory(categoryId);
     setBrowseItems([]);
     setBrowsePage(0);
     setBrowseTotalPages(1);
-    fetchProducts(1, term, categoryId);
+    fetchProducts(1, term, categoryId, type);
+  };
+
+  // Alterna entre productos de catálogo y plantillas.
+  const selectBrowseType = (type: 'product' | 'template') => {
+    setBrowseType(type);
+    runCatalogSearch(browseSearch, browseCategory, type);
   };
 
   // Limpia el filtro de búsqueda del catálogo y recarga todo.
@@ -328,7 +384,7 @@ export default function NewSalePage() {
     const el = e.currentTarget;
     if (el.scrollHeight - el.scrollTop - el.clientHeight < 80) {
       if (!browseLoading && browsePage < browseTotalPages) {
-        fetchProducts(browsePage + 1, browseSearch, browseCategory);
+        fetchProducts(browsePage + 1, browseSearch, browseCategory, browseType);
       }
     }
   };
@@ -625,32 +681,57 @@ export default function NewSalePage() {
             </form>
           </div>
 
-          {/* Chips de categoría para toque rápido (solo las de la caja) */}
-          {visibleCategories.length > 0 && (
-            <div className="flex gap-1.5 overflow-x-auto px-3 py-2 border-b border-gray-100 bg-gray-50/60">
-              <button
-                type="button"
-                onClick={() => selectCategory(null)}
-                className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors ${
-                  browseCategory === null ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-100'
-                }`}
-              >
-                Todas
-              </button>
-              {visibleCategories.map((cat) => (
-                <button
-                  key={cat.id}
-                  type="button"
-                  onClick={() => selectCategory(cat.id)}
-                  className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors ${
-                    browseCategory === cat.id ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-100'
-                  }`}
-                >
-                  {cat.name}
-                </button>
-              ))}
+          {/* Chips de categoría (izquierda) + alternar Productos/Plantillas (derecha) */}
+          <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-100 bg-gray-50/60">
+            <div className="flex gap-1.5 overflow-x-auto flex-1 min-w-0">
+              {visibleCategories.length > 0 && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => selectCategory(null)}
+                    className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors ${
+                      browseCategory === null ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-100'
+                    }`}
+                  >
+                    Todas
+                  </button>
+                  {visibleCategories.map((cat) => (
+                    <button
+                      key={cat.id}
+                      type="button"
+                      onClick={() => selectCategory(cat.id)}
+                      className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors ${
+                        browseCategory === cat.id ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-100'
+                      }`}
+                    >
+                      {cat.name}
+                    </button>
+                  ))}
+                </>
+              )}
             </div>
-          )}
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <div className="flex items-center bg-white border border-gray-200 rounded-full p-0.5">
+                <button
+                  type="button"
+                  onClick={() => selectBrowseType('product')}
+                  className={`px-3 py-1 rounded-full text-xs font-semibold transition-colors ${browseType === 'product' ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-100'}`}
+                >
+                  Productos
+                </button>
+                <button
+                  type="button"
+                  onClick={() => selectBrowseType('template')}
+                  className={`px-3 py-1 rounded-full text-xs font-semibold transition-colors ${browseType === 'template' ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-100'}`}
+                >
+                  Plantillas
+                </button>
+              </div>
+              <span className="text-xs text-gray-500 whitespace-nowrap">
+                {browseType === 'product' ? 'Productos' : 'Plantillas'} ({browseTotal})
+              </span>
+            </div>
+          </div>
 
           {/* Barra de filtro fina: solo cuando hay una búsqueda activa */}
           {browseSearch && (
@@ -685,7 +766,7 @@ export default function NewSalePage() {
                     <button
                       key={index}
                       type="button"
-                      onClick={() => handleSelectSearchResult(item)}
+                      onClick={() => handleTileClick(item)}
                       className="relative text-left border border-gray-200 rounded-lg p-2 hover:border-blue-400 hover:shadow-sm transition-all"
                     >
                       {onSale && (
@@ -1081,6 +1162,15 @@ export default function NewSalePage() {
           template={selectedTemplate}
           onConfirm={handleZoneSelectionConfirm}
           onCancel={() => setSelectedTemplate(null)}
+        />
+      )}
+
+      {variantModal && (
+        <VariantSelectModal
+          productName={variantModal.name}
+          variants={variantModal.variants}
+          onSelect={addVariantToCart}
+          onClose={() => setVariantModal(null)}
         />
       )}
 
