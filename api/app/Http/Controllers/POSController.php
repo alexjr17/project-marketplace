@@ -143,6 +143,31 @@ class POSController extends Controller
         return $this->success($sale, 'Venta anulada exitosamente');
     }
 
+    /** POST /api/pos/sale/{id}/return — devolución parcial de una venta. */
+    public function returnSale(Request $request, int $id)
+    {
+        $data = $request->validate([
+            'items' => 'required|array|min:1',
+            'items.*.variantId' => 'required|integer',
+            'items.*.quantity' => 'required|integer|min:1',
+            'reason' => 'nullable|string',
+            'refundMethod' => 'nullable|in:cash,transfer',
+        ]);
+
+        $isAdmin = ((int) $request->user()->roleId === 1);
+
+        try {
+            $sale = $this->pos->returnSaleItems(
+                $id, $data['items'], $data['reason'] ?? '',
+                $data['refundMethod'] ?? 'cash', $request->user()->id, $isAdmin
+            );
+        } catch (\RuntimeException $e) {
+            return $this->error($e->getMessage(), 400);
+        }
+
+        return $this->success($sale, 'Devolución registrada exitosamente');
+    }
+
     /** PUT /api/pos/sale/{id} — editar una venta. */
     public function updateSale(Request $request, int $id)
     {

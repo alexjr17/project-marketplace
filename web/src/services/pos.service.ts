@@ -293,6 +293,22 @@ export async function cancelSale(saleId: number, reason: string): Promise<Sale> 
   return response.data.data;
 }
 
+export interface ReturnSalePayload {
+  items: { variantId: number; quantity: number }[];
+  reason?: string;
+  refundMethod?: 'cash' | 'transfer';
+}
+
+/** Devolución parcial de una venta (reintegra stock y reembolsa). */
+export async function returnSale(saleId: number, payload: ReturnSalePayload): Promise<Sale> {
+  const response = await axios.post(
+    `${API_URL}/pos/sale/${saleId}/return`,
+    payload,
+    { headers: { Authorization: `Bearer ${getAuthToken()}` } }
+  );
+  return response.data.data;
+}
+
 /**
  * Get sales history
  */

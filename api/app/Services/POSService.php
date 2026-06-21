@@ -634,6 +634,171 @@ class POSService
     }
 
     /**
+     * Devolución parcial de una venta POS (POST /pos/sale/{id}/return).
+     * Reintegra el stock de los ítems devueltos, recalcula los totales, ajusta
+     * la caja por el reembolso y deja registro en el historial de cambios.
+     */
+    public function returnSaleItems(int $orderId, array $items, string $reason, string $refundMethod, int $userId, bool $isAdmin = false): Order
+    {
+        $order = Order::with('items')->find($orderId);
+        if (! $order || $order->saleChannel !== 'POS') {
+            throw new RuntimeException('Venta no encontrada');
+        }
+        if ($order->status === 'CANCELLED') {
+            throw new RuntimeException('No se puede devolver una venta anulada');
+        }
+        if (! $isAdmin && $order->sellerId !== $userId) {
+            throw new RuntimeException('Solo puedes registrar devoluciones de tus propias ventas');
+        }
+
+        // Cantidades vendidas por variante.
+        $sold = [];
+        foreach ($order->items as $it) {
+            if ($it->variantId) {
+                $sold[$it->variantId] = ($sold[$it->variantId] ?? 0) + (int) $it->quantity;
+            }
+        }
+        // Validar y consolidar lo que se devuelve.
+        $ret = [];
+        foreach ($items as $r) {
+            $vid = (int) ($r['variantId'] ?? 0);
+            $qty = (int) ($r['quantity'] ?? 0);
+            if ($qty <= 0) {
+                continue;
+            }
+            if (! isset($sold[$vid])) {
+                throw new RuntimeException('Un producto no pertenece a esta venta');
+            }
+            $ret[$vid] = ($ret[$vid] ?? 0) + $qty;
+            if ($ret[$vid] > $sold[$vid]) {
+                throw new RuntimeException('La cantidad a devolver supera lo vendido');
+            }
+        }
+        if (empty($ret)) {
+            throw new RuntimeException('No hay ítems para devolver');
+        }
+
+        return DB::transaction(function () use ($order, $ret, $reason, $refundMethod, $userId) {
+            $oldTotal = (float) $order->total;
+            $returnedDetail = [];
+
+            foreach ($order->items as $item) {
+                $vid = $item->variantId;
+                if (! $vid || ! isset($ret[$vid])) {
+                    continue;
+                }
+                $qty = $ret[$vid];
+
+                // Reintegrar stock + movimiento.
+                $v = ProductVariant::find($vid);
+                if ($v) {
+                    $prev = (int) $v->stock;
+                    $v->stock = $prev + $qty;
+                    $v->save();
+                    VariantMovement::create([
+                        'variantId' => $vid,
+                        'movementType' => 'RETURN',
+                        'quantity' => $qty,
+                        'previousStock' => $prev,
+                        'newStock' => $prev + $qty,
+                        'referenceType' => 'return',
+                        'referenceId' => $order->id,
+                        'reason' => 'Devolución POS'.($reason ? ': '.$reason : ''),
+                    ]);
+                }
+                $returnedDetail[] = $item->productName.' x'.$qty;
+
+                // Reducir o eliminar el ítem de la orden.
+                $newQty = (int) $item->quantity - $qty;
+                if ($newQty <= 0) {
+                    $item->delete();
+                } else {
+                    $item->quantity = $newQty;
+                    $item->save();
+                }
+            }
+
+            // Recalcular totales con los ítems restantes.
+            $remaining = OrderItem::where('orderId', $order->id)->get();
+            if ($remaining->isEmpty()) {
+                $order->subtotal = 0;
+                $order->discount = 0;
+                $order->tax = 0;
+                $order->total = 0;
+                $order->status = 'CANCELLED';
+            } else {
+                $calcItems = $remaining->map(fn ($i) => [
+                    'variantId' => $i->variantId,
+                    'quantity' => (int) $i->quantity,
+                    'price' => (float) $i->unitPrice,
+                ])->all();
+                $newSubtotal = array_sum(array_map(fn ($i) => $i['price'] * $i['quantity'], $calcItems));
+                $disc = min((float) $order->discount, $newSubtotal);
+                $calc = $this->calculateSale($calcItems, $disc);
+                $order->subtotal = $calc['subtotal'];
+                $order->discount = $calc['discount'];
+                $order->tax = $calc['tax'];
+                $order->total = $calc['total'];
+            }
+
+            $refund = max(0, $oldTotal - (float) $order->total);
+
+            // Recalcular estado (para fiados) sin tocar lo ya pagado.
+            if ($order->status !== 'CANCELLED') {
+                $paid = (float) ($order->cashAmount ?? 0) + (float) ($order->cardAmount ?? 0);
+                $order->status = ($order->paymentMethod === 'debe')
+                    ? (($paid + 0.01 >= (float) $order->total) ? 'PAID' : 'PENDING')
+                    : 'PAID';
+            }
+
+            $order->notes = $order->notes
+                ? $order->notes."\nDEVOLUCIÓN: ".implode(', ', $returnedDetail).($reason ? ' ('.$reason.')' : '')
+                : 'DEVOLUCIÓN: '.implode(', ', $returnedDetail).($reason ? ' ('.$reason.')' : '');
+
+            $statusHistory = $order->statusHistory ?? [];
+            $statusHistory[] = [
+                'status' => $order->status,
+                'timestamp' => now()->toIso8601String(),
+                'note' => 'Devolución - reembolso $'.number_format($refund, 0, ',', '.'),
+            ];
+            $order->statusHistory = $statusHistory;
+
+            $editHistory = $order->editHistory ?? [];
+            $editHistory[] = [
+                'action' => 'return',
+                'timestamp' => now()->toIso8601String(),
+                'userId' => $userId,
+                'changes' => [[
+                    'field' => 'return',
+                    'label' => 'Devolución',
+                    'from' => implode(', ', $returnedDetail),
+                    'to' => 'Reembolso $'.number_format($refund, 0, ',', '.')
+                        .' ('.($refundMethod === 'cash' ? 'Efectivo' : 'Transferencia').')'
+                        .($reason ? ' · '.$reason : ''),
+                ]],
+            ];
+            $order->editHistory = $editHistory;
+
+            $order->save();
+
+            // Ajustar la caja abierta por el reembolso.
+            if ($order->cashRegisterId) {
+                $session = CashSession::where('cashRegisterId', $order->cashRegisterId)
+                    ->where('status', 'OPEN')->first();
+                if ($session) {
+                    $session->totalSales = (float) $session->totalSales - $refund;
+                    if ($remaining->isEmpty()) {
+                        $session->salesCount = max(0, (int) $session->salesCount - 1);
+                    }
+                    $session->save();
+                }
+            }
+
+            return $order->fresh(['items']);
+        });
+    }
+
+    /**
      * Edita una venta POS (PUT /pos/sale/{id}): ítems (recalcula stock y
      * totales), cliente, método de pago y notas.
      */

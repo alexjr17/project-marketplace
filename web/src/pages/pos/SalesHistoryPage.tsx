@@ -9,7 +9,7 @@ import OpenSessionPrompt from '../../components/pos/OpenSessionPrompt';
 import PrintPreviewModal from '../../components/pos/PrintPreviewModal';
 import type { PrintSettings } from '../../types/settings';
 import { DEFAULT_PRINT_SETTINGS } from '../../types/settings';
-import { History, Receipt, Calendar, DollarSign, CreditCard, User, Printer, Mail, X, Loader2, CheckCircle, Smartphone, Eye, RefreshCw, Camera, Upload, Image as ImageIcon, ChevronLeft, ChevronRight, Clock, Pencil, Trash2 } from 'lucide-react';
+import { History, Receipt, Calendar, DollarSign, CreditCard, User, Printer, Mail, X, Loader2, CheckCircle, Smartphone, Eye, RefreshCw, Camera, Upload, Image as ImageIcon, ChevronLeft, ChevronRight, Clock, Pencil, Trash2, Undo2, Minus, Plus } from 'lucide-react';
 
 // Estado de la venta → etiqueta + estilo del badge.
 function statusInfo(status: string): { label: string; cls: string } {
@@ -29,6 +29,12 @@ export default function SalesHistoryPage() {
   const [loading, setLoading] = useState(true);
   // Venta seleccionada para ver su resumen + acciones.
   const [summarySale, setSummarySale] = useState<any | null>(null);
+  // Devolución parcial.
+  const [returnModalSale, setReturnModalSale] = useState<any | null>(null);
+  const [returnQtys, setReturnQtys] = useState<Record<number, number>>({});
+  const [returnReason, setReturnReason] = useState('');
+  const [returnRefundMethod, setReturnRefundMethod] = useState<'cash' | 'transfer'>('cash');
+  const [isReturning, setIsReturning] = useState(false);
 
   // Email modal state
   const [emailModalSale, setEmailModalSale] = useState<any | null>(null);
@@ -125,6 +131,51 @@ export default function SalesHistoryPage() {
       loadSales();
     } catch (error: any) {
       showToast(error.response?.data?.message || 'No se pudo anular la venta', 'error');
+    }
+  };
+
+  // Abrir modal de devolución
+  const openReturnModal = (sale: any) => {
+    setReturnModalSale(sale);
+    setReturnQtys({});
+    setReturnReason('');
+    setReturnRefundMethod(sale.paymentMethod === 'transfer' ? 'transfer' : 'cash');
+  };
+
+  const setReturnQty = (variantId: number, qty: number, max: number) => {
+    const v = Math.max(0, Math.min(qty, max));
+    setReturnQtys((prev) => ({ ...prev, [variantId]: v }));
+  };
+
+  const returnRefundTotal = (sale: any) =>
+    (sale?.items || []).reduce(
+      (sum: number, it: any) => sum + (returnQtys[it.variantId] || 0) * Number(it.unitPrice ?? it.price ?? 0),
+      0
+    );
+
+  const handleReturn = async () => {
+    if (!returnModalSale) return;
+    const items = (returnModalSale.items || [])
+      .map((it: any) => ({ variantId: it.variantId, quantity: returnQtys[it.variantId] || 0 }))
+      .filter((i: any) => i.quantity > 0);
+    if (items.length === 0) {
+      showToast('Selecciona al menos un producto a devolver', 'error');
+      return;
+    }
+    setIsReturning(true);
+    try {
+      await posService.returnSale(returnModalSale.id, {
+        items,
+        reason: returnReason.trim() || undefined,
+        refundMethod: returnRefundMethod,
+      });
+      showToast('Devolución registrada correctamente', 'success');
+      setReturnModalSale(null);
+      loadSales();
+    } catch (error: any) {
+      showToast(error.response?.data?.message || 'No se pudo registrar la devolución', 'error');
+    } finally {
+      setIsReturning(false);
     }
   };
 
@@ -1147,9 +1198,11 @@ export default function SalesHistoryPage() {
                     <ol className="relative border-l-2 border-gray-100 ml-1.5 space-y-3">
                       {[...summarySale.editHistory].reverse().map((e: any, idx: number) => {
                         const actionLabel = e.action === 'created' ? 'Venta creada'
-                          : e.action === 'payment' ? 'Abono recibido' : 'Venta editada';
+                          : e.action === 'payment' ? 'Abono recibido'
+                          : e.action === 'return' ? 'Devolución' : 'Venta editada';
                         const dot = e.action === 'created' ? 'bg-green-500'
-                          : e.action === 'payment' ? 'bg-emerald-500' : 'bg-blue-500';
+                          : e.action === 'payment' ? 'bg-emerald-500'
+                          : e.action === 'return' ? 'bg-red-500' : 'bg-blue-500';
                         return (
                           <li key={idx} className="ml-4">
                             <span className={`absolute -left-[7px] w-3 h-3 rounded-full ${dot} border-2 border-white`} />
@@ -1196,6 +1249,16 @@ export default function SalesHistoryPage() {
                     Editar venta
                   </Button>
                 )}
+                {!isCancelled && (summarySale.items?.length > 0) && (
+                  <Button
+                    variant="admin-secondary"
+                    fullWidth
+                    onClick={() => { const sale = summarySale; setSummarySale(null); openReturnModal(sale); }}
+                  >
+                    <Undo2 className="w-4 h-4" />
+                    Devolver productos
+                  </Button>
+                )}
                 <div className="grid grid-cols-2 gap-2">
                   <Button variant="admin-secondary" size="sm" onClick={() => { const sale = summarySale; setSummarySale(null); handlePrintTicket(sale); }}>
                     <Printer className="w-4 h-4" />
@@ -1223,6 +1286,112 @@ export default function SalesHistoryPage() {
           </div>
         );
       })()}
+
+      {/* Modal de devolución parcial */}
+      {returnModalSale && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full max-h-[90vh] flex flex-col overflow-hidden">
+            <div className="px-5 py-4 border-b border-gray-200 bg-red-50 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Undo2 className="w-5 h-5 text-red-600" />
+                <div>
+                  <h2 className="text-base font-semibold text-red-800">Devolver productos</h2>
+                  <p className="text-xs text-red-600 font-mono">{returnModalSale.orderNumber}</p>
+                </div>
+              </div>
+              <button onClick={() => setReturnModalSale(null)} className="text-gray-400 hover:text-gray-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4 overflow-y-auto">
+              {/* Items con cantidad a devolver */}
+              <div className="space-y-2">
+                {(returnModalSale.items || []).map((it: any, idx: number) => {
+                  const max = it.quantity || 0;
+                  const qty = returnQtys[it.variantId] || 0;
+                  return (
+                    <div key={idx} className="flex items-center justify-between gap-2 border border-gray-100 rounded-lg p-2.5">
+                      <div className="min-w-0">
+                        <p className="text-sm text-gray-800 truncate">{it.productName || it.product?.name || 'Producto'}</p>
+                        <p className="text-xs text-gray-500">
+                          Vendidos: {max} · ${Number(it.unitPrice ?? it.price ?? 0).toLocaleString()} c/u
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        <button
+                          onClick={() => setReturnQty(it.variantId, qty - 1, max)}
+                          className="p-1 rounded border border-gray-300 hover:bg-gray-100 disabled:opacity-40"
+                          disabled={qty <= 0}
+                        >
+                          <Minus className="w-3.5 h-3.5" />
+                        </button>
+                        <span className="w-7 text-center text-sm font-medium">{qty}</span>
+                        <button
+                          onClick={() => setReturnQty(it.variantId, qty + 1, max)}
+                          className="p-1 rounded border border-gray-300 hover:bg-gray-100 disabled:opacity-40"
+                          disabled={qty >= max}
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Motivo */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Motivo (opcional)</label>
+                <input
+                  type="text"
+                  value={returnReason}
+                  onChange={(e) => setReturnReason(e.target.value)}
+                  placeholder="Ej: producto en mal estado"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                />
+              </div>
+
+              {/* Método de reembolso */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Reembolso por</label>
+                <select
+                  value={returnRefundMethod}
+                  onChange={(e) => setReturnRefundMethod(e.target.value as 'cash' | 'transfer')}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white"
+                >
+                  <option value="cash">Efectivo</option>
+                  <option value="transfer">Transferencia</option>
+                </select>
+              </div>
+
+              {/* Total a reembolsar */}
+              <div className="flex justify-between items-center bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                <span className="text-sm font-medium text-red-800">Total a reembolsar</span>
+                <span className="text-lg font-bold text-red-700">
+                  ${returnRefundTotal(returnModalSale).toLocaleString()}
+                </span>
+              </div>
+            </div>
+
+            <div className="px-5 py-4 border-t border-gray-200 flex gap-3">
+              <Button variant="admin-secondary" fullWidth onClick={() => setReturnModalSale(null)} disabled={isReturning}>
+                Cancelar
+              </Button>
+              <Button
+                variant="admin-danger"
+                fullWidth
+                onClick={handleReturn}
+                isLoading={isReturning}
+                disabled={isReturning || returnRefundTotal(returnModalSale) <= 0}
+              >
+                <Undo2 className="w-4 h-4" />
+                Confirmar devolución
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );
