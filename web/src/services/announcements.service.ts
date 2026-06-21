@@ -28,6 +28,8 @@ export interface Announcement {
   ctaUrl?: string | null;
   couponCode?: string | null;
   variant: AnnouncementVariant;
+  bgColor?: string | null;
+  textColor?: string | null;
   isActive: boolean;
   dismissible: boolean;
   target: 'all' | 'home' | 'catalog';

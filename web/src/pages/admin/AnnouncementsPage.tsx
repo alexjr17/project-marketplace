@@ -29,7 +29,9 @@ const EMPTY: AnnouncementInput = {
   ctaText: '',
   ctaUrl: '',
   couponCode: '',
-  variant: 'info',
+  variant: 'promo',
+  bgColor: '',
+  textColor: '',
   isActive: true,
   dismissible: true,
   target: 'all',
@@ -199,12 +201,30 @@ export default function AnnouncementsPage() {
                     {Object.entries(TYPE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                   </select>
                 </Field>
-                <Field label="Estilo (color)">
+                <Field label="Estilo (preset)">
                   <select value={form.variant} onChange={(e) => set('variant', e.target.value as AnnouncementInput['variant'])} className="sel">
                     {Object.entries(VARIANT_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                   </select>
                 </Field>
               </div>
+
+              <Field label="Color propio (opcional — vacío usa el preset/marca)">
+                <div className="flex items-center gap-3">
+                  <label className="flex items-center gap-1.5 text-xs text-gray-600">
+                    Fondo
+                    <input type="color" value={form.bgColor || '#7c3aed'} onChange={(e) => set('bgColor', e.target.value)} className="w-9 h-8 rounded border cursor-pointer" />
+                  </label>
+                  <label className="flex items-center gap-1.5 text-xs text-gray-600">
+                    Texto
+                    <input type="color" value={form.textColor || '#ffffff'} onChange={(e) => set('textColor', e.target.value)} className="w-9 h-8 rounded border cursor-pointer" />
+                  </label>
+                  {(form.bgColor || form.textColor) && (
+                    <button type="button" onClick={() => { set('bgColor', ''); set('textColor', ''); }} className="text-xs text-gray-500 hover:text-red-600 underline">
+                      Quitar (usar marca)
+                    </button>
+                  )}
+                </div>
+              </Field>
 
               <Field label="Título">
                 <input value={form.title || ''} onChange={(e) => set('title', e.target.value)} placeholder="Ej: ¡Envío gratis hoy!" className="inp" />

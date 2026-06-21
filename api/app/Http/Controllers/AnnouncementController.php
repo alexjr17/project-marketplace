@@ -21,6 +21,8 @@ class AnnouncementController extends Controller
             'ctaUrl' => 'nullable|string',
             'couponCode' => 'nullable|string',
             'variant' => 'nullable|in:info,promo,warning,success,dark',
+            'bgColor' => 'nullable|string',
+            'textColor' => 'nullable|string',
             'isActive' => 'boolean',
             'dismissible' => 'boolean',
             'target' => 'nullable|in:all,home,catalog',

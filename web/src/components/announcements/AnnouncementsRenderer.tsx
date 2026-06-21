@@ -63,11 +63,16 @@ export function AnnouncementsRenderer() {
   };
   const brandGradient = `linear-gradient(to right, ${brand.primary}, ${brand.secondary})`;
 
-  // El estilo "promo" usa los colores configurados de la marca.
-  const barProps = (a: Announcement): { className: string; style?: CSSProperties } =>
-    a.variant === 'promo'
-      ? { className: 'text-sm text-white', style: { backgroundImage: brandGradient } }
-      : { className: `${VARIANT_BAR[a.variant] || VARIANT_BAR.info} text-sm` };
+  // Color: 1) color propio del anuncio, 2) "promo" = degradado de marca, 3) preset.
+  const barProps = (a: Announcement): { className: string; style?: CSSProperties } => {
+    if (a.bgColor) {
+      return { className: 'text-sm', style: { backgroundColor: a.bgColor, color: a.textColor || '#fff' } };
+    }
+    if (a.variant === 'promo') {
+      return { className: 'text-sm text-white', style: { backgroundImage: brandGradient } };
+    }
+    return { className: `${VARIANT_BAR[a.variant] || VARIANT_BAR.info} text-sm` };
+  };
 
   const [items, setItems] = useState<Announcement[]>([]);
   const [dismissed, setDismissed] = useState<Set<number>>(new Set());
@@ -112,11 +117,11 @@ export function AnnouncementsRenderer() {
                 </div>
               </div>
             ) : (
-              <div className="flex-1 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-center">
-                {a.title && <strong>{a.title}</strong>}
+              <div className="flex-1 flex flex-wrap items-center justify-center gap-x-3 gap-y-1.5 text-center">
+                {a.title && <strong className="font-bold">{a.title}</strong>}
                 {a.message && <span className="opacity-95">{a.message}</span>}
                 <Coupon code={a.couponCode} />
-                <Cta a={a} />
+                <Cta a={a} className="inline-flex items-center px-3.5 py-1 rounded-full text-xs font-bold bg-white text-gray-900 hover:bg-white/90 shadow-sm" />
               </div>
             )}
             {a.dismissible && (
@@ -159,15 +164,34 @@ export function AnnouncementsRenderer() {
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/60" onClick={() => dismiss(popup)} />
           <div className="relative bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden">
-            <button onClick={() => dismiss(popup)} aria-label="Cerrar" className="absolute top-2 right-2 z-10 p-1.5 bg-white/80 rounded-full text-gray-600 hover:bg-white">
+            {/* Borde superior con el color de la marca */}
+            <div className="h-1.5 w-full" style={{ backgroundImage: brandGradient }} />
+            <button onClick={() => dismiss(popup)} aria-label="Cerrar" className="absolute top-3 right-3 z-10 p-1.5 bg-white/90 rounded-full text-gray-600 hover:bg-white shadow">
               <X className="w-5 h-5" />
             </button>
-            {popup.imageUrl && <img src={popup.imageUrl} alt={popup.title || ''} className="w-full max-h-60 object-cover" />}
+            {popup.imageUrl && (
+              <div className="group w-full h-60 bg-gradient-to-b from-gray-50 to-gray-100 flex items-center justify-center overflow-hidden">
+                {/* Recortada por defecto; al pasar el cursor se ajusta para verla completa */}
+                <img
+                  src={popup.imageUrl}
+                  alt={popup.title || ''}
+                  className="w-full h-full object-cover group-hover:object-contain transition-all duration-300"
+                />
+              </div>
+            )}
             <div className="p-6 text-center">
-              {popup.title && <h3 className="text-xl font-bold text-gray-900">{popup.title}</h3>}
+              {popup.title && <h3 className="text-2xl font-bold text-gray-900">{popup.title}</h3>}
               {popup.message && <p className="text-gray-600 mt-2">{popup.message}</p>}
               {popup.couponCode && (
-                <div className="mt-4 flex justify-center"><Coupon code={popup.couponCode} dark /></div>
+                <div className="mt-4 flex flex-col items-center gap-1">
+                  <span className="text-[11px] uppercase tracking-wide text-gray-400 font-semibold">Tu cupón</span>
+                  <span
+                    className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-base font-extrabold border-2 border-dashed"
+                    style={{ color: brand.primary, borderColor: brand.primary, backgroundColor: `${brand.primary}10` }}
+                  >
+                    <Tag className="w-4 h-4" /> {popup.couponCode}
+                  </span>
+                </div>
               )}
               {popup.ctaText && popup.ctaUrl && (
                 <div className="mt-5" onClick={() => markSeen(popup)}>
