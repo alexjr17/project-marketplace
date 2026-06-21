@@ -31,6 +31,7 @@ import { addressesService, type Address } from '../services/addresses.service';
 import { quoteShipping } from '../utils/shippingQuote';
 import { validateCoupon, type CouponResult } from '../services/discounts.service';
 import { CitySelect } from '../components/shared/CitySelect';
+import { BackButton } from '../components/shared/BackButton';
 
 interface FormData {
   customerName: string;
@@ -455,21 +456,14 @@ export const CheckoutPage = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header con gradiente dinámico */}
-      <div className="text-white py-6 shadow-lg" style={{ background: gradientStyle }}>
-        <div className="max-w-6xl mx-auto px-4">
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => navigate('/cart')}
-              className="hover:bg-white/10 p-2 rounded-lg transition-colors"
-            >
-              <ArrowLeft className="w-6 h-6" />
-            </button>
-            <div>
-              <h1 className="text-2xl md:text-3xl font-bold">Finalizar Compra</h1>
-              <p className="text-sm text-white/90">
-                {step === 'info' ? 'Completa tu información' : 'Selecciona método de pago'}
-              </p>
-            </div>
+      <div className="text-white py-4 shadow-md" style={{ background: gradientStyle }}>
+        <div className="max-w-6xl mx-auto px-4 flex items-center gap-3">
+          <BackButton label="Carrito" to="/cart" />
+          <div className="min-w-0">
+            <h1 className="text-xl md:text-2xl font-bold">Finalizar Compra</h1>
+            <p className="text-sm text-white/80">
+              {step === 'info' ? 'Completa tu información' : 'Selecciona método de pago'}
+            </p>
           </div>
         </div>
       </div>

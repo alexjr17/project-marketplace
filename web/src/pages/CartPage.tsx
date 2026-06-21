@@ -1,4 +1,5 @@
-import { ArrowLeft, ShoppingBag, Truck, Heart, AlertTriangle } from 'lucide-react';
+import { ShoppingBag, Truck, Heart, AlertTriangle } from 'lucide-react';
+import { BackButton } from '../components/shared/BackButton';
 import { useNavigate } from 'react-router-dom';
 import { useState, useCallback } from 'react';
 import { useCart } from '../context/CartContext';
@@ -68,21 +69,14 @@ export const CartPage = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header con gradiente dinámico */}
-      <div className="text-white py-6 shadow-lg" style={{ background: gradientStyle }}>
-        <div className="max-w-7xl mx-auto px-4">
-          <div className="flex items-center gap-4">
-            <button
-              onClick={handleContinueShopping}
-              className="hover:bg-white/10 p-2 rounded-lg transition-colors"
-            >
-              <ArrowLeft className="w-6 h-6" />
-            </button>
-            <div>
-              <h1 className="text-2xl md:text-3xl font-bold">Carrito</h1>
-              <p className="text-sm text-white/90">
-                {isEmpty ? 'Tu carrito de compras' : `${cart.totalItems} ${cart.totalItems === 1 ? 'producto' : 'productos'}`}
-              </p>
-            </div>
+      <div className="text-white py-4 shadow-md" style={{ background: gradientStyle }}>
+        <div className="max-w-7xl mx-auto px-4 flex items-center gap-3">
+          <BackButton label="Seguir comprando" onClick={handleContinueShopping} />
+          <div className="min-w-0">
+            <h1 className="text-xl md:text-2xl font-bold">Carrito</h1>
+            <p className="text-sm text-white/80">
+              {isEmpty ? 'Tu carrito de compras' : `${cart.totalItems} ${cart.totalItems === 1 ? 'producto' : 'productos'}`}
+            </p>
           </div>
         </div>
       </div>

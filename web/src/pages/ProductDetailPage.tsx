@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ShoppingCart, Check, ZoomIn, Star, ArrowLeft, Loader2, Share2, X, Copy } from 'lucide-react';
+import { ShoppingCart, Check, ZoomIn, Star, Loader2, Share2, X, Copy } from 'lucide-react';
+import { BackButton } from '../components/shared/BackButton';
 import { useSettings } from '../context/SettingsContext';
 import { useCurrency } from '../hooks/useCurrency';
 import { useCart } from '../context/CartContext';
@@ -343,19 +344,12 @@ export default function ProductDetailPage() {
         type="product"
       />
       {/* Header con gradiente */}
-      <div className="text-white py-6 shadow-lg" style={{ background: gradientStyle }}>
-        <div className="max-w-7xl mx-auto px-4">
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => navigate(-1)}
-              className="hover:bg-white/10 p-2 rounded-lg transition-colors"
-            >
-              <ArrowLeft className="w-6 h-6" />
-            </button>
-            <div>
-              <p className="text-sm text-white/80">Detalle del producto</p>
-              <p className="text-xl font-bold capitalize">{categoryName}</p>
-            </div>
+      <div className="text-white py-4 shadow-md" style={{ background: gradientStyle }}>
+        <div className="max-w-7xl mx-auto px-4 flex items-center gap-3">
+          <BackButton />
+          <div className="min-w-0">
+            <p className="text-[11px] uppercase tracking-wide text-white/70">Detalle del producto</p>
+            <p className="text-lg font-bold capitalize truncate">{categoryName}</p>
           </div>
         </div>
       </div>
