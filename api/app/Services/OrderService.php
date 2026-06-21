@@ -176,11 +176,6 @@ class OrderService
 
             $images = is_array($product->images) ? $product->images : [];
             $firstImage = is_string($images[0] ?? null) ? $images[0] : '';
-            // No persistir imágenes embebidas (data URI base64) en el pedido:
-            // son enormes y rompen el insert. Solo guardamos URLs.
-            if (str_starts_with($firstImage, 'data:')) {
-                $firstImage = '';
-            }
 
             $orderItems[] = [
                 'productId' => $product->id,
