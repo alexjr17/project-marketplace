@@ -17,7 +17,7 @@ import { SettingsProvider } from './context/SettingsContext';
 import { HomePage } from './pages/HomePage';
 import AppSelectorPage from './pages/AppSelectorPage';
 import { CatalogPage } from './pages/CatalogPage';
-import { CustomizerPage } from './pages/CustomizerPage';
+const CustomizerPage = lazy(() => import('./pages/CustomizerPage').then(m => ({ default: m.CustomizerPage })));
 import { CartPage } from './pages/CartPage';
 import { CheckoutPage } from './pages/CheckoutPage';
 import { OrderConfirmationPage } from './pages/OrderConfirmationPage';
@@ -27,73 +27,71 @@ import { LegalPage } from './pages/LegalPage';
 import { ResetPasswordPage } from './pages/ResetPasswordPage';
 import ProductDetailPage from './pages/ProductDetailPage';
 import { AdminLayout } from './components/admin/AdminLayout';
-import { DashboardPage } from './pages/admin/DashboardPage';
-import { InboxPage as MessagingInboxPage } from './pages/messaging/InboxPage';
-import { ChannelsPage as MessagingChannelsPage } from './pages/messaging/ChannelsPage';
-import { PostsPage as MessagingPostsPage } from './pages/messaging/PostsPage';
-import { PagesPage as MessagingPagesPage } from './pages/messaging/PagesPage';
-import { KnowledgePage as MessagingKnowledgePage } from './pages/messaging/KnowledgePage';
+const DashboardPage = lazy(() => import('./pages/admin/DashboardPage').then(m => ({ default: m.DashboardPage })));
+const MessagingInboxPage = lazy(() => import('./pages/messaging/InboxPage').then(m => ({ default: m.InboxPage })));
+const MessagingChannelsPage = lazy(() => import('./pages/messaging/ChannelsPage').then(m => ({ default: m.ChannelsPage })));
+const MessagingPostsPage = lazy(() => import('./pages/messaging/PostsPage').then(m => ({ default: m.PostsPage })));
+const MessagingPagesPage = lazy(() => import('./pages/messaging/PagesPage').then(m => ({ default: m.PagesPage })));
+const MessagingKnowledgePage = lazy(() => import('./pages/messaging/KnowledgePage').then(m => ({ default: m.KnowledgePage })));
 import MessagingLayout from './components/messaging/MessagingLayout';
-import { ProductsPage } from './pages/admin/ProductsPage';
-import { VariantsPage } from './pages/admin/VariantsPage';
-import { UsersPage } from './pages/admin/UsersPage';
-import { UserDetailPage } from './pages/admin/UserDetailPage';
-import { AdminUsersPage } from './pages/admin/AdminUsersPage';
-import { AdminDetailPage } from './pages/admin/AdminDetailPage';
-import { RolesPage } from './pages/admin/RolesPage';
-import { RoleFormPage } from './pages/admin/RoleFormPage';
-import { SizesPage } from './pages/admin/catalogs/SizesPage';
-import { ColorsPage } from './pages/admin/catalogs/ColorsPage';
-import { CategoriesPage } from './pages/admin/catalogs/CategoriesPage';
-import { ProductTypesPage } from './pages/admin/ProductTypesPage';
-import { TemplatesPage } from './pages/admin/TemplatesPage';
-import ZoneTypesPage from './pages/admin/ZoneTypesPage';
-import ZoneTypeDetailPage from './pages/admin/ZoneTypeDetailPage';
-import InputTypesPage from './pages/admin/InputTypesPage';
-import InputTypeDetailPage from './pages/admin/InputTypeDetailPage';
-import InputsPage from './pages/admin/InputsPage';
-import InputDetailPage from './pages/admin/InputDetailPage';
-import DesignImagesPage from './pages/admin/DesignImagesPage';
-import { OrdersPage } from './pages/admin/OrdersPage';
-import { OrderDetailPage } from './pages/admin/OrderDetailPage';
-import { ShippingPage } from './pages/admin/ShippingPage';
-import { PaymentsPage } from './pages/admin/PaymentsPage';
-import CashRegistersPage from './pages/admin/CashRegistersPage';
-import CashRegisterFormPage from './pages/admin/CashRegisterFormPage';
-import BarcodePrintPage from './pages/admin/BarcodePrintPage';
-import SuppliersPage from './pages/admin/SuppliersPage';
-import SupplierDetailPage from './pages/admin/SupplierDetailPage';
-import PurchaseOrdersPage from './pages/admin/PurchaseOrdersPage';
-import PurchaseOrderDetailPage from './pages/admin/PurchaseOrderDetailPage';
-import PurchaseReturnsPage from './pages/admin/PurchaseReturnsPage';
-import PurchaseReturnFormPage from './pages/admin/PurchaseReturnFormPage';
-import InventoryMovementsPage from './pages/admin/InventoryMovementsPage';
-import InventoryCountsPage from './pages/admin/InventoryCountsPage';
-import InventoryCountDetailPage from './pages/admin/InventoryCountDetailPage';
-import InventoryConversionsPage from './pages/admin/InventoryConversionsPage';
-import InventoryConversionDetailPage from './pages/admin/InventoryConversionDetailPage';
-import InventoryConversionFromTemplatePage from './pages/admin/InventoryConversionFromTemplatePage';
-import TemplateRecipesPage from './pages/admin/TemplateRecipesPage';
-import ReviewsPage from './pages/admin/ReviewsPage';
-import {
-  SettingsGeneralPage,
-  SettingsAppearancePage,
-  SettingsShippingPage,
-  SettingsPaymentPage,
-  SettingsLegalPage,
-  SettingsHomePage,
-  SettingsCatalogPage,
-  SettingsPrintingPage,
-  LabelTemplatesPage,
-} from './pages/admin/settings';
+const ProductsPage = lazy(() => import('./pages/admin/ProductsPage').then(m => ({ default: m.ProductsPage })));
+const VariantsPage = lazy(() => import('./pages/admin/VariantsPage').then(m => ({ default: m.VariantsPage })));
+const UsersPage = lazy(() => import('./pages/admin/UsersPage').then(m => ({ default: m.UsersPage })));
+const UserDetailPage = lazy(() => import('./pages/admin/UserDetailPage').then(m => ({ default: m.UserDetailPage })));
+const AdminUsersPage = lazy(() => import('./pages/admin/AdminUsersPage').then(m => ({ default: m.AdminUsersPage })));
+const AdminDetailPage = lazy(() => import('./pages/admin/AdminDetailPage').then(m => ({ default: m.AdminDetailPage })));
+const RolesPage = lazy(() => import('./pages/admin/RolesPage').then(m => ({ default: m.RolesPage })));
+const RoleFormPage = lazy(() => import('./pages/admin/RoleFormPage').then(m => ({ default: m.RoleFormPage })));
+const SizesPage = lazy(() => import('./pages/admin/catalogs/SizesPage').then(m => ({ default: m.SizesPage })));
+const ColorsPage = lazy(() => import('./pages/admin/catalogs/ColorsPage').then(m => ({ default: m.ColorsPage })));
+const CategoriesPage = lazy(() => import('./pages/admin/catalogs/CategoriesPage').then(m => ({ default: m.CategoriesPage })));
+const ProductTypesPage = lazy(() => import('./pages/admin/ProductTypesPage').then(m => ({ default: m.ProductTypesPage })));
+const TemplatesPage = lazy(() => import('./pages/admin/TemplatesPage').then(m => ({ default: m.TemplatesPage })));
+const ZoneTypesPage = lazy(() => import('./pages/admin/ZoneTypesPage'));
+const ZoneTypeDetailPage = lazy(() => import('./pages/admin/ZoneTypeDetailPage'));
+const InputTypesPage = lazy(() => import('./pages/admin/InputTypesPage'));
+const InputTypeDetailPage = lazy(() => import('./pages/admin/InputTypeDetailPage'));
+const InputsPage = lazy(() => import('./pages/admin/InputsPage'));
+const InputDetailPage = lazy(() => import('./pages/admin/InputDetailPage'));
+const DesignImagesPage = lazy(() => import('./pages/admin/DesignImagesPage'));
+const OrdersPage = lazy(() => import('./pages/admin/OrdersPage').then(m => ({ default: m.OrdersPage })));
+const OrderDetailPage = lazy(() => import('./pages/admin/OrderDetailPage').then(m => ({ default: m.OrderDetailPage })));
+const ShippingPage = lazy(() => import('./pages/admin/ShippingPage').then(m => ({ default: m.ShippingPage })));
+const PaymentsPage = lazy(() => import('./pages/admin/PaymentsPage').then(m => ({ default: m.PaymentsPage })));
+const CashRegistersPage = lazy(() => import('./pages/admin/CashRegistersPage'));
+const CashRegisterFormPage = lazy(() => import('./pages/admin/CashRegisterFormPage'));
+const BarcodePrintPage = lazy(() => import('./pages/admin/BarcodePrintPage'));
+const SuppliersPage = lazy(() => import('./pages/admin/SuppliersPage'));
+const SupplierDetailPage = lazy(() => import('./pages/admin/SupplierDetailPage'));
+const PurchaseOrdersPage = lazy(() => import('./pages/admin/PurchaseOrdersPage'));
+const PurchaseOrderDetailPage = lazy(() => import('./pages/admin/PurchaseOrderDetailPage'));
+const PurchaseReturnsPage = lazy(() => import('./pages/admin/PurchaseReturnsPage'));
+const PurchaseReturnFormPage = lazy(() => import('./pages/admin/PurchaseReturnFormPage'));
+const InventoryMovementsPage = lazy(() => import('./pages/admin/InventoryMovementsPage'));
+const InventoryCountsPage = lazy(() => import('./pages/admin/InventoryCountsPage'));
+const InventoryCountDetailPage = lazy(() => import('./pages/admin/InventoryCountDetailPage'));
+const InventoryConversionsPage = lazy(() => import('./pages/admin/InventoryConversionsPage'));
+const InventoryConversionDetailPage = lazy(() => import('./pages/admin/InventoryConversionDetailPage'));
+const InventoryConversionFromTemplatePage = lazy(() => import('./pages/admin/InventoryConversionFromTemplatePage'));
+const TemplateRecipesPage = lazy(() => import('./pages/admin/TemplateRecipesPage'));
+const ReviewsPage = lazy(() => import('./pages/admin/ReviewsPage'));
+const SettingsGeneralPage = lazy(() => import('./pages/admin/settings').then(m => ({ default: m.SettingsGeneralPage })));
+const SettingsAppearancePage = lazy(() => import('./pages/admin/settings').then(m => ({ default: m.SettingsAppearancePage })));
+const SettingsShippingPage = lazy(() => import('./pages/admin/settings').then(m => ({ default: m.SettingsShippingPage })));
+const SettingsPaymentPage = lazy(() => import('./pages/admin/settings').then(m => ({ default: m.SettingsPaymentPage })));
+const SettingsLegalPage = lazy(() => import('./pages/admin/settings').then(m => ({ default: m.SettingsLegalPage })));
+const SettingsHomePage = lazy(() => import('./pages/admin/settings').then(m => ({ default: m.SettingsHomePage })));
+const SettingsCatalogPage = lazy(() => import('./pages/admin/settings').then(m => ({ default: m.SettingsCatalogPage })));
+const SettingsPrintingPage = lazy(() => import('./pages/admin/settings').then(m => ({ default: m.SettingsPrintingPage })));
+const LabelTemplatesPage = lazy(() => import('./pages/admin/settings').then(m => ({ default: m.LabelTemplatesPage })));
 import { NotFoundPage } from './pages/NotFoundPage';
 import { POSProvider } from './context/POSContext';
 import POSLayout from './components/pos/POSLayout';
-import NewSalePage from './pages/pos/NewSalePage';
-import SalesHistoryPage from './pages/pos/SalesHistoryPage';
-import DebtsPage from './pages/pos/DebtsPage';
-import CustomersPage from './pages/pos/CustomersPage';
-import CashRegisterPage from './pages/pos/CashRegisterPage';
+const NewSalePage = lazy(() => import('./pages/pos/NewSalePage'));
+const SalesHistoryPage = lazy(() => import('./pages/pos/SalesHistoryPage'));
+const DebtsPage = lazy(() => import('./pages/pos/DebtsPage'));
+const CustomersPage = lazy(() => import('./pages/pos/CustomersPage'));
+const CashRegisterPage = lazy(() => import('./pages/pos/CashRegisterPage'));
 import type { Permission } from './types/roles';
 
 // Protected route for admin access
@@ -205,6 +203,7 @@ function App() {
                       <SettingsProvider>
                         <POSProvider>
                           <CartProvider>
+                          <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-gray-400 text-sm">Cargando…</div>}>
                           <Routes>
                             {/* Mensajería — app independiente con su propio layout */}
                             <Route
@@ -788,6 +787,7 @@ function App() {
                             }
                           />
                         </Routes>
+                          </Suspense>
                           </CartProvider>
                         </POSProvider>
                       </SettingsProvider>
