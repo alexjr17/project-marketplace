@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { usePOS } from '../../context/POSContext';
+import { Button } from '../../components/shared/Button';
 import { useToast } from '../../context/ToastContext';
-import { useSettings } from '../../context/SettingsContext';
 import * as posService from '../../services/pos.service';
 import settingsService from '../../services/settings.service';
 import OpenSessionPrompt from '../../components/pos/OpenSessionPrompt';
@@ -9,7 +10,6 @@ import PrintPreviewModal from '../../components/pos/PrintPreviewModal';
 import type { PrintSettings } from '../../types/settings';
 import { DEFAULT_PRINT_SETTINGS } from '../../types/settings';
 import { History, Receipt, Calendar, DollarSign, CreditCard, User, Printer, Mail, X, Loader2, CheckCircle, Smartphone, Eye, RefreshCw, Camera, Upload, Image as ImageIcon, ChevronLeft, ChevronRight, Clock, Pencil, Trash2 } from 'lucide-react';
-import EditSaleModal from '../../components/pos/EditSaleModal';
 
 // Estado de la venta → etiqueta + estilo del badge.
 function statusInfo(status: string): { label: string; cls: string } {
@@ -24,9 +24,11 @@ function statusInfo(status: string): { label: string; cls: string } {
 export default function SalesHistoryPage() {
   const { currentSession } = usePOS();
   const { showToast } = useToast();
-  const { settings } = useSettings();
+  const navigate = useNavigate();
   const [sales, setSales] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  // Venta seleccionada para ver su resumen + acciones.
+  const [summarySale, setSummarySale] = useState<any | null>(null);
 
   // Email modal state
   const [emailModalSale, setEmailModalSale] = useState<any | null>(null);
@@ -53,7 +55,6 @@ export default function SalesHistoryPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 10;
   const [statusFilter, setStatusFilter] = useState<'all' | 'PAID' | 'PENDING' | 'CANCELLED'>('all');
-  const [editSaleId, setEditSaleId] = useState<number | null>(null);
 
   useEffect(() => {
     loadPrintSettings();
@@ -680,65 +681,16 @@ export default function SalesHistoryPage() {
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-center">
-                      <div className="flex items-center justify-center gap-2">
-                        <button
-                          onClick={() => handlePrintTicket(sale)}
-                          className="inline-flex items-center gap-1 px-3 py-1.5 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors text-sm font-medium"
-                          title="Imprimir ticket"
+                      <div className="flex justify-center">
+                        <Button
+                          variant="admin-secondary"
+                          size="sm"
+                          onClick={() => setSummarySale(sale)}
+                          title="Ver resumen y acciones"
                         >
-                          <Printer className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handleOpenEmailModal(sale)}
-                          className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg transition-colors text-sm font-medium ${
-                            sale.customerEmail
-                              ? 'bg-green-100 text-green-700 hover:bg-green-200'
-                              : 'bg-purple-100 text-purple-700 hover:bg-purple-200'
-                          }`}
-                          title={sale.customerEmail ? `Enviado a: ${sale.customerEmail}` : 'Enviar recibo por email'}
-                        >
-                          {sale.customerEmail ? (
-                            <CheckCircle className="w-4 h-4" />
-                          ) : (
-                            <Mail className="w-4 h-4" />
-                          )}
-                        </button>
-                        {/* Botón de evidencia solo para transferencias */}
-                        {sale.paymentMethod === 'transfer' && (
-                          <button
-                            onClick={() => handleOpenEvidenceModal(sale)}
-                            className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg transition-colors text-sm font-medium ${
-                              sale.paymentEvidence
-                                ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
-                                : 'bg-amber-100 text-amber-700 hover:bg-amber-200'
-                            }`}
-                            title={sale.paymentEvidence ? 'Ver/Editar evidencia de pago' : 'Subir evidencia de pago'}
-                          >
-                            {sale.paymentEvidence ? (
-                              <ImageIcon className="w-4 h-4" />
-                            ) : (
-                              <Camera className="w-4 h-4" />
-                            )}
-                          </button>
-                        )}
-                        {sale.status !== 'CANCELLED' && (
-                          <>
-                            <button
-                              onClick={() => setEditSaleId(sale.id)}
-                              className="inline-flex items-center gap-1 px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm font-medium"
-                              title="Editar venta"
-                            >
-                              <Pencil className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => handleCancelSale(sale)}
-                              className="inline-flex items-center gap-1 px-3 py-1.5 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors text-sm font-medium"
-                              title="Anular venta"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </>
-                        )}
+                          <Eye className="w-4 h-4" />
+                          Resumen
+                        </Button>
                       </div>
                     </td>
                   </tr>
@@ -1107,13 +1059,125 @@ export default function SalesHistoryPage() {
         </div>
       )}
 
-      {editSaleId !== null && (
-        <EditSaleModal
-          saleId={editSaleId}
-          onClose={() => setEditSaleId(null)}
-          onSaved={() => { setEditSaleId(null); loadSales(); }}
-        />
-      )}
+      {/* Resumen de la venta + acciones */}
+      {summarySale && (() => {
+        const s = statusInfo(summarySale.status);
+        const isCancelled = summarySale.status === 'CANCELLED';
+        return (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl shadow-xl max-w-md w-full max-h-[90vh] flex flex-col overflow-hidden">
+              {/* Header */}
+              <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between">
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-900 font-mono">{summarySale.orderNumber}</h2>
+                  <p className="text-xs text-gray-500">
+                    {new Date(summarySale.createdAt).toLocaleString('es-CO')}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-medium ${s.cls}`}>{s.label}</span>
+                  <button onClick={() => setSummarySale(null)} className="text-gray-400 hover:text-gray-600">
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Body */}
+              <div className="p-5 space-y-3 overflow-y-auto">
+                <div className="flex items-center gap-2 text-sm">
+                  <User className="w-4 h-4 text-gray-400" />
+                  <span className="text-gray-900 font-medium">
+                    {summarySale.posCustomer?.name || summarySale.customerName || 'Cliente general'}
+                  </span>
+                  {summarySale.posCustomer?.cedula && (
+                    <span className="text-gray-500">· CC {summarySale.posCustomer.cedula}</span>
+                  )}
+                </div>
+
+                {/* Items */}
+                <div className="border border-gray-100 rounded-lg divide-y divide-gray-100">
+                  {(summarySale.items || []).map((it: any, idx: number) => (
+                    <div key={idx} className="flex items-center justify-between gap-2 px-3 py-2 text-sm">
+                      <span className="text-gray-700 truncate">
+                        {it.quantity}× {it.productName || it.product?.name || 'Producto'}
+                      </span>
+                      <span className="text-gray-900 font-medium whitespace-nowrap">
+                        ${(Number(it.unitPrice ?? it.price ?? 0) * (it.quantity || 1)).toLocaleString()}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Totales */}
+                <div className="space-y-1 text-sm">
+                  <div className="flex justify-between text-gray-600">
+                    <span>Subtotal</span><span>${Number(summarySale.subtotal).toLocaleString()}</span>
+                  </div>
+                  {summarySale.discount > 0 && (
+                    <div className="flex justify-between text-red-600">
+                      <span>Descuento</span><span>-${Number(summarySale.discount).toLocaleString()}</span>
+                    </div>
+                  )}
+                  {summarySale.tax > 0 && (
+                    <div className="flex justify-between text-gray-600">
+                      <span>Impuesto</span><span>${Number(summarySale.tax).toLocaleString()}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between text-base font-bold text-gray-900 border-t border-gray-200 pt-1">
+                    <span>Total</span><span>${Number(summarySale.total).toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between text-gray-500">
+                    <span>Pago</span>
+                    <span className="capitalize">
+                      {summarySale.paymentMethod === 'cash' ? 'Efectivo' :
+                       summarySale.paymentMethod === 'transfer' ? 'Transferencia' :
+                       summarySale.paymentMethod === 'mixed' ? 'Mixto' :
+                       summarySale.paymentMethod === 'debe' ? 'Fiado' : 'Tarjeta'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Acciones */}
+              <div className="px-5 py-4 border-t border-gray-200 space-y-2">
+                {!isCancelled && (
+                  <Button
+                    variant="admin-primary"
+                    fullWidth
+                    onClick={() => { const id = summarySale.id; setSummarySale(null); navigate(`/pos/sale?edit=${id}`); }}
+                  >
+                    <Pencil className="w-4 h-4" />
+                    Editar venta
+                  </Button>
+                )}
+                <div className="grid grid-cols-2 gap-2">
+                  <Button variant="admin-secondary" size="sm" onClick={() => { const sale = summarySale; setSummarySale(null); handlePrintTicket(sale); }}>
+                    <Printer className="w-4 h-4" />
+                    Imprimir
+                  </Button>
+                  <Button variant="admin-secondary" size="sm" onClick={() => { const sale = summarySale; setSummarySale(null); handleOpenEmailModal(sale); }}>
+                    {summarySale.customerEmail ? <CheckCircle className="w-4 h-4" /> : <Mail className="w-4 h-4" />}
+                    Email
+                  </Button>
+                  {summarySale.paymentMethod === 'transfer' && (
+                    <Button variant="admin-secondary" size="sm" onClick={() => { const sale = summarySale; setSummarySale(null); handleOpenEvidenceModal(sale); }}>
+                      {summarySale.paymentEvidence ? <ImageIcon className="w-4 h-4" /> : <Camera className="w-4 h-4" />}
+                      Evidencia
+                    </Button>
+                  )}
+                  {!isCancelled && (
+                    <Button variant="admin-danger" size="sm" onClick={() => { const sale = summarySale; setSummarySale(null); handleCancelSale(sale); }}>
+                      <Trash2 className="w-4 h-4" />
+                      Anular
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
     </div>
   );
 }

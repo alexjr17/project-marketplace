@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { usePOS } from '../../context/POSContext';
 import { useToast } from '../../context/ToastContext';
 import { useSettings } from '../../context/SettingsContext';
@@ -25,6 +26,7 @@ import {
   Clock,
   Info,
   AlertTriangle,
+  Pencil,
 } from 'lucide-react';
 
 // Cliente por defecto (consumidor final): siempre hay un cliente seleccionado
@@ -49,10 +51,53 @@ export default function NewSalePage() {
     processSale,
     isProcessingSale,
     currentSession,
+    editingSaleId,
+    loadSaleForEditing,
+    cancelEditing,
   } = usePOS();
 
   const { showToast } = useToast();
   const { settings } = useSettings();
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const editParam = searchParams.get('edit');
+  const editLoadedRef = useRef(false);
+
+  // Cargar una venta para editar cuando se entra con ?edit=<id>
+  useEffect(() => {
+    if (!editParam || editLoadedRef.current) return;
+    editLoadedRef.current = true;
+    (async () => {
+      try {
+        const sale = await posService.getSaleDetail(Number(editParam));
+        loadSaleForEditing(sale);
+        if (sale.posCustomer || sale.customerName) {
+          setSelectedCustomer({
+            id: sale.posCustomer?.id,
+            name: sale.posCustomer?.name || sale.customerName || 'Consumidor Final',
+            cedula: sale.posCustomer?.cedula ?? null,
+            phone: sale.posCustomer?.phone ?? sale.customerPhone ?? null,
+            email: sale.posCustomer?.email ?? sale.customerEmail ?? null,
+          });
+        }
+        if (['cash', 'card', 'transfer', 'mixed', 'debe'].includes(sale.paymentMethod)) {
+          setPaymentMethod(sale.paymentMethod as typeof paymentMethod);
+        }
+        showToast(`Editando venta ${sale.orderNumber}`, 'info');
+      } catch (error) {
+        console.error('Error cargando la venta a editar:', error);
+        showToast('No se pudo cargar la venta para editar', 'error');
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editParam]);
+
+  // Salir del modo edición y volver al historial.
+  const exitEditing = () => {
+    cancelEditing();
+    setSelectedCustomer(DEFAULT_CUSTOMER);
+    navigate('/pos/history');
+  };
 
   // Scanner input
   const [barcodeInput, setBarcodeInput] = useState('');
@@ -473,7 +518,24 @@ export default function NewSalePage() {
   }
 
   return (
-    <div className="lg:h-full flex flex-col lg:flex-row gap-4">
+    <div className="lg:h-full flex flex-col gap-3">
+      {/* Banner de edición de venta */}
+      {editingSaleId && (
+        <div className="flex items-center justify-between gap-3 bg-amber-50 border border-amber-200 rounded-lg px-4 py-2.5 flex-shrink-0">
+          <div className="flex items-center gap-2 text-amber-800 text-sm">
+            <Pencil className="w-4 h-4 flex-shrink-0" />
+            <span>Estás <strong>editando una venta</strong>. Al confirmar se <strong>actualiza</strong> (no se crea una nueva).</span>
+          </div>
+          <button
+            onClick={exitEditing}
+            className="text-sm font-medium text-amber-700 hover:text-amber-900 underline whitespace-nowrap"
+          >
+            Cancelar edición
+          </button>
+        </div>
+      )}
+
+      <div className="flex-1 min-h-0 flex flex-col lg:flex-row gap-4">
       {/* Left Column - Productos */}
       <div className="flex-1 flex flex-col min-h-0 lg:max-h-none gap-3 lg:gap-4">
         {/* Cliente (sin label: el buscador/selector ya es explícito) */}
@@ -830,6 +892,7 @@ export default function NewSalePage() {
           </button>
         </div>
 
+      </div>
       </div>
 
       {/* Discount Modal */}

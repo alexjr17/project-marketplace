@@ -59,6 +59,11 @@ interface POSContextType {
   isProcessingSale: boolean;
   processSale: (data: Omit<CreateSaleRequest, 'items' | 'cashRegisterId'>) => Promise<Sale>;
 
+  // Edición de una venta existente (desde Historial → Nueva Venta)
+  editingSaleId: number | null;
+  loadSaleForEditing: (sale: Sale) => void;
+  cancelEditing: () => void;
+
   // Barcode scanning
   scanProduct: (barcode: string) => Promise<void>;
   isScanningProduct: boolean;
@@ -79,6 +84,8 @@ export function POSProvider({ children }: { children: React.ReactNode }) {
   // Cart state
   const [cart, setCart] = useState<CartItem[]>([]);
   const [discount, setDiscount] = useState(0);
+  // Si se está editando una venta existente, su id (si no, null = venta nueva).
+  const [editingSaleId, setEditingSaleId] = useState<number | null>(null);
 
   // Loading states
   const [isProcessingSale, setIsProcessingSale] = useState(false);
@@ -259,6 +266,45 @@ export function POSProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   /**
+   * Cargar una venta existente al carrito para editarla en "Nueva Venta".
+   * Usa stock alto para no bloquear el ajuste de cantidades durante la edición.
+   */
+  const loadSaleForEditing = useCallback((sale: Sale) => {
+    const items: CartItem[] = (sale.items || []).map((it: any) => {
+      const price = Number(it.unitPrice ?? it.price) || 0;
+      const quantity = Number(it.quantity) || 1;
+      return {
+        itemType: 'product' as const,
+        variantId: it.variantId,
+        product: {
+          id: it.product?.id ?? 0,
+          name: it.productName || it.product?.name || 'Producto',
+          image: it.product?.image || it.image || '',
+        },
+        color: it.color || it.variant?.color?.name || '',
+        size: it.size || it.variant?.size?.name || '',
+        sku: it.sku || it.variant?.sku || '',
+        barcode: it.barcode ?? null,
+        price,
+        stock: 999999,
+        available: true,
+        quantity,
+        subtotal: price * quantity,
+      } as ProductCartItem;
+    });
+    setCart(items);
+    setDiscount(Number(sale.discount) || 0);
+    setEditingSaleId(sale.id);
+  }, []);
+
+  /** Salir del modo edición (descarta los cambios en el carrito). */
+  const cancelEditing = useCallback(() => {
+    setEditingSaleId(null);
+    setCart([]);
+    setDiscount(0);
+  }, []);
+
+  /**
    * Scan product by barcode
    */
   const scanProduct = useCallback(
@@ -305,13 +351,29 @@ export function POSProvider({ children }: { children: React.ReactNode }) {
           price: item.price,
         }));
 
-        // Create sale
-        const sale = await posService.createSale({
-          ...data,
-          cashRegisterId: currentSession.cashRegisterId,
-          items,
-          discount,
-        });
+        let sale: Sale;
+        if (editingSaleId) {
+          // Editar la venta existente en vez de crear una nueva.
+          sale = await posService.updateSale(editingSaleId, {
+            items,
+            customerId: data.customerId,
+            customerName: data.customerName,
+            customerPhone: data.customerPhone,
+            customerCedula: data.customerCedula,
+            paymentMethod: data.paymentMethod,
+            discount,
+            notes: data.notes,
+          });
+          setEditingSaleId(null);
+        } else {
+          // Create sale
+          sale = await posService.createSale({
+            ...data,
+            cashRegisterId: currentSession.cashRegisterId,
+            items,
+            discount,
+          });
+        }
 
         // Clear cart on success
         clearCart();
@@ -319,7 +381,7 @@ export function POSProvider({ children }: { children: React.ReactNode }) {
         // Reload session to update counters
         await loadSession();
 
-        showToast('Venta procesada exitosamente', 'success');
+        showToast(editingSaleId ? 'Venta actualizada exitosamente' : 'Venta procesada exitosamente', 'success');
 
         return sale;
       } catch (error: any) {
@@ -333,7 +395,7 @@ export function POSProvider({ children }: { children: React.ReactNode }) {
         setIsProcessingSale(false);
       }
     },
-    [currentSession, cart, discount, clearCart, loadSession, showToast]
+    [currentSession, cart, discount, editingSaleId, clearCart, loadSession, showToast]
   );
 
   // Load session on mount
@@ -365,6 +427,11 @@ export function POSProvider({ children }: { children: React.ReactNode }) {
     // Sales
     isProcessingSale,
     processSale,
+
+    // Edición
+    editingSaleId,
+    loadSaleForEditing,
+    cancelEditing,
 
     // Barcode scanning
     scanProduct,
