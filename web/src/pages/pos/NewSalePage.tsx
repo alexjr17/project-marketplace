@@ -24,6 +24,7 @@ import {
   Loader2,
   Clock,
   Info,
+  AlertTriangle,
 } from 'lucide-react';
 
 // Cliente por defecto (consumidor final): siempre hay un cliente seleccionado
@@ -887,6 +888,7 @@ export default function NewSalePage() {
         total={total}
         paymentMethod={paymentMethod}
         initialCustomer={selectedCustomer}
+        onCustomerChange={(c) => setSelectedCustomer(c ?? DEFAULT_CUSTOMER)}
         abono={paymentMethod === 'debe' ? parseFloat(abonoAmount || '0') : 0}
         taxRate={settings.payment?.taxRate || 19}
         subtotal={subtotal}
@@ -913,90 +915,76 @@ export default function NewSalePage() {
 
       {/* Product Info Modal (Out of Stock) */}
       {productInfoModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
-            {/* Header */}
-            <div className="px-6 py-4 border-b border-gray-200 bg-red-50">
-              <div className="flex items-center justify-between">
-                <h2 className="text-xl font-semibold text-red-800">Producto Sin Stock</h2>
-                <button
-                  onClick={() => {
-                    setProductInfoModal(null);
-                    barcodeInputRef.current?.focus();
-                  }}
-                  className="text-red-600 hover:text-red-700"
-                >
-                  <X className="w-6 h-6" />
-                </button>
-              </div>
-            </div>
-
-            {/* Content */}
-            <div className="p-6">
-              {/* Product Image */}
-              {productInfoModal.image && (
-                <div className="mb-4 flex justify-center">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-sm w-full overflow-hidden">
+            {/* Encabezado: imagen + nombre lado a lado */}
+            <div className="flex items-start gap-3 p-4 border-b border-gray-100">
+              <div className="w-16 h-16 flex-shrink-0 rounded-lg border border-gray-200 bg-gray-50 overflow-hidden flex items-center justify-center">
+                {productInfoModal.image ? (
                   <img
                     src={productInfoModal.image}
                     alt={productInfoModal.name}
-                    className="w-48 h-48 object-cover rounded-lg border-2 border-gray-200"
+                    className="w-full h-full object-cover"
                   />
-                </div>
-              )}
-
-              {/* Product Info */}
-              <div className="space-y-3">
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-1">
-                    {productInfoModal.name}
-                  </h3>
-                  <p className="text-gray-600">
-                    {productInfoModal.color} - {productInfoModal.size}
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3 text-sm">
-                  <div className="bg-gray-50 p-3 rounded">
-                    <p className="text-gray-500 mb-1">SKU</p>
-                    <p className="font-mono font-medium text-gray-900">{productInfoModal.sku}</p>
-                  </div>
-                  <div className="bg-gray-50 p-3 rounded">
-                    <p className="text-gray-500 mb-1">Código de Barras</p>
-                    <p className="font-mono font-medium text-gray-900">{productInfoModal.barcode}</p>
-                  </div>
-                  <div className="bg-gray-50 p-3 rounded">
-                    <p className="text-gray-500 mb-1">Precio</p>
-                    <p className="text-lg font-bold text-gray-900">
-                      ${productInfoModal.price.toLocaleString()}
-                    </p>
-                  </div>
-                  <div className="bg-red-50 p-3 rounded border border-red-200">
-                    <p className="text-red-600 mb-1 font-medium">Stock</p>
-                    <p className="text-lg font-bold text-red-700">
-                      {productInfoModal.stock}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="bg-red-50 border border-red-200 rounded-lg p-4 mt-4">
-                  <p className="text-red-800 font-medium text-center">
-                    ⚠️ Este producto no tiene stock disponible
-                  </p>
-                </div>
+                ) : (
+                  <Package className="w-7 h-7 text-gray-300" />
+                )}
               </div>
-
-              {/* Action Button */}
-              <div className="mt-6">
-                <button
-                  onClick={() => {
-                    setProductInfoModal(null);
-                    barcodeInputRef.current?.focus();
-                  }}
-                  className="w-full px-4 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 font-medium"
-                >
-                  Cerrar
-                </button>
+              <div className="min-w-0 flex-1">
+                <h3 className="text-base font-semibold text-gray-900 leading-tight truncate">
+                  {productInfoModal.name}
+                </h3>
+                {(productInfoModal.color || productInfoModal.size) && (
+                  <p className="text-xs text-gray-500 mt-0.5 truncate">
+                    {[productInfoModal.color, productInfoModal.size].filter(Boolean).join(' · ')}
+                  </p>
+                )}
+                <p className="text-lg font-bold text-gray-900 mt-1">
+                  ${productInfoModal.price.toLocaleString()}
+                </p>
               </div>
+              <button
+                onClick={() => {
+                  setProductInfoModal(null);
+                  barcodeInputRef.current?.focus();
+                }}
+                className="text-gray-400 hover:text-gray-600 -mt-1 -mr-1"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Datos compactos */}
+            <div className="px-4 py-3 space-y-2 text-sm">
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-gray-500">SKU</span>
+                <span className="font-mono text-gray-900 truncate">{productInfoModal.sku}</span>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-gray-500">Código de barras</span>
+                <span className="font-mono text-gray-900 truncate">{productInfoModal.barcode || '—'}</span>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-gray-500">Stock</span>
+                <span className="font-semibold text-red-600">{productInfoModal.stock}</span>
+              </div>
+            </div>
+
+            {/* Aviso + acción */}
+            <div className="px-4 pb-4 pt-1">
+              <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-3">
+                <AlertTriangle className="w-4 h-4 text-red-600 flex-shrink-0" />
+                <p className="text-xs text-red-800 font-medium">Sin stock disponible para vender</p>
+              </div>
+              <button
+                onClick={() => {
+                  setProductInfoModal(null);
+                  barcodeInputRef.current?.focus();
+                }}
+                className="w-full px-4 py-2.5 bg-gray-900 text-white rounded-lg hover:bg-gray-800 text-sm font-medium"
+              >
+                Entendido
+              </button>
             </div>
           </div>
         </div>

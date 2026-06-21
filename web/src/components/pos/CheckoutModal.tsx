@@ -8,12 +8,15 @@ import {
   Loader2,
   ArrowRight,
   User,
+  UserCog,
+  UserPlus,
   CreditCard,
   Hash,
   MessageCircle,
 } from 'lucide-react';
 import * as posService from '../../services/pos.service';
 import type { SelectedCustomer } from './CustomerSelect';
+import CustomerFormModal from './CustomerFormModal';
 
 type CheckoutStep = 'customer' | 'processing' | 'completed';
 
@@ -45,6 +48,8 @@ interface CheckoutModalProps {
   total: number;
   paymentMethod: 'cash' | 'card' | 'transfer' | 'mixed' | 'debe';
   initialCustomer?: SelectedCustomer | null;
+  /** Notifica al padre cuando se edita/registra el cliente desde el cobro. */
+  onCustomerChange?: (customer: SelectedCustomer | null) => void;
   abono?: number;
   taxRate?: number;
   subtotal: number;
@@ -67,6 +72,7 @@ export const CheckoutModal = ({
   total,
   paymentMethod,
   initialCustomer,
+  onCustomerChange,
   abono = 0,
   taxRate = 19,
   subtotal,
@@ -82,6 +88,10 @@ export const CheckoutModal = ({
   onAbonoMethodChange,
 }: CheckoutModalProps) => {
   const [step, setStep] = useState<CheckoutStep>('customer');
+
+  // Cliente local: se inicializa del padre pero puede editarse/registrarse aquí.
+  const [customer, setCustomer] = useState<SelectedCustomer | null | undefined>(initialCustomer);
+  const [showCustomerForm, setShowCustomerForm] = useState(false);
 
   // Payment amount calculations
   const cashNum = parseFloat(cashAmount || '0');
@@ -125,6 +135,8 @@ export const CheckoutModal = ({
   useEffect(() => {
     if (isOpen) {
       setStep('customer');
+      setCustomer(initialCustomer);
+      setShowCustomerForm(false);
       setEmailInput(initialCustomer?.email || '');
       setCompletedData(null);
       setPdfUrl(null);
@@ -175,9 +187,9 @@ export const CheckoutModal = ({
       // return;
     }
 
-    // Fiado: exige cliente identificado (elegido en la pantalla de venta).
-    if (isDebt && !initialCustomer) {
-      alert('Para una venta a crédito (Debe) selecciona un cliente en la pantalla de venta.');
+    // Fiado: exige cliente identificado.
+    if (isDebt && !customer) {
+      alert('Para una venta a crédito (Debe) selecciona o registra un cliente.');
       return;
     }
 
@@ -195,11 +207,11 @@ export const CheckoutModal = ({
 
     try {
       const result = await onConfirm({
-        customerId: initialCustomer?.id,
-        customerName: initialCustomer?.name || undefined,
-        customerEmail: initialCustomer?.email || undefined,
-        customerPhone: initialCustomer?.phone || undefined,
-        customerNit: initialCustomer?.cedula || undefined,
+        customerId: customer?.id,
+        customerName: customer?.name || undefined,
+        customerEmail: customer?.email || undefined,
+        customerPhone: customer?.phone || undefined,
+        customerNit: customer?.cedula || undefined,
         cardReference: cardReference.trim() || undefined,
         cardType: cardType || undefined,
         cardLastFour: cardLastFour.trim() || undefined,
@@ -266,7 +278,7 @@ export const CheckoutModal = ({
     text += `\n\n¡Gracias por tu compra!`;
 
     // Teléfono del cliente si existe (Colombia: anteponer 57 a 10 dígitos).
-    const raw = (initialCustomer?.phone || '').replace(/\D/g, '');
+    const raw = (customer?.phone || '').replace(/\D/g, '');
     const phone = raw.length === 10 ? `57${raw}` : raw;
     window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`, '_blank');
   };
@@ -346,31 +358,50 @@ export const CheckoutModal = ({
           {step === 'customer' && (
             <div className="flex-1 p-4 lg:p-5 overflow-y-auto">
               <div className="space-y-4">
-                {/* Cliente (solo lectura) */}
-                {initialCustomer ? (
+                {/* Cliente: con botón de editar/completar datos */}
+                {customer ? (
                   <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex items-start gap-3">
                     <User className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
-                    <div className="min-w-0">
-                      <p className="text-sm font-bold text-gray-900 truncate">{initialCustomer.name}</p>
-                      {initialCustomer.cedula && (
-                        <p className="text-xs text-gray-600 truncate">CC/NIT {initialCustomer.cedula}</p>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-bold text-gray-900 truncate">{customer.name}</p>
+                      {customer.cedula && (
+                        <p className="text-xs text-gray-600 truncate">CC/NIT {customer.cedula}</p>
                       )}
-                      {initialCustomer.phone && (
-                        <p className="text-xs text-gray-600 truncate">{initialCustomer.phone}</p>
+                      {customer.phone && (
+                        <p className="text-xs text-gray-600 truncate">{customer.phone}</p>
                       )}
                       <p className="text-xs text-gray-400 truncate">
-                        {initialCustomer.id ? 'Cliente existente' : 'Cliente nuevo · se registra al cobrar'}
+                        {customer.id ? 'Cliente existente' : 'Cliente nuevo · se registra al cobrar'}
                       </p>
                     </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowCustomerForm(true)}
+                      title="Editar / completar datos del cliente"
+                      className="flex-shrink-0 inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-blue-700 bg-white border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors"
+                    >
+                      <UserCog className="w-3.5 h-3.5" />
+                      Editar
+                    </button>
                   </div>
                 ) : (
-                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
-                    <p className="text-sm text-gray-500">Sin cliente (consumidor final)</p>
-                    {isDebt && (
-                      <p className="mt-1 text-xs text-amber-700">
-                        Selecciona un cliente en la pantalla de venta para registrar el fiado.
-                      </p>
-                    )}
+                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm text-gray-500">Sin cliente (consumidor final)</p>
+                      {isDebt && (
+                        <p className="mt-1 text-xs text-amber-700">
+                          Registra un cliente para el fiado.
+                        </p>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowCustomerForm(true)}
+                      className="flex-shrink-0 inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+                    >
+                      <UserPlus className="w-3.5 h-3.5" />
+                      Registrar
+                    </button>
                   </div>
                 )}
 
@@ -610,7 +641,7 @@ export const CheckoutModal = ({
                   <button
                     onClick={handleConfirmSale}
                     disabled={
-                      (isDebt && !initialCustomer) ||
+                      (isDebt && !customer) ||
                       (paymentMethod === 'cash' && cashNum < total) ||
                       (paymentMethod === 'mixed' && paid < total)
                     }
@@ -814,6 +845,18 @@ export const CheckoutModal = ({
           )}
         </div>
       </div>
+
+      {/* Formulario para registrar/editar cliente con datos completos */}
+      <CustomerFormModal
+        isOpen={showCustomerForm}
+        initial={customer}
+        onClose={() => setShowCustomerForm(false)}
+        onSave={(c) => {
+          setCustomer(c);
+          onCustomerChange?.(c);
+          setShowCustomerForm(false);
+        }}
+      />
     </div>
   );
 };
