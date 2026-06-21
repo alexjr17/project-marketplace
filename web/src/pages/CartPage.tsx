@@ -1,4 +1,4 @@
-import { ShoppingBag, Truck, Heart, AlertTriangle } from 'lucide-react';
+import { ShoppingBag, Truck, Heart, AlertTriangle, ArrowLeft } from 'lucide-react';
 import { PageHeader } from '../components/shared/PageHeader';
 import { useNavigate } from 'react-router-dom';
 import { useState, useCallback } from 'react';

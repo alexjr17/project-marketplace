@@ -483,9 +483,10 @@ export default function ProductDetailPage() {
               )}
 
               {/* Separador */}
-              <div className="border-t border-gray-200 my-3" />
+              {(needsColor || needsSize) && <div className="border-t border-gray-200 my-3" />}
 
               {/* Color Selection */}
+              {needsColor && (
               <div className="flex items-center gap-3 mb-3">
                 <span className="text-xs font-medium text-gray-500 w-14">Color</span>
                 <div className="flex items-center gap-1.5 flex-1">
@@ -526,8 +527,10 @@ export default function ProductDetailPage() {
                   {product.colors.find(c => c.hexCode === selectedColor)?.name}
                 </span>
               </div>
+              )}
 
               {/* Size Selection */}
+              {needsSize && (
               <div className="flex items-center gap-3 mb-3">
                 <span className="text-xs font-medium text-gray-500 w-14">Talla</span>
                 <div className="flex flex-wrap gap-1.5 flex-1">
@@ -551,6 +554,7 @@ export default function ProductDetailPage() {
                   })}
                 </div>
               </div>
+              )}
 
               {/* Quantity + Stock */}
               <div className="flex items-center gap-3 mb-4">
