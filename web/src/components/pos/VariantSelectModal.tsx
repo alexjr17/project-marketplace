@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { X, Check } from 'lucide-react';
 import type { PosVariant } from '../../services/pos.service';
 
@@ -40,6 +40,16 @@ export function VariantSelectModal({
   const match = variants.find(
     (v) => (v.colorHex || '') === (color || '') && (v.size || '') === (size || '')
   );
+
+  // Cuando se elige una combinación completa con stock, se agrega solo (rápido).
+  const colorReady = !hasColors || color !== null;
+  const sizeReady = !hasSizes || size !== null;
+  useEffect(() => {
+    if (colorReady && sizeReady && match && match.stock > 0) {
+      onSelect(match);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [color, size]);
 
   // Stock disponible por talla según el color elegido (para deshabilitar).
   const stockFor = (sz: string) =>
