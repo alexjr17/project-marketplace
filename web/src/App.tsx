@@ -19,6 +19,8 @@ import AppSelectorPage from './pages/AppSelectorPage';
 import { CatalogPage } from './pages/CatalogPage';
 const CustomizerPage = lazy(() => import('./pages/CustomizerPage').then(m => ({ default: m.CustomizerPage })));
 import { CartPage } from './pages/CartPage';
+const FavoritesPage = lazy(() => import('./pages/FavoritesPage'));
+import { FavoritesProvider } from './context/FavoritesContext';
 import { CheckoutPage } from './pages/CheckoutPage';
 import { OrderConfirmationPage } from './pages/OrderConfirmationPage';
 import { ProfilePage } from './pages/ProfilePage';
@@ -203,6 +205,7 @@ function App() {
                       <SettingsProvider>
                         <POSProvider>
                           <CartProvider>
+                          <FavoritesProvider>
                           <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-gray-400 text-sm">Cargando…</div>}>
                           <Routes>
                             {/* Mensajería — app independiente con su propio layout */}
@@ -776,6 +779,7 @@ function App() {
                                   <Route path="/product/:id" element={<ProductDetailPage />} />
                                   <Route path="/customize" element={<CustomizerPage />} />
                                   <Route path="/cart" element={<CartPage />} />
+                                  <Route path="/favorites" element={<FavoritesPage />} />
                                   <Route path="/checkout" element={<CheckoutPage />} />
                                   <Route path="/order-confirmation/:orderNumber" element={<OrderConfirmationPage />} />
                                   <Route path="/profile" element={<ProfilePage />} />
@@ -788,6 +792,7 @@ function App() {
                           />
                         </Routes>
                           </Suspense>
+                          </FavoritesProvider>
                           </CartProvider>
                         </POSProvider>
                       </SettingsProvider>

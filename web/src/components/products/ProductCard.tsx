@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { Star } from 'lucide-react';
 import { useCurrency } from '../../hooks/useCurrency';
 import type { Product } from '../../types/product';
+import { FavoriteButton } from './FavoriteButton';
 
 interface ProductCardProps {
   product: Product;
@@ -59,6 +60,11 @@ export const ProductCard = ({ product, priority = false }: ProductCardProps) => 
             AGOTADO
           </span>
         )}
+        <FavoriteButton
+          productId={Number(product.id)}
+          size={18}
+          className="absolute bottom-2 right-2 w-8 h-8 bg-white/90 hover:bg-white shadow-sm"
+        />
       </div>
 
       {/* Info */}

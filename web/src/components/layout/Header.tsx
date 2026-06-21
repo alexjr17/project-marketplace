@@ -1,7 +1,8 @@
 import { Link, useLocation } from 'react-router-dom';
-import { ShoppingCart, Search, Home, Package, Palette, Shirt, User } from 'lucide-react';
+import { ShoppingCart, Search, Home, Package, Palette, Shirt, User, Heart } from 'lucide-react';
 import { useState } from 'react';
 import { useCart } from '../../context/CartContext';
+import { useFavorites } from '../../context/FavoritesContext';
 import { useAuth } from '../../context/AuthContext';
 import { useSettings } from '../../context/SettingsContext';
 import { UserMenu } from '../auth/UserMenu';
@@ -14,6 +15,7 @@ import { NotificationBell } from '../notifications/NotificationBell';
 export const Header = () => {
   const location = useLocation();
   const { cart } = useCart();
+  const { count: favoritesCount } = useFavorites();
   const { isAuthenticated } = useAuth();
   const { settings } = useSettings();
   const [searchQuery, setSearchQuery] = useState('');
@@ -205,6 +207,27 @@ export const Header = () => {
                   />
                 </button>
               )}
+
+              {/* Favoritos */}
+              <Link
+                to="/favorites"
+                aria-label="Favoritos"
+                className={`relative p-2.5 rounded-lg transition-all group ${
+                  isActive('/favorites') ? 'bg-gray-100' : 'hover:bg-gray-100'
+                }`}
+              >
+                <Heart
+                  className={`w-6 h-6 transition-colors ${
+                    isActive('/favorites') ? 'text-red-500 fill-red-500' : 'text-gray-700 group-hover:text-gray-900'
+                  }`}
+                  strokeWidth={2}
+                />
+                {favoritesCount > 0 && (
+                  <span className="absolute top-1 right-1 bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[16px] h-4 px-1 flex items-center justify-center">
+                    {favoritesCount}
+                  </span>
+                )}
+              </Link>
 
               {/* Notifications */}
               <NotificationBell />
