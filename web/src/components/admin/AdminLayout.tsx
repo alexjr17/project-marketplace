@@ -193,10 +193,6 @@ export const AdminLayout = ({ children }: AdminLayoutProps) => {
   const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth >= 1024);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 1024);
-  // En escritorio el sidebar está contraído (solo iconos) y se expande al pasar el cursor.
-  const [hovered, setHovered] = useState(false);
-  // ¿Mostrar etiquetas/submenús? En móvil siempre (es un drawer); en escritorio solo al hover.
-  const expanded = isMobile || hovered;
 
   // Detectar cambios de tamaño de pantalla
   useEffect(() => {
@@ -368,12 +364,10 @@ export const AdminLayout = ({ children }: AdminLayoutProps) => {
 
         {/* Sidebar */}
         <aside
-          onMouseEnter={() => !isMobile && setHovered(true)}
-          onMouseLeave={() => setHovered(false)}
           className={`
             fixed lg:relative inset-y-0 left-0 z-50 lg:z-40
-            w-64 ${expanded ? 'lg:w-64' : 'lg:w-16'} bg-white border-r border-gray-200 flex flex-col flex-shrink-0
-            transform transition-all duration-300 ease-in-out
+            w-64 bg-white border-r border-gray-200 flex flex-col flex-shrink-0
+            transform transition-transform duration-300 ease-in-out
             ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
             ${isMobile ? 'h-full' : ''}
           `}
@@ -448,17 +442,14 @@ export const AdminLayout = ({ children }: AdminLayoutProps) => {
                   <Link
                     key={item.path}
                     to={item.path}
-                    title={!expanded ? item.label : undefined}
                     className={`flex items-center gap-3 px-3 py-3 rounded-lg font-medium text-sm transition-colors ${
-                      expanded ? 'justify-start' : 'justify-center'
-                    } ${
                       active
                         ? 'bg-orange-50 text-orange-700'
                         : 'text-gray-700 hover:bg-gray-50'
                     }`}
                   >
                     <Icon className={`w-5 h-5 flex-shrink-0 ${active ? 'text-orange-600' : 'text-gray-500'}`} />
-                    <span className={`whitespace-nowrap ${expanded ? 'inline' : 'hidden'}`}>{item.label}</span>
+                    <span className="whitespace-nowrap">{item.label}</span>
                   </Link>
                 );
               })}
@@ -474,14 +465,8 @@ export const AdminLayout = ({ children }: AdminLayoutProps) => {
                 return (
                   <div key={module.id}>
                     <button
-                      onClick={() => {
-                        if (!expanded) { setHovered(true); return; }
-                        toggleSubmenu(module.id);
-                      }}
-                      title={!expanded ? module.label : undefined}
-                      className={`w-full flex items-center gap-3 px-3 py-3 rounded-lg font-medium text-sm transition-colors ${
-                        expanded ? 'justify-between' : 'justify-center'
-                      } ${
+                      onClick={() => toggleSubmenu(module.id)}
+                      className={`w-full flex items-center justify-between gap-3 px-3 py-3 rounded-lg font-medium text-sm transition-colors ${
                         moduleActive
                           ? 'bg-orange-50 text-orange-700'
                           : 'text-gray-700 hover:bg-gray-50'
@@ -489,14 +474,14 @@ export const AdminLayout = ({ children }: AdminLayoutProps) => {
                     >
                       <div className="flex items-center gap-3">
                         <Icon className={`w-5 h-5 flex-shrink-0 ${moduleActive ? 'text-orange-600' : 'text-gray-500'}`} />
-                        <span className={`whitespace-nowrap ${expanded ? 'inline' : 'hidden'}`}>{module.label}</span>
+                        <span className="whitespace-nowrap">{module.label}</span>
                       </div>
                       <ChevronRight
-                        className={`w-4 h-4 transition-transform ${expanded ? 'block' : 'hidden'} ${openSubmenus[module.id] ? 'rotate-90' : ''}`}
+                        className={`w-4 h-4 transition-transform ${openSubmenus[module.id] ? 'rotate-90' : ''}`}
                       />
                     </button>
 
-                    {expanded && openSubmenus[module.id] && (
+                    {openSubmenus[module.id] && (
                       <div className="ml-4 mt-1 space-y-1 border-l-2 border-gray-100 pl-2">
                         {module.submenu.map((subItem) => {
                           const subActive = isActive(subItem.path);
