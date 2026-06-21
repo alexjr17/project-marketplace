@@ -434,7 +434,7 @@ export const AdminLayout = ({ children }: AdminLayoutProps) => {
             </div>
           )}
 
-          <nav className="flex-1 p-4 space-y-1 bg-white overflow-y-auto">
+          <nav className="flex-1 px-2 py-3 space-y-1 bg-white overflow-y-auto overflow-x-hidden">
               {/* Menús simples sin submenú */}
               {visibleMenuItems.map((item) => {
                 const Icon = item.icon;
@@ -444,7 +444,7 @@ export const AdminLayout = ({ children }: AdminLayoutProps) => {
                   <Link
                     key={item.path}
                     to={item.path}
-                    className={`flex items-center gap-3 px-4 py-3 rounded-lg font-medium text-sm transition-colors ${
+                    className={`flex items-center gap-3 px-3 py-3 rounded-lg font-medium text-sm transition-colors lg:justify-center lg:group-hover:justify-start ${
                       active
                         ? 'bg-orange-50 text-orange-700'
                         : 'text-gray-700 hover:bg-gray-50'
@@ -468,7 +468,7 @@ export const AdminLayout = ({ children }: AdminLayoutProps) => {
                   <div key={module.id}>
                     <button
                       onClick={() => toggleSubmenu(module.id)}
-                      className={`w-full flex items-center justify-between gap-3 px-4 py-3 rounded-lg font-medium text-sm transition-colors ${
+                      className={`w-full flex items-center justify-between gap-3 px-3 py-3 rounded-lg font-medium text-sm transition-colors lg:justify-center lg:group-hover:justify-between ${
                         moduleActive
                           ? 'bg-orange-50 text-orange-700'
                           : 'text-gray-700 hover:bg-gray-50'
