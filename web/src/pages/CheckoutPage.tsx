@@ -1013,7 +1013,7 @@ export const CheckoutPage = () => {
                   } else {
                     const standardItem = item as import('../types/cart').CartItem;
                     name = standardItem.product.name;
-                    image = standardItem.product.images.front;
+                    image = standardItem.product.colors?.find((c) => c.hexCode === standardItem.selectedColor)?.image || standardItem.product.images.front;
                     colorHex = standardItem.selectedColor;
                     // Buscar nombre del color en el producto
                     const colorObj = standardItem.product.colors.find(c => c.hexCode === standardItem.selectedColor);

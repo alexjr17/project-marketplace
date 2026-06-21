@@ -90,6 +90,15 @@ class CartController extends Controller
                         'salePrice' => $sale,
                         'hasDiscount' => $sale < (float) $v->product->basePrice,
                     ];
+                    // Imagen por color: si la variante tiene color con imagen, úsala.
+                    if ($v->colorId) {
+                        $pc = \App\Models\ProductColor::where('productId', $v->product->id)
+                            ->where('colorId', $v->colorId)->first();
+                        $colorImg = $pc ? \App\Support\ImageUrls::forColor($pc->image, $pc->id, $v->product->updatedAt) : null;
+                        if ($colorImg) {
+                            $product['images']['front'] = $colorImg;
+                        }
+                    }
                     $variant = [
                         'id' => $v->id,
                         'colorName' => $v->color?->name ?? '',

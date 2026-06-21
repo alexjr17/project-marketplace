@@ -116,7 +116,7 @@ export const CartItem = ({ item, onUpdateQuantity, onRemove, onStockChange }: Ca
             isOutOfStock ? 'opacity-50' : ''
           }`}>
             <img
-              src={item.product.images.front}
+              src={item.product.colors?.find((c) => c.hexCode === item.selectedColor)?.image || item.product.images.front}
               alt={item.product.name}
               loading="lazy"
               decoding="async"

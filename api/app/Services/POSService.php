@@ -185,12 +185,22 @@ class POSService
         $amount = $best ? $best['amount'] : 0.0;
         $finalPrice = max(0.0, $base - $amount);
 
+        // Imagen por color de la variante (si existe); si no, la del producto.
+        $image = $this->firstImage($product->images);
+        if ($v->colorId) {
+            $pc = \App\Models\ProductColor::where('productId', $product->id)->where('colorId', $v->colorId)->first();
+            $colorImg = $pc ? \App\Support\ImageUrls::forColor($pc->image, $pc->id, $product->updatedAt) : null;
+            if ($colorImg) {
+                $image = $colorImg;
+            }
+        }
+
         return [
             'type' => 'product',
             'variantId' => $v->id,
             'productId' => $product->id,
             'name' => $product->name,
-            'image' => $this->firstImage($product->images),
+            'image' => $image,
             'color' => $v->color?->name ?? 'N/A',
             'size' => $v->size?->abbreviation ?? $v->size?->name ?? 'N/A',
             'sku' => $v->sku ?? $product->sku,
