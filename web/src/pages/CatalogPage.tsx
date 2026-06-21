@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
-import { Search, ArrowLeft } from 'lucide-react';
+import { Search } from 'lucide-react';
+import { PageHeader } from '../components/shared/PageHeader';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useProducts } from '../context/ProductsContext';
 import { useSettings } from '../context/SettingsContext';
@@ -114,24 +115,12 @@ export const CatalogPage = () => {
     <div className="min-h-screen bg-gray-50">
       <Seo title="Catálogo" description="Explora todos nuestros productos y personalízalos a tu gusto." />
       {/* Header */}
-      <div className="text-white py-6 shadow-lg" style={{ background: gradientStyle }}>
-        <div className="max-w-7xl mx-auto px-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <button
-                onClick={() => navigate('/')}
-                className="hover:bg-white/10 p-2 rounded-lg transition-colors"
-              >
-                <ArrowLeft className="w-6 h-6" />
-              </button>
-              <div>
-                <h1 className="text-2xl md:text-3xl font-bold">Catálogo de Productos</h1>
-                <p className="text-sm text-white/90">Explora nuestra colección completa de productos personalizables</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+      <PageHeader
+        title="Catálogo de Productos"
+        subtitle="Explora nuestra colección completa de productos personalizables"
+        backLabel="Inicio"
+        backTo="/"
+      />
 
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 py-8">

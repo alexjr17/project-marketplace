@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { ShoppingCart, ArrowLeft, Loader2, Package, Eye, EyeOff, Download, Move } from 'lucide-react';
+import { ShoppingCart, Loader2, Package, Eye, EyeOff, Download, Move } from 'lucide-react';
+import { PageHeader } from '../components/shared/PageHeader';
 import { canvasService } from '../services/canvas.service';
 import { templatesService, type Template, type DesignZone } from '../services/templates.service';
 import { templateZonesService, type TemplateZone } from '../services/template-zones.service';
@@ -1437,26 +1438,12 @@ export const CustomizerPage = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <div className="text-white py-6 shadow-lg" style={{ background: gradientStyle }}>
-        <div className="max-w-7xl mx-auto px-4">
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => navigate(isEditMode ? '/cart' : '/catalog')}
-              className="hover:bg-white/10 p-2 rounded-lg transition-colors"
-            >
-              <ArrowLeft className="w-6 h-6" />
-            </button>
-            <div>
-              <h1 className="text-2xl md:text-3xl font-bold">
-                {isEditMode ? 'Editar Diseño' : 'Personalizador'}
-              </h1>
-              <p className="text-sm text-white/90">
-                {isEditMode ? 'Modifica tu diseño' : 'Crea tu diseño único'}
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
+      <PageHeader
+        title={isEditMode ? 'Editar Diseño' : 'Personalizador'}
+        subtitle={isEditMode ? 'Modifica tu diseño' : 'Crea tu diseño único'}
+        backLabel={isEditMode ? 'Carrito' : 'Catálogo'}
+        onBack={() => navigate(isEditMode ? '/cart' : '/catalog')}
+      />
 
       <div className="max-w-7xl mx-auto px-4 py-4 lg:py-8">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6">
