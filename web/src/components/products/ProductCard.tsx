@@ -50,13 +50,6 @@ export const ProductCard = ({ product, priority = false }: ProductCardProps) => 
             DESTACADO
           </span>
         )}
-        {product.hasDiscount && (
-          <span className="absolute top-9 left-2 bg-emerald-600 text-white text-[10px] font-bold px-2 py-0.5 rounded">
-            {product.discountType === 'percent' && product.discountValue
-              ? `-${Math.round(product.discountValue)}%`
-              : 'OFERTA'}
-          </span>
-        )}
         {/* Disponibilidad (un solo lugar: sobre la imagen) */}
         {(product.stock ?? 0) > 0 ? (
           <span className="absolute top-2 right-2 bg-green-600 text-white text-[10px] font-bold px-2 py-0.5 rounded">
@@ -137,9 +130,14 @@ export const ProductCard = ({ product, priority = false }: ProductCardProps) => 
 
         {/* Precio (con oferta si aplica) */}
         {product.hasDiscount && product.salePrice != null ? (
-          <div className="flex items-baseline gap-2 mt-1">
+          <div className="flex items-baseline gap-2 mt-1 flex-wrap">
             <span className="text-base font-bold text-emerald-600">{format(product.salePrice)}</span>
             <span className="text-xs text-gray-400 line-through">{format(product.basePrice)}</span>
+            <span className="bg-emerald-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded">
+              {product.discountType === 'percent' && product.discountValue
+                ? `-${Math.round(product.discountValue)}%`
+                : 'OFERTA'}
+            </span>
           </div>
         ) : (
           <span className="text-base font-bold text-gray-900 mt-1">
