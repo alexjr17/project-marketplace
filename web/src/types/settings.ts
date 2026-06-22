@@ -219,19 +219,27 @@ export interface CarrierConnectionPreset {
  */
 export const CARRIER_CONNECTION_PRESETS: CarrierConnectionPreset[] = [
   {
-    id: 'custom',
-    label: 'No aplica',
-    description: 'Sin plantilla — configura la conexión manualmente.',
+    id: 'carrier',
+    label: 'Transportadora (API propia)',
+    description:
+      'Conexión directa a la API de la propia transportadora (Servientrega, TCC, Coordinadora, Interrapidísimo, etc.). Ajusta la URL, las credenciales y los nombres de los campos con SU documentación.',
     config: {
-      quoteUrl: '',
+      quoteUrl: 'https://api.transportadora.com/cotizar',
       method: 'POST',
       auth: { type: 'apiKey', keyLocation: 'header', keyName: 'Authorization', keyValue: '' },
-      headers: {},
+      headers: { 'Content-Type': 'application/json' },
       requestTemplate: `{
-  "origen": "{{origin.city}}",
-  "destino": "{{destination.city}}",
+  "origen": {
+    "ciudad": "{{origin.city}}",
+    "codigoDane": "{{origin.dane}}"
+  },
+  "destino": {
+    "ciudad": "{{destination.city}}",
+    "codigoDane": "{{destination.dane}}"
+  },
   "peso": "{{weight}}",
-  "valorDeclarado": "{{declaredValue}}"
+  "valorDeclarado": "{{declaredValue}}",
+  "dimensiones": { "largo": "{{length}}", "ancho": "{{width}}", "alto": "{{height}}" }
 }`,
       responseMapping: { costPath: 'data.valor', daysPath: 'data.dias', errorPath: 'message' },
       timeoutMs: 8000,

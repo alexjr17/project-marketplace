@@ -120,6 +120,8 @@ export const SettingsShippingPage = () => {
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncProposal, setSyncProposal] = useState<SyncRatesResult | null>(null);
   const [connApiCarrierCode, setConnApiCarrierCode] = useState('');
+  // Plantilla base seleccionada: SIEMPRE una de las dos ('carrier' | 'envia').
+  const [connApiPreset, setConnApiPreset] = useState<string>('carrier');
 
   // Zone handlers
   const handleOpenZoneModal = (zone?: ShippingZone) => {
@@ -277,6 +279,10 @@ export const SettingsShippingPage = () => {
     setConnType(carrier.integrationType ?? 'table');
     setConnApi(carrier.apiConfig ?? blankApiConfig());
     setConnApiCarrierCode(carrier.apiCarrierCode ?? '');
+    // Detecta qué plantilla está aplicada (Envía vs API propia) por la URL.
+    setConnApiPreset(
+      (carrier.apiConfig?.quoteUrl || '').includes('envia.com') ? 'envia' : 'carrier'
+    );
   };
 
   // Al entrar a Conexiones, preselecciona la transportadora predeterminada.
@@ -652,7 +658,19 @@ export const SettingsShippingPage = () => {
                     </button>
                     <button
                       type="button"
-                      onClick={() => setConnType('api')}
+                      onClick={() => {
+                        setConnType('api');
+                        // Si aún no hay una URL configurada, parte de una plantilla
+                        // base (debe ser una de las dos: transportadora o Envía).
+                        if (!connApi.quoteUrl) {
+                          const preset = CARRIER_CONNECTION_PRESETS.find((p) => p.id === connApiPreset)
+                            ?? CARRIER_CONNECTION_PRESETS[0];
+                          const next: CarrierApiConfig = JSON.parse(JSON.stringify(preset.config));
+                          if (connApi.auth?.keyValue || connApi.auth?.password) next.auth = connApi.auth;
+                          setConnApiPreset(preset.id);
+                          setConnApi(next);
+                        }
+                      }}
                       className={`flex-1 p-3 rounded-lg border-2 text-left transition-colors ${
                         connType === 'api'
                           ? 'border-orange-400 bg-orange-50'
@@ -679,10 +697,11 @@ export const SettingsShippingPage = () => {
                         Plantilla de conexión
                       </label>
                       <select
-                        value=""
+                        value={connApiPreset}
                         onChange={(e) => {
                           const preset = CARRIER_CONNECTION_PRESETS.find((p) => p.id === e.target.value);
                           if (preset) {
+                            setConnApiPreset(preset.id);
                             const next: CarrierApiConfig = JSON.parse(JSON.stringify(preset.config));
                             // Conservar la credencial ya escrita: aplicar una
                             // plantilla no debe borrar el token del usuario.
@@ -695,7 +714,6 @@ export const SettingsShippingPage = () => {
                         }}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500"
                       >
-                        <option value="">Aplicar una plantilla base…</option>
                         {CARRIER_CONNECTION_PRESETS.map((p) => (
                           <option key={p.id} value={p.id}>
                             {p.label}
@@ -703,8 +721,8 @@ export const SettingsShippingPage = () => {
                         ))}
                       </select>
                       <p className="text-xs text-gray-500 mt-1">
-                        Rellena la estructura típica. Debes ajustar la URL, las credenciales y los
-                        nombres de los campos con la documentación del proveedor.
+                        {CARRIER_CONNECTION_PRESETS.find((p) => p.id === connApiPreset)?.description ||
+                          'Rellena la estructura típica. Debes ajustar la URL, las credenciales y los nombres de los campos con la documentación del proveedor.'}
                       </p>
                     </div>
 
