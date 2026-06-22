@@ -17,6 +17,9 @@ import {
   Edit3,
   Home,
   Ticket,
+  Smartphone,
+  Wallet,
+  Upload,
 } from 'lucide-react';
 import { useCart } from '../context/CartContext';
 import { useOrders } from '../context/OrdersContext';
@@ -32,6 +35,7 @@ import { quoteShipping } from '../utils/shippingQuote';
 import { validateCoupon, type CouponResult } from '../services/discounts.service';
 import { CitySelect } from '../components/shared/CitySelect';
 import { PageHeader } from '../components/shared/PageHeader';
+import paymentsService from '../services/payments.service';
 
 interface FormData {
   customerName: string;
@@ -55,7 +59,7 @@ export const CheckoutPage = () => {
   const navigate = useNavigate();
   const { cart, clearCart } = useCart();
   const { createOrder, changeOrderStatus } = useOrders();
-  const { createPayment } = usePayments();
+  const { createPayment, updateMyPayment } = usePayments();
   const { settings } = useSettings();
   const { showToast } = useToast();
   const { user } = useAuth();
@@ -75,6 +79,9 @@ export const CheckoutPage = () => {
   const [step, setStep] = useState<'info' | 'payment'>('info');
   const [paymentReference, setPaymentReference] = useState('');
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string>('');
+  // Comprobante de pago (dataURL) para métodos manuales con verificación.
+  const [proofImage, setProofImage] = useState<string | null>(null);
+  const [proofName, setProofName] = useState<string>('');
 
   // Direcciones guardadas del usuario. selectedAddressId = 'new' para escribir una nueva.
   const [savedAddresses, setSavedAddresses] = useState<Address[]>([]);
@@ -234,10 +241,65 @@ export const CheckoutPage = () => {
         return <Banknote className="w-5 h-5" />;
       case 'pickup':
         return <Store className="w-5 h-5" />;
+      case 'nequi':
+        return <Smartphone className="w-5 h-5" />;
+      case 'mercadopago':
+        return <Wallet className="w-5 h-5" />;
       default:
         return <CreditCard className="w-5 h-5" />;
     }
   };
+
+  // Lee un archivo de imagen y lo guarda como dataURL para el comprobante.
+  const handleProofFile = (file?: File | null) => {
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      showToast('La imagen del comprobante no debe superar 5 MB', 'error');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      setProofImage(typeof reader.result === 'string' ? reader.result : null);
+      setProofName(file.name);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // Uploader de comprobante para métodos manuales (cuando requireProof está activo).
+  const renderProofUploader = () => (
+    <div className="mb-4">
+      <label className="block text-sm font-medium text-gray-700 mb-2">
+        Comprobante de pago <span className="text-gray-400">(opcional)</span>
+      </label>
+      {proofImage ? (
+        <div className="flex items-center gap-3 p-3 border border-gray-200 rounded-lg">
+          <img src={proofImage} alt="Comprobante" className="w-14 h-14 object-cover rounded-md border" />
+          <span className="text-sm text-gray-600 truncate flex-1">{proofName || 'Comprobante adjunto'}</span>
+          <button
+            type="button"
+            onClick={() => { setProofImage(null); setProofName(''); }}
+            className="text-sm text-red-600 hover:text-red-700 font-medium"
+          >
+            Quitar
+          </button>
+        </div>
+      ) : (
+        <label className="flex flex-col items-center justify-center gap-2 p-4 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-gray-400 hover:bg-gray-50 transition-colors">
+          <Upload className="w-5 h-5 text-gray-400" />
+          <span className="text-sm text-gray-500">Sube la captura de tu transferencia / pago</span>
+          <input
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => handleProofFile(e.target.files?.[0])}
+          />
+        </label>
+      )}
+      <p className="text-xs text-gray-400 mt-1">
+        Verificaremos tu pago antes de procesar el pedido.
+      </p>
+    </div>
+  );
 
   const validateForm = (): boolean => {
     const newErrors: FormErrors = {};
@@ -406,7 +468,7 @@ export const CheckoutPage = () => {
       const order = await createOrderFromCart('pending');
 
       // Crear registro de pago PENDIENTE para verificación manual
-      await createPayment({
+      const payment = await createPayment({
         orderId: Number(order.id),
         transactionId: paymentReference, // Usar referencia generada
         paymentMethod: selectedMethod?.type || 'transfer',
@@ -417,9 +479,23 @@ export const CheckoutPage = () => {
         payerPhone: formData.customerPhone,
       });
 
+      // Adjuntar el comprobante si el cliente subió uno.
+      if (proofImage && payment?.id) {
+        try {
+          await updateMyPayment(payment.id, { receiptData: proofImage });
+        } catch {
+          // No bloquea el pedido: el cliente puede subirlo luego desde "Mis pedidos".
+        }
+      }
+
       clearCart();
 
-      showToast('¡Pedido creado! Te contactaremos pronto.', 'success');
+      showToast(
+        proofImage
+          ? '¡Pedido creado! Verificaremos tu comprobante pronto.'
+          : '¡Pedido creado! Te contactaremos pronto.',
+        'success'
+      );
 
       // Redirigir a mis pedidos
       navigate('/my-orders');
@@ -427,6 +503,44 @@ export const CheckoutPage = () => {
       const errorMessage = error?.response?.data?.message || error?.message || 'Error al procesar el pedido. Intenta de nuevo.';
       showToast(errorMessage, 'error');
     } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Handler para Mercado Pago (Checkout Pro): crea el pedido, registra el pago
+  // pendiente y redirige a la pasarela para pagar.
+  const handleMercadoPago = async () => {
+    if (!validateForm()) {
+      showToast('Por favor completa todos los campos requeridos', 'error');
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      const order = await createOrderFromCart('pending');
+
+      await createPayment({
+        orderId: Number(order.id),
+        paymentMethod: 'mercadopago',
+        amount: orderTotal,
+        currency: settings.general.currency || 'COP',
+        payerName: formData.customerName,
+        payerEmail: formData.customerEmail,
+        payerPhone: formData.customerPhone,
+      });
+
+      const pref = await paymentsService.createMercadoPagoPreference(Number(order.id));
+      if (!pref.initPoint) {
+        throw new Error('No se obtuvo la URL de pago de Mercado Pago');
+      }
+
+      clearCart();
+      // Redirige a la pasarela de Mercado Pago.
+      window.location.href = pref.initPoint;
+    } catch (error: any) {
+      const errorMessage = error?.response?.data?.message || error?.message || 'No se pudo iniciar el pago con Mercado Pago.';
+      showToast(errorMessage, 'error');
       setIsSubmitting(false);
     }
   };
@@ -829,6 +943,7 @@ export const CheckoutPage = () => {
                             <p className="text-sm text-yellow-700">{selectedMethod.instructions}</p>
                           </div>
                         )}
+                        {selectedMethod.requireProof && renderProofUploader()}
                         <button
                           onClick={handleManualPayment}
                           disabled={isSubmitting}
@@ -842,6 +957,78 @@ export const CheckoutPage = () => {
                           )}
                           Confirmar Pedido - {formatCurrency(orderTotal)}
                         </button>
+                      </div>
+                    )}
+
+                    {/* Nequi */}
+                    {selectedMethod?.type === 'nequi' && (
+                      <div className="border-t pt-6">
+                        <div className="mb-4 p-4 bg-fuchsia-50 border border-fuchsia-100 rounded-lg">
+                          <p className="text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
+                            <Smartphone className="w-4 h-4 text-fuchsia-600" />
+                            Paga con Nequi a:
+                          </p>
+                          <div className="text-sm text-gray-600 space-y-1">
+                            <p className="text-lg font-bold text-fuchsia-700">
+                              {selectedMethod.nequiConfig?.phone || '—'}
+                            </p>
+                            {selectedMethod.nequiConfig?.accountHolder && (
+                              <p><span className="font-medium">Titular:</span> {selectedMethod.nequiConfig.accountHolder}</p>
+                            )}
+                          </div>
+                          {selectedMethod.nequiConfig?.qrImage && (
+                            <img
+                              src={selectedMethod.nequiConfig.qrImage}
+                              alt="QR Nequi"
+                              className="mt-3 w-40 h-40 object-contain rounded-lg border border-fuchsia-200 bg-white"
+                            />
+                          )}
+                        </div>
+                        {selectedMethod.instructions && (
+                          <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                            <p className="text-sm text-yellow-700">{selectedMethod.instructions}</p>
+                          </div>
+                        )}
+                        {selectedMethod.requireProof && renderProofUploader()}
+                        <button
+                          onClick={handleManualPayment}
+                          disabled={isSubmitting}
+                          style={{ background: gradientStyle }}
+                          className="w-full flex items-center justify-center gap-2 text-white font-semibold py-3 px-6 rounded-lg hover:opacity-90 transition-all shadow-md hover:shadow-lg disabled:opacity-50"
+                        >
+                          {isSubmitting ? (
+                            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                          ) : (
+                            <CheckCircle2 className="w-5 h-5" />
+                          )}
+                          Confirmar Pedido - {formatCurrency(orderTotal)}
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Mercado Pago (Checkout Pro) */}
+                    {selectedMethod?.type === 'mercadopago' && (
+                      <div className="border-t pt-6">
+                        {selectedMethod.instructions && (
+                          <div className="mb-4 p-3 bg-sky-50 border border-sky-200 rounded-lg">
+                            <p className="text-sm text-sky-700">{selectedMethod.instructions}</p>
+                          </div>
+                        )}
+                        <button
+                          onClick={handleMercadoPago}
+                          disabled={isSubmitting}
+                          className="w-full flex items-center justify-center gap-2 text-white font-semibold py-3 px-6 rounded-lg transition-all shadow-md hover:shadow-lg disabled:opacity-50 bg-[#009ee3] hover:bg-[#008fcc]"
+                        >
+                          {isSubmitting ? (
+                            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                          ) : (
+                            <Wallet className="w-5 h-5" />
+                          )}
+                          Pagar con Mercado Pago - {formatCurrency(orderTotal)}
+                        </button>
+                        <p className="text-xs text-gray-500 text-center mt-3">
+                          Serás redirigido a Mercado Pago para completar el pago de forma segura.
+                        </p>
                       </div>
                     )}
 
@@ -927,6 +1114,7 @@ export const CheckoutPage = () => {
                             <p className="text-sm text-blue-700">{selectedMethod.instructions}</p>
                           </div>
                         )}
+                        {selectedMethod.requireProof && renderProofUploader()}
                         <button
                           onClick={handleManualPayment}
                           disabled={isSubmitting}

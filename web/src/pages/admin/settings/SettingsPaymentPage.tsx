@@ -4,7 +4,7 @@ import { useToast } from '../../../context/ToastContext';
 import { Button } from '../../../components/shared/Button';
 import { Input } from '../../../components/shared/Input';
 import { Modal } from '../../../components/shared/Modal';
-import type { PaymentMethodConfig, WompiConfig, PickupConfig } from '../../../types/settings';
+import type { PaymentMethodConfig, WompiConfig, PickupConfig, NequiConfig, MercadoPagoConfig } from '../../../types/settings';
 import { PAYMENT_TYPE_LABELS } from '../../../types/settings';
 import {
   CreditCard,
@@ -19,6 +19,9 @@ import {
   Eye,
   EyeOff,
   Store,
+  Smartphone,
+  Wallet,
+  Copy,
 } from 'lucide-react';
 
 export const SettingsPaymentPage = () => {
@@ -61,7 +64,27 @@ export const SettingsPaymentPage = () => {
     mapUrl: '',
     additionalInfo: '',
   });
+  const [nequiForm, setNequiForm] = useState<NequiConfig>({
+    phone: '',
+    accountHolder: '',
+  });
+  const [mpForm, setMpForm] = useState<MercadoPagoConfig>({
+    publicKey: '',
+    accessToken: '',
+    isTestMode: true,
+  });
   const [showSecrets, setShowSecrets] = useState(false);
+
+  // URL base de la API (para mostrar las URLs de webhook que el comercio debe
+  // registrar en el panel de Wompi / Mercado Pago).
+  const apiBase = (import.meta.env.VITE_API_URL || 'http://localhost:8000/api').replace(/\/$/, '');
+  const wompiWebhookUrl = `${apiBase}/webhooks/wompi`;
+  const mpWebhookUrl = `${apiBase}/webhooks/mercadopago`;
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    toast.success('URL copiada');
+  };
 
   const handleUpdateTax = (updates: { taxEnabled?: boolean; taxRate?: number; taxIncluded?: boolean }) => {
     updatePaymentSettings({
@@ -81,9 +104,22 @@ export const SettingsPaymentPage = () => {
         description: method.description || '',
         instructions: method.instructions || '',
         isActive: method.isActive,
+        requireProof: method.requireProof ?? false,
         bankInfo: method.bankInfo,
         wompiConfig: method.wompiConfig,
         pickupConfig: method.pickupConfig,
+        nequiConfig: method.nequiConfig,
+        mercadoPagoConfig: method.mercadoPagoConfig,
+      });
+      setNequiForm({
+        phone: method.nequiConfig?.phone || '',
+        accountHolder: method.nequiConfig?.accountHolder || '',
+        qrImage: method.nequiConfig?.qrImage,
+      });
+      setMpForm({
+        publicKey: method.mercadoPagoConfig?.publicKey || '',
+        accessToken: method.mercadoPagoConfig?.accessToken || '',
+        isTestMode: method.mercadoPagoConfig?.isTestMode ?? true,
       });
       if (method.wompiConfig) {
         setWompiForm({
@@ -133,6 +169,7 @@ export const SettingsPaymentPage = () => {
         description: '',
         instructions: '',
         isActive: true,
+        requireProof: true,
       });
       setWompiForm({
         publicKey: '',
@@ -141,6 +178,8 @@ export const SettingsPaymentPage = () => {
         eventSecret: '',
         isTestMode: true,
       });
+      setNequiForm({ phone: '', accountHolder: '' });
+      setMpForm({ publicKey: '', accessToken: '', isTestMode: true });
       setPickupForm({
         storeName: '',
         address: '',
@@ -179,6 +218,22 @@ export const SettingsPaymentPage = () => {
         phone: pickupForm.phone || undefined,
         mapUrl: pickupForm.mapUrl || undefined,
         additionalInfo: pickupForm.additionalInfo || undefined,
+      };
+    }
+
+    if (paymentForm.type === 'nequi') {
+      dataToSave.nequiConfig = {
+        phone: nequiForm.phone,
+        accountHolder: nequiForm.accountHolder || undefined,
+        qrImage: nequiForm.qrImage || undefined,
+      };
+    }
+
+    if (paymentForm.type === 'mercadopago') {
+      dataToSave.mercadoPagoConfig = {
+        publicKey: mpForm.publicKey,
+        accessToken: mpForm.accessToken || undefined,
+        isTestMode: mpForm.isTestMode,
       };
     }
 
@@ -355,6 +410,36 @@ export const SettingsPaymentPage = () => {
                           </p>
                         </div>
                       )}
+                      {method.type === 'nequi' && method.nequiConfig && (
+                        <div className="mt-2 text-xs bg-fuchsia-50 p-2 rounded">
+                          <div className="flex items-center gap-2">
+                            <Smartphone className="w-3 h-3 text-fuchsia-600" />
+                            <span className="font-medium text-fuchsia-700">
+                              {method.nequiConfig.phone}
+                            </span>
+                          </div>
+                          {method.nequiConfig.accountHolder && (
+                            <p className="text-gray-500 mt-1">
+                              <strong>Titular:</strong> {method.nequiConfig.accountHolder}
+                            </p>
+                          )}
+                        </div>
+                      )}
+                      {method.type === 'mercadopago' && method.mercadoPagoConfig && (
+                        <div className="mt-2 text-xs bg-sky-50 p-2 rounded">
+                          <div className="flex items-center gap-2">
+                            <Wallet className="w-3 h-3 text-sky-600" />
+                            <span className={`font-medium ${method.mercadoPagoConfig.isTestMode ? 'text-yellow-700' : 'text-green-700'}`}>
+                              {method.mercadoPagoConfig.isTestMode ? 'Modo Prueba' : 'Modo Producción'}
+                            </span>
+                          </div>
+                          {method.mercadoPagoConfig.publicKey && (
+                            <p className="text-gray-500 mt-1">
+                              <strong>Public Key:</strong> {method.mercadoPagoConfig.publicKey.slice(0, 20)}...
+                            </p>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
@@ -501,6 +586,30 @@ export const SettingsPaymentPage = () => {
                   {wompiForm.isTestMode
                     ? 'Debe empezar con "pub_test_"'
                     : 'Debe empezar con "pub_prod_"'}
+                </p>
+              </div>
+
+              {/* URL del webhook (eventos) que se registra en el panel de Wompi */}
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">
+                  URL de eventos (Webhook)
+                </label>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 text-xs bg-white border border-purple-200 rounded-lg px-3 py-2 text-gray-700 break-all">
+                    {wompiWebhookUrl}
+                  </code>
+                  <button
+                    type="button"
+                    onClick={() => copyToClipboard(wompiWebhookUrl)}
+                    className="p-2 text-purple-600 hover:bg-purple-100 rounded-lg"
+                    title="Copiar URL"
+                  >
+                    <Copy className="w-4 h-4" />
+                  </button>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  Pégala en Wompi → <strong>Desarrolladores → Eventos / URL de eventos</strong>. Con
+                  ella confirmamos automáticamente los pagos aprobados.
                 </p>
               </div>
 
@@ -735,6 +844,182 @@ export const SettingsPaymentPage = () => {
                 </div>
               </div>
             </div>
+          )}
+
+          {/* Nequi */}
+          {paymentForm.type === 'nequi' && (
+            <div className="bg-fuchsia-50 rounded-lg p-4 space-y-4">
+              <h4 className="font-medium text-gray-900 flex items-center gap-2">
+                <Smartphone className="w-4 h-4 text-fuchsia-600" />
+                Configuración de Nequi
+              </h4>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">
+                    Número Nequi *
+                  </label>
+                  <Input
+                    value={nequiForm.phone}
+                    onChange={(e) => setNequiForm({ ...nequiForm, phone: e.target.value })}
+                    placeholder="300 123 4567"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">
+                    Titular de la cuenta
+                  </label>
+                  <Input
+                    value={nequiForm.accountHolder || ''}
+                    onChange={(e) => setNequiForm({ ...nequiForm, accountHolder: e.target.value })}
+                    placeholder="Nombre del titular"
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-fuchsia-700">
+                El cliente paga a este número y adjunta el comprobante. El pedido queda pendiente
+                de verificación hasta que lo apruebes.
+              </p>
+            </div>
+          )}
+
+          {/* Mercado Pago */}
+          {paymentForm.type === 'mercadopago' && (
+            <div className="bg-sky-50 rounded-lg p-4 space-y-4">
+              <div className="flex items-center justify-between">
+                <h4 className="font-medium text-gray-900 flex items-center gap-2">
+                  <Wallet className="w-4 h-4 text-sky-600" />
+                  Configuración de Mercado Pago
+                </h4>
+                <a
+                  href="https://www.mercadopago.com.co/developers/panel/app"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs text-sky-600 hover:underline"
+                >
+                  Panel de desarrolladores →
+                </a>
+              </div>
+
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 text-yellow-600 mt-0.5 flex-shrink-0" />
+                <div className="text-xs text-yellow-700">
+                  <p className="font-medium">Obtén tus credenciales en Mercado Pago</p>
+                  <p className="mt-1">
+                    1. Entra a <strong>mercadopago.com.co/developers</strong><br />
+                    2. Crea una aplicación → <strong>Credenciales</strong><br />
+                    3. Copia la <strong>Public Key</strong> y el <strong>Access Token</strong>
+                    (de prueba o producción)
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-4">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="mpMode"
+                    checked={mpForm.isTestMode}
+                    onChange={() => setMpForm({ ...mpForm, isTestMode: true })}
+                    className="w-4 h-4 text-sky-600"
+                  />
+                  <span className="text-sm text-gray-700">Modo Prueba</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="mpMode"
+                    checked={!mpForm.isTestMode}
+                    onChange={() => setMpForm({ ...mpForm, isTestMode: false })}
+                    className="w-4 h-4 text-sky-600"
+                  />
+                  <span className="text-sm text-gray-700">Producción</span>
+                </label>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">
+                  Public Key *
+                </label>
+                <Input
+                  value={mpForm.publicKey}
+                  onChange={(e) => setMpForm({ ...mpForm, publicKey: e.target.value })}
+                  placeholder={mpForm.isTestMode ? 'TEST-...' : 'APP_USR-...'}
+                />
+              </div>
+
+              {/* URL del webhook (notificaciones) para el panel de Mercado Pago */}
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">
+                  URL de notificaciones (Webhook)
+                </label>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 text-xs bg-white border border-sky-200 rounded-lg px-3 py-2 text-gray-700 break-all">
+                    {mpWebhookUrl}
+                  </code>
+                  <button
+                    type="button"
+                    onClick={() => copyToClipboard(mpWebhookUrl)}
+                    className="p-2 text-sky-600 hover:bg-sky-100 rounded-lg"
+                    title="Copiar URL"
+                  >
+                    <Copy className="w-4 h-4" />
+                  </button>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  Pégala en Mercado Pago → <strong>Tu aplicación → Webhooks / Notificaciones</strong>{' '}
+                  (evento <em>Pagos</em>).
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowSecrets(!showSecrets)}
+                className="flex items-center gap-2 text-sm text-sky-600 hover:text-sky-700"
+              >
+                {showSecrets ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                {showSecrets ? 'Ocultar Access Token' : 'Mostrar Access Token'}
+              </button>
+
+              {showSecrets && (
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">
+                    Access Token *
+                  </label>
+                  <Input
+                    type="password"
+                    autoComplete="new-password"
+                    value={mpForm.accessToken || ''}
+                    onChange={(e) => setMpForm({ ...mpForm, accessToken: e.target.value })}
+                    placeholder={mpForm.isTestMode ? 'TEST-...' : 'APP_USR-...'}
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Secreto del servidor. Se usa para crear la preferencia de pago y validar la
+                    confirmación. No se muestra en la tienda.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Comprobante para métodos manuales */}
+          {(paymentForm.type === 'transfer' ||
+            paymentForm.type === 'nequi' ||
+            paymentForm.type === 'pickup') && (
+            <label className="flex items-start gap-2 cursor-pointer bg-gray-50 rounded-lg p-3">
+              <input
+                type="checkbox"
+                checked={paymentForm.requireProof ?? false}
+                onChange={(e) => setPaymentForm({ ...paymentForm, requireProof: e.target.checked })}
+                className="w-4 h-4 mt-0.5 text-orange-600 border-gray-300 rounded focus:ring-orange-500"
+              />
+              <span className="text-sm text-gray-700">
+                Pedir comprobante de pago al cliente
+                <span className="block text-xs text-gray-500">
+                  El cliente puede adjuntar la captura del pago; el pedido queda pendiente de
+                  verificación por el admin.
+                </span>
+              </span>
+            </label>
           )}
 
           <div className="flex gap-3 pt-4">

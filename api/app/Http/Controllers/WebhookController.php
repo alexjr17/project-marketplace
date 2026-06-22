@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Concerns\ApiResponse;
+use App\Services\MercadoPagoService;
 use App\Services\Messaging\Channels\MessengerChannel;
 use App\Services\Messaging\Channels\WhatsAppChannel;
 use App\Services\WompiService;
@@ -16,6 +17,7 @@ class WebhookController extends Controller
 
     public function __construct(
         private WompiService $wompi,
+        private MercadoPagoService $mercadoPago,
         private MessengerChannel $messenger,
         private WhatsAppChannel $whatsapp,
     ) {}
@@ -128,6 +130,43 @@ class WebhookController extends Controller
             // Siempre 200 para que Wompi no reintente.
             return response()->json(['success' => false, 'message' => $e->getMessage()]);
         }
+    }
+
+    /** Webhook de eventos de Mercado Pago (pública). */
+    public function mercadopago(Request $request)
+    {
+        try {
+            // MP puede notificar por body (type/data.id) o por query (topic/id).
+            $payload = $request->all();
+            if (empty($payload['type']) && $request->query('topic')) {
+                $payload = [
+                    'type' => $request->query('topic'),
+                    'data' => ['id' => $request->query('id')],
+                ];
+            }
+
+            $result = $this->mercadoPago->processWebhook($payload);
+
+            // Siempre 200 para que Mercado Pago no reintente indefinidamente.
+            return response()->json(['success' => $result['success'], 'message' => $result['message']]);
+        } catch (Throwable $e) {
+            Log::error('Webhook MercadoPago: '.$e->getMessage());
+
+            return response()->json(['success' => false, 'message' => $e->getMessage()]);
+        }
+    }
+
+    /** Confirma un pago de Mercado Pago por consulta directa (retorno del back_url). */
+    public function confirmMercadoPago(Request $request, string $orderNumber)
+    {
+        $paymentId = (string) ($request->query('payment_id') ?? $request->query('collection_id') ?? '');
+        if ($paymentId === '') {
+            return $this->error('Falta el identificador del pago', 400);
+        }
+
+        $result = $this->mercadoPago->confirmByPaymentId($paymentId, $orderNumber);
+
+        return response()->json($result);
     }
 
     /** Verifica el estado de una transacción directamente con Wompi (admin). */

@@ -280,6 +280,7 @@ Route::prefix('orders')->middleware('auth:sanctum')->group(function () {
 // ==================== PAGOS ====================
 Route::prefix('payments')->middleware('auth:sanctum')->group(function () {
     Route::post('/', [PaymentController::class, 'store']);
+    Route::post('mercadopago/preference', [PaymentController::class, 'mercadopagoPreference']);
     Route::get('order/{orderId}', [PaymentController::class, 'myOrderPayments'])->whereNumber('orderId');
 
     Route::middleware('admin')->group(function () {
@@ -302,6 +303,9 @@ Route::prefix('webhooks')->group(function () {
     Route::post('wompi', [WebhookController::class, 'wompi']);
     Route::get('wompi/verify/{transactionId}', [WebhookController::class, 'verifyWompiTransaction'])
         ->middleware(['auth:sanctum', 'admin']);
+
+    Route::post('mercadopago', [WebhookController::class, 'mercadopago']);
+    Route::get('mercadopago/confirm/{orderNumber}', [WebhookController::class, 'confirmMercadoPago']);
 
     // Meta — Messenger (Instagram comparte el mismo endpoint en futuro).
     Route::get('messenger', [WebhookController::class, 'messengerVerify']);

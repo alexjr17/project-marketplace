@@ -128,6 +128,37 @@ class PaymentsService {
   }
 
   /**
+   * Crear una preferencia de Mercado Pago (Checkout Pro) y obtener la URL de pago.
+   */
+  async createMercadoPagoPreference(
+    orderId: number
+  ): Promise<{ initPoint: string | null; preferenceId: string | null; isTestMode: boolean }> {
+    const response = await api.post<{
+      success: boolean;
+      data: { initPoint: string | null; preferenceId: string | null; isTestMode: boolean };
+    }>('/payments/mercadopago/preference', { orderId });
+    return response.data.data;
+  }
+
+  /**
+   * Confirmar un pago de Mercado Pago al volver del checkout (best-effort).
+   */
+  async confirmMercadoPago(
+    orderNumber: string,
+    paymentId: string
+  ): Promise<{ success: boolean; message: string; status?: string }> {
+    const response = await api.get<{ success: boolean; message: string; status?: string }>(
+      `/webhooks/mercadopago/confirm/${encodeURIComponent(orderNumber)}`,
+      { payment_id: paymentId }
+    );
+    return (response.data ?? { success: false, message: 'Sin respuesta' }) as {
+      success: boolean;
+      message: string;
+      status?: string;
+    };
+  }
+
+  /**
    * Obtener pagos de mi pedido
    */
   async getMyOrderPayments(orderId: number): Promise<Payment[]> {

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Concerns\ApiResponse;
 use App\Models\Order;
 use App\Models\Payment;
+use App\Services\MercadoPagoService;
 use App\Services\PaymentService;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -14,7 +15,31 @@ class PaymentController extends Controller
 {
     use ApiResponse;
 
-    public function __construct(private PaymentService $payments) {}
+    public function __construct(
+        private PaymentService $payments,
+        private MercadoPagoService $mercadoPago,
+    ) {}
+
+    /** Crea una preferencia de Checkout Pro y devuelve la URL de pago. */
+    public function mercadopagoPreference(Request $request)
+    {
+        $data = $request->validate(['orderId' => 'required|integer']);
+
+        $order = Order::find($data['orderId']);
+        if (! $order) {
+            return $this->error('Pedido no encontrado', 404);
+        }
+        if ($order->userId !== null && $order->userId !== $request->user()->id) {
+            return $this->error('Pedido no encontrado', 404);
+        }
+
+        $result = $this->mercadoPago->createPreference($order);
+        if (! ($result['success'] ?? false)) {
+            return $this->error($result['message'] ?? 'No se pudo crear la preferencia', 400);
+        }
+
+        return $this->success($result, 'Preferencia creada');
+    }
 
     private function fail(RuntimeException $e)
     {

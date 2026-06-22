@@ -21,7 +21,7 @@ import { useSettings } from '../context/SettingsContext';
 import { useToast } from '../context/ToastContext';
 import { Button } from '../components/shared/Button';
 import type { Order } from '../types/order';
-import type { Payment } from '../services/payments.service';
+import paymentsService, { type Payment } from '../services/payments.service';
 
 export const OrderConfirmationPage = () => {
   const { orderNumber } = useParams<{ orderNumber: string }>();
@@ -33,19 +33,43 @@ export const OrderConfirmationPage = () => {
   const [order, setOrder] = useState<Order | null>(null);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [uploadingReceipt, setUploadingReceipt] = useState(false);
+  // Estado del retorno de Mercado Pago: 'success' | 'pending' | 'failure'.
+  const [mpReturn, setMpReturn] = useState<string | null>(null);
 
   useEffect(() => {
-    if (orderNumber) {
-      const foundOrder = getOrderByNumber(orderNumber);
+    let cancelled = false;
+
+    (async () => {
+      if (!orderNumber) return;
+
+      // Si volvemos de Mercado Pago, confirma el pago (además del webhook).
+      const params = new URLSearchParams(window.location.search);
+      const paymentFlag = params.get('payment');
+      const mpPaymentId = params.get('payment_id') || params.get('collection_id');
+      if (paymentFlag) setMpReturn(paymentFlag);
+      if (paymentFlag === 'success' && mpPaymentId) {
+        try {
+          await paymentsService.confirmMercadoPago(orderNumber, mpPaymentId);
+        } catch {
+          // El webhook confirmará el pago aunque esta llamada falle.
+        }
+      }
+
+      const foundOrder = await getOrderByNumber(orderNumber);
+      if (cancelled) return;
       if (foundOrder) {
         setOrder(foundOrder);
-        // Cargar pagos del pedido
         loadPayments(Number(foundOrder.id));
       } else {
         navigate('/');
       }
-    }
-  }, [orderNumber, getOrderByNumber, navigate]);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orderNumber]);
 
   const loadPayments = async (orderId: number) => {
     try {
@@ -140,6 +164,18 @@ export const OrderConfirmationPage = () => {
             Hemos recibido tu pedido y te enviaremos actualizaciones por correo
           </p>
         </div>
+
+        {/* Aviso de retorno de Mercado Pago (pendiente/rechazado) */}
+        {mpReturn === 'pending' && (
+          <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 mb-6 text-sm text-yellow-800">
+            Tu pago con Mercado Pago quedó <strong>pendiente</strong>. Te confirmaremos en cuanto se acredite.
+          </div>
+        )}
+        {mpReturn === 'failure' && (
+          <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6 text-sm text-red-700">
+            El pago con Mercado Pago no se completó. Puedes reintentar desde <strong>Mis pedidos</strong>.
+          </div>
+        )}
 
         {/* Order Number */}
         <div className="bg-white rounded-xl shadow-sm p-6 mb-6">

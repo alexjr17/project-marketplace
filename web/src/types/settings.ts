@@ -334,11 +334,13 @@ export interface ShippingSettings {
 
 export interface PaymentMethodConfig {
   id: string;
-  type: 'credit_card' | 'debit_card' | 'pse' | 'cash' | 'transfer' | 'wompi' | 'pickup';
+  type: 'credit_card' | 'debit_card' | 'pse' | 'cash' | 'transfer' | 'wompi' | 'pickup' | 'nequi' | 'mercadopago';
   name: string;
   description?: string;
   instructions?: string;
   isActive: boolean;
+  // Si el cliente puede/debe adjuntar comprobante de pago (transferencia, Nequi, punto físico).
+  requireProof?: boolean;
   bankInfo?: {
     bankName: string;
     accountType: string;
@@ -351,6 +353,24 @@ export interface PaymentMethodConfig {
   wompiConfig?: WompiConfig;
   // Configuración específica de Punto Físico
   pickupConfig?: PickupConfig;
+  // Configuración específica de Nequi (pago manual con comprobante)
+  nequiConfig?: NequiConfig;
+  // Configuración específica de Mercado Pago (Checkout Pro)
+  mercadoPagoConfig?: MercadoPagoConfig;
+}
+
+// Configuración de Nequi: pago a un número con comprobante manual.
+export interface NequiConfig {
+  phone: string;            // número Nequi que recibe el pago
+  accountHolder?: string;   // titular de la cuenta
+  qrImage?: string;         // imagen del QR (dataURL u URL), opcional
+}
+
+// Configuración de Mercado Pago (Checkout Pro).
+export interface MercadoPagoConfig {
+  publicKey: string;        // APP_USR-... o TEST-...
+  accessToken?: string;     // secreto, usado por el backend para crear la preferencia
+  isTestMode: boolean;
 }
 
 // Configuración de punto físico
@@ -697,6 +717,8 @@ export const PAYMENT_TYPE_LABELS: Record<PaymentMethodConfig['type'], string> = 
   transfer: 'Transferencia Bancaria',
   wompi: 'Wompi (Tarjeta, PSE, Nequi)',
   pickup: 'Pago en Punto Físico',
+  nequi: 'Nequi (con comprobante)',
+  mercadopago: 'Mercado Pago',
 };
 
 export const CURRENCY_OPTIONS = [
