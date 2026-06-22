@@ -832,6 +832,8 @@ export const SettingsShippingPage = () => {
                               Credencial
                             </label>
                             <Input
+                              type="password"
+                              autoComplete="new-password"
                               value={connApi.auth.keyValue || ''}
                               onChange={(e) =>
                                 setConnApi({
@@ -851,6 +853,8 @@ export const SettingsShippingPage = () => {
                             Token
                           </label>
                           <Input
+                            type="password"
+                            autoComplete="new-password"
                             value={connApi.auth.keyValue || ''}
                             onChange={(e) =>
                               setConnApi({
