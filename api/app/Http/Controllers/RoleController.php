@@ -19,9 +19,10 @@ class RoleController extends Controller
      * frontend (web/src/types/roles.ts) y con lo que enforce el sidebar/rutas.
      */
     private const AVAILABLE_PERMISSIONS = [
-        'store.access', 'admin.access', 'messaging.access',
+        'store.access', 'admin.access', 'messaging.access', 'manufacturing.access',
         'messaging.inbox', 'messaging.posts', 'messaging.pages',
         'messaging.knowledge', 'messaging.channels',
+        'manufacturing.references.view', 'manufacturing.catalogs.view', 'manufacturing.orders.view',
         'pos.access', 'pos.create_sale', 'pos.view_sales', 'pos.cancel_sale',
         'pos.cash_register', 'pos.open_close_session', 'pos.view_reports',
         'dashboard.view',
@@ -39,7 +40,8 @@ class RoleController extends Controller
     ];
 
     private const PERMISSION_GROUPS = [
-        'apps' => ['store.access', 'pos.access', 'admin.access', 'messaging.access'],
+        'apps' => ['store.access', 'pos.access', 'admin.access', 'messaging.access', 'manufacturing.access'],
+        'manufacturing' => ['manufacturing.references.view', 'manufacturing.orders.view', 'manufacturing.catalogs.view'],
         'messaging' => ['messaging.inbox', 'messaging.posts', 'messaging.pages', 'messaging.knowledge', 'messaging.channels'],
         'pos' => ['pos.create_sale', 'pos.view_sales', 'pos.cancel_sale', 'pos.cash_register', 'pos.open_close_session', 'pos.view_reports'],
         'dashboard' => ['dashboard.view'],

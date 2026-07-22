@@ -684,6 +684,111 @@ Route::prefix('messaging')->middleware(['auth:sanctum', 'admin', 'permission:mes
     });
 });
 
+// ==================== FÁBRICA (manufacturing) ====================
+// App de producción ligera: catálogos (procesos, talleres, bodegas) y
+// referencias con su ficha técnica (colores, tallas y materiales/BOM).
+Route::prefix('manufacturing')->middleware('auth:sanctum')->group(function () {
+    // Catálogos propios de Fábrica (tipos de prenda, colores, tallas, insumos).
+    Route::prefix('garment-types')->middleware('permission:manufacturing.catalogs.view')->group(function () {
+        Route::get('/', [\App\Http\Controllers\MfgGarmentTypeController::class, 'index']);
+        Route::post('/', [\App\Http\Controllers\MfgGarmentTypeController::class, 'store']);
+        Route::put('{id}', [\App\Http\Controllers\MfgGarmentTypeController::class, 'update'])->whereNumber('id');
+        Route::delete('{id}', [\App\Http\Controllers\MfgGarmentTypeController::class, 'destroy'])->whereNumber('id');
+    });
+    Route::prefix('colors')->middleware('permission:manufacturing.catalogs.view')->group(function () {
+        Route::get('/', [\App\Http\Controllers\MfgColorController::class, 'index']);
+        Route::post('/', [\App\Http\Controllers\MfgColorController::class, 'store']);
+        Route::put('{id}', [\App\Http\Controllers\MfgColorController::class, 'update'])->whereNumber('id');
+        Route::delete('{id}', [\App\Http\Controllers\MfgColorController::class, 'destroy'])->whereNumber('id');
+    });
+    Route::prefix('sizes')->middleware('permission:manufacturing.catalogs.view')->group(function () {
+        Route::get('/', [\App\Http\Controllers\MfgSizeController::class, 'index']);
+        Route::post('/', [\App\Http\Controllers\MfgSizeController::class, 'store']);
+        Route::put('{id}', [\App\Http\Controllers\MfgSizeController::class, 'update'])->whereNumber('id');
+        Route::delete('{id}', [\App\Http\Controllers\MfgSizeController::class, 'destroy'])->whereNumber('id');
+    });
+    Route::prefix('input-types')->middleware('permission:manufacturing.catalogs.view')->group(function () {
+        Route::get('/', [\App\Http\Controllers\MfgInputTypeController::class, 'index']);
+        Route::post('/', [\App\Http\Controllers\MfgInputTypeController::class, 'store']);
+        Route::put('{id}', [\App\Http\Controllers\MfgInputTypeController::class, 'update'])->whereNumber('id');
+        Route::delete('{id}', [\App\Http\Controllers\MfgInputTypeController::class, 'destroy'])->whereNumber('id');
+    });
+    Route::prefix('inputs')->middleware('permission:manufacturing.catalogs.view')->group(function () {
+        Route::get('/', [\App\Http\Controllers\MfgInputController::class, 'index']);
+        Route::post('/', [\App\Http\Controllers\MfgInputController::class, 'store']);
+        Route::put('{id}', [\App\Http\Controllers\MfgInputController::class, 'update'])->whereNumber('id');
+        Route::delete('{id}', [\App\Http\Controllers\MfgInputController::class, 'destroy'])->whereNumber('id');
+    });
+    Route::prefix('collections')->middleware('permission:manufacturing.catalogs.view')->group(function () {
+        Route::get('/', [\App\Http\Controllers\MfgCollectionController::class, 'index']);
+        Route::post('/', [\App\Http\Controllers\MfgCollectionController::class, 'store']);
+        Route::put('{id}', [\App\Http\Controllers\MfgCollectionController::class, 'update'])->whereNumber('id');
+        Route::delete('{id}', [\App\Http\Controllers\MfgCollectionController::class, 'destroy'])->whereNumber('id');
+    });
+    // Configuración de planta.
+    Route::prefix('processes')->middleware('permission:manufacturing.catalogs.view')->group(function () {
+        Route::get('/', [\App\Http\Controllers\MfgProcessController::class, 'index']);
+        Route::post('/', [\App\Http\Controllers\MfgProcessController::class, 'store']);
+        Route::put('{id}', [\App\Http\Controllers\MfgProcessController::class, 'update'])->whereNumber('id');
+        Route::delete('{id}', [\App\Http\Controllers\MfgProcessController::class, 'destroy'])->whereNumber('id');
+    });
+    Route::prefix('workshops')->middleware('permission:manufacturing.catalogs.view')->group(function () {
+        Route::get('/', [\App\Http\Controllers\MfgWorkshopController::class, 'index']);
+        Route::post('/', [\App\Http\Controllers\MfgWorkshopController::class, 'store']);
+        Route::put('{id}', [\App\Http\Controllers\MfgWorkshopController::class, 'update'])->whereNumber('id');
+        Route::delete('{id}', [\App\Http\Controllers\MfgWorkshopController::class, 'destroy'])->whereNumber('id');
+    });
+    Route::prefix('warehouses')->middleware('permission:manufacturing.catalogs.view')->group(function () {
+        Route::get('/', [\App\Http\Controllers\MfgWarehouseController::class, 'index']);
+        Route::post('/', [\App\Http\Controllers\MfgWarehouseController::class, 'store']);
+        Route::put('{id}', [\App\Http\Controllers\MfgWarehouseController::class, 'update'])->whereNumber('id');
+        Route::delete('{id}', [\App\Http\Controllers\MfgWarehouseController::class, 'destroy'])->whereNumber('id');
+    });
+    // Referencias + ficha técnica.
+    Route::prefix('references')->middleware('permission:manufacturing.references.view')->group(function () {
+        Route::post('generate-code', [\App\Http\Controllers\MfgReferenceController::class, 'generateCode']);
+        Route::get('/', [\App\Http\Controllers\MfgReferenceController::class, 'index']);
+        Route::get('{id}', [\App\Http\Controllers\MfgReferenceController::class, 'show'])->whereNumber('id');
+        Route::post('/', [\App\Http\Controllers\MfgReferenceController::class, 'store']);
+        Route::put('{id}', [\App\Http\Controllers\MfgReferenceController::class, 'update'])->whereNumber('id');
+        Route::delete('{id}', [\App\Http\Controllers\MfgReferenceController::class, 'destroy'])->whereNumber('id');
+    });
+    // Clientes de Fábrica (catálogo propio).
+    Route::prefix('clients')->middleware('permission:manufacturing.catalogs.view')->group(function () {
+        Route::get('/', [\App\Http\Controllers\MfgClientController::class, 'index']);
+        Route::post('/', [\App\Http\Controllers\MfgClientController::class, 'store']);
+        Route::put('{id}', [\App\Http\Controllers\MfgClientController::class, 'update'])->whereNumber('id');
+        Route::delete('{id}', [\App\Http\Controllers\MfgClientController::class, 'destroy'])->whereNumber('id');
+    });
+    // Órdenes de pedido → generan producción.
+    Route::prefix('purchase-orders')->middleware('permission:manufacturing.orders.view')->group(function () {
+        Route::get('generate-number', [\App\Http\Controllers\MfgPurchaseOrderController::class, 'generateNumber']);
+        Route::get('/', [\App\Http\Controllers\MfgPurchaseOrderController::class, 'index']);
+        Route::get('{id}', [\App\Http\Controllers\MfgPurchaseOrderController::class, 'show'])->whereNumber('id');
+        Route::post('/', [\App\Http\Controllers\MfgPurchaseOrderController::class, 'store']);
+        Route::put('{id}', [\App\Http\Controllers\MfgPurchaseOrderController::class, 'update'])->whereNumber('id');
+        Route::patch('{id}/status', [\App\Http\Controllers\MfgPurchaseOrderController::class, 'changeStatus'])->whereNumber('id');
+        Route::post('{id}/generate-production', [\App\Http\Controllers\MfgPurchaseOrderController::class, 'generateProduction'])->whereNumber('id');
+        Route::delete('{id}', [\App\Http\Controllers\MfgPurchaseOrderController::class, 'destroy'])->whereNumber('id');
+    });
+    // Inventario de producto terminado por bodega.
+    Route::get('inventory', [\App\Http\Controllers\MfgInventoryController::class, 'index'])->middleware('permission:manufacturing.orders.view');
+    // Órdenes de producción + etapas (Fase 2).
+    Route::prefix('production-orders')->middleware('permission:manufacturing.orders.view')->group(function () {
+        Route::get('generate-number', [\App\Http\Controllers\MfgProductionOrderController::class, 'generateNumber']);
+        Route::get('/', [\App\Http\Controllers\MfgProductionOrderController::class, 'index']);
+        Route::get('{id}', [\App\Http\Controllers\MfgProductionOrderController::class, 'show'])->whereNumber('id');
+        Route::post('/', [\App\Http\Controllers\MfgProductionOrderController::class, 'store']);
+        Route::put('{id}', [\App\Http\Controllers\MfgProductionOrderController::class, 'update'])->whereNumber('id');
+        Route::patch('{id}/status', [\App\Http\Controllers\MfgProductionOrderController::class, 'changeStatus'])->whereNumber('id');
+        Route::patch('{id}/stages/{stageId}', [\App\Http\Controllers\MfgProductionOrderController::class, 'updateStage'])->whereNumber('id')->whereNumber('stageId');
+        Route::get('{id}/materials', [\App\Http\Controllers\MfgProductionOrderController::class, 'materials'])->whereNumber('id');
+        Route::post('{id}/substitutions', [\App\Http\Controllers\MfgProductionOrderController::class, 'saveSubstitution'])->whereNumber('id');
+        Route::delete('{id}/substitutions/{subId}', [\App\Http\Controllers\MfgProductionOrderController::class, 'deleteSubstitution'])->whereNumber('id')->whereNumber('subId');
+        Route::delete('{id}', [\App\Http\Controllers\MfgProductionOrderController::class, 'destroy'])->whereNumber('id');
+    });
+});
+
 // ==================== MENSAJERÍA — chat web público ====================
 // El widget de la tienda usa estas rutas. No requieren login; se autentican
 // con un token de sesión devuelto por /start y enviado en X-WebChat-Token.

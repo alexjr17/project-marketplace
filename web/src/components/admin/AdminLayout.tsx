@@ -120,10 +120,10 @@ const menuWithSubmenus: {
       { path: '/admin-panel/catalogs/colors', label: 'Colores', icon: Palette, permission: 'colors.view' },
     ],
   },
-  // 4. PRODUCCIÓN - Zonas y personalización
+  // 4. PERSONALIZADOR - Zonas de diseño de la tienda (la producción vive en la app Fábrica)
   {
     id: 'production',
-    label: 'Producción',
+    label: 'Personalizador',
     icon: Scissors,
     basePath: '/admin-panel/zone',
     submenu: [

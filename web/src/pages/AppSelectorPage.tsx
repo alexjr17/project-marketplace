@@ -7,6 +7,7 @@ import {
   ShoppingCart,
   LayoutGrid,
   MessageSquare,
+  Shirt,
   ArrowRight,
   LogOut,
   type LucideIcon,
@@ -93,6 +94,18 @@ export default function AppSelectorPage() {
         iconBg: 'bg-pink-500/15',
         iconColor: 'text-pink-300',
         available: hasPermission('messaging.access'),
+      },
+      {
+        id: 'manufacturing',
+        name: 'Fábrica',
+        tag: 'Producción',
+        description: 'Referencias, órdenes de producción, códigos de barras y despachos.',
+        icon: Shirt,
+        path: '/manufacturing',
+        ring: 'hover:ring-amber-400/60',
+        iconBg: 'bg-amber-500/15',
+        iconColor: 'text-amber-300',
+        available: hasPermission('manufacturing.access'),
       },
     ];
     return all.filter((a) => a.available);

@@ -96,6 +96,27 @@ const SalesHistoryPage = lazy(() => import('./pages/pos/SalesHistoryPage'));
 const DebtsPage = lazy(() => import('./pages/pos/DebtsPage'));
 const CustomersPage = lazy(() => import('./pages/pos/CustomersPage'));
 const CashRegisterPage = lazy(() => import('./pages/pos/CashRegisterPage'));
+// App Fábrica (manufacturing)
+import ManufacturingLayout from './components/manufacturing/ManufacturingLayout';
+const ReferencesPage = lazy(() => import('./pages/manufacturing/ReferencesPage'));
+const ReferenceFormPage = lazy(() => import('./pages/manufacturing/ReferenceFormPage'));
+const ProcessesPage = lazy(() => import('./pages/manufacturing/ProcessesPage'));
+const WorkshopsPage = lazy(() => import('./pages/manufacturing/WorkshopsPage'));
+const WarehousesPage = lazy(() => import('./pages/manufacturing/WarehousesPage'));
+const CollectionsPage = lazy(() => import('./pages/manufacturing/CollectionsPage'));
+const GarmentTypesPage = lazy(() => import('./pages/manufacturing/GarmentTypesPage'));
+const MfgColorsPage = lazy(() => import('./pages/manufacturing/MfgColorsPage'));
+const MfgSizesPage = lazy(() => import('./pages/manufacturing/MfgSizesPage'));
+const MfgInputsPage = lazy(() => import('./pages/manufacturing/MfgInputsPage'));
+const MfgInputTypesPage = lazy(() => import('./pages/manufacturing/InputTypesPage'));
+const ProductionOrdersPage = lazy(() => import('./pages/manufacturing/ProductionOrdersPage'));
+const ProductionOrderFormPage = lazy(() => import('./pages/manufacturing/ProductionOrderFormPage'));
+const ProductionOrderDetailPage = lazy(() => import('./pages/manufacturing/ProductionOrderDetailPage'));
+const MfgPurchaseOrdersPage = lazy(() => import('./pages/manufacturing/PurchaseOrdersPage'));
+const MfgPurchaseOrderFormPage = lazy(() => import('./pages/manufacturing/PurchaseOrderFormPage'));
+const MfgPurchaseOrderDetailPage = lazy(() => import('./pages/manufacturing/PurchaseOrderDetailPage'));
+const MfgClientsPage = lazy(() => import('./pages/manufacturing/ClientsPage'));
+const InventoryPage = lazy(() => import('./pages/manufacturing/InventoryPage'));
 import type { Permission } from './types/roles';
 
 // Protected route for admin access
@@ -140,6 +161,21 @@ const POSRoute = ({ children }: { children: React.ReactNode }) => {
   }
 
   if (!hasPermission('pos.access')) {
+    return <Navigate to="/" replace />;
+  }
+
+  return <>{children}</>;
+};
+
+// Protected route for Fábrica (manufacturing) access.
+const ManufacturingRoute = ({ children }: { children: React.ReactNode }) => {
+  const { user, isAuthenticated, hasPermission } = useAuth();
+
+  if (!isAuthenticated || !user) {
+    return <Navigate to="/" replace />;
+  }
+
+  if (!hasPermission('manufacturing.access')) {
     return <Navigate to="/" replace />;
   }
 
@@ -247,6 +283,41 @@ function App() {
                                     </Routes>
                                   </POSLayout>
                                 </POSRoute>
+                              }
+                            />
+
+                            {/* Fábrica (manufacturing) - Con ManufacturingLayout */}
+                            <Route
+                              path="/manufacturing/*"
+                              element={
+                                <ManufacturingRoute>
+                                  <ManufacturingLayout>
+                                    <Routes>
+                                      <Route path="/" element={<Navigate to="/manufacturing/orders" replace />} />
+                                      <Route path="/orders" element={<ProductionOrdersPage />} />
+                                      <Route path="/orders/new" element={<ProductionOrderFormPage />} />
+                                      <Route path="/orders/:id" element={<ProductionOrderDetailPage />} />
+                                      <Route path="/purchase-orders" element={<MfgPurchaseOrdersPage />} />
+                                      <Route path="/purchase-orders/new" element={<MfgPurchaseOrderFormPage />} />
+                                      <Route path="/purchase-orders/:id" element={<MfgPurchaseOrderDetailPage />} />
+                                      <Route path="/clients" element={<MfgClientsPage />} />
+                                      <Route path="/inventory" element={<InventoryPage />} />
+                                      <Route path="/references" element={<ReferencesPage />} />
+                                      <Route path="/references/new" element={<ReferenceFormPage />} />
+                                      <Route path="/references/:id" element={<ReferenceFormPage />} />
+                                      <Route path="/collections" element={<CollectionsPage />} />
+                                      <Route path="/garment-types" element={<GarmentTypesPage />} />
+                                      <Route path="/colors" element={<MfgColorsPage />} />
+                                      <Route path="/sizes" element={<MfgSizesPage />} />
+                                      <Route path="/input-types" element={<MfgInputTypesPage />} />
+                                      <Route path="/inputs" element={<MfgInputsPage />} />
+                                      <Route path="/processes" element={<ProcessesPage />} />
+                                      <Route path="/workshops" element={<WorkshopsPage />} />
+                                      <Route path="/warehouses" element={<WarehousesPage />} />
+                                      <Route path="*" element={<Navigate to="/manufacturing/orders" replace />} />
+                                    </Routes>
+                                  </ManufacturingLayout>
+                                </ManufacturingRoute>
                               }
                             />
 

@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { Grid3x3, ShoppingCart, LayoutGrid, ChevronDown, MessageSquare } from 'lucide-react';
+import { Grid3x3, ShoppingCart, LayoutGrid, ChevronDown, MessageSquare, Shirt } from 'lucide-react';
 
 interface AppSwitcherProps {
   /** 'sidebar' = encabezado de ancho completo (icono + nombre + chevron). */
@@ -33,6 +33,7 @@ export default function AppSwitcher({ variant = 'default', collapsed = false }: 
     if (location.pathname.startsWith('/pos')) return 'pos';
     if (location.pathname.startsWith('/admin-panel')) return 'admin';
     if (location.pathname.startsWith('/messaging')) return 'messaging';
+    if (location.pathname.startsWith('/manufacturing')) return 'manufacturing';
     return 'store';
   };
 
@@ -76,6 +77,15 @@ export default function AppSwitcher({ variant = 'default', collapsed = false }: 
       bgColor: 'bg-pink-50',
       available: hasPermission('messaging.access'),
     },
+    {
+      id: 'manufacturing',
+      name: 'Fábrica',
+      icon: Shirt,
+      path: '/manufacturing',
+      color: 'text-amber-600',
+      bgColor: 'bg-amber-50',
+      available: hasPermission('manufacturing.access'),
+    },
   ].filter((app) => app.available);
 
   const currentAppData = apps.find((app) => app.id === currentApp);
@@ -115,6 +125,7 @@ export default function AppSwitcher({ variant = 'default', collapsed = false }: 
             {app.id === 'pos' && 'Ventas y caja'}
             {app.id === 'admin' && 'Administración'}
             {app.id === 'messaging' && 'Inbox + publicaciones'}
+            {app.id === 'manufacturing' && 'Producción y despachos'}
           </div>
         </div>
         {isCurrent && (

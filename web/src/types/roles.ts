@@ -10,6 +10,11 @@ export type Permission =
   | 'store.access'
   | 'admin.access'
   | 'messaging.access'
+  | 'manufacturing.access'
+  // Fábrica (app de producción)
+  | 'manufacturing.references.view'  // Referencias + ficha técnica
+  | 'manufacturing.orders.view'      // Órdenes de producción + etapas
+  | 'manufacturing.catalogs.view'    // Catálogos + planta
   // Social Media (módulos = pestañas)
   | 'messaging.inbox'
   | 'messaging.posts'
@@ -82,6 +87,7 @@ export type AdminModule =
   | 'shipping'
   | 'catalog'
   | 'production'
+  | 'manufacturing'
   | 'supplies'
   | 'purchases'
   | 'users'
@@ -106,7 +112,8 @@ export const SYSTEM_ROLES: Role[] = [
     name: 'Super Administrador',
     description: 'Acceso total al sistema. Solo puede existir uno.',
     permissions: [
-      'store.access', 'admin.access', 'messaging.access',
+      'store.access', 'admin.access', 'messaging.access', 'manufacturing.access',
+      'manufacturing.references.view', 'manufacturing.orders.view', 'manufacturing.catalogs.view',
       'messaging.inbox', 'messaging.posts', 'messaging.pages', 'messaging.knowledge', 'messaging.channels',
       'pos.access', 'pos.create_sale', 'pos.view_sales', 'pos.cancel_sale',
       'pos.cash_register', 'pos.open_close_session', 'pos.view_reports',
@@ -188,10 +195,19 @@ export const PERMISSION_GROUPS: {
   },
   {
     module: 'production',
-    label: 'Producción',
+    label: 'Personalizador',
     permissions: [
       { id: 'zone_types.view', label: 'Tipos de Zona', description: 'Tipos de zona de diseño' },
       { id: 'design_images.view', label: 'Imágenes de Diseño', description: 'Catálogo de imágenes' },
+    ],
+  },
+  {
+    module: 'manufacturing',
+    label: 'Fábrica',
+    permissions: [
+      { id: 'manufacturing.references.view', label: 'Referencias', description: 'Referencias y ficha técnica' },
+      { id: 'manufacturing.orders.view', label: 'Órdenes de producción', description: 'Órdenes y avance de etapas' },
+      { id: 'manufacturing.catalogs.view', label: 'Catálogos', description: 'Tipos de prenda, colores, tallas, insumos, procesos, talleres, bodegas' },
     ],
   },
   {
@@ -299,6 +315,13 @@ export const APPLICATIONS: {
     description: 'Inbox, canales y publicaciones',
     access: { id: 'messaging.access', label: 'Acceso a Social Media', description: 'Entrar a Social Media' },
     modules: ['messaging'],
+  },
+  {
+    id: 'manufacturing',
+    name: 'Fábrica',
+    description: 'Producción, referencias y despachos',
+    access: { id: 'manufacturing.access', label: 'Acceso a Fábrica', description: 'Entrar a la app de producción' },
+    modules: ['manufacturing'],
   },
 ];
 
