@@ -53,4 +53,8 @@ RUN composer install --no-interaction --no-scripts --prefer-dist
 
 EXPOSE 8000
 
-CMD ["sh", "-c", "php artisan serve --host=0.0.0.0 --port=8000"]
+# Se usa `php -S` con un router propio (server-router.php) en vez de
+# `php artisan serve` para poder añadir cabeceras CORS a /uploads (las
+# imágenes que el personalizador procesa en <canvas>/máscaras desde el front).
+# En producción (Dockerfile) ya se hace así; este es el mismo mecanismo en dev.
+CMD ["sh", "-c", "php -S 0.0.0.0:8000 -t public server-router.php"]
