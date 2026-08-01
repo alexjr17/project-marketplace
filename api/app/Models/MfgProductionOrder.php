@@ -12,6 +12,8 @@ class MfgProductionOrder extends BaseModel
     protected $casts = [
         'startedAt' => 'datetime',
         'finishedAt' => 'datetime',
+        'scheduledAt' => 'datetime',
+        'estimatedDeliveryAt' => 'datetime',
     ];
 
     /** Próximo código OP-{año}-####. */
@@ -84,6 +86,11 @@ class MfgProductionOrder extends BaseModel
     public function warehouse()
     {
         return $this->belongsTo(MfgWarehouse::class, 'warehouseId');
+    }
+
+    public function collection()
+    {
+        return $this->belongsTo(MfgCollection::class, 'collectionId');
     }
 
     public function items()

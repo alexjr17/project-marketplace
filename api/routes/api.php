@@ -782,6 +782,7 @@ Route::prefix('manufacturing')->middleware('auth:sanctum')->group(function () {
         Route::put('{id}', [\App\Http\Controllers\MfgProductionOrderController::class, 'update'])->whereNumber('id');
         Route::patch('{id}/status', [\App\Http\Controllers\MfgProductionOrderController::class, 'changeStatus'])->whereNumber('id');
         Route::patch('{id}/stages/{stageId}', [\App\Http\Controllers\MfgProductionOrderController::class, 'updateStage'])->whereNumber('id')->whereNumber('stageId');
+        Route::get('{id}/stages/{stageId}/pdf', [\App\Http\Controllers\MfgProductionOrderController::class, 'stagePdf'])->whereNumber('id')->whereNumber('stageId');
         Route::get('{id}/materials', [\App\Http\Controllers\MfgProductionOrderController::class, 'materials'])->whereNumber('id');
         Route::post('{id}/substitutions', [\App\Http\Controllers\MfgProductionOrderController::class, 'saveSubstitution'])->whereNumber('id');
         Route::delete('{id}/substitutions/{subId}', [\App\Http\Controllers\MfgProductionOrderController::class, 'deleteSubstitution'])->whereNumber('id')->whereNumber('subId');

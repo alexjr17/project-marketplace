@@ -381,8 +381,13 @@ export interface MfgLot {
 export interface MfgProductionOrder {
   id: number;
   code: string;
+  internalCode?: string | null;
   referenceId: number;
   warehouseId?: number | null;
+  collectionId?: number | null;
+  semester?: string | null; // I | II
+  scheduledAt?: string | null;
+  estimatedDeliveryAt?: string | null;
   status: MfgOrderStatus;
   notes?: string | null;
   startedAt?: string | null;
@@ -400,6 +405,7 @@ export interface MfgProductionOrder {
     }[];
   };
   warehouse?: { id: number; name: string } | null;
+  collection?: { id: number; name: string; year?: number | null; semester?: string | null } | null;
   items: MfgProductionOrderItem[];
   stages: MfgProductionOrderStage[];
   lots?: MfgLot[];
@@ -432,6 +438,11 @@ export interface MfgOrderMaterial {
 export interface MfgProductionOrderInput {
   referenceId: number;
   warehouseId?: number | null;
+  collectionId?: number | null;
+  semester?: string | null;
+  internalCode?: string | null;
+  scheduledAt?: string | null;
+  estimatedDeliveryAt?: string | null;
   notes?: string | null;
   items: { colorId: number; sizeId: number; quantity: number }[];
 }

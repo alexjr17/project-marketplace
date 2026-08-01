@@ -182,11 +182,15 @@ export const manufacturingService = {
   async createProductionOrder(data: MfgProductionOrderInput): Promise<MfgProductionOrder> {
     return (await api.post<MfgProductionOrder>('/manufacturing/production-orders', data)).data!;
   },
-  async updateProductionOrder(id: number, data: { warehouseId?: number | null; notes?: string | null }): Promise<MfgProductionOrder> {
+  async updateProductionOrder(id: number, data: { referenceId?: number; warehouseId?: number | null; collectionId?: number | null; semester?: string | null; internalCode?: string | null; scheduledAt?: string | null; estimatedDeliveryAt?: string | null; notes?: string | null; items?: { colorId: number; sizeId: number; quantity: number }[] }): Promise<MfgProductionOrder> {
     return (await api.put<MfgProductionOrder>(`/manufacturing/production-orders/${id}`, data)).data!;
   },
   async updateStage(id: number, stageId: number, data: MfgStageUpdate): Promise<MfgProductionOrder> {
     return (await api.patch<MfgProductionOrder>(`/manufacturing/production-orders/${id}/stages/${stageId}`, data)).data!;
+  },
+  /** PDF real (dompdf) del reporte/solicitud de una etapa (o de un componente puntual). */
+  async getStagePdf(orderId: number, stageId: number, includeInputs: boolean, componentId?: number): Promise<Blob> {
+    return await api.getBlob(`/manufacturing/production-orders/${orderId}/stages/${stageId}/pdf`, { includeInputs: includeInputs ? 1 : 0, componentId });
   },
   async changeOrderStatus(id: number, status: MfgOrderStatus): Promise<MfgProductionOrder> {
     return (await api.patch<MfgProductionOrder>(`/manufacturing/production-orders/${id}/status`, { status })).data!;

@@ -11,6 +11,7 @@ use App\Models\MfgProductionOrderStage;
 use App\Models\MfgReferenceMaterial;
 use App\Models\MfgWarehouse;
 use App\Models\MfgWarehouseStock;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -31,6 +32,7 @@ class MfgProductionOrderController extends Controller
         'reference.materials.input:id,code,name,unitOfMeasure,inputTypeId',
         'reference.materials.color:id,name,hexCode',
         'warehouse:id,name',
+        'collection:id,name,year,semester',
         'substitutions.originalInput:id,code,name',
         'substitutions.substituteInput:id,code,name',
         'substitutions.color:id,name,hexCode',
@@ -50,7 +52,7 @@ class MfgProductionOrderController extends Controller
 
     public function index(Request $request)
     {
-        $query = MfgProductionOrder::with(['reference:id,code,name', 'warehouse:id,name'])
+        $query = MfgProductionOrder::with(['reference:id,code,name', 'warehouse:id,name', 'collection:id,name,year,semester'])
             ->withCount('items')
             ->orderByDesc('createdAt');
 
@@ -92,20 +94,17 @@ class MfgProductionOrderController extends Controller
             'colorId' => $it->colorId, 'sizeId' => $it->sizeId, 'quantity' => $it->quantity,
         ])->values()->all();
 
-        $maxSeq = $stages->max('sequence');
         $lastCompleted = null;         // matriz de completadas de la última etapa cerrada
-        $allPrevDone = true;           // para canStart de la última
 
         foreach ($stages as $st) {
+            // Cualquier etapa puede iniciarse sin depender de las anteriores (paridad con fabrica-ropa).
             $st->programmed = $lastCompleted ?? $orderMatrix;
-            $st->canStart = ($st->sequence < $maxSeq) ? true : $allPrevDone;
+            $st->canStart = true;
 
             if (in_array($st->status, ['COMPLETED', 'SKIPPED'])) {
                 // Si cerró con matriz, esa alimenta la siguiente; si no, arrastra la programada.
                 $cells = $st->cells->map(fn ($c) => ['colorId' => $c->colorId, 'sizeId' => $c->sizeId, 'quantity' => $c->quantity])->all();
                 $lastCompleted = ! empty($cells) ? $cells : $st->programmed;
-            } else {
-                $allPrevDone = false;
             }
         }
 
@@ -122,6 +121,11 @@ class MfgProductionOrderController extends Controller
         $data = $request->validate([
             'referenceId' => 'required|integer|exists:mfg_references,id',
             'warehouseId' => 'nullable|integer|exists:mfg_warehouses,id',
+            'collectionId' => 'nullable|integer|exists:mfg_collections,id',
+            'semester' => 'nullable|string|max:2',
+            'internalCode' => 'nullable|string|max:50',
+            'scheduledAt' => 'nullable|date',
+            'estimatedDeliveryAt' => 'nullable|date',
             'notes' => 'nullable|string',
             'items' => 'required|array|min:1',
             'items.*.colorId' => 'required|integer|exists:mfg_colors,id',
@@ -138,6 +142,14 @@ class MfgProductionOrderController extends Controller
             $data['warehouseId'] ?? null,
         ));
 
+        $order->update([
+            'collectionId' => $data['collectionId'] ?? null,
+            'semester' => $data['semester'] ?? null,
+            'internalCode' => $data['internalCode'] ?? null,
+            'scheduledAt' => $data['scheduledAt'] ?? null,
+            'estimatedDeliveryAt' => $data['estimatedDeliveryAt'] ?? null,
+        ]);
+
         return $this->created($order->load(self::RELATIONS), 'Orden de producción creada');
     }
 
@@ -147,13 +159,93 @@ class MfgProductionOrderController extends Controller
         if (! $order) {
             return $this->error('Orden no encontrada', 404);
         }
+
         $data = $request->validate([
+            'referenceId' => 'nullable|integer|exists:mfg_references,id',
             'warehouseId' => 'nullable|integer|exists:mfg_warehouses,id',
+            'collectionId' => 'nullable|integer|exists:mfg_collections,id',
+            'semester' => 'nullable|string|max:2',
+            'internalCode' => 'nullable|string|max:50',
+            'scheduledAt' => 'nullable|date',
+            'estimatedDeliveryAt' => 'nullable|date',
             'notes' => 'nullable|string',
+            'items' => 'nullable|array|min:1',
+            'items.*.colorId' => 'required|integer|exists:mfg_colors,id',
+            'items.*.sizeId' => 'required|integer|exists:mfg_sizes,id',
+            'items.*.quantity' => 'required|integer|min:1',
         ]);
-        $order->fill($data)->save();
+
+        // La matriz/la referencia solo se editan mientras la orden no esté cerrada.
+        $hasItemsOrReference = array_key_exists('items', $data) || array_key_exists('referenceId', $data);
+        if ($hasItemsOrReference && in_array($order->status, ['COMPLETED', 'CANCELLED'])) {
+            return $this->error('No se puede editar la matriz de una orden '.strtolower($order->status), 422);
+        }
+
+        DB::transaction(function () use ($order, $data) {
+            if (array_key_exists('referenceId', $data) && $data['referenceId'] !== $order->referenceId) {
+                $order->referenceId = $data['referenceId'];
+            }
+            if (array_key_exists('warehouseId', $data)) {
+                $order->warehouseId = $data['warehouseId'];
+            }
+            if (array_key_exists('collectionId', $data)) {
+                $order->collectionId = $data['collectionId'];
+            }
+            if (array_key_exists('semester', $data)) {
+                $order->semester = $data['semester'];
+            }
+            if (array_key_exists('internalCode', $data)) {
+                $order->internalCode = $data['internalCode'];
+            }
+            if (array_key_exists('scheduledAt', $data)) {
+                $order->scheduledAt = $data['scheduledAt'] ?: null;
+            }
+            if (array_key_exists('estimatedDeliveryAt', $data)) {
+                $order->estimatedDeliveryAt = $data['estimatedDeliveryAt'] ?: null;
+            }
+            if (array_key_exists('notes', $data)) {
+                $order->notes = $data['notes'];
+            }
+            $order->save();
+
+            if (array_key_exists('items', $data)) {
+                $order->items()->delete();
+                foreach ($data['items'] as $it) {
+                    if ((int) $it['quantity'] > 0) {
+                        $order->items()->create([
+                            'colorId' => $it['colorId'],
+                            'sizeId' => $it['sizeId'],
+                            'quantity' => $it['quantity'],
+                        ]);
+                    }
+                }
+            }
+        });
 
         return $this->success($order->load(self::RELATIONS), 'Orden actualizada');
+    }
+
+    /** PDF real (dompdf) del reporte/solicitud de una etapa (o de un componente). */
+    public function stagePdf(Request $request, int $id, int $stageId)
+    {
+        $order = MfgProductionOrder::with(self::RELATIONS)->find($id);
+        if (! $order) {
+            return $this->error('Orden no encontrada', 404);
+        }
+        $this->attachStageMatrices($order);
+        $stage = $order->stages->firstWhere('id', $stageId);
+        if (! $stage) {
+            return $this->error('Etapa no encontrada', 404);
+        }
+
+        $pdf = Pdf::loadView('pdf.manufacturing-stage', [
+            'order' => $order,
+            'stage' => $stage,
+            'includeInputs' => $request->boolean('includeInputs', true),
+            'componentId' => $request->filled('componentId') ? (int) $request->input('componentId') : null,
+        ]);
+
+        return $pdf->stream('Reporte_'.$order->code.'.pdf');
     }
 
     /** Avanza una etapa (con su matriz), lleva trazabilidad y, si es la última, crea el lote. */

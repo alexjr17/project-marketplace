@@ -122,6 +122,39 @@ class ApiService {
     });
   }
 
+  /** GET que devuelve el cuerpo crudo como Blob (para PDFs/imágenes), con el token incluido. */
+  async getBlob(endpoint: string, params?: Record<string, any>): Promise<Blob> {
+    const token = this.getToken();
+    const queryString = params
+      ? '?' + new URLSearchParams(
+          Object.entries(params)
+            .filter(([, v]) => v !== undefined && v !== null && v !== '')
+            .map(([k, v]) => [k, String(v)])
+        ).toString()
+      : '';
+
+    const response = await fetch(`${this.baseUrl}${endpoint}${queryString}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+
+    if (!response.ok) {
+      let message = 'Error en la solicitud';
+      try {
+        const body = await response.json();
+        message = body?.message || message;
+      } catch {
+        // no es JSON: se deja el mensaje genérico
+      }
+      if (response.status === 401 && token) {
+        localStorage.removeItem('marketplace_auth');
+        window.dispatchEvent(new CustomEvent('auth:token-expired'));
+      }
+      throw new Error(message);
+    }
+
+    return response.blob();
+  }
+
   async put<T>(endpoint: string, body?: any): Promise<ApiResponse<T>> {
     return this.request<T>(endpoint, {
       method: 'PUT',

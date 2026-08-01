@@ -3,15 +3,21 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Save } from 'lucide-react';
 import toast from 'react-hot-toast';
 import manufacturingService from '../../services/manufacturing.service';
-import type { MfgReference, MfgWarehouse, MfgProductionOrderInput } from '../../types/manufacturing';
+import type { MfgReference, MfgWarehouse, MfgCollection, MfgProductionOrderInput } from '../../types/manufacturing';
 
 export default function ProductionOrderFormPage() {
   const navigate = useNavigate();
   const [references, setReferences] = useState<MfgReference[]>([]);
   const [warehouses, setWarehouses] = useState<MfgWarehouse[]>([]);
+  const [collections, setCollections] = useState<MfgCollection[]>([]);
   const [referenceId, setReferenceId] = useState<number | ''>('');
   const [ref, setRef] = useState<MfgReference | null>(null);
   const [warehouseId, setWarehouseId] = useState<number | ''>('');
+  const [collectionId, setCollectionId] = useState<number | ''>('');
+  const [semester, setSemester] = useState('');
+  const [internalCode, setInternalCode] = useState('');
+  const [scheduledAt, setScheduledAt] = useState('');
+  const [estimatedDeliveryAt, setEstimatedDeliveryAt] = useState('');
   const [notes, setNotes] = useState('');
   // qty[sizeId][colorId] = cantidad
   const [qty, setQty] = useState<Record<number, Record<number, string>>>({});
@@ -24,12 +30,14 @@ export default function ProductionOrderFormPage() {
     (async () => {
       setLoading(true);
       try {
-        const [refs, whs] = await Promise.all([
+        const [refs, whs, cols] = await Promise.all([
           manufacturingService.getReferences(),
           manufacturingService.getWarehouses(),
+          manufacturingService.getCollections(),
         ]);
         setReferences(refs);
         setWarehouses(whs);
+        setCollections(cols);
       } catch {
         toast.error('No se pudieron cargar los datos');
       } finally {
@@ -75,6 +83,11 @@ export default function ProductionOrderFormPage() {
       const order = await manufacturingService.createProductionOrder({
         referenceId: Number(referenceId),
         warehouseId: warehouseId === '' ? null : Number(warehouseId),
+        collectionId: collectionId === '' ? null : Number(collectionId),
+        semester: semester.trim() || null,
+        internalCode: internalCode.trim() || null,
+        scheduledAt: scheduledAt || null,
+        estimatedDeliveryAt: estimatedDeliveryAt || null,
         notes: notes.trim() || null,
         items,
       });
@@ -111,6 +124,33 @@ export default function ProductionOrderFormPage() {
               <option value="">— Sin asignar —</option>
               {warehouses.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
             </select>
+          </label>
+          <label className="block">
+            <span className="text-sm font-medium text-gray-700">Código interno</span>
+            <input value={internalCode} onChange={(e) => setInternalCode(e.target.value)} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2" placeholder="Ej. FAB-001" />
+          </label>
+          <label className="block">
+            <span className="text-sm font-medium text-gray-700">Colección</span>
+            <select value={collectionId} onChange={(e) => setCollectionId(e.target.value === '' ? '' : Number(e.target.value))} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2">
+              <option value="">— Sin colección —</option>
+              {collections.map((c) => <option key={c.id} value={c.id}>{c.name}{c.year ? ` (${c.year})` : ''}</option>)}
+            </select>
+          </label>
+          <label className="block">
+            <span className="text-sm font-medium text-gray-700">Semestre</span>
+            <select value={semester} onChange={(e) => setSemester(e.target.value)} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2">
+              <option value="">— Sin semestre —</option>
+              <option value="I">I</option>
+              <option value="II">II</option>
+            </select>
+          </label>
+          <label className="block">
+            <span className="text-sm font-medium text-gray-700">Fecha programada</span>
+            <input type="date" value={scheduledAt} onChange={(e) => setScheduledAt(e.target.value)} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2" />
+          </label>
+          <label className="block">
+            <span className="text-sm font-medium text-gray-700">Fecha entrega estimada</span>
+            <input type="date" value={estimatedDeliveryAt} onChange={(e) => setEstimatedDeliveryAt(e.target.value)} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2" />
           </label>
           <label className="block sm:col-span-2">
             <span className="text-sm font-medium text-gray-700">Notas</span>
