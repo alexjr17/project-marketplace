@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
-import { Plus, Pencil, Trash2, Box } from 'lucide-react';
+import { Plus, Pencil, Trash2, Box, Coins } from 'lucide-react';
 import toast from 'react-hot-toast';
 import manufacturingService from '../../services/manufacturing.service';
-import type { MfgInput, MfgInputType } from '../../types/manufacturing';
+import type { MfgInput, MfgInputType, MfgInputBatch, MfgColor } from '../../types/manufacturing';
+
+const money = (n: number) => '$' + n.toLocaleString('es-CO', { maximumFractionDigits: 2 });
 
 const empty = { code: '', name: '', inputTypeId: undefined as number | undefined, unitOfMeasure: 'und', scope: null as MfgInput['scope'], notes: '', isActive: true };
 
@@ -15,13 +17,45 @@ export default function MfgInputsPage() {
   const [form, setForm] = useState<Partial<MfgInput>>(empty);
   const [saving, setSaving] = useState(false);
 
+  // Lotes / precios del insumo.
+  const [colors, setColors] = useState<MfgColor[]>([]);
+  const [batchInput, setBatchInput] = useState<MfgInput | null>(null);
+  const [batches, setBatches] = useState<MfgInputBatch[]>([]);
+  const [batchAvg, setBatchAvg] = useState(0);
+  const [batchForm, setBatchForm] = useState({ colorId: '' as number | '', unitCost: '', quantity: '', purchasedAt: '', reference: '' });
+
   const load = async () => {
     setLoading(true);
     try { setItems(await manufacturingService.getInputs()); }
     catch { toast.error('No se pudieron cargar los insumos'); }
     finally { setLoading(false); }
   };
-  useEffect(() => { load(); manufacturingService.getInputTypes().then(setTypes).catch(() => {}); }, []);
+  useEffect(() => { load(); manufacturingService.getInputTypes().then(setTypes).catch(() => {}); manufacturingService.getColors().then(setColors).catch(() => {}); }, []);
+
+  const openBatches = async (i: MfgInput) => {
+    setBatchInput(i); setBatchForm({ colorId: '', unitCost: '', quantity: '', purchasedAt: '', reference: '' });
+    try { const d = await manufacturingService.getInputBatches(i.id); setBatches(d.batches); setBatchAvg(d.average); }
+    catch { setBatches([]); setBatchAvg(0); }
+  };
+  const addBatch = async () => {
+    if (!batchInput) return;
+    if (batchForm.unitCost === '' || Number(batchForm.unitCost) <= 0) { toast.error('Ingresa el precio del lote'); return; }
+    try {
+      await manufacturingService.createInputBatch(batchInput.id, {
+        colorId: batchForm.colorId === '' ? null : Number(batchForm.colorId),
+        unitCost: Number(batchForm.unitCost), quantity: batchForm.quantity === '' ? null : Number(batchForm.quantity),
+        purchasedAt: batchForm.purchasedAt || null, reference: batchForm.reference.trim() || null,
+      });
+      toast.success('Lote registrado');
+      const d = await manufacturingService.getInputBatches(batchInput.id); setBatches(d.batches); setBatchAvg(d.average);
+      setBatchForm({ colorId: '', unitCost: '', quantity: '', purchasedAt: '', reference: '' });
+    } catch { toast.error('No se pudo registrar'); }
+  };
+  const removeBatch = async (b: MfgInputBatch) => {
+    if (!batchInput) return;
+    try { await manufacturingService.deleteInputBatch(batchInput.id, b.id); const d = await manufacturingService.getInputBatches(batchInput.id); setBatches(d.batches); setBatchAvg(d.average); }
+    catch { toast.error('No se pudo eliminar'); }
+  };
 
   const selectedType = types.find((t) => t.id === form.inputTypeId);
   const isService = selectedType?.classification === 'SERVICIO';
@@ -93,6 +127,7 @@ export default function MfgInputsPage() {
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex items-center justify-end gap-1">
+                    {i.inputType?.classification !== 'SERVICIO' && <button onClick={() => openBatches(i)} title="Lotes / precios" className="p-2 text-gray-500 hover:text-amber-600 hover:bg-amber-50 rounded-lg"><Coins className="w-4 h-4" /></button>}
                     <button onClick={() => openEdit(i)} className="p-2 text-gray-500 hover:text-orange-600 hover:bg-orange-50 rounded-lg"><Pencil className="w-4 h-4" /></button>
                     <button onClick={() => remove(i)} className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg"><Trash2 className="w-4 h-4" /></button>
                   </div>
@@ -151,6 +186,51 @@ export default function MfgInputsPage() {
               <button onClick={() => setModal(false)} className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700">Cancelar</button>
               <button onClick={save} disabled={saving} className="px-4 py-2 rounded-lg bg-orange-500 hover:bg-orange-600 text-white font-medium disabled:opacity-60">{saving ? 'Guardando…' : 'Guardar'}</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de lotes / precios del insumo */}
+      {batchInput && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => setBatchInput(null)}>
+          <div className="bg-white rounded-2xl w-full max-w-2xl p-6 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-1">
+              <h2 className="text-lg font-bold text-gray-900">Lotes / precios · {batchInput.name}</h2>
+              <button onClick={() => setBatchInput(null)} className="text-gray-400 hover:text-gray-700 text-sm">Cerrar</button>
+            </div>
+            <p className="text-sm text-gray-500 mb-4">Registra las compras del insumo con su precio. En la ficha técnica se traen para decidir el precio. Promedio actual: <b className="text-gray-700">{money(batchAvg)}</b></p>
+
+            {/* Alta de lote */}
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 items-end bg-gray-50 rounded-lg p-3 mb-4">
+              <label className="block"><span className="text-xs text-gray-500">Color</span>
+                <select value={batchForm.colorId} onChange={(e) => setBatchForm({ ...batchForm, colorId: e.target.value === '' ? '' : Number(e.target.value) })} className="mt-1 w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm">
+                  <option value="">—</option>{colors.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </label>
+              <label className="block"><span className="text-xs text-gray-500">Precio unit. *</span><input type="number" step="0.01" min="0" value={batchForm.unitCost} onChange={(e) => setBatchForm({ ...batchForm, unitCost: e.target.value })} className="mt-1 w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm" /></label>
+              <label className="block"><span className="text-xs text-gray-500">Cantidad</span><input type="number" step="0.0001" min="0" value={batchForm.quantity} onChange={(e) => setBatchForm({ ...batchForm, quantity: e.target.value })} className="mt-1 w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm" /></label>
+              <label className="block"><span className="text-xs text-gray-500">Fecha</span><input type="date" value={batchForm.purchasedAt} onChange={(e) => setBatchForm({ ...batchForm, purchasedAt: e.target.value })} className="mt-1 w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm" /></label>
+              <button onClick={addBatch} className="inline-flex items-center justify-center gap-1 bg-slate-700 hover:bg-slate-800 text-white px-3 py-2 rounded-lg text-sm"><Plus className="w-4 h-4" /> Agregar</button>
+            </div>
+
+            {batches.length === 0 ? <p className="text-sm text-gray-400">Sin lotes registrados.</p> : (
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 text-gray-500 text-left"><tr>
+                  <th className="px-3 py-2 font-medium">Color</th><th className="px-3 py-2 font-medium">Fecha</th><th className="px-3 py-2 font-medium">Precio</th><th className="px-3 py-2 font-medium">Cant.</th><th className="px-3 py-2" />
+                </tr></thead>
+                <tbody className="divide-y divide-gray-100">
+                  {batches.map((b) => (
+                    <tr key={b.id}>
+                      <td className="px-3 py-2">{b.color ? <span className="inline-flex items-center gap-1"><span className="w-3 h-3 rounded-full border border-gray-200" style={{ backgroundColor: b.color.hexCode }} />{b.color.name}</span> : '—'}</td>
+                      <td className="px-3 py-2 text-gray-600">{b.purchasedAt ?? '—'}</td>
+                      <td className="px-3 py-2 font-medium text-gray-800">{money(Number(b.unitCost))}</td>
+                      <td className="px-3 py-2 text-gray-600">{b.quantity ?? '—'}</td>
+                      <td className="px-3 py-2 text-right"><button onClick={() => removeBatch(b)} className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg"><Trash2 className="w-4 h-4" /></button></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
         </div>
       )}

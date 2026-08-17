@@ -328,12 +328,25 @@ export interface MfgReferenceSize {
   size?: { id: number; name: string; abbreviation: string; sortOrder: number };
 }
 
+export interface MfgInputBatch {
+  id: number;
+  inputId: number;
+  colorId?: number | null;
+  unitCost: string | number;
+  quantity?: string | number | null;
+  purchasedAt?: string | null;
+  reference?: string | null;
+  color?: { id: number; name: string; hexCode: string } | null;
+}
+
 export interface MfgReferenceMaterial {
   id: number;
   referenceId: number;
   inputId: number;
   colorId?: number | null;
   componentId?: number | null;
+  consumptionInitial?: string | number | null;
+  increment?: string | number | null;
   consumption: string | number;
   unitValue: string | number;
   unitOfMeasure?: string | null;
@@ -574,6 +587,8 @@ export interface MfgReferenceInput {
     inputId: number;
     colorId?: number | null;
     componentIndex?: number | null;
+    consumptionInitial?: number | null;
+    increment?: number | null;
     consumption: number;
     unitValue: number;
     unitOfMeasure?: string | null;

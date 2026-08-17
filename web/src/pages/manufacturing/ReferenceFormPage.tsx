@@ -7,13 +7,13 @@ import MultiSelect from '../../components/manufacturing/MultiSelect';
 import { socialService } from '../../services/social.service';
 import type {
   MfgGarmentType, MfgColor, MfgSize, MfgInput, MfgCollection,
-  MfgColorType, MfgMarket, MfgComponentPosition, MfgReferenceInput,
+  MfgColorType, MfgMarket, MfgComponentPosition, MfgReferenceInput, MfgInputBatch,
 } from '../../types/manufacturing';
 
 const money = (n: number) => '$' + n.toLocaleString('es-CO', { maximumFractionDigits: 2 });
 
 interface ComponentRow { _key: number; position: MfgComponentPosition; description: string; }
-interface MaterialRow { inputId: number | ''; colorId: number | ''; componentKey: number | ''; consumption: string; unitValue: string; unitOfMeasure: string; notes: string; }
+interface MaterialRow { inputId: number | ''; colorId: number | ''; componentKey: number | ''; consumptionInitial: string; increment: string; consumption: string; unitValue: string; unitOfMeasure: string; notes: string; }
 interface GroupRow { name: string; market: MfgMarket; fixedCostExtra: string; factor: string; listPrice: string; auto: boolean; isWholesale: boolean; sizeIds: number[]; surcharges: Record<number, string>; }
 
 /** Sección plegable reutilizable. */
@@ -67,6 +67,8 @@ export default function ReferenceFormPage() {
   const [components, setComponents] = useState<ComponentRow[]>([]);
   const [materials, setMaterials] = useState<MaterialRow[]>([]);
   const [groups, setGroups] = useState<GroupRow[]>([]);
+  // Lotes por insumo (precio): cache { inputId: {batches, average} }.
+  const [batchCache, setBatchCache] = useState<Record<number, { batches: MfgInputBatch[]; average: number }>>({});
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -97,8 +99,13 @@ export default function ReferenceFormPage() {
           const compIdToKey = new Map(r.components.map((c, i) => [c.id, comps[i]._key]));
           setMaterials(r.materials.map((m) => ({
             inputId: m.inputId, colorId: m.colorId ?? '', componentKey: m.componentId ? (compIdToKey.get(m.componentId) ?? '') : '',
+            consumptionInitial: m.consumptionInitial != null ? String(m.consumptionInitial) : '', increment: m.increment != null ? String(m.increment) : '',
             consumption: String(m.consumption ?? ''), unitValue: String(m.unitValue ?? ''), unitOfMeasure: m.unitOfMeasure ?? '', notes: m.notes ?? '',
           })));
+          // Precarga los lotes de cada insumo usado (para el selector de precio).
+          const ids = [...new Set(r.materials.map((m) => m.inputId))];
+          const loaded = await Promise.all(ids.map(async (iid) => { try { return [iid, await manufacturingService.getInputBatches(iid)] as const; } catch { return null; } }));
+          setBatchCache(Object.fromEntries(loaded.filter(Boolean) as [number, { batches: MfgInputBatch[]; average: number }][]));
           setGroups(r.sizeGroups.map((g) => ({
             name: g.name, market: g.market, fixedCostExtra: String(g.fixedCostExtra ?? 0), factor: String(g.factor ?? 1),
             listPrice: String(g.listPrice ?? 0), auto: false, isWholesale: g.isWholesale, sizeIds: g.sizes.map((s) => s.sizeId),
@@ -184,7 +191,31 @@ export default function ReferenceFormPage() {
       return n;
     });
   const addComponent = () => setComponents([...components, { _key: keyRef.current++, position: 'SUPERIOR', description: '' }]);
-  const addMaterial = () => setMaterials([...materials, { inputId: '', colorId: '', componentKey: '', consumption: '', unitValue: '', unitOfMeasure: '', notes: '' }]);
+  const addMaterial = () => setMaterials([...materials, { inputId: '', colorId: '', componentKey: '', consumptionInitial: '', increment: '', consumption: '', unitValue: '', unitOfMeasure: '', notes: '' }]);
+
+  // Actualiza una fila y recalcula el consumo final = inicial × (1 + incremento/100).
+  const patchMaterial = (i: number, patch: Partial<MaterialRow>) => setMaterials((prev) => prev.map((x, idx) => {
+    if (idx !== i) return x;
+    const next = { ...x, ...patch };
+    if ('consumptionInitial' in patch || 'increment' in patch) {
+      const ini = Number(next.consumptionInitial) || 0; const inc = Number(next.increment) || 0;
+      if (next.consumptionInitial !== '') next.consumption = String(Number((ini * (1 + inc / 100)).toFixed(4)));
+    }
+    return next;
+  }));
+
+  // Al elegir un insumo: trae sus lotes (precio), setea unidad y valor por defecto (promedio).
+  const onSelectInput = async (i: number, inputId: number | '') => {
+    const inp = inputs.find((x) => x.id === inputId);
+    patchMaterial(i, { inputId, unitOfMeasure: inp?.unitOfMeasure ?? '' });
+    if (inputId === '') return;
+    let data = batchCache[inputId];
+    if (!data) {
+      try { data = await manufacturingService.getInputBatches(Number(inputId)); setBatchCache((c) => ({ ...c, [Number(inputId)]: data! })); }
+      catch { data = { batches: [], average: 0 }; }
+    }
+    if (data && data.average > 0) patchMaterial(i, { unitValue: String(data.average) });
+  };
   const addGroup = () => {
     const g = garmentTypes.find((x) => x.id === garmentTypeId);
     const natIds = (g?.sizes ?? []).filter((s) => (s.pivot?.market ?? 'NATIONAL') === 'NATIONAL').map((s) => s.id);
@@ -208,6 +239,8 @@ export default function ReferenceFormPage() {
       materials: materials.map((m) => ({
         inputId: Number(m.inputId), colorId: m.colorId === '' ? null : Number(m.colorId),
         componentIndex: m.componentKey === '' ? null : (keyToIdx.get(Number(m.componentKey)) ?? null),
+        consumptionInitial: m.consumptionInitial === '' ? null : Number(m.consumptionInitial),
+        increment: Number(m.increment) || 0,
         consumption: Number(m.consumption) || 0, unitValue: Number(m.unitValue) || 0,
         unitOfMeasure: m.unitOfMeasure.trim() || null, notes: m.notes.trim() || null,
       })),
@@ -467,35 +500,56 @@ export default function ReferenceFormPage() {
             {materials.length === 0 ? <div className="text-sm text-gray-400 py-2">Sin materiales.</div> : (
               <div className="space-y-3">
                 <div className="space-y-3 max-h-[28rem] overflow-y-auto pr-1">
-                {materials.map((m, i) => (
-                  <div key={i} className="grid grid-cols-12 gap-2 items-start bg-gray-50 rounded-lg p-3">
-                    <div className="col-span-12 sm:col-span-3"><span className="text-xs text-gray-500">Insumo *</span>
-                      <select value={m.inputId} onChange={(e) => setMaterials(materials.map((x, idx) => idx === i ? { ...x, inputId: e.target.value === '' ? '' : Number(e.target.value) } : x))} className="mt-1 w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm">
-                        <option value="">— Selecciona —</option>
-                        {inputsByType.map(([typeName, list]) => (
-                          <optgroup key={typeName} label={typeName}>
-                            {list.map((inp) => <option key={inp.id} value={inp.id}>{inp.code} · {inp.name}</option>)}
-                          </optgroup>
-                        ))}
-                      </select>
+                {materials.map((m, i) => {
+                  const batchInfo = m.inputId !== '' ? batchCache[Number(m.inputId)] : undefined;
+                  const lots = batchInfo?.batches ?? [];
+                  return (
+                  <div key={i} className="bg-gray-50 rounded-lg p-3">
+                    {/* Fila 1: insumo, componente, color */}
+                    <div className="grid grid-cols-12 gap-2 items-start">
+                      <div className="col-span-12 sm:col-span-6"><span className="text-xs text-gray-500">Insumo *</span>
+                        <select value={m.inputId} onChange={(e) => onSelectInput(i, e.target.value === '' ? '' : Number(e.target.value))} className="mt-1 w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm">
+                          <option value="">— Selecciona —</option>
+                          {inputsByType.map(([typeName, list]) => (
+                            <optgroup key={typeName} label={typeName}>
+                              {list.map((inp) => <option key={inp.id} value={inp.id}>{inp.code} · {inp.name}</option>)}
+                            </optgroup>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="col-span-6 sm:col-span-3"><span className="text-xs text-gray-500">Componente</span>
+                        <select value={m.componentKey} onChange={(e) => patchMaterial(i, { componentKey: e.target.value === '' ? '' : Number(e.target.value) })} className="mt-1 w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm">
+                          <option value="">—</option>{components.map((c) => <option key={c._key} value={c._key}>{c.position === 'SUPERIOR' ? 'Sup' : 'Inf'}{c.description ? ` · ${c.description}` : ''}</option>)}
+                        </select>
+                      </div>
+                      <div className="col-span-6 sm:col-span-3"><span className="text-xs text-gray-500">Color</span>
+                        <select value={m.colorId} onChange={(e) => patchMaterial(i, { colorId: e.target.value === '' ? '' : Number(e.target.value) })} className="mt-1 w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm">
+                          <option value="">Todos</option>{colors.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                        </select>
+                      </div>
                     </div>
-                    <div className="col-span-6 sm:col-span-2"><span className="text-xs text-gray-500">Componente</span>
-                      <select value={m.componentKey} onChange={(e) => setMaterials(materials.map((x, idx) => idx === i ? { ...x, componentKey: e.target.value === '' ? '' : Number(e.target.value) } : x))} className="mt-1 w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm">
-                        <option value="">—</option>{components.map((c) => <option key={c._key} value={c._key}>{c.position === 'SUPERIOR' ? 'Sup' : 'Inf'}{c.description ? ` · ${c.description}` : ''}</option>)}
-                      </select>
+                    {/* Fila 2: consumo inicial, incremento %, consumo final, precio (lote), valor, unidad */}
+                    <div className="grid grid-cols-12 gap-2 items-end mt-2">
+                      <div className="col-span-4 sm:col-span-2"><span className="text-xs text-gray-500">C. inicial</span><input type="number" step="0.0001" min="0" value={m.consumptionInitial} onChange={(e) => patchMaterial(i, { consumptionInitial: e.target.value })} className="mt-1 w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm" /></div>
+                      <div className="col-span-4 sm:col-span-1"><span className="text-xs text-gray-500">Inc. %</span><input type="number" step="0.01" min="0" value={m.increment} onChange={(e) => patchMaterial(i, { increment: e.target.value })} className="mt-1 w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm" /></div>
+                      <div className="col-span-4 sm:col-span-2"><span className="text-xs text-gray-500">C. final</span><input type="number" step="0.0001" min="0" value={m.consumption} onChange={(e) => setMaterials(materials.map((x, idx) => idx === i ? { ...x, consumption: e.target.value } : x))} className="mt-1 w-full border border-orange-200 bg-orange-50/40 rounded-lg px-2 py-1.5 text-sm" /></div>
+                      <div className="col-span-8 sm:col-span-3"><span className="text-xs text-gray-500">Precio {lots.length > 0 ? `(${lots.length} lote${lots.length > 1 ? 's' : ''})` : ''}</span>
+                        {lots.length > 0 ? (
+                          <select onChange={(e) => { const v = e.target.value; if (v === '') return; if (v === 'avg') patchMaterial(i, { unitValue: String(batchInfo!.average) }); else { const b = lots.find((x) => String(x.id) === v); if (b) patchMaterial(i, { unitValue: String(b.unitCost), colorId: b.colorId ?? m.colorId }); } }} value="" className="mt-1 w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm">
+                            <option value="">Elegir lote…</option>
+                            <option value="avg">Promedio · {money(batchInfo!.average)}</option>
+                            {lots.map((b) => <option key={b.id} value={b.id}>{b.color?.name ? `${b.color.name} · ` : ''}{b.purchasedAt ?? 's/f'} · {money(Number(b.unitCost))}</option>)}
+                          </select>
+                        ) : <p className="mt-1 text-[11px] text-gray-400 py-1.5">Sin lotes; ingresa el valor.</p>}
+                      </div>
+                      <div className="col-span-3 sm:col-span-2"><span className="text-xs text-gray-500">Valor unit.</span><input type="number" step="0.01" min="0" value={m.unitValue} onChange={(e) => patchMaterial(i, { unitValue: e.target.value })} className="mt-1 w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm" /></div>
+                      <div className="col-span-6 sm:col-span-1"><span className="text-xs text-gray-500">Unid.</span><input value={m.unitOfMeasure} onChange={(e) => patchMaterial(i, { unitOfMeasure: e.target.value })} placeholder={inputUnit(m.inputId)} className="mt-1 w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm" /></div>
+                      <div className="col-span-3 sm:col-span-1 flex sm:justify-center"><button type="button" onClick={() => setMaterials(materials.filter((_, idx) => idx !== i))} className="p-2 text-gray-400 hover:text-red-600 rounded-lg"><Trash2 className="w-4 h-4" /></button></div>
                     </div>
-                    <div className="col-span-6 sm:col-span-2"><span className="text-xs text-gray-500">Color</span>
-                      <select value={m.colorId} onChange={(e) => setMaterials(materials.map((x, idx) => idx === i ? { ...x, colorId: e.target.value === '' ? '' : Number(e.target.value) } : x))} className="mt-1 w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm">
-                        <option value="">Todos</option>{colors.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                      </select>
-                    </div>
-                    <div className="col-span-4 sm:col-span-1"><span className="text-xs text-gray-500">Consumo</span><input type="number" step="0.0001" min="0" value={m.consumption} onChange={(e) => setMaterials(materials.map((x, idx) => idx === i ? { ...x, consumption: e.target.value } : x))} className="mt-1 w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm" /></div>
-                    <div className="col-span-4 sm:col-span-2"><span className="text-xs text-gray-500">Valor unit.</span><input type="number" step="0.01" min="0" value={m.unitValue} onChange={(e) => setMaterials(materials.map((x, idx) => idx === i ? { ...x, unitValue: e.target.value } : x))} className="mt-1 w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm" /></div>
-                    <div className="col-span-3 sm:col-span-1"><span className="text-xs text-gray-500">Unid.</span><input value={m.unitOfMeasure} onChange={(e) => setMaterials(materials.map((x, idx) => idx === i ? { ...x, unitOfMeasure: e.target.value } : x))} placeholder={inputUnit(m.inputId)} className="mt-1 w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm" /></div>
-                    <div className="col-span-1 flex sm:justify-center sm:pt-6"><button type="button" onClick={() => setMaterials(materials.filter((_, idx) => idx !== i))} className="p-2 text-gray-400 hover:text-red-600 rounded-lg"><Trash2 className="w-4 h-4" /></button></div>
-                    <div className="col-span-12 text-right text-xs text-gray-500">Subtotal: {money((Number(m.consumption) || 0) * (Number(m.unitValue) || 0))}</div>
+                    <div className="text-right text-xs text-gray-500 mt-1">Subtotal: {money((Number(m.consumption) || 0) * (Number(m.unitValue) || 0))}</div>
                   </div>
-                ))}
+                  );
+                })}
                 </div>
                 <div className="text-right text-sm font-medium text-gray-700">Costo insumos: {money(costVariable)}</div>
               </div>

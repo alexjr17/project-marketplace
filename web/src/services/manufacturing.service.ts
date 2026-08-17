@@ -36,6 +36,17 @@ export const manufacturingService = {
     await api.delete(`/manufacturing/garment-types/${id}`);
   },
 
+  // ==================== LOTES DE INSUMO (precios) ====================
+  async getInputBatches(inputId: number): Promise<{ batches: import('../types/manufacturing').MfgInputBatch[]; average: number }> {
+    return (await api.get<{ batches: import('../types/manufacturing').MfgInputBatch[]; average: number }>(`/manufacturing/inputs/${inputId}/batches`)).data ?? { batches: [], average: 0 };
+  },
+  async createInputBatch(inputId: number, data: { colorId?: number | null; unitCost: number; quantity?: number | null; purchasedAt?: string | null; reference?: string | null }): Promise<import('../types/manufacturing').MfgInputBatch> {
+    return (await api.post<import('../types/manufacturing').MfgInputBatch>(`/manufacturing/inputs/${inputId}/batches`, data)).data!;
+  },
+  async deleteInputBatch(inputId: number, batchId: number): Promise<void> {
+    await api.delete(`/manufacturing/inputs/${inputId}/batches/${batchId}`);
+  },
+
   // ==================== MARCAS ====================
   async getBrands(): Promise<import('../types/manufacturing').MfgBrand[]> {
     return (await api.get<import('../types/manufacturing').MfgBrand[]>('/manufacturing/brands')).data ?? [];

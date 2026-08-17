@@ -11,6 +11,8 @@ class MfgReferenceMaterial extends BaseModel
     protected $table = 'mfg_reference_materials';
 
     protected $casts = [
+        'consumptionInitial' => 'decimal:4',
+        'increment' => 'decimal:2',
         'consumption' => 'decimal:4',
         'unitValue' => 'decimal:4',
     ];

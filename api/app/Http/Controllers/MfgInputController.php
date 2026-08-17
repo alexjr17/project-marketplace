@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Concerns\ApiResponse;
 use App\Models\MfgInput;
+use App\Models\MfgInputBatch;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
@@ -57,5 +58,45 @@ class MfgInputController extends Controller
         $i->delete();
 
         return $this->success(null, 'Insumo eliminado');
+    }
+
+    // ---- Lotes / compras del insumo (para costear la ficha técnica) ----
+
+    /** Lotes del insumo + precio promedio (para decidir el precio en la referencia). */
+    public function batches(int $id)
+    {
+        $batches = MfgInputBatch::with('color:id,name,hexCode')
+            ->where('inputId', $id)->orderByDesc('purchasedAt')->orderByDesc('id')->get();
+        $avg = $batches->count() ? round((float) $batches->avg('unitCost'), 2) : 0;
+
+        return $this->success(['batches' => $batches, 'average' => $avg]);
+    }
+
+    public function storeBatch(Request $request, int $id)
+    {
+        if (! MfgInput::whereKey($id)->exists()) {
+            return $this->error('Insumo no encontrado', 404);
+        }
+        $data = $request->validate([
+            'colorId' => 'nullable|integer|exists:mfg_colors,id',
+            'unitCost' => 'required|numeric|min:0',
+            'quantity' => 'nullable|numeric|min:0',
+            'purchasedAt' => 'nullable|date',
+            'reference' => 'nullable|string|max:60',
+        ]);
+        $data['inputId'] = $id;
+
+        return $this->created(MfgInputBatch::create($data)->load('color:id,name,hexCode'), 'Lote registrado');
+    }
+
+    public function deleteBatch(int $id, int $batchId)
+    {
+        $b = MfgInputBatch::where('inputId', $id)->find($batchId);
+        if (! $b) {
+            return $this->error('Lote no encontrado', 404);
+        }
+        $b->delete();
+
+        return $this->success(null, 'Lote eliminado');
     }
 }
