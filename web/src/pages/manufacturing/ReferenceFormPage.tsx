@@ -752,12 +752,24 @@ export default function ReferenceFormPage() {
                         {/* Costos + precio final */}
                         <div className="lg:col-span-2">
                           <div className="grid grid-cols-3 gap-2 items-end">
-                            <label className="block"><span className="text-xs text-gray-500">Costo fijo adic.</span>
+                            <div className="block"><span className="text-xs text-gray-500">Costo fijo adic.</span>
                               <div className="mt-1 flex"><span className="inline-flex items-center px-2 rounded-l-lg border border-r-0 border-gray-300 bg-gray-100 text-gray-500 text-sm">$</span><input type="number" step="0.01" min="0" value={g.fixedCostExtra} onChange={(e) => set({ fixedCostExtra: e.target.value })} className="w-full border border-gray-300 rounded-r-lg px-2 py-1.5 text-sm" /></div>
-                            </label>
-                            <label className="block"><span className="text-xs text-gray-500">Factor</span>
+                              {Number(gt?.fixedCost) > 0 && (
+                                <label className="inline-flex items-center gap-1 mt-1 text-[11px] text-gray-500 cursor-pointer">
+                                  <input type="checkbox" checked={Number(g.fixedCostExtra) === Number(gt?.fixedCost)} onChange={(e) => set({ fixedCostExtra: e.target.checked ? String(gt?.fixedCost) : '0' })} />
+                                  Usar: <b className="text-blue-600">{money(Number(gt?.fixedCost))}</b>
+                                </label>
+                              )}
+                            </div>
+                            <div className="block"><span className="text-xs text-gray-500">Factor</span>
                               <div className="mt-1 flex"><span className="inline-flex items-center px-2 rounded-l-lg border border-r-0 border-gray-300 bg-gray-100 text-gray-500 text-sm">x</span><input type="number" step="0.0001" min="0" value={g.factor} onChange={(e) => set({ factor: e.target.value })} className="w-full border border-gray-300 px-2 py-1.5 text-sm" /><span className="inline-flex items-center px-1.5 rounded-r-lg border border-l-0 border-gray-300 bg-sky-500 text-white text-[11px] min-w-[46px] justify-center">{groupProfitPct(g).toFixed(1)}%</span></div>
-                            </label>
+                              {Number(gtFactorFor(g.market)) > 0 && (
+                                <label className="inline-flex items-center gap-1 mt-1 text-[11px] text-gray-500 cursor-pointer">
+                                  <input type="checkbox" checked={Number(g.factor) === Number(gtFactorFor(g.market))} onChange={(e) => set({ factor: e.target.checked ? gtFactorFor(g.market) : g.factor })} />
+                                  Usar: <b className="text-green-600">x{Number(gtFactorFor(g.market))}</b>
+                                </label>
+                              )}
+                            </div>
                             <label className="block"><span className="text-xs text-gray-500">Precio Lista</span>
                               <input type="number" step="0.01" min="0" disabled={g.auto} value={g.auto ? Math.round(groupPrice(g)) : g.listPrice} onChange={(e) => set({ listPrice: e.target.value })} className="mt-1 w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm disabled:bg-gray-50 disabled:text-gray-500" />
                               <label className="inline-flex items-center gap-1 mt-1 text-[11px] text-gray-500"><input type="checkbox" checked={g.auto} onChange={(e) => set({ auto: e.target.checked })} /> Auto: <b className={g.market === 'EXPORT' ? 'text-blue-600' : 'text-orange-600'}>{money(Math.round(groupPrice(g)))}</b></label>
