@@ -133,6 +133,76 @@ export interface MfgPurchaseOrderInput {
   references: { referenceId: number; items: { colorId: number; sizeId: number; quantity: number }[] }[];
 }
 
+// --- Despachos / entregas ---
+
+export type MfgDispatchStatus = 'DRAFT' | 'CONFIRMED' | 'CANCELLED';
+export type MfgDispatchType = 'VENTA' | 'CONSIGNACION' | 'TRASLADO' | 'MUESTRA';
+
+export interface MfgDispatchItem {
+  id: number;
+  dispatchId: number;
+  referenceId: number;
+  colorId: number;
+  sizeId: number;
+  quantity: number;
+  reference?: { id: number; code: string; name: string; imagePath?: string | null };
+  color?: { id: number; name: string; hexCode: string };
+  size?: { id: number; name: string; abbreviation: string; sortOrder: number };
+}
+
+export interface MfgDispatch {
+  id: number;
+  code: string;
+  clientId?: number | null;
+  purchaseOrderId?: number | null;
+  warehouseId?: number | null;
+  type: MfgDispatchType;
+  status: MfgDispatchStatus;
+  notes?: string | null;
+  dispatchedAt?: string | null;
+  createdAt?: string;
+  client?: { id: number; name: string; city?: string | null };
+  purchaseOrder?: { id: number; code: string };
+  warehouse?: { id: number; name: string };
+  items: MfgDispatchItem[];
+  items_count?: number;
+}
+
+export interface MfgDispatchInput {
+  clientId?: number | null;
+  purchaseOrderId?: number | null;
+  warehouseId?: number | null;
+  type?: MfgDispatchType;
+  notes?: string | null;
+  items: { referenceId: number; colorId: number; sizeId: number; quantity: number }[];
+}
+
+export interface MfgAvailableStock {
+  referenceId: number;
+  refCode: string;
+  refName: string;
+  imagePath?: string | null;
+  colorId: number;
+  colorName: string;
+  colorHex: string;
+  sizeId: number;
+  sizeAbbr: string;
+  sizeSort: number;
+  available: string | number;
+}
+
+export interface MfgPoPendingItem {
+  referenceId: number;
+  reference?: { id: number; code: string; name: string; imagePath?: string | null };
+  colorId: number;
+  color?: { id: number; name: string; hexCode: string };
+  sizeId: number;
+  size?: { id: number; name: string; abbreviation: string; sortOrder: number };
+  ordered: number;
+  dispatched: number;
+  pending: number;
+}
+
 // --- Configuración de planta ---
 
 export type MfgConsumptionKind = 'TYPE' | 'INPUT';

@@ -254,6 +254,32 @@ export const manufacturingService = {
   async deletePurchaseOrder(id: number): Promise<void> {
     await api.delete(`/manufacturing/purchase-orders/${id}`);
   },
+
+  // ==================== DESPACHOS ====================
+  async getDispatches(params?: { status?: string; search?: string }): Promise<import('../types/manufacturing').MfgDispatch[]> {
+    return (await api.get<import('../types/manufacturing').MfgDispatch[]>('/manufacturing/dispatches', params)).data ?? [];
+  },
+  async getDispatch(id: number): Promise<import('../types/manufacturing').MfgDispatch> {
+    return (await api.get<import('../types/manufacturing').MfgDispatch>(`/manufacturing/dispatches/${id}`)).data!;
+  },
+  async getAvailableStock(warehouseId?: number): Promise<import('../types/manufacturing').MfgAvailableStock[]> {
+    return (await api.get<import('../types/manufacturing').MfgAvailableStock[]>('/manufacturing/dispatches/available', warehouseId ? { warehouseId } : undefined)).data ?? [];
+  },
+  async getPoPending(poId: number): Promise<{ purchaseOrder: { id: number; code: string; clientId: number }; items: import('../types/manufacturing').MfgPoPendingItem[] }> {
+    return (await api.get<{ purchaseOrder: { id: number; code: string; clientId: number }; items: import('../types/manufacturing').MfgPoPendingItem[] }>(`/manufacturing/dispatches/po/${poId}/pending`)).data!;
+  },
+  async createDispatch(data: import('../types/manufacturing').MfgDispatchInput): Promise<import('../types/manufacturing').MfgDispatch> {
+    return (await api.post<import('../types/manufacturing').MfgDispatch>('/manufacturing/dispatches', data)).data!;
+  },
+  async confirmDispatch(id: number): Promise<import('../types/manufacturing').MfgDispatch> {
+    return (await api.post<import('../types/manufacturing').MfgDispatch>(`/manufacturing/dispatches/${id}/confirm`, {})).data!;
+  },
+  async cancelDispatch(id: number): Promise<import('../types/manufacturing').MfgDispatch> {
+    return (await api.post<import('../types/manufacturing').MfgDispatch>(`/manufacturing/dispatches/${id}/cancel`, {})).data!;
+  },
+  async deleteDispatch(id: number): Promise<void> {
+    await api.delete(`/manufacturing/dispatches/${id}`);
+  },
 };
 
 export default manufacturingService;

@@ -771,6 +771,19 @@ Route::prefix('manufacturing')->middleware('auth:sanctum')->group(function () {
         Route::post('{id}/generate-production', [\App\Http\Controllers\MfgPurchaseOrderController::class, 'generateProduction'])->whereNumber('id');
         Route::delete('{id}', [\App\Http\Controllers\MfgPurchaseOrderController::class, 'destroy'])->whereNumber('id');
     });
+    // Despachos / entregas de producto terminado (cierra el ciclo).
+    Route::prefix('dispatches')->middleware('permission:manufacturing.orders.view')->group(function () {
+        Route::get('generate-number', [\App\Http\Controllers\MfgDispatchController::class, 'generateNumber']);
+        Route::get('available', [\App\Http\Controllers\MfgDispatchController::class, 'available']);
+        Route::get('po/{poId}/pending', [\App\Http\Controllers\MfgDispatchController::class, 'purchaseOrderPending'])->whereNumber('poId');
+        Route::get('/', [\App\Http\Controllers\MfgDispatchController::class, 'index']);
+        Route::get('{id}', [\App\Http\Controllers\MfgDispatchController::class, 'show'])->whereNumber('id');
+        Route::post('/', [\App\Http\Controllers\MfgDispatchController::class, 'store']);
+        Route::put('{id}', [\App\Http\Controllers\MfgDispatchController::class, 'update'])->whereNumber('id');
+        Route::post('{id}/confirm', [\App\Http\Controllers\MfgDispatchController::class, 'confirm'])->whereNumber('id');
+        Route::post('{id}/cancel', [\App\Http\Controllers\MfgDispatchController::class, 'cancel'])->whereNumber('id');
+        Route::delete('{id}', [\App\Http\Controllers\MfgDispatchController::class, 'destroy'])->whereNumber('id');
+    });
     // Inventario de producto terminado por bodega.
     Route::get('inventory', [\App\Http\Controllers\MfgInventoryController::class, 'index'])->middleware('permission:manufacturing.orders.view');
     // Órdenes de producción + etapas (Fase 2).

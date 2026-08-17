@@ -8,6 +8,7 @@ use App\Models\MfgOrderInputSubstitution;
 use App\Models\MfgProcess;
 use App\Models\MfgProductionOrder;
 use App\Models\MfgProductionOrderStage;
+use App\Models\MfgProductMovement;
 use App\Models\MfgReferenceMaterial;
 use App\Models\MfgWarehouse;
 use App\Models\MfgWarehouseStock;
@@ -283,6 +284,14 @@ class MfgProductionOrderController extends Controller
 
         $userName = $request->user()?->name ?? 'Sistema';
 
+        // No permitir reabrir la última etapa si el producto ya tuvo despachos.
+        if (in_array($data['status'] ?? '', ['PENDING', 'IN_PROCESS'], true)
+            && $this->isLastStage($order, $stage)
+            && $order->lots()->exists()
+            && $this->lotsHaveDispatches($order)) {
+            return $this->error('No se puede reabrir: el producto de esta orden ya tiene despachos. Anula los despachos primero.', 422);
+        }
+
         DB::transaction(function () use ($order, $stage, $data, $userName) {
             if (array_key_exists('workshopId', $data)) {
                 $stage->workshopId = $data['workshopId'];
@@ -418,6 +427,13 @@ class MfgProductionOrderController extends Controller
                 $stock->updatedAt = now();
                 $stock->save();
             }
+            // Kardex: entrada de producto terminado.
+            MfgProductMovement::create([
+                'referenceId' => $order->referenceId, 'colorId' => $c->colorId, 'sizeId' => $c->sizeId,
+                'warehouseId' => $whId, 'lotId' => $lot->id,
+                'type' => 'ENTRADA', 'quantity' => $c->quantity,
+                'sourceType' => 'LOT', 'sourceId' => $lot->id, 'notes' => 'Lote '.$lot->code,
+            ]);
         }
         // Persistir la bodega elegida en la orden.
         if ($whId && $order->warehouseId !== $whId) {
@@ -426,7 +442,21 @@ class MfgProductionOrderController extends Controller
         }
     }
 
-    /** Revierte los lotes de la orden: descuenta el stock de bodega que crearon y los elimina. */
+    /** ¿Algún lote de la orden ya tuvo salidas (despachos)? Bloquea reabrir la etapa. */
+    private function lotsHaveDispatches(MfgProductionOrder $order): bool
+    {
+        foreach ($order->lots()->with('items')->get() as $lot) {
+            foreach ($lot->items as $it) {
+                if ((int) $it->quantityAvailable < (int) $it->quantityProduced) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /** Revierte los lotes de la orden: descuenta el stock (saldo disponible) y los elimina. */
     private function revertLots(MfgProductionOrder $order): void
     {
         foreach ($order->lots()->with('items')->get() as $lot) {
@@ -437,11 +467,13 @@ class MfgProductionOrderController extends Controller
                         'colorId' => $it->colorId, 'sizeId' => $it->sizeId,
                     ])->first();
                     if ($stock) {
-                        $stock->quantity = max(0, (int) $stock->quantity - (int) $it->quantityProduced);
+                        $stock->quantity = max(0, (int) $stock->quantity - (int) $it->quantityAvailable);
                         $stock->save();
                     }
                 }
             }
+            // Borra el kardex de entrada de este lote.
+            MfgProductMovement::where('sourceType', 'LOT')->where('sourceId', $lot->id)->delete();
             $lot->items()->delete();
             $lot->delete();
         }

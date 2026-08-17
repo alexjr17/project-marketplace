@@ -23,6 +23,7 @@ import {
   ClipboardList,
   ShoppingCart,
   Users,
+  Truck,
   Store,
 } from 'lucide-react';
 import type { Permission } from '../../types/roles';
@@ -48,6 +49,7 @@ const menuWithSubmenus: {
     submenu: [
       { path: '/manufacturing/purchase-orders', label: 'Pedidos', icon: ShoppingCart, permission: 'manufacturing.orders.view' },
       { path: '/manufacturing/orders', label: 'Órdenes de producción', icon: ClipboardList, permission: 'manufacturing.orders.view' },
+      { path: '/manufacturing/dispatches', label: 'Despachos', icon: Truck, permission: 'manufacturing.orders.view' },
       { path: '/manufacturing/references', label: 'Referencias', icon: FileText, permission: 'manufacturing.references.view' },
       { path: '/manufacturing/inventory', label: 'Inventario', icon: Boxes, permission: 'manufacturing.orders.view' },
     ],

@@ -116,6 +116,9 @@ const MfgPurchaseOrdersPage = lazy(() => import('./pages/manufacturing/PurchaseO
 const MfgPurchaseOrderFormPage = lazy(() => import('./pages/manufacturing/PurchaseOrderFormPage'));
 const MfgPurchaseOrderDetailPage = lazy(() => import('./pages/manufacturing/PurchaseOrderDetailPage'));
 const MfgClientsPage = lazy(() => import('./pages/manufacturing/ClientsPage'));
+const MfgDispatchesPage = lazy(() => import('./pages/manufacturing/DispatchesPage'));
+const MfgDispatchFormPage = lazy(() => import('./pages/manufacturing/DispatchFormPage'));
+const MfgDispatchDetailPage = lazy(() => import('./pages/manufacturing/DispatchDetailPage'));
 const InventoryPage = lazy(() => import('./pages/manufacturing/InventoryPage'));
 import type { Permission } from './types/roles';
 
@@ -301,6 +304,9 @@ function App() {
                                       <Route path="/purchase-orders/new" element={<MfgPurchaseOrderFormPage />} />
                                       <Route path="/purchase-orders/:id" element={<MfgPurchaseOrderDetailPage />} />
                                       <Route path="/clients" element={<MfgClientsPage />} />
+                                      <Route path="/dispatches" element={<MfgDispatchesPage />} />
+                                      <Route path="/dispatches/new" element={<MfgDispatchFormPage />} />
+                                      <Route path="/dispatches/:id" element={<MfgDispatchDetailPage />} />
                                       <Route path="/inventory" element={<InventoryPage />} />
                                       <Route path="/references" element={<ReferencesPage />} />
                                       <Route path="/references/new" element={<ReferenceFormPage />} />
