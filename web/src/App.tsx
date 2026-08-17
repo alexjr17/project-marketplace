@@ -104,6 +104,7 @@ const ProcessesPage = lazy(() => import('./pages/manufacturing/ProcessesPage'));
 const WorkshopsPage = lazy(() => import('./pages/manufacturing/WorkshopsPage'));
 const WarehousesPage = lazy(() => import('./pages/manufacturing/WarehousesPage'));
 const CollectionsPage = lazy(() => import('./pages/manufacturing/CollectionsPage'));
+const MfgBrandsPage = lazy(() => import('./pages/manufacturing/MfgBrandsPage'));
 const GarmentTypesPage = lazy(() => import('./pages/manufacturing/GarmentTypesPage'));
 const MfgColorsPage = lazy(() => import('./pages/manufacturing/MfgColorsPage'));
 const MfgSizesPage = lazy(() => import('./pages/manufacturing/MfgSizesPage'));
@@ -312,6 +313,7 @@ function App() {
                                       <Route path="/references/new" element={<ReferenceFormPage />} />
                                       <Route path="/references/:id" element={<ReferenceFormPage />} />
                                       <Route path="/collections" element={<CollectionsPage />} />
+                                      <Route path="/brands" element={<MfgBrandsPage />} />
                                       <Route path="/garment-types" element={<GarmentTypesPage />} />
                                       <Route path="/colors" element={<MfgColorsPage />} />
                                       <Route path="/sizes" element={<MfgSizesPage />} />

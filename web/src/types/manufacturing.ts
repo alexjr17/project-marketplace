@@ -7,12 +7,25 @@ export type MfgWorkshopType = 'INTERNAL' | 'EXTERNAL';
 
 export type MfgComposition = 'SUPERIOR' | 'INFERIOR' | 'SET';
 
+export interface MfgBrand {
+  id: number;
+  name: string;
+  code?: string | null;
+  isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface MfgGarmentType {
   id: number;
   code: string;
   name: string;
   composition: MfgComposition;
+  brandId?: number | null;
+  fixedCost?: string | number;
+  factor?: string | number;
   isActive: boolean;
+  brand?: { id: number; name: string } | null;
   sizes?: { id: number; name: string; abbreviation: string; sortOrder: number; pivot?: { market: MfgMarket } }[];
   createdAt?: string;
   updatedAt?: string;
@@ -335,6 +348,7 @@ export interface MfgReference {
   code: string;
   name: string;
   garmentTypeId?: number | null;
+  brandId?: number | null;
   collectionId?: number | null;
   description?: string | null;
   isActive: boolean;
@@ -344,7 +358,8 @@ export interface MfgReference {
   costVariable: string | number;
   costUnit: string | number;
   basePrice: string | number;
-  garmentType?: { id: number; code: string; name: string } | null;
+  garmentType?: { id: number; code: string; name: string; brandId?: number | null; fixedCost?: string | number; factor?: string | number; brand?: { id: number; name: string } | null } | null;
+  brand?: { id: number; name: string } | null;
   collection?: { id: number; name: string; year?: number | null; semester?: string | null } | null;
   colors: MfgReferenceColor[];
   sizes: MfgReferenceSize[];

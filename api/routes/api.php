@@ -719,6 +719,12 @@ Route::prefix('manufacturing')->middleware('auth:sanctum')->group(function () {
         Route::put('{id}', [\App\Http\Controllers\MfgInputController::class, 'update'])->whereNumber('id');
         Route::delete('{id}', [\App\Http\Controllers\MfgInputController::class, 'destroy'])->whereNumber('id');
     });
+    Route::prefix('brands')->middleware('permission:manufacturing.catalogs.view')->group(function () {
+        Route::get('/', [\App\Http\Controllers\MfgBrandController::class, 'index']);
+        Route::post('/', [\App\Http\Controllers\MfgBrandController::class, 'store']);
+        Route::put('{id}', [\App\Http\Controllers\MfgBrandController::class, 'update'])->whereNumber('id');
+        Route::delete('{id}', [\App\Http\Controllers\MfgBrandController::class, 'destroy'])->whereNumber('id');
+    });
     Route::prefix('collections')->middleware('permission:manufacturing.catalogs.view')->group(function () {
         Route::get('/', [\App\Http\Controllers\MfgCollectionController::class, 'index']);
         Route::post('/', [\App\Http\Controllers\MfgCollectionController::class, 'store']);

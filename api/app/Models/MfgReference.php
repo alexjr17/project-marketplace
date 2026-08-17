@@ -24,6 +24,11 @@ class MfgReference extends BaseModel
         return $this->belongsTo(MfgGarmentType::class, 'garmentTypeId');
     }
 
+    public function brand()
+    {
+        return $this->belongsTo(MfgBrand::class, 'brandId');
+    }
+
     public function collection()
     {
         return $this->belongsTo(MfgCollection::class, 'collectionId');

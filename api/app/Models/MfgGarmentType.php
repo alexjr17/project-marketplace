@@ -11,11 +11,18 @@ class MfgGarmentType extends BaseModel
 
     protected $casts = [
         'isActive' => 'boolean',
+        'fixedCost' => 'decimal:2',
+        'factor' => 'decimal:4',
     ];
 
     public function sizes()
     {
         return $this->belongsToMany(MfgSize::class, 'mfg_garment_type_sizes', 'garmentTypeId', 'sizeId')
             ->withPivot('market')->orderBy('sortOrder');
+    }
+
+    public function brand()
+    {
+        return $this->belongsTo(MfgBrand::class, 'brandId');
     }
 }

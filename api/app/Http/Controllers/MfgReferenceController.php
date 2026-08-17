@@ -26,7 +26,9 @@ class MfgReferenceController extends Controller
     use ApiResponse;
 
     private const RELATIONS = [
-        'garmentType:id,code,name',
+        'garmentType:id,code,name,brandId,fixedCost,factor',
+        'garmentType.brand:id,name',
+        'brand:id,name',
         'collection:id,name,year,semester',
         'colors.color:id,name,hexCode,code',
         'sizes.size:id,name,abbreviation,sortOrder',
@@ -135,6 +137,7 @@ class MfgReferenceController extends Controller
                 'code' => $code,
                 'name' => $data['name'],
                 'garmentTypeId' => $data['garmentTypeId'],
+                'brandId' => \App\Models\MfgGarmentType::whereKey($data['garmentTypeId'])->value('brandId'),
                 'collectionId' => $data['collectionId'] ?? null,
                 'description' => $data['description'] ?? null,
                 'isActive' => $data['isActive'] ?? true,
@@ -171,6 +174,7 @@ class MfgReferenceController extends Controller
                 'code' => $code,
                 'name' => $data['name'],
                 'garmentTypeId' => $data['garmentTypeId'],
+                'brandId' => \App\Models\MfgGarmentType::whereKey($data['garmentTypeId'])->value('brandId'),
                 'collectionId' => $data['collectionId'] ?? null,
                 'description' => $data['description'] ?? null,
                 'isActive' => $data['isActive'] ?? true,

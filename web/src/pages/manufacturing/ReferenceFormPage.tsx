@@ -123,6 +123,11 @@ export default function ReferenceFormPage() {
     if (g?.sizes) {
       setSelSizes([...new Set(g.sizes.map((s) => s.id))]);
     }
+    // Sugiere costo fijo y factor del tipo de prenda (como el indicador de costo de fabrica).
+    if (g) {
+      if (g.fixedCost !== undefined && g.fixedCost !== null) setFixedCost(String(g.fixedCost));
+      if (g.factor !== undefined && g.factor !== null) setFactor(String(g.factor));
+    }
     if (!isEdit && value !== '') {
       try {
         const full = await manufacturingService.generateReferenceCode(Number(value));
@@ -271,7 +276,7 @@ export default function ReferenceFormPage() {
                   {gt && <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${gt.composition === 'SET' ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-600'}`}>{compositionLabel[gt.composition]}</span>}
                   <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>{isActive ? 'Activa' : 'Inactiva'}</span>
                 </div>
-                <p className="text-sm text-gray-500 mt-1">{gt ? gt.name : 'Sin tipo'}{col ? ` · ${col.name}` : ''}</p>
+                <p className="text-sm text-gray-500 mt-1">{gt ? gt.name : 'Sin tipo'}{gt?.brand?.name ? ` · ${gt.brand.name}` : ''}{col ? ` · ${col.name}` : ''}</p>
 
                 <div className="mt-3">
                   <p className="text-xs text-gray-400 uppercase tracking-wide mb-1">Colores</p>
@@ -500,8 +505,8 @@ export default function ReferenceFormPage() {
           {/* Costos y precios */}
           <Section icon={<Coins className="w-5 h-5" />} title="Costos y precios" subtitle="Costo fijo, factor y grupos de precio por tallas">
             <div className="grid sm:grid-cols-4 gap-4 mb-5">
-              <label className="block"><span className="text-sm font-medium text-gray-700">Costo fijo</span><input type="number" step="0.01" min="0" value={fixedCost} onChange={(e) => setFixedCost(e.target.value)} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2" /></label>
-              <label className="block"><span className="text-sm font-medium text-gray-700">Factor</span><input type="number" step="0.0001" min="0" value={factor} onChange={(e) => setFactor(e.target.value)} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2" /></label>
+              <label className="block"><span className="text-sm font-medium text-gray-700">Costo fijo</span><input type="number" step="0.01" min="0" value={fixedCost} onChange={(e) => setFixedCost(e.target.value)} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2" /><span className="text-[11px] text-gray-400">Sugerido por el tipo de prenda.</span></label>
+              <label className="block"><span className="text-sm font-medium text-gray-700">Factor</span><input type="number" step="0.0001" min="0" value={factor} onChange={(e) => setFactor(e.target.value)} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2" /><span className="text-[11px] text-gray-400">Sugerido por el tipo de prenda.</span></label>
               <div className="sm:col-span-2 grid grid-cols-3 gap-2 text-center">
                 <div className="bg-gray-50 rounded-lg p-2"><p className="text-xs text-gray-500">Costo insumos</p><p className="font-semibold text-gray-800">{money(costVariable)}</p></div>
                 <div className="bg-gray-50 rounded-lg p-2"><p className="text-xs text-gray-500">Costo unidad</p><p className="font-semibold text-gray-800">{money(costUnit)}</p></div>

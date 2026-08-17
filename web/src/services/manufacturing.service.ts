@@ -36,6 +36,20 @@ export const manufacturingService = {
     await api.delete(`/manufacturing/garment-types/${id}`);
   },
 
+  // ==================== MARCAS ====================
+  async getBrands(): Promise<import('../types/manufacturing').MfgBrand[]> {
+    return (await api.get<import('../types/manufacturing').MfgBrand[]>('/manufacturing/brands')).data ?? [];
+  },
+  async createBrand(data: Partial<import('../types/manufacturing').MfgBrand>): Promise<import('../types/manufacturing').MfgBrand> {
+    return (await api.post<import('../types/manufacturing').MfgBrand>('/manufacturing/brands', data)).data!;
+  },
+  async updateBrand(id: number, data: Partial<import('../types/manufacturing').MfgBrand>): Promise<import('../types/manufacturing').MfgBrand> {
+    return (await api.put<import('../types/manufacturing').MfgBrand>(`/manufacturing/brands/${id}`, data)).data!;
+  },
+  async deleteBrand(id: number): Promise<void> {
+    await api.delete(`/manufacturing/brands/${id}`);
+  },
+
   // ==================== COLORES ====================
   async getColors(): Promise<MfgColor[]> {
     return (await api.get<MfgColor[]>('/manufacturing/colors')).data ?? [];

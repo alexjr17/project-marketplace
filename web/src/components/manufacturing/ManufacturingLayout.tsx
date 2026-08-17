@@ -24,6 +24,7 @@ import {
   ShoppingCart,
   Users,
   Truck,
+  BadgeCheck,
   Store,
 } from 'lucide-react';
 import type { Permission } from '../../types/roles';
@@ -61,6 +62,7 @@ const menuWithSubmenus: {
     basePath: '/manufacturing/garment-types',
     submenu: [
       { path: '/manufacturing/clients', label: 'Clientes', icon: Users, permission: 'manufacturing.catalogs.view' },
+      { path: '/manufacturing/brands', label: 'Marcas', icon: BadgeCheck, permission: 'manufacturing.catalogs.view' },
       { path: '/manufacturing/collections', label: 'Colecciones', icon: CalendarRange, permission: 'manufacturing.catalogs.view' },
       { path: '/manufacturing/garment-types', label: 'Tipos de prenda', icon: Tag, permission: 'manufacturing.catalogs.view' },
       { path: '/manufacturing/colors', label: 'Colores', icon: Palette, permission: 'manufacturing.catalogs.view' },

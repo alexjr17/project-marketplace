@@ -2,9 +2,9 @@ import { useEffect, useState } from 'react';
 import { Plus, Pencil, Trash2, Tag } from 'lucide-react';
 import toast from 'react-hot-toast';
 import manufacturingService from '../../services/manufacturing.service';
-import type { MfgGarmentType, MfgSize } from '../../types/manufacturing';
+import type { MfgGarmentType, MfgSize, MfgBrand } from '../../types/manufacturing';
 
-const empty = { code: '', name: '', composition: 'SUPERIOR' as const, isActive: true };
+const empty = { code: '', name: '', composition: 'SUPERIOR' as const, brandId: null as number | null, fixedCost: 0, factor: 1, isActive: true };
 
 const COMPOSITION_LABEL: Record<string, string> = { SUPERIOR: 'Superior', INFERIOR: 'Inferior', SET: 'Conjunto' };
 
@@ -17,6 +17,7 @@ export default function GarmentTypesPage() {
   const [nationalIds, setNationalIds] = useState<number[]>([]);
   const [exportIds, setExportIds] = useState<number[]>([]);
   const [allSizes, setAllSizes] = useState<MfgSize[]>([]);
+  const [brands, setBrands] = useState<MfgBrand[]>([]);
   const [saving, setSaving] = useState(false);
 
   const load = async () => {
@@ -25,7 +26,7 @@ export default function GarmentTypesPage() {
     catch { toast.error('No se pudieron cargar los tipos de prenda'); }
     finally { setLoading(false); }
   };
-  useEffect(() => { load(); manufacturingService.getSizes().then(setAllSizes).catch(() => {}); }, []);
+  useEffect(() => { load(); manufacturingService.getSizes().then(setAllSizes).catch(() => {}); manufacturingService.getBrands().then(setBrands).catch(() => {}); }, []);
 
   const sortedSizes = [...allSizes].sort((a, b) => a.sortOrder - b.sortOrder);
   const toggle = (list: number[], set: (v: number[]) => void, id: number) => set(list.includes(id) ? list.filter((x) => x !== id) : [...list, id]);
@@ -132,6 +133,24 @@ export default function GarmentTypesPage() {
                 </select>
                 <span className="text-xs text-gray-400">Define qué componentes lleva la referencia de este tipo.</span>
               </label>
+              <label className="block">
+                <span className="text-sm font-medium text-gray-700">Marca</span>
+                <select value={form.brandId ?? ''} onChange={(e) => setForm({ ...form, brandId: e.target.value === '' ? null : Number(e.target.value) })} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2">
+                  <option value="">— Sin marca —</option>
+                  {brands.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+                </select>
+                <span className="text-xs text-gray-400">La referencia de este tipo hereda esta marca.</span>
+              </label>
+              <div className="grid grid-cols-2 gap-3">
+                <label className="block">
+                  <span className="text-sm font-medium text-gray-700">Costo fijo (sugerido)</span>
+                  <input type="number" step="0.01" min="0" value={form.fixedCost ?? 0} onChange={(e) => setForm({ ...form, fixedCost: e.target.value === '' ? 0 : Number(e.target.value) })} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2" />
+                </label>
+                <label className="block">
+                  <span className="text-sm font-medium text-gray-700">Factor (sugerido)</span>
+                  <input type="number" step="0.0001" min="0" value={form.factor ?? 1} onChange={(e) => setForm({ ...form, factor: e.target.value === '' ? 1 : Number(e.target.value) })} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2" />
+                </label>
+              </div>
               <div className="block">
                 <span className="text-sm font-medium text-gray-700">Tallas del tipo</span>
                 <p className="text-xs text-gray-400 mb-2">Se traen a la referencia según el mercado.</p>

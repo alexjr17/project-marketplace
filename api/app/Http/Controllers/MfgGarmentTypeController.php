@@ -21,6 +21,9 @@ class MfgGarmentTypeController extends Controller
             'code' => ['required', 'string', 'max:10', Rule::unique('mfg_garment_types', 'code')->ignore($ignoreId)],
             'name' => 'required|string|max:120',
             'composition' => 'nullable|in:SUPERIOR,INFERIOR,SET',
+            'brandId' => 'nullable|integer|exists:mfg_brands,id',
+            'fixedCost' => 'nullable|numeric|min:0',
+            'factor' => 'nullable|numeric|min:0',
             'isActive' => 'boolean',
             'nationalSizeIds' => 'nullable|array',
             'nationalSizeIds.*' => 'integer|exists:mfg_sizes,id',
@@ -57,7 +60,7 @@ class MfgGarmentTypeController extends Controller
 
     public function index()
     {
-        return $this->success(MfgGarmentType::with('sizes:id,name,abbreviation,sortOrder')->orderBy('name')->get());
+        return $this->success(MfgGarmentType::with(['sizes:id,name,abbreviation,sortOrder', 'brand:id,name'])->orderBy('name')->get());
     }
 
     public function store(Request $request)
@@ -68,7 +71,7 @@ class MfgGarmentTypeController extends Controller
         $g = MfgGarmentType::create($data);
         $this->syncSizes($g, $national, $export);
 
-        return $this->created($g->load('sizes:id,name,abbreviation,sortOrder'), 'Tipo de prenda creado');
+        return $this->created($g->load(['sizes:id,name,abbreviation,sortOrder', 'brand:id,name']), 'Tipo de prenda creado');
     }
 
     public function update(Request $request, int $id)
@@ -83,7 +86,7 @@ class MfgGarmentTypeController extends Controller
         $g->fill($data)->save();
         $this->syncSizes($g, $national, $export);
 
-        return $this->success($g->load('sizes:id,name,abbreviation,sortOrder'), 'Tipo de prenda actualizado');
+        return $this->success($g->load(['sizes:id,name,abbreviation,sortOrder', 'brand:id,name']), 'Tipo de prenda actualizado');
     }
 
     public function destroy(int $id)
