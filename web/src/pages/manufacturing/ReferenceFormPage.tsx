@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Plus, Trash2, Save, ImageIcon, ChevronDown, Package, Boxes, Layers, Coins } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Pencil, Save, ImageIcon, ChevronDown, Package, Boxes, Layers, Coins } from 'lucide-react';
 import toast from 'react-hot-toast';
 import manufacturingService from '../../services/manufacturing.service';
 import MultiSelect from '../../components/manufacturing/MultiSelect';
@@ -72,6 +72,7 @@ export default function ReferenceFormPage() {
   // Borrador del formulario de alta de insumo (arriba); la tabla solo muestra lo agregado.
   const emptyDraft: MaterialRow = { inputId: '', colorId: '', componentKey: '', consumptionInitial: '', increment: '', consumption: '', unitValue: '', unitOfMeasure: '', notes: '' };
   const [draft, setDraft] = useState<MaterialRow>(emptyDraft);
+  const [editIdx, setEditIdx] = useState<number | null>(null); // fila en edición en línea
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -176,6 +177,21 @@ export default function ReferenceFormPage() {
     return Object.values(groups);
   }, [materials, inputs]);
 
+  // Insumos de la tabla agrupados por tipo (preserva el índice para editar/eliminar).
+  const TELA_FIRST = (a: string, b: string) => (a.toLowerCase().includes('tela') ? -1 : b.toLowerCase().includes('tela') ? 1 : 0);
+  const materialTableGroups = useMemo(() => {
+    const groups: Record<string, { name: string; classification: string; rows: { m: MaterialRow; i: number }[]; subtotal: number }> = {};
+    materials.forEach((m, i) => {
+      const inp = inputs.find((x) => x.id === m.inputId);
+      const typeName = inp?.inputType?.name ?? 'Sin tipo';
+      const cls = inp?.inputType?.classification ?? 'PRODUCTO';
+      (groups[typeName] ||= { name: typeName, classification: cls, rows: [], subtotal: 0 });
+      groups[typeName].rows.push({ m, i });
+      groups[typeName].subtotal += (Number(m.consumption) || 0) * (Number(m.unitValue) || 0);
+    });
+    return Object.values(groups).sort((a, b) => TELA_FIRST(a.name, b.name));
+  }, [materials, inputs]);
+
   const costVariable = useMemo(() => materials.reduce((t, m) => t + (Number(m.consumption) || 0) * (Number(m.unitValue) || 0), 0), [materials]);
   const costUnit = costVariable + (Number(fixedCost) || 0);
   const basePrice = costUnit * (Number(factor) || 0);
@@ -190,37 +206,53 @@ export default function ReferenceFormPage() {
       return n;
     });
   const addComponent = () => setComponents([...components, { _key: keyRef.current++, position: 'SUPERIOR', description: '' }]);
-  const removeMaterial = (i: number) => setMaterials(materials.filter((_, idx) => idx !== i));
+  const removeMaterial = (i: number) => { setMaterials(materials.filter((_, idx) => idx !== i)); setEditIdx(null); };
 
-  // Borrador: actualiza y recalcula el consumo final = inicial × (1 + incremento/100).
-  const patchDraft = (patch: Partial<MaterialRow>) => setDraft((prev) => {
-    const next = { ...prev, ...patch };
+  // Recalcula el consumo final = inicial × (1 + incremento/100) cuando cambian esos campos.
+  const recompute = (row: MaterialRow, patch: Partial<MaterialRow>): MaterialRow => {
+    const next = { ...row, ...patch };
     if ('consumptionInitial' in patch || 'increment' in patch) {
       const ini = Number(next.consumptionInitial) || 0; const inc = Number(next.increment) || 0;
       if (next.consumptionInitial !== '') next.consumption = String(Number((ini * (1 + inc / 100)).toFixed(4)));
     }
     return next;
-  });
+  };
 
-  // Al elegir un insumo en el borrador: trae sus lotes y pone el precio promedio por defecto.
+  // Trae los lotes de un insumo (cache) y devuelve su promedio.
+  const loadBatches = async (inputId: number): Promise<{ batches: MfgInputBatch[]; average: number }> => {
+    let data = batchCache[inputId];
+    if (!data) {
+      try { data = await manufacturingService.getInputBatches(inputId); setBatchCache((c) => ({ ...c, [inputId]: data! })); }
+      catch { data = { batches: [], average: 0 }; }
+    }
+    return data;
+  };
+
+  // --- Borrador (form de alta) ---
+  const patchDraft = (patch: Partial<MaterialRow>) => setDraft((prev) => recompute(prev, patch));
   const onSelectDraftInput = async (inputId: number | '') => {
     const inp = inputs.find((x) => x.id === inputId);
     patchDraft({ inputId, unitOfMeasure: inp?.unitOfMeasure ?? '', unitValue: '' });
     if (inputId === '') return;
-    let data = batchCache[inputId];
-    if (!data) {
-      try { data = await manufacturingService.getInputBatches(Number(inputId)); setBatchCache((c) => ({ ...c, [Number(inputId)]: data! })); }
-      catch { data = { batches: [], average: 0 }; }
-    }
-    if (data && data.average > 0) patchDraft({ unitValue: String(data.average) });
+    const data = await loadBatches(Number(inputId));
+    if (data.average > 0) patchDraft({ unitValue: String(data.average) });
   };
-
-  // Agrega el borrador a la tabla de insumos.
   const addDraft = () => {
     if (draft.inputId === '') { toast.error('Selecciona un insumo'); return; }
     if (!(Number(draft.consumption) > 0)) { toast.error('Ingresa el consumo'); return; }
     setMaterials([...materials, draft]);
     setDraft(emptyDraft);
+  };
+
+  // --- Edición en línea de una fila de la tabla ---
+  const patchMaterialAt = (i: number, patch: Partial<MaterialRow>) => setMaterials((prev) => prev.map((x, idx) => idx === i ? recompute(x, patch) : x));
+  const startEdit = async (i: number) => { setEditIdx(i); const iid = materials[i].inputId; if (iid !== '') await loadBatches(Number(iid)); };
+  const onSelectInputAt = async (i: number, inputId: number | '') => {
+    const inp = inputs.find((x) => x.id === inputId);
+    patchMaterialAt(i, { inputId, unitOfMeasure: inp?.unitOfMeasure ?? '' });
+    if (inputId === '') return;
+    const data = await loadBatches(Number(inputId));
+    if (data.average > 0) patchMaterialAt(i, { unitValue: String(data.average) });
   };
   const addGroup = () => {
     const g = garmentTypes.find((x) => x.id === garmentTypeId);
@@ -276,6 +308,70 @@ export default function ReferenceFormPage() {
   const expSizes = sizesForMarket('EXPORT');
   const primary = refColors.filter((c) => colorState[c.id] === 'PRIMARY');
   const secondary = refColors.filter((c) => colorState[c.id] === 'SECONDARY');
+
+  // Fila de la tabla de insumos (modo normal o edición en línea).
+  const renderMaterialRow = (m: MaterialRow, i: number) => {
+    if (editIdx === i) {
+      const eBatch = m.inputId !== '' ? batchCache[Number(m.inputId)] : undefined;
+      const eLots = eBatch?.batches ?? [];
+      return (
+        <tr key={i} className="bg-orange-50/40">
+          <td className="px-2 py-2">
+            <select value={m.inputId} onChange={(e) => onSelectInputAt(i, e.target.value === '' ? '' : Number(e.target.value))} className="w-full border border-gray-300 rounded px-1.5 py-1 text-xs">
+              <option value="">—</option>
+              {inputsByType.map(([tn, list]) => <optgroup key={tn} label={tn}>{list.map((inp) => <option key={inp.id} value={inp.id}>{inp.code} · {inp.name}</option>)}</optgroup>)}
+            </select>
+          </td>
+          <td className="px-2 py-2">
+            <select value={m.componentKey} onChange={(e) => patchMaterialAt(i, { componentKey: e.target.value === '' ? '' : Number(e.target.value) })} className="w-full border border-gray-300 rounded px-1.5 py-1 text-xs">
+              <option value="">—</option>{components.map((c) => <option key={c._key} value={c._key}>{c.position === 'SUPERIOR' ? 'Sup' : 'Inf'}{c.description ? ` · ${c.description}` : ''}</option>)}
+            </select>
+          </td>
+          <td className="px-2 py-2">
+            <select value={m.colorId} onChange={(e) => patchMaterialAt(i, { colorId: e.target.value === '' ? '' : Number(e.target.value) })} className="w-full border border-gray-300 rounded px-1.5 py-1 text-xs">
+              <option value="">Todos</option>{colors.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </td>
+          <td className="px-2 py-2"><input type="number" step="0.0001" min="0" value={m.consumptionInitial} onChange={(e) => patchMaterialAt(i, { consumptionInitial: e.target.value })} className="w-16 border border-gray-300 rounded px-1.5 py-1 text-xs text-right" /></td>
+          <td className="px-2 py-2"><input type="number" step="0.01" min="0" value={m.increment} onChange={(e) => patchMaterialAt(i, { increment: e.target.value })} className="w-14 border border-gray-300 rounded px-1.5 py-1 text-xs text-right" /></td>
+          <td className="px-2 py-2"><input type="number" step="0.0001" min="0" value={m.consumption} onChange={(e) => patchMaterialAt(i, { consumption: e.target.value })} className="w-16 border border-orange-300 rounded px-1.5 py-1 text-xs text-right" /></td>
+          <td className="px-2 py-2">
+            <input type="number" step="0.01" min="0" value={m.unitValue} onChange={(e) => patchMaterialAt(i, { unitValue: e.target.value })} className="w-20 border border-gray-300 rounded px-1.5 py-1 text-xs text-right" />
+            {eLots.length > 0 && (
+              <select onChange={(e) => { const v = e.target.value; if (v === 'avg') patchMaterialAt(i, { unitValue: String(eBatch!.average) }); else { const b = eLots.find((x) => String(x.id) === v); if (b) patchMaterialAt(i, { unitValue: String(b.unitCost), colorId: b.colorId ?? m.colorId }); } }} value="" className="mt-1 w-full border border-gray-200 rounded px-1 py-0.5 text-[10px]">
+                <option value="">lote…</option>
+                <option value="avg">Prom · {money(eBatch!.average)}</option>
+                {eLots.map((b) => <option key={b.id} value={b.id}>{b.color?.name ? `${b.color.name} · ` : ''}{money(Number(b.unitCost))}</option>)}
+              </select>
+            )}
+          </td>
+          <td className="px-2 py-2 text-right font-medium text-gray-800">{money((Number(m.consumption) || 0) * (Number(m.unitValue) || 0))}</td>
+          <td className="px-2 py-2 text-right"><button type="button" onClick={() => setEditIdx(null)} className="px-2 py-1 rounded bg-green-600 text-white text-xs">Listo</button></td>
+        </tr>
+      );
+    }
+    const inp = inputs.find((x) => x.id === m.inputId);
+    const comp = components.find((c) => c._key === m.componentKey);
+    const col2 = colors.find((c) => c.id === m.colorId);
+    return (
+      <tr key={i} className="hover:bg-gray-50">
+        <td className="px-3 py-2 text-gray-800">{inp ? `${inp.code} · ${inp.name}` : '—'}</td>
+        <td className="px-3 py-2 text-gray-600">{comp ? `${comp.position === 'SUPERIOR' ? 'Sup' : 'Inf'}${comp.description ? ' · ' + comp.description : ''}` : '—'}</td>
+        <td className="px-3 py-2 text-gray-600">{col2 ? col2.name : 'Todos'}</td>
+        <td className="px-3 py-2 text-right text-gray-600">{m.consumptionInitial || '—'}</td>
+        <td className="px-3 py-2 text-right text-gray-600">{m.increment && Number(m.increment) > 0 ? `${m.increment}%` : '—'}</td>
+        <td className="px-3 py-2 text-right font-medium text-gray-800">{m.consumption} {m.unitOfMeasure}</td>
+        <td className="px-3 py-2 text-right text-gray-600">{money(Number(m.unitValue) || 0)}</td>
+        <td className="px-3 py-2 text-right font-medium text-gray-800">{money((Number(m.consumption) || 0) * (Number(m.unitValue) || 0))}</td>
+        <td className="px-3 py-2 text-right">
+          <div className="flex items-center justify-end gap-0.5">
+            <button type="button" onClick={() => startEdit(i)} className="p-1.5 text-gray-400 hover:text-orange-600 rounded-lg"><Pencil className="w-4 h-4" /></button>
+            <button type="button" onClick={() => removeMaterial(i)} className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg"><Trash2 className="w-4 h-4" /></button>
+          </div>
+        </td>
+      </tr>
+    );
+  };
 
   return (
     <div className="max-w-5xl mx-auto">
@@ -562,22 +658,22 @@ export default function ReferenceFormPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
-                    {materials.map((m, i) => {
-                      const inp = inputs.find((x) => x.id === m.inputId);
-                      const comp = components.find((c) => c._key === m.componentKey);
-                      const col = colors.find((c) => c.id === m.colorId);
+                    {materialTableGroups.map((grp) => {
+                      const pct = basePrice > 0 ? (grp.subtotal / basePrice) * 100 : 0;
                       return (
-                        <tr key={i} className="hover:bg-gray-50">
-                          <td className="px-3 py-2 text-gray-800">{inp ? `${inp.code} · ${inp.name}` : '—'}</td>
-                          <td className="px-3 py-2 text-gray-600">{comp ? `${comp.position === 'SUPERIOR' ? 'Sup' : 'Inf'}${comp.description ? ' · ' + comp.description : ''}` : '—'}</td>
-                          <td className="px-3 py-2 text-gray-600">{col ? col.name : 'Todos'}</td>
-                          <td className="px-3 py-2 text-right text-gray-600">{m.consumptionInitial || '—'}</td>
-                          <td className="px-3 py-2 text-right text-gray-600">{m.increment && Number(m.increment) > 0 ? `${m.increment}%` : '—'}</td>
-                          <td className="px-3 py-2 text-right font-medium text-gray-800">{m.consumption} {m.unitOfMeasure}</td>
-                          <td className="px-3 py-2 text-right text-gray-600">{money(Number(m.unitValue) || 0)}</td>
-                          <td className="px-3 py-2 text-right font-medium text-gray-800">{money((Number(m.consumption) || 0) * (Number(m.unitValue) || 0))}</td>
-                          <td className="px-3 py-2 text-right"><button type="button" onClick={() => removeMaterial(i)} className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg"><Trash2 className="w-4 h-4" /></button></td>
-                        </tr>
+                        <Fragment key={grp.name}>
+                          <tr className="bg-slate-50 border-l-2 border-orange-400">
+                            <td colSpan={2} className="px-3 py-1.5 text-xs font-semibold text-gray-600 uppercase tracking-wide">
+                              {grp.name}
+                              {grp.classification === 'SERVICIO' && <span className="ml-1.5 px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 text-[10px] font-medium normal-case">Servicio</span>}
+                              <span className="ml-1.5 text-gray-400 font-normal normal-case">· {grp.rows.length} ítem{grp.rows.length > 1 ? 's' : ''}</span>
+                            </td>
+                            <td colSpan={5} className="px-3 py-1.5 text-right text-[11px] text-gray-400">{pct > 0 ? `${pct.toFixed(1)}% del precio` : ''}</td>
+                            <td className="px-3 py-1.5 text-right text-xs font-semibold text-gray-700">{money(grp.subtotal)}</td>
+                            <td />
+                          </tr>
+                          {grp.rows.map(({ m, i }) => renderMaterialRow(m, i))}
+                        </Fragment>
                       );
                     })}
                   </tbody>
