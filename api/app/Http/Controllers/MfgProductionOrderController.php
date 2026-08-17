@@ -130,6 +130,7 @@ class MfgProductionOrderController extends Controller
             'warehouseId' => 'nullable|integer|exists:mfg_warehouses,id',
             'collectionId' => 'nullable|integer|exists:mfg_collections,id',
             'semester' => 'nullable|string|max:2',
+            'market' => 'nullable|in:NATIONAL,EXPORT',
             'internalCode' => 'nullable|string|max:50',
             'scheduledAt' => 'nullable|date',
             'estimatedDeliveryAt' => 'nullable|date',
@@ -148,6 +149,7 @@ class MfgProductionOrderController extends Controller
                 'warehouseId' => $data['warehouseId'] ?? null,
                 'collectionId' => $data['collectionId'] ?? null,
                 'semester' => $semester,
+                'market' => $data['market'] ?? 'NATIONAL',
                 'internalCode' => $data['internalCode'] ?? null,
                 'scheduledAt' => $data['scheduledAt'] ?? null,
                 'estimatedDeliveryAt' => $data['estimatedDeliveryAt'] ?? null,
@@ -171,6 +173,7 @@ class MfgProductionOrderController extends Controller
             'warehouseId' => 'nullable|integer|exists:mfg_warehouses,id',
             'collectionId' => 'nullable|integer|exists:mfg_collections,id',
             'semester' => 'nullable|string|max:2',
+            'market' => 'nullable|in:NATIONAL,EXPORT',
             'internalCode' => 'nullable|string|max:50',
             'scheduledAt' => 'nullable|date',
             'estimatedDeliveryAt' => 'nullable|date',
@@ -200,6 +203,9 @@ class MfgProductionOrderController extends Controller
             // El semestre se deriva de la colección (que ya incluye año+semestre).
             if (array_key_exists('collectionId', $data) || array_key_exists('semester', $data)) {
                 $order->semester = $this->semesterFromCollection($order->collectionId) ?? ($data['semester'] ?? $order->semester);
+            }
+            if (array_key_exists('market', $data)) {
+                $order->market = $data['market'];
             }
             if (array_key_exists('internalCode', $data)) {
                 $order->internalCode = $data['internalCode'];

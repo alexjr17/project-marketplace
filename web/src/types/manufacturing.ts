@@ -131,6 +131,7 @@ export interface MfgPurchaseOrder {
   clientId: number;
   collectionId?: number | null;
   semester?: string | null;
+  market?: MfgMarket;
   status: MfgPurchaseStatus;
   dispatchStartDate?: string | null;
   deliveryDate?: string | null;
@@ -148,6 +149,7 @@ export interface MfgPurchaseOrderInput {
   clientId: number;
   collectionId?: number | null;
   semester?: string | null;
+  market?: MfgMarket;
   status?: MfgPurchaseStatus;
   dispatchStartDate?: string | null;
   deliveryDate?: string | null;
@@ -326,7 +328,7 @@ export interface MfgReferenceSize {
   id: number;
   referenceId: number;
   sizeId: number;
-  size?: { id: number; name: string; abbreviation: string; sortOrder: number };
+  size?: { id: number; name: string; abbreviation: string; sortOrder: number; market?: MfgMarket };
 }
 
 export interface MfgInputBatch {
@@ -497,6 +499,7 @@ export interface MfgProductionOrder {
   warehouseId?: number | null;
   collectionId?: number | null;
   semester?: string | null; // I | II
+  market?: MfgMarket;
   scheduledAt?: string | null;
   estimatedDeliveryAt?: string | null;
   status: MfgOrderStatus;
@@ -551,6 +554,7 @@ export interface MfgProductionOrderInput {
   warehouseId?: number | null;
   collectionId?: number | null;
   semester?: string | null;
+  market?: MfgMarket;
   internalCode?: string | null;
   scheduledAt?: string | null;
   estimatedDeliveryAt?: string | null;

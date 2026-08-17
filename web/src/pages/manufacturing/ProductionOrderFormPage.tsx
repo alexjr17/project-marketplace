@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Save } from 'lucide-react';
 import toast from 'react-hot-toast';
 import manufacturingService from '../../services/manufacturing.service';
-import type { MfgReference, MfgWarehouse, MfgCollection, MfgProductionOrderInput } from '../../types/manufacturing';
+import type { MfgReference, MfgWarehouse, MfgCollection, MfgProductionOrderInput, MfgMarket } from '../../types/manufacturing';
 
 export default function ProductionOrderFormPage() {
   const navigate = useNavigate();
@@ -14,6 +14,7 @@ export default function ProductionOrderFormPage() {
   const [ref, setRef] = useState<MfgReference | null>(null);
   const [warehouseId, setWarehouseId] = useState<number | ''>('');
   const [collectionId, setCollectionId] = useState<number | ''>('');
+  const [market, setMarket] = useState<MfgMarket>('NATIONAL');
   const [internalCode, setInternalCode] = useState('');
   const [scheduledAt, setScheduledAt] = useState('');
   const [estimatedDeliveryAt, setEstimatedDeliveryAt] = useState('');
@@ -56,7 +57,7 @@ export default function ProductionOrderFormPage() {
     finally { setLoadingRef(false); }
   };
 
-  const sizes = useMemo(() => (ref?.sizes ?? []).map((s) => s.size!).filter(Boolean).sort((a, b) => a.sortOrder - b.sortOrder), [ref]);
+  const sizes = useMemo(() => (ref?.sizes ?? []).map((s) => s.size!).filter(Boolean).filter((s) => (s.market ?? 'NATIONAL') === market).sort((a, b) => a.sortOrder - b.sortOrder), [ref, market]);
   const colors = useMemo(() => (ref?.colors ?? []).map((c) => c.color!).filter(Boolean), [ref]);
 
   const setCell = (sizeId: number, colorId: number, val: string) =>
@@ -83,6 +84,7 @@ export default function ProductionOrderFormPage() {
         referenceId: Number(referenceId),
         warehouseId: warehouseId === '' ? null : Number(warehouseId),
         collectionId: collectionId === '' ? null : Number(collectionId),
+        market,
         internalCode: internalCode.trim() || null,
         scheduledAt: scheduledAt || null,
         estimatedDeliveryAt: estimatedDeliveryAt || null,
@@ -132,6 +134,13 @@ export default function ProductionOrderFormPage() {
             <select value={collectionId} onChange={(e) => setCollectionId(e.target.value === '' ? '' : Number(e.target.value))} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2">
               <option value="">— Sin colección —</option>
               {collections.map((c) => <option key={c.id} value={c.id}>{c.name}{c.year ? ` (${c.year})` : ''}</option>)}
+            </select>
+          </label>
+          <label className="block">
+            <span className="text-sm font-medium text-gray-700">Mercado</span>
+            <select value={market} onChange={(e) => setMarket(e.target.value as MfgMarket)} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2">
+              <option value="NATIONAL">Nacional</option>
+              <option value="EXPORT">Exportación</option>
             </select>
           </label>
           <label className="block">

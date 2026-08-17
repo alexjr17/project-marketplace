@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Save, Plus, Trash2, Package } from 'lucide-react';
 import toast from 'react-hot-toast';
 import manufacturingService from '../../services/manufacturing.service';
-import type { MfgReference, MfgClient, MfgCollection, MfgPurchaseOrderInput } from '../../types/manufacturing';
+import type { MfgReference, MfgClient, MfgCollection, MfgPurchaseOrderInput, MfgMarket } from '../../types/manufacturing';
 
 interface Line { ref: MfgReference; qty: Record<number, Record<number, string>>; } // qty[sizeId][colorId]
 
@@ -17,6 +17,7 @@ export default function PurchaseOrderFormPage() {
 
   const [clientId, setClientId] = useState<number | ''>('');
   const [collectionId, setCollectionId] = useState<number | ''>('');
+  const [market, setMarket] = useState<MfgMarket>('NATIONAL');
   const [dispatchStartDate, setDispatchStartDate] = useState('');
   const [deliveryDate, setDeliveryDate] = useState('');
   const [partialDates, setPartialDates] = useState<string[]>([]);
@@ -65,7 +66,7 @@ export default function PurchaseOrderFormPage() {
     if (lines.length === 0) { toast.error('Agrega al menos una referencia'); return; }
     const refsPayload: MfgPurchaseOrderInput['references'] = [];
     for (const l of lines) {
-      const sizes = (l.ref.sizes ?? []).map((s) => s.size!).filter(Boolean);
+      const sizes = (l.ref.sizes ?? []).map((s) => s.size!).filter(Boolean).filter((s) => (s.market ?? 'NATIONAL') === market);
       const colors = (l.ref.colors ?? []).map((c) => c.color!).filter(Boolean);
       const items: { colorId: number; sizeId: number; quantity: number }[] = [];
       for (const s of sizes) for (const c of colors) {
@@ -81,6 +82,7 @@ export default function PurchaseOrderFormPage() {
       const order = await manufacturingService.createPurchaseOrder({
         clientId: Number(clientId),
         collectionId: collectionId === '' ? null : Number(collectionId),
+        market,
         dispatchStartDate: dispatchStartDate || null,
         deliveryDate: deliveryDate || null,
         partialDates: partialDates.filter(Boolean),
@@ -118,6 +120,14 @@ export default function PurchaseOrderFormPage() {
               <option value="">— Sin asignar —</option>
               {collections.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
+          </label>
+          <label className="block">
+            <span className="text-sm font-medium text-gray-700">Mercado</span>
+            <select value={market} onChange={(e) => setMarket(e.target.value as MfgMarket)} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2">
+              <option value="NATIONAL">Nacional</option>
+              <option value="EXPORT">Exportación</option>
+            </select>
+            <span className="text-[11px] text-gray-400">Define las tallas de la matriz.</span>
           </label>
           <label className="block">
             <span className="text-sm font-medium text-gray-700">Entrega desde</span>
@@ -178,7 +188,7 @@ export default function PurchaseOrderFormPage() {
         ) : (
           <div className="space-y-4">
             {lines.map((l) => {
-              const sizes = (l.ref.sizes ?? []).map((s) => s.size!).filter(Boolean).sort((a, b) => a.sortOrder - b.sortOrder);
+              const sizes = (l.ref.sizes ?? []).map((s) => s.size!).filter(Boolean).filter((s) => (s.market ?? 'NATIONAL') === market).sort((a, b) => a.sortOrder - b.sortOrder);
               const colors = (l.ref.colors ?? []).map((c) => c.color!).filter(Boolean);
               return (
                 <div key={l.ref.id} className="border border-gray-200 rounded-xl p-4">

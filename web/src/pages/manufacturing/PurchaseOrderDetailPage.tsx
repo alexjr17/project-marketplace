@@ -88,7 +88,7 @@ export default function PurchaseOrderDetailPage() {
             </div>
             <p className="text-gray-700 font-medium mt-1">{order.client?.name}{order.client?.city ? ` · ${order.client.city}` : ''}</p>
             <p className="text-sm text-gray-500 mt-1">
-              {order.collection ? `Colección: ${order.collection.name} · ` : ''}
+              {order.collection ? `Colección: ${order.collection.name} · ` : ''}{`${order.market === 'EXPORT' ? 'Exportación' : 'Nacional'} · `}
               {(order.dispatchStartDate || order.deliveryDate) ? `Entrega: ${order.dispatchStartDate ?? '…'} → ${order.deliveryDate ?? '…'} · ` : ''}Total: {totalQty} und
             </p>
             {order.partialDates && order.partialDates.length > 0 && (

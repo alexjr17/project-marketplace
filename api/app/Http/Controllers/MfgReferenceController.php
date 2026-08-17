@@ -31,7 +31,7 @@ class MfgReferenceController extends Controller
         'brand:id,name',
         'collection:id,name,year,semester',
         'colors.color:id,name,hexCode,code',
-        'sizes.size:id,name,abbreviation,sortOrder',
+        'sizes.size:id,name,abbreviation,sortOrder,market',
         'components',
         'materials.input:id,code,name,unitOfMeasure,inputTypeId,scope',
         'materials.input.inputType:id,name,classification',
