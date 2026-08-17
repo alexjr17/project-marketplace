@@ -47,6 +47,20 @@ export const manufacturingService = {
     await api.delete(`/manufacturing/inputs/${inputId}/batches/${batchId}`);
   },
 
+  // ==================== TASA DE CAMBIO ====================
+  async getExchangeRates(): Promise<import('../types/manufacturing').MfgExchangeRate[]> {
+    return (await api.get<import('../types/manufacturing').MfgExchangeRate[]>('/manufacturing/exchange-rates')).data ?? [];
+  },
+  async getActiveExchangeRate(): Promise<import('../types/manufacturing').MfgExchangeRate | null> {
+    return (await api.get<import('../types/manufacturing').MfgExchangeRate | null>('/manufacturing/exchange-rates/active')).data ?? null;
+  },
+  async createExchangeRate(data: { rate: number; currency?: string; effectiveDate?: string | null }): Promise<import('../types/manufacturing').MfgExchangeRate> {
+    return (await api.post<import('../types/manufacturing').MfgExchangeRate>('/manufacturing/exchange-rates', data)).data!;
+  },
+  async deleteExchangeRate(id: number): Promise<void> {
+    await api.delete(`/manufacturing/exchange-rates/${id}`);
+  },
+
   // ==================== MARCAS ====================
   async getBrands(): Promise<import('../types/manufacturing').MfgBrand[]> {
     return (await api.get<import('../types/manufacturing').MfgBrand[]>('/manufacturing/brands')).data ?? [];

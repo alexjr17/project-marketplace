@@ -67,6 +67,7 @@ export default function ReferenceFormPage() {
   const [components, setComponents] = useState<ComponentRow[]>([]);
   const [materials, setMaterials] = useState<MaterialRow[]>([]);
   const [groups, setGroups] = useState<GroupRow[]>([]);
+  const [exchangeRate, setExchangeRate] = useState(0); // COP por USD (para exportación)
   // Lotes por insumo (precio): cache { inputId: {batches, average} }.
   const [batchCache, setBatchCache] = useState<Record<number, { batches: MfgInputBatch[]; average: number }>>({});
   // Borrador del formulario de alta de insumo (arriba); la tabla solo muestra lo agregado.
@@ -89,6 +90,7 @@ export default function ReferenceFormPage() {
           manufacturingService.getInputs(),
         ]);
         setGarmentTypes(gts); setCollections(cols); setColors(cs); setSizes(ss); setInputs(ins);
+        try { const er = await manufacturingService.getActiveExchangeRate(); if (er) setExchangeRate(Number(er.rate)); } catch { /* noop */ }
 
         if (isEdit) {
           const r = await manufacturingService.getReference(refId);
@@ -199,8 +201,16 @@ export default function ReferenceFormPage() {
   const fixedPct = costVariable > 0 ? ((Number(fixedCost) || 0) / costVariable) * 100 : 0;
   const profit = basePrice - costUnit;
   const profitPct = basePrice > 0 ? (1 - costUnit / basePrice) * 100 : 0;
-  const groupPrice = (g: GroupRow) => (g.auto || !g.listPrice) ? (costUnit + (Number(g.fixedCostExtra) || 0)) * (Number(g.factor) || 1) : Number(g.listPrice);
+  // Precio del grupo: pesos para nacional (entero); dividido por la tasa (USD, 2 dec) para exportación.
+  const groupPrice = (g: GroupRow) => {
+    if (!(g.auto || !g.listPrice)) return Number(g.listPrice);
+    const pesos = (costUnit + (Number(g.fixedCostExtra) || 0)) * (Number(g.factor) || 1);
+    if (g.market === 'EXPORT') return exchangeRate > 0 ? Math.round((pesos / exchangeRate) * 100) / 100 : pesos;
+    return Math.round(pesos);
+  };
   const groupProfitPct = (g: GroupRow) => { const f = Number(g.factor) || 0; return f > 0 ? (1 - 1 / f) * 100 : 0; };
+  // Formato de moneda por grupo (US$ con 2 decimales para exportación).
+  const groupMoney = (g: GroupRow, n: number) => (g.market === 'EXPORT' ? 'US$' : '$') + n.toLocaleString('es-CO', { maximumFractionDigits: g.market === 'EXPORT' ? 2 : 0 });
 
   // Fija el conjunto de colores de un tipo (PRIMARY/SECONDARY); un color solo puede ser uno.
   const setColorsByType = (type: MfgColorType, ids: number[]) =>
@@ -295,7 +305,7 @@ export default function ReferenceFormPage() {
       })),
       sizeGroups: groups.map((g) => ({
         name: g.name.trim() || 'Grupo', market: g.market, fixedCostExtra: Number(g.fixedCostExtra) || 0,
-        factor: Number(g.factor) || 1, listPrice: g.auto ? 0 : (Number(g.listPrice) || 0), isWholesale: g.isWholesale, sizeIds: g.sizeIds,
+        factor: Number(g.factor) || 1, listPrice: g.auto ? groupPrice(g) : (Number(g.listPrice) || 0), isWholesale: g.isWholesale, sizeIds: g.sizeIds,
         surcharges: Object.entries(g.surcharges).map(([cid, amt]) => ({ colorId: Number(cid), amount: Number(amt) || 0 })).filter((s) => s.amount > 0),
       })),
     };
@@ -452,7 +462,7 @@ export default function ReferenceFormPage() {
                         <p className="font-medium text-gray-800 text-sm truncate">{g.name || 'Grupo'} <span className="text-xs text-gray-400">· {g.market === 'EXPORT' ? 'Exportación' : 'Nacional'}{g.isWholesale ? ' · Mayorista' : ''}</span></p>
                         <div className="flex flex-wrap gap-1 mt-0.5">{g.sizeIds.map((sid) => <span key={sid} className="text-[11px] bg-gray-100 text-gray-600 rounded px-1.5">{sizeById(sid)?.abbreviation}</span>)}</div>
                       </div>
-                      <span className="font-semibold text-orange-600">{money(groupPrice(g))}</span>
+                      <span className={`font-semibold ${g.market === 'EXPORT' ? 'text-blue-600' : 'text-orange-600'}`}>{groupMoney(g, groupPrice(g))}</span>
                     </div>
                   ))}
                 </div>
@@ -770,15 +780,15 @@ export default function ReferenceFormPage() {
                                 </label>
                               )}
                             </div>
-                            <label className="block"><span className="text-xs text-gray-500">Precio Lista</span>
-                              <input type="number" step="0.01" min="0" disabled={g.auto} value={g.auto ? Math.round(groupPrice(g)) : g.listPrice} onChange={(e) => set({ listPrice: e.target.value })} className="mt-1 w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm disabled:bg-gray-50 disabled:text-gray-500" />
-                              <label className="inline-flex items-center gap-1 mt-1 text-[11px] text-gray-500"><input type="checkbox" checked={g.auto} onChange={(e) => set({ auto: e.target.checked })} /> Auto: <b className={g.market === 'EXPORT' ? 'text-blue-600' : 'text-orange-600'}>{money(Math.round(groupPrice(g)))}</b></label>
-                            </label>
+                            <div className="block"><span className="text-xs text-gray-500">Precio Lista</span>
+                              <div className="mt-1 flex"><span className="inline-flex items-center px-2 rounded-l-lg border border-r-0 border-gray-300 bg-gray-100 text-gray-500 text-sm">{g.market === 'EXPORT' ? 'US$' : '$'}</span><input type="number" step="0.01" min="0" disabled={g.auto} value={g.auto ? groupPrice(g) : g.listPrice} onChange={(e) => set({ listPrice: e.target.value })} className="w-full border border-gray-300 rounded-r-lg px-2 py-1.5 text-sm disabled:bg-gray-50 disabled:text-gray-500" /></div>
+                              <label className="inline-flex items-center gap-1 mt-1 text-[11px] text-gray-500 cursor-pointer"><input type="checkbox" checked={g.auto} onChange={(e) => set({ auto: e.target.checked })} /> Auto: <b className={g.market === 'EXPORT' ? 'text-blue-600' : 'text-orange-600'}>{groupMoney(g, groupPrice(g))}</b></label>
+                            </div>
                           </div>
                           {/* Precio Final destacado */}
                           <div className={`mt-2 rounded-lg py-2 text-center border ${g.market === 'EXPORT' ? 'bg-blue-50 border-blue-200' : 'bg-orange-50 border-orange-200'}`}>
-                            <p className="text-[11px] text-gray-500">Precio Final</p>
-                            <p className={`text-lg font-bold ${g.market === 'EXPORT' ? 'text-blue-700' : 'text-orange-700'}`}>{money(g.auto || !g.listPrice ? Math.round(groupPrice(g)) : Number(g.listPrice))}</p>
+                            <p className="text-[11px] text-gray-500">Precio Final{g.market === 'EXPORT' && exchangeRate > 0 ? ` · tasa ${money(exchangeRate)}` : ''}</p>
+                            <p className={`text-lg font-bold ${g.market === 'EXPORT' ? 'text-blue-700' : 'text-orange-700'}`}>{groupMoney(g, g.auto || !g.listPrice ? groupPrice(g) : Number(g.listPrice))}</p>
                           </div>
                         </div>
                         {/* Derecha: Tallas + Recargo por color (con scroll al desbordar) */}

@@ -723,6 +723,12 @@ Route::prefix('manufacturing')->middleware('auth:sanctum')->group(function () {
         Route::post('{id}/batches', [\App\Http\Controllers\MfgInputController::class, 'storeBatch'])->whereNumber('id');
         Route::delete('{id}/batches/{batchId}', [\App\Http\Controllers\MfgInputController::class, 'deleteBatch'])->whereNumber('id')->whereNumber('batchId');
     });
+    Route::prefix('exchange-rates')->middleware('permission:manufacturing.catalogs.view')->group(function () {
+        Route::get('/', [\App\Http\Controllers\MfgExchangeRateController::class, 'index']);
+        Route::get('active', [\App\Http\Controllers\MfgExchangeRateController::class, 'active']);
+        Route::post('/', [\App\Http\Controllers\MfgExchangeRateController::class, 'store']);
+        Route::delete('{id}', [\App\Http\Controllers\MfgExchangeRateController::class, 'destroy'])->whereNumber('id');
+    });
     Route::prefix('brands')->middleware('permission:manufacturing.catalogs.view')->group(function () {
         Route::get('/', [\App\Http\Controllers\MfgBrandController::class, 'index']);
         Route::post('/', [\App\Http\Controllers\MfgBrandController::class, 'store']);

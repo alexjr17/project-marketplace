@@ -25,6 +25,7 @@ import {
   Users,
   Truck,
   BadgeCheck,
+  DollarSign,
   Store,
 } from 'lucide-react';
 import type { Permission } from '../../types/roles';
@@ -69,6 +70,7 @@ const menuWithSubmenus: {
       { path: '/manufacturing/sizes', label: 'Tallas', icon: Ruler, permission: 'manufacturing.catalogs.view' },
       { path: '/manufacturing/input-types', label: 'Tipos de insumo', icon: Boxes, permission: 'manufacturing.catalogs.view' },
       { path: '/manufacturing/inputs', label: 'Insumos', icon: Box, permission: 'manufacturing.catalogs.view' },
+      { path: '/manufacturing/exchange-rates', label: 'Tasa de cambio', icon: DollarSign, permission: 'manufacturing.catalogs.view' },
     ],
   },
   {

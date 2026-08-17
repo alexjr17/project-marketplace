@@ -16,6 +16,15 @@ export interface MfgBrand {
   updatedAt?: string;
 }
 
+export interface MfgExchangeRate {
+  id: number;
+  rate: string | number;
+  currency: string;
+  isActive: boolean;
+  effectiveDate?: string | null;
+  createdAt?: string;
+}
+
 export interface MfgGarmentType {
   id: number;
   code: string;
