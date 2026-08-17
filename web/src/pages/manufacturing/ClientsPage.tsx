@@ -4,7 +4,7 @@ import toast from 'react-hot-toast';
 import manufacturingService from '../../services/manufacturing.service';
 import type { MfgClient } from '../../types/manufacturing';
 
-const empty = { name: '', documentId: '', businessName: '', phone: '', city: '', isActive: true };
+const empty = { name: '', documentId: '', documentType: '', businessName: '', email: '', phone: '', city: '', invoiceAddress: '', dispatchAddress: '', creditDays: null as number | null, isActive: true };
 
 export default function ClientsPage() {
   const [items, setItems] = useState<MfgClient[]>([]);
@@ -103,22 +103,51 @@ export default function ClientsPage() {
                 <input value={form.name ?? ''} onChange={(e) => setForm({ ...form, name: e.target.value })} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2" />
               </label>
               <label className="block">
-                <span className="text-sm font-medium text-gray-700">Nombre del negocio</span>
+                <span className="text-sm font-medium text-gray-700">Nombre del negocio / razón social</span>
                 <input value={form.businessName ?? ''} onChange={(e) => setForm({ ...form, businessName: e.target.value })} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2" />
               </label>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-3 gap-3">
                 <label className="block">
+                  <span className="text-sm font-medium text-gray-700">Tipo doc.</span>
+                  <select value={form.documentType ?? ''} onChange={(e) => setForm({ ...form, documentType: e.target.value })} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2">
+                    <option value="">—</option>
+                    <option value="C.C">C.C</option>
+                    <option value="NIT">NIT</option>
+                    <option value="Otro">Otro</option>
+                  </select>
+                </label>
+                <label className="block col-span-2">
                   <span className="text-sm font-medium text-gray-700">Documento / NIT</span>
                   <input value={form.documentId ?? ''} onChange={(e) => setForm({ ...form, documentId: e.target.value })} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2" />
                 </label>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <label className="block">
+                  <span className="text-sm font-medium text-gray-700">Email</span>
+                  <input type="email" value={form.email ?? ''} onChange={(e) => setForm({ ...form, email: e.target.value })} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2" />
+                </label>
+                <label className="block">
+                  <span className="text-sm font-medium text-gray-700">Teléfono</span>
+                  <input value={form.phone ?? ''} onChange={(e) => setForm({ ...form, phone: e.target.value })} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2" />
+                </label>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
                 <label className="block">
                   <span className="text-sm font-medium text-gray-700">Ciudad</span>
                   <input value={form.city ?? ''} onChange={(e) => setForm({ ...form, city: e.target.value })} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2" />
                 </label>
+                <label className="block">
+                  <span className="text-sm font-medium text-gray-700">Plazo crédito (días)</span>
+                  <input type="number" min="0" value={form.creditDays ?? ''} onChange={(e) => setForm({ ...form, creditDays: e.target.value === '' ? null : Number(e.target.value) })} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2" />
+                </label>
               </div>
               <label className="block">
-                <span className="text-sm font-medium text-gray-700">Teléfono</span>
-                <input value={form.phone ?? ''} onChange={(e) => setForm({ ...form, phone: e.target.value })} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2" />
+                <span className="text-sm font-medium text-gray-700">Dirección de facturación</span>
+                <input value={form.invoiceAddress ?? ''} onChange={(e) => setForm({ ...form, invoiceAddress: e.target.value })} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2" />
+              </label>
+              <label className="block">
+                <span className="text-sm font-medium text-gray-700">Dirección de despacho</span>
+                <input value={form.dispatchAddress ?? ''} onChange={(e) => setForm({ ...form, dispatchAddress: e.target.value })} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2" />
               </label>
               <label className="flex items-center gap-2">
                 <input type="checkbox" checked={form.isActive ?? true} onChange={(e) => setForm({ ...form, isActive: e.target.checked })} />

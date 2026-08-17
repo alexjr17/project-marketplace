@@ -10,6 +10,10 @@ class MfgPurchaseOrder extends BaseModel
 {
     protected $table = 'mfg_purchase_orders';
 
+    protected $casts = [
+        'partialDates' => 'array',
+    ];
+
     public function client()
     {
         return $this->belongsTo(MfgClient::class, 'clientId');

@@ -16,9 +16,14 @@ class MfgClientController extends Controller
         return [
             'name' => 'required|string|max:150',
             'documentId' => 'nullable|string|max:40',
+            'documentType' => 'nullable|in:C.C,NIT,Otro',
             'businessName' => 'nullable|string|max:150',
+            'email' => 'nullable|email|max:150',
             'phone' => 'nullable|string|max:40',
             'city' => 'nullable|string|max:100',
+            'invoiceAddress' => 'nullable|string|max:200',
+            'dispatchAddress' => 'nullable|string|max:200',
+            'creditDays' => 'nullable|integer|min:0|max:365',
             'isActive' => 'boolean',
         ];
     }

@@ -64,7 +64,6 @@ export default function ProductionOrderDetailPage() {
   // Campos de cabecera (paridad con fabrica-ropa).
   const [collections, setCollections] = useState<MfgCollection[]>([]);
   const [editCollectionId, setEditCollectionId] = useState<number | ''>('');
-  const [editSemester, setEditSemester] = useState('');
   const [editInternalCode, setEditInternalCode] = useState('');
   const [editScheduledAt, setEditScheduledAt] = useState('');
   const [editEstimatedDeliveryAt, setEditEstimatedDeliveryAt] = useState('');
@@ -85,7 +84,6 @@ export default function ProductionOrderDetailPage() {
       setEditNotes(order.notes ?? '');
       setCollections(cols);
       setEditCollectionId(order.collectionId ?? '');
-      setEditSemester(order.semester ?? '');
       setEditInternalCode(order.internalCode ?? '');
       setEditScheduledAt(order.scheduledAt ? order.scheduledAt.slice(0, 10) : '');
       setEditEstimatedDeliveryAt(order.estimatedDeliveryAt ? order.estimatedDeliveryAt.slice(0, 10) : '');
@@ -135,7 +133,6 @@ export default function ProductionOrderDetailPage() {
         referenceId: Number(editRefId),
         warehouseId: editWarehouseId === '' ? null : Number(editWarehouseId),
         collectionId: editCollectionId === '' ? null : Number(editCollectionId),
-        semester: editSemester || null,
         internalCode: editInternalCode.trim() || null,
         scheduledAt: editScheduledAt || null,
         estimatedDeliveryAt: editEstimatedDeliveryAt || null,
@@ -536,14 +533,6 @@ export default function ProductionOrderDetailPage() {
                   <select value={editCollectionId} onChange={(e) => setEditCollectionId(e.target.value === '' ? '' : Number(e.target.value))} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2">
                     <option value="">— Sin asignar —</option>
                     {collections.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                  </select>
-                </label>
-                <label className="block">
-                  <span className="text-sm font-medium text-gray-700">Semestre</span>
-                  <select value={editSemester} onChange={(e) => setEditSemester(e.target.value)} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2">
-                    <option value="">—</option>
-                    <option value="I">I</option>
-                    <option value="II">II</option>
                   </select>
                 </label>
                 <label className="block">

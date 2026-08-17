@@ -83,9 +83,14 @@ export interface MfgClient {
   id: number;
   name: string;
   documentId?: string | null;
+  documentType?: string | null; // C.C | NIT | Otro
   businessName?: string | null;
+  email?: string | null;
   phone?: string | null;
   city?: string | null;
+  invoiceAddress?: string | null;
+  dispatchAddress?: string | null;
+  creditDays?: number | null;
   isActive: boolean;
   createdAt?: string;
   updatedAt?: string;
@@ -113,7 +118,9 @@ export interface MfgPurchaseOrder {
   collectionId?: number | null;
   semester?: string | null;
   status: MfgPurchaseStatus;
+  dispatchStartDate?: string | null;
   deliveryDate?: string | null;
+  partialDates?: string[] | null;
   notes?: string | null;
   createdAt?: string;
   client?: { id: number; name: string; businessName?: string | null; city?: string | null; phone?: string | null };
@@ -128,7 +135,9 @@ export interface MfgPurchaseOrderInput {
   collectionId?: number | null;
   semester?: string | null;
   status?: MfgPurchaseStatus;
+  dispatchStartDate?: string | null;
   deliveryDate?: string | null;
+  partialDates?: string[];
   notes?: string | null;
   references: { referenceId: number; items: { colorId: number; sizeId: number; quantity: number }[] }[];
 }
@@ -158,6 +167,9 @@ export interface MfgDispatch {
   warehouseId?: number | null;
   type: MfgDispatchType;
   status: MfgDispatchStatus;
+  shipmentNumber?: string | null;
+  invoiceNumber?: string | null;
+  invoicedAt?: string | null;
   notes?: string | null;
   dispatchedAt?: string | null;
   createdAt?: string;

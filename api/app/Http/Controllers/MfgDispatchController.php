@@ -126,6 +126,9 @@ class MfgDispatchController extends Controller
                 'warehouseId' => $data['warehouseId'] ?? null,
                 'type' => $data['type'] ?? 'VENTA',
                 'status' => 'DRAFT',
+                'shipmentNumber' => $data['shipmentNumber'] ?? null,
+                'invoiceNumber' => $data['invoiceNumber'] ?? null,
+                'invoicedAt' => $data['invoicedAt'] ?? null,
                 'notes' => $data['notes'] ?? null,
                 'createdBy' => $request->user()?->id,
             ]);
@@ -153,6 +156,9 @@ class MfgDispatchController extends Controller
                 'purchaseOrderId' => $data['purchaseOrderId'] ?? null,
                 'warehouseId' => $data['warehouseId'] ?? null,
                 'type' => $data['type'] ?? 'VENTA',
+                'shipmentNumber' => $data['shipmentNumber'] ?? null,
+                'invoiceNumber' => $data['invoiceNumber'] ?? null,
+                'invoicedAt' => $data['invoicedAt'] ?? null,
                 'notes' => $data['notes'] ?? null,
             ]);
             $d->items()->delete();
@@ -221,6 +227,26 @@ class MfgDispatchController extends Controller
         });
 
         return $this->success($d->load(self::RELATIONS), 'Despacho anulado');
+    }
+
+    /** Registra la remisión / facturación del despacho (puede ser post-confirmación). */
+    public function billing(Request $request, int $id)
+    {
+        $d = MfgDispatch::find($id);
+        if (! $d) {
+            return $this->error('Despacho no encontrado', 404);
+        }
+        if ($d->status === 'CANCELLED') {
+            return $this->error('El despacho está anulado.', 422);
+        }
+        $data = $request->validate([
+            'shipmentNumber' => 'nullable|string|max:60',
+            'invoiceNumber' => 'nullable|string|max:60',
+            'invoicedAt' => 'nullable|date',
+        ]);
+        $d->fill($data)->save();
+
+        return $this->success($d->load(self::RELATIONS), 'Facturación actualizada');
     }
 
     public function destroy(int $id)
@@ -343,6 +369,9 @@ class MfgDispatchController extends Controller
             'purchaseOrderId' => 'nullable|integer|exists:mfg_purchase_orders,id',
             'warehouseId' => 'nullable|integer|exists:mfg_warehouses,id',
             'type' => 'nullable|in:VENTA,CONSIGNACION,TRASLADO,MUESTRA',
+            'shipmentNumber' => 'nullable|string|max:60',
+            'invoiceNumber' => 'nullable|string|max:60',
+            'invoicedAt' => 'nullable|date',
             'notes' => 'nullable|string',
             'items' => 'required|array|min:1',
             'items.*.referenceId' => 'required|integer|exists:mfg_references,id',

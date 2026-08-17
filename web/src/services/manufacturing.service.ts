@@ -277,6 +277,9 @@ export const manufacturingService = {
   async cancelDispatch(id: number): Promise<import('../types/manufacturing').MfgDispatch> {
     return (await api.post<import('../types/manufacturing').MfgDispatch>(`/manufacturing/dispatches/${id}/cancel`, {})).data!;
   },
+  async updateDispatchBilling(id: number, data: { shipmentNumber?: string | null; invoiceNumber?: string | null; invoicedAt?: string | null }): Promise<import('../types/manufacturing').MfgDispatch> {
+    return (await api.patch<import('../types/manufacturing').MfgDispatch>(`/manufacturing/dispatches/${id}/billing`, data)).data!;
+  },
   async deleteDispatch(id: number): Promise<void> {
     await api.delete(`/manufacturing/dispatches/${id}`);
   },

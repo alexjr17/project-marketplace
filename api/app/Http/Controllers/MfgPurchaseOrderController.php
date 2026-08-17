@@ -66,9 +66,11 @@ class MfgPurchaseOrderController extends Controller
                 'code' => $this->nextCode(),
                 'clientId' => $data['clientId'],
                 'collectionId' => $data['collectionId'] ?? null,
-                'semester' => $data['semester'] ?? null,
+                'semester' => $this->semesterFrom($data),
                 'status' => $data['status'] ?? 'DRAFT',
+                'dispatchStartDate' => $data['dispatchStartDate'] ?? null,
                 'deliveryDate' => $data['deliveryDate'] ?? null,
+                'partialDates' => $this->cleanDates($data['partialDates'] ?? null),
                 'notes' => $data['notes'] ?? null,
                 'createdBy' => $request->user()?->id,
             ]);
@@ -95,8 +97,10 @@ class MfgPurchaseOrderController extends Controller
             $order->update([
                 'clientId' => $data['clientId'],
                 'collectionId' => $data['collectionId'] ?? null,
-                'semester' => $data['semester'] ?? null,
+                'semester' => $this->semesterFrom($data),
+                'dispatchStartDate' => $data['dispatchStartDate'] ?? null,
                 'deliveryDate' => $data['deliveryDate'] ?? null,
+                'partialDates' => $this->cleanDates($data['partialDates'] ?? null),
                 'notes' => $data['notes'] ?? null,
             ]);
             // Reemplaza el detalle (solo celdas > 0).
@@ -170,9 +174,13 @@ class MfgPurchaseOrderController extends Controller
                 $prod = MfgProductionOrder::createForReference(
                     (int) $referenceId,
                     array_values($agg),
-                    $order->id,
-                    $request->user()?->id,
-                    'Generada desde pedido '.$order->code,
+                    [
+                        'purchaseOrderId' => $order->id,
+                        'collectionId' => $order->collectionId,
+                        'semester' => $order->semester,
+                        'notes' => 'Generada desde pedido '.$order->code,
+                        'createdBy' => $request->user()?->id,
+                    ],
                 );
                 // Marca las celdas del pedido como enviadas a producción.
                 $order->items()->where('referenceId', $referenceId)->whereNull('productionOrderId')
@@ -207,7 +215,10 @@ class MfgPurchaseOrderController extends Controller
             'collectionId' => 'nullable|integer|exists:mfg_collections,id',
             'semester' => 'nullable|in:I,II',
             'status' => 'nullable|in:DRAFT,APPROVED,IN_PRODUCTION,DELIVERED,CANCELLED',
+            'dispatchStartDate' => 'nullable|date',
             'deliveryDate' => 'nullable|date',
+            'partialDates' => 'nullable|array|max:4',
+            'partialDates.*' => 'nullable|date',
             'notes' => 'nullable|string',
             'references' => 'required|array|min:1',
             'references.*.referenceId' => 'required|integer|exists:mfg_references,id',
@@ -216,6 +227,30 @@ class MfgPurchaseOrderController extends Controller
             'references.*.items.*.sizeId' => 'required|integer|exists:mfg_sizes,id',
             'references.*.items.*.quantity' => 'required|integer|min:0',
         ]);
+    }
+
+    /** Limpia la lista de fechas parciales (quita vacías, reindexada). */
+    private function cleanDates(?array $dates): ?array
+    {
+        if (empty($dates)) {
+            return null;
+        }
+        $clean = array_values(array_filter($dates, fn ($d) => ! empty($d)));
+
+        return $clean ?: null;
+    }
+
+    /** El semestre se toma de la colección (que ya incluye año+semestre). */
+    private function semesterFrom(array $data): ?string
+    {
+        if (! empty($data['collectionId'])) {
+            $sem = \App\Models\MfgCollection::whereKey($data['collectionId'])->value('semester');
+            if ($sem) {
+                return $sem;
+            }
+        }
+
+        return $data['semester'] ?? null;
     }
 
     private function syncItems(MfgPurchaseOrder $order, array $references): void

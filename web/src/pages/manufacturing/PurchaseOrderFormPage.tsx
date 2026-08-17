@@ -17,8 +17,9 @@ export default function PurchaseOrderFormPage() {
 
   const [clientId, setClientId] = useState<number | ''>('');
   const [collectionId, setCollectionId] = useState<number | ''>('');
-  const [semester, setSemester] = useState('');
+  const [dispatchStartDate, setDispatchStartDate] = useState('');
   const [deliveryDate, setDeliveryDate] = useState('');
+  const [partialDates, setPartialDates] = useState<string[]>([]);
   const [notes, setNotes] = useState('');
 
   const [pickRef, setPickRef] = useState<number | ''>('');
@@ -80,8 +81,9 @@ export default function PurchaseOrderFormPage() {
       const order = await manufacturingService.createPurchaseOrder({
         clientId: Number(clientId),
         collectionId: collectionId === '' ? null : Number(collectionId),
-        semester: semester || null,
+        dispatchStartDate: dispatchStartDate || null,
         deliveryDate: deliveryDate || null,
+        partialDates: partialDates.filter(Boolean),
         notes: notes.trim() || null,
         references: refsPayload,
       });
@@ -118,17 +120,35 @@ export default function PurchaseOrderFormPage() {
             </select>
           </label>
           <label className="block">
-            <span className="text-sm font-medium text-gray-700">Semestre</span>
-            <select value={semester} onChange={(e) => setSemester(e.target.value)} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2">
-              <option value="">—</option>
-              <option value="I">I</option>
-              <option value="II">II</option>
-            </select>
+            <span className="text-sm font-medium text-gray-700">Entrega desde</span>
+            <input type="date" value={dispatchStartDate} onChange={(e) => setDispatchStartDate(e.target.value)} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2" />
           </label>
           <label className="block">
-            <span className="text-sm font-medium text-gray-700">Fecha de entrega</span>
+            <span className="text-sm font-medium text-gray-700">Entrega hasta</span>
             <input type="date" value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2" />
           </label>
+          {/* Entregas parciales (hasta 4 fechas) */}
+          <div className="block sm:col-span-2">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium text-gray-700">Entregas parciales</span>
+              {partialDates.length < 4 && (
+                <button type="button" onClick={() => setPartialDates((p) => [...p, ''])} className="text-sm text-orange-600 hover:underline">+ Agregar fecha</button>
+              )}
+            </div>
+            {partialDates.length === 0 ? (
+              <p className="text-xs text-gray-400 mt-1">Opcional: agrega fechas de entregas parciales.</p>
+            ) : (
+              <div className="mt-1 space-y-2">
+                {partialDates.map((d, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <span className="text-xs text-gray-400 w-8">#{i + 1}</span>
+                    <input type="date" value={d} onChange={(e) => setPartialDates((p) => p.map((x, j) => j === i ? e.target.value : x))} className="flex-1 border border-gray-300 rounded-lg px-3 py-2" />
+                    <button type="button" onClick={() => setPartialDates((p) => p.filter((_, j) => j !== i))} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg"><Trash2 className="w-4 h-4" /></button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
           <label className="block sm:col-span-2">
             <span className="text-sm font-medium text-gray-700">Notas</span>
             <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2" />

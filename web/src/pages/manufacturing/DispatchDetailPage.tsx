@@ -15,12 +15,31 @@ export default function DispatchDetailPage() {
   const [d, setD] = useState<MfgDispatch | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  // Remisión / facturación (editable).
+  const [bill, setBill] = useState({ shipmentNumber: '', invoiceNumber: '', invoicedAt: '' });
 
   const load = async () => {
     setLoading(true);
-    try { setD(await manufacturingService.getDispatch(dispatchId)); }
+    try {
+      const dd = await manufacturingService.getDispatch(dispatchId);
+      setD(dd);
+      setBill({ shipmentNumber: dd.shipmentNumber ?? '', invoiceNumber: dd.invoiceNumber ?? '', invoicedAt: dd.invoicedAt ?? '' });
+    }
     catch { toast.error('No se pudo cargar el despacho'); }
     finally { setLoading(false); }
+  };
+
+  const saveBilling = async () => {
+    setBusy(true);
+    try {
+      const dd = await manufacturingService.updateDispatchBilling(dispatchId, {
+        shipmentNumber: bill.shipmentNumber.trim() || null,
+        invoiceNumber: bill.invoiceNumber.trim() || null,
+        invoicedAt: bill.invoicedAt || null,
+      });
+      setD(dd); toast.success('Facturación guardada');
+    } catch (e: any) { toast.error(e?.message || 'No se pudo guardar'); }
+    finally { setBusy(false); }
   };
   useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [dispatchId]);
 
@@ -101,6 +120,29 @@ export default function DispatchDetailPage() {
           </div>
         </div>
       </div>
+
+      {d.status !== 'CANCELLED' && (
+        <div className="bg-white rounded-xl border border-gray-200 p-5 mb-5">
+          <h2 className="font-semibold text-gray-900 mb-3">Remisión / Facturación</h2>
+          <div className="grid sm:grid-cols-3 gap-3">
+            <label className="block">
+              <span className="text-sm font-medium text-gray-700">N° remisión</span>
+              <input value={bill.shipmentNumber} onChange={(e) => setBill({ ...bill, shipmentNumber: e.target.value })} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+            </label>
+            <label className="block">
+              <span className="text-sm font-medium text-gray-700">N° factura</span>
+              <input value={bill.invoiceNumber} onChange={(e) => setBill({ ...bill, invoiceNumber: e.target.value })} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+            </label>
+            <label className="block">
+              <span className="text-sm font-medium text-gray-700">Fecha facturación</span>
+              <input type="date" value={bill.invoicedAt} onChange={(e) => setBill({ ...bill, invoicedAt: e.target.value })} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+            </label>
+          </div>
+          <div className="flex justify-end mt-3">
+            <button onClick={saveBilling} disabled={busy} className="text-sm bg-slate-700 hover:bg-slate-800 text-white px-4 py-2 rounded-lg disabled:opacity-60">Guardar facturación</button>
+          </div>
+        </div>
+      )}
 
       <div className="space-y-4">
         {groups.map((g) => (

@@ -782,6 +782,7 @@ Route::prefix('manufacturing')->middleware('auth:sanctum')->group(function () {
         Route::put('{id}', [\App\Http\Controllers\MfgDispatchController::class, 'update'])->whereNumber('id');
         Route::post('{id}/confirm', [\App\Http\Controllers\MfgDispatchController::class, 'confirm'])->whereNumber('id');
         Route::post('{id}/cancel', [\App\Http\Controllers\MfgDispatchController::class, 'cancel'])->whereNumber('id');
+        Route::patch('{id}/billing', [\App\Http\Controllers\MfgDispatchController::class, 'billing'])->whereNumber('id');
         Route::delete('{id}', [\App\Http\Controllers\MfgDispatchController::class, 'destroy'])->whereNumber('id');
     });
     // Inventario de producto terminado por bodega.

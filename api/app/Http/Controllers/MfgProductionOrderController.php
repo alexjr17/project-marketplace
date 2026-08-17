@@ -117,6 +117,12 @@ class MfgProductionOrderController extends Controller
         return $this->success(['code' => MfgProductionOrder::nextCode()]);
     }
 
+    /** El semestre se toma de la colección (que ya incluye año+semestre). */
+    private function semesterFromCollection(?int $collectionId): ?string
+    {
+        return $collectionId ? \App\Models\MfgCollection::whereKey($collectionId)->value('semester') : null;
+    }
+
     public function store(Request $request)
     {
         $data = $request->validate([
@@ -134,22 +140,21 @@ class MfgProductionOrderController extends Controller
             'items.*.quantity' => 'required|integer|min:1',
         ]);
 
+        $semester = $this->semesterFromCollection($data['collectionId'] ?? null) ?? ($data['semester'] ?? null);
         $order = DB::transaction(fn () => MfgProductionOrder::createForReference(
             $data['referenceId'],
             $data['items'],
-            null,
-            $request->user()?->id,
-            $data['notes'] ?? null,
-            $data['warehouseId'] ?? null,
+            [
+                'warehouseId' => $data['warehouseId'] ?? null,
+                'collectionId' => $data['collectionId'] ?? null,
+                'semester' => $semester,
+                'internalCode' => $data['internalCode'] ?? null,
+                'scheduledAt' => $data['scheduledAt'] ?? null,
+                'estimatedDeliveryAt' => $data['estimatedDeliveryAt'] ?? null,
+                'notes' => $data['notes'] ?? null,
+                'createdBy' => $request->user()?->id,
+            ],
         ));
-
-        $order->update([
-            'collectionId' => $data['collectionId'] ?? null,
-            'semester' => $data['semester'] ?? null,
-            'internalCode' => $data['internalCode'] ?? null,
-            'scheduledAt' => $data['scheduledAt'] ?? null,
-            'estimatedDeliveryAt' => $data['estimatedDeliveryAt'] ?? null,
-        ]);
 
         return $this->created($order->load(self::RELATIONS), 'Orden de producción creada');
     }
@@ -192,8 +197,9 @@ class MfgProductionOrderController extends Controller
             if (array_key_exists('collectionId', $data)) {
                 $order->collectionId = $data['collectionId'];
             }
-            if (array_key_exists('semester', $data)) {
-                $order->semester = $data['semester'];
+            // El semestre se deriva de la colección (que ya incluye año+semestre).
+            if (array_key_exists('collectionId', $data) || array_key_exists('semester', $data)) {
+                $order->semester = $this->semesterFromCollection($order->collectionId) ?? ($data['semester'] ?? $order->semester);
             }
             if (array_key_exists('internalCode', $data)) {
                 $order->internalCode = $data['internalCode'];

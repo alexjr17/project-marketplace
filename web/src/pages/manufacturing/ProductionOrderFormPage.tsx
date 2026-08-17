@@ -14,7 +14,6 @@ export default function ProductionOrderFormPage() {
   const [ref, setRef] = useState<MfgReference | null>(null);
   const [warehouseId, setWarehouseId] = useState<number | ''>('');
   const [collectionId, setCollectionId] = useState<number | ''>('');
-  const [semester, setSemester] = useState('');
   const [internalCode, setInternalCode] = useState('');
   const [scheduledAt, setScheduledAt] = useState('');
   const [estimatedDeliveryAt, setEstimatedDeliveryAt] = useState('');
@@ -84,7 +83,6 @@ export default function ProductionOrderFormPage() {
         referenceId: Number(referenceId),
         warehouseId: warehouseId === '' ? null : Number(warehouseId),
         collectionId: collectionId === '' ? null : Number(collectionId),
-        semester: semester.trim() || null,
         internalCode: internalCode.trim() || null,
         scheduledAt: scheduledAt || null,
         estimatedDeliveryAt: estimatedDeliveryAt || null,
@@ -134,14 +132,6 @@ export default function ProductionOrderFormPage() {
             <select value={collectionId} onChange={(e) => setCollectionId(e.target.value === '' ? '' : Number(e.target.value))} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2">
               <option value="">— Sin colección —</option>
               {collections.map((c) => <option key={c.id} value={c.id}>{c.name}{c.year ? ` (${c.year})` : ''}</option>)}
-            </select>
-          </label>
-          <label className="block">
-            <span className="text-sm font-medium text-gray-700">Semestre</span>
-            <select value={semester} onChange={(e) => setSemester(e.target.value)} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2">
-              <option value="">— Sin semestre —</option>
-              <option value="I">I</option>
-              <option value="II">II</option>
             </select>
           </label>
           <label className="block">

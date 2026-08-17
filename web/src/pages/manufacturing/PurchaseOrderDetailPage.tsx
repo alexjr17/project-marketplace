@@ -88,9 +88,12 @@ export default function PurchaseOrderDetailPage() {
             </div>
             <p className="text-gray-700 font-medium mt-1">{order.client?.name}{order.client?.city ? ` · ${order.client.city}` : ''}</p>
             <p className="text-sm text-gray-500 mt-1">
-              {order.collection ? `Colección: ${order.collection.name} · ` : ''}{order.semester ? `Semestre ${order.semester} · ` : ''}
-              {order.deliveryDate ? `Entrega: ${order.deliveryDate} · ` : ''}Total: {totalQty} und
+              {order.collection ? `Colección: ${order.collection.name} · ` : ''}
+              {(order.dispatchStartDate || order.deliveryDate) ? `Entrega: ${order.dispatchStartDate ?? '…'} → ${order.deliveryDate ?? '…'} · ` : ''}Total: {totalQty} und
             </p>
+            {order.partialDates && order.partialDates.length > 0 && (
+              <p className="text-xs text-gray-500 mt-1">Entregas parciales: {order.partialDates.join(' · ')}</p>
+            )}
             {order.notes && <p className="text-sm text-gray-500 mt-1">Notas: {order.notes}</p>}
           </div>
           <div className="flex flex-col items-end gap-2">

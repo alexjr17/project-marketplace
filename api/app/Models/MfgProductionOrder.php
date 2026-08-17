@@ -47,17 +47,13 @@ class MfgProductionOrder extends BaseModel
      * ([{colorId,sizeId,quantity}]) y genera sus etapas. Reutilizado por la
      * creación manual y por la generación desde una orden de pedido.
      */
-    public static function createForReference(int $referenceId, array $items, ?int $purchaseOrderId = null, ?int $createdBy = null, ?string $notes = null, ?int $warehouseId = null): self
+    public static function createForReference(int $referenceId, array $items, array $attrs = []): self
     {
-        $order = self::create([
+        $order = self::create(array_merge([
             'code' => self::nextCode(),
             'referenceId' => $referenceId,
-            'purchaseOrderId' => $purchaseOrderId,
-            'warehouseId' => $warehouseId,
             'status' => 'PROGRAMMED',
-            'notes' => $notes,
-            'createdBy' => $createdBy,
-        ]);
+        ], $attrs));
         foreach ($items as $it) {
             if ((int) ($it['quantity'] ?? 0) <= 0) {
                 continue;
