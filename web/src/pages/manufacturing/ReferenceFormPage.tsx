@@ -696,16 +696,30 @@ export default function ReferenceFormPage() {
 
           {/* Costos y precios */}
           <Section icon={<Coins className="w-5 h-5" />} title="Costos y precios" subtitle="Costo fijo, factor y grupos de precio por tallas">
-            <div className="grid sm:grid-cols-2 gap-4 mb-4">
-              <label className="block"><span className="text-sm font-medium text-gray-700">Costo fijo</span><input type="number" step="0.01" min="0" value={fixedCost} onChange={(e) => setFixedCost(e.target.value)} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2" /><span className="text-[11px] text-gray-400">Sugerido por el tipo de prenda · {fixedPct.toFixed(1)}% del costo variable.</span></label>
-              <label className="block"><span className="text-sm font-medium text-gray-700">Factor</span><input type="number" step="0.0001" min="0" value={factor} onChange={(e) => setFactor(e.target.value)} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2" /><span className="text-[11px] text-gray-400">Sugerido por el tipo de prenda · margen {profitPct.toFixed(1)}%.</span></label>
+            {/* Costo Fijo · % Costo Fijo · Factor */}
+            <div className="grid sm:grid-cols-3 gap-3 mb-3">
+              <label className="block"><span className="text-sm font-medium text-gray-700">Costo Fijo</span><input type="number" step="0.01" min="0" value={fixedCost} onChange={(e) => setFixedCost(e.target.value)} placeholder="0.00" className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2" /><span className="text-[11px] text-gray-400">Sugerido por el tipo de prenda.</span></label>
+              <label className="block"><span className="text-sm font-medium text-gray-700">% Costo Fijo</span><input type="number" value={fixedPct.toFixed(2)} readOnly className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 bg-gray-50 text-gray-500" /><span className="text-[11px] text-gray-400">Costo fijo ÷ costo insumos.</span></label>
+              <label className="block"><span className="text-sm font-medium text-gray-700">Factor</span><input type="number" step="0.0001" min="0" value={factor} onChange={(e) => setFactor(e.target.value)} placeholder="1.00" className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2" /><span className="text-[11px] text-gray-400">Sugerido por el tipo de prenda.</span></label>
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-center mb-5">
-              <div className="bg-gray-50 rounded-lg p-2"><p className="text-[11px] text-gray-500">Costo insumos</p><p className="font-semibold text-gray-800 text-sm">{money(costVariable)}</p></div>
-              <div className="bg-gray-50 rounded-lg p-2"><p className="text-[11px] text-gray-500">Costo unidad</p><p className="font-semibold text-gray-800 text-sm">{money(costUnit)}</p></div>
-              <div className="bg-orange-50 rounded-lg p-2"><p className="text-[11px] text-orange-600">Precio base</p><p className="font-semibold text-orange-700 text-sm">{money(basePrice)}</p></div>
-              <div className="bg-green-50 rounded-lg p-2"><p className="text-[11px] text-green-600">Ganancia</p><p className="font-semibold text-green-700 text-sm">{money(profit)}</p></div>
-              <div className="bg-green-50 rounded-lg p-2"><p className="text-[11px] text-green-600">% ganancia</p><p className="font-semibold text-green-700 text-sm">{profitPct.toFixed(1)}%</p></div>
+            {/* Info: Costo Fijo · Factor · Costo Unitario · Precio de Venta */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-5">
+              <div className="border border-gray-200 bg-gray-50 rounded-lg px-3 py-2">
+                <p className="text-[11px] text-gray-500">Costo Fijo</p>
+                <p><span className="font-semibold text-orange-600">{fixedPct.toFixed(2)}%</span><span className="text-gray-300 mx-1">|</span><span className="text-gray-500 text-sm">{money(Number(fixedCost) || 0)}</span></p>
+              </div>
+              <div className="border border-gray-200 bg-gray-50 rounded-lg px-3 py-2">
+                <p className="text-[11px] text-gray-500">Factor (x{Number(factor) || 1})</p>
+                <p><span className="font-semibold text-green-600">{profitPct.toFixed(2)}%</span><span className="text-gray-300 mx-1">|</span><span className="text-gray-500 text-sm">+{money(profit)}</span></p>
+              </div>
+              <div className="border border-blue-200 bg-blue-50 rounded-lg px-3 py-2">
+                <p className="text-[11px] text-blue-600">Costo Unitario</p>
+                <p className="text-lg font-bold text-blue-700">{money(costUnit)}</p>
+              </div>
+              <div className="border border-green-200 bg-green-50 rounded-lg px-3 py-2">
+                <p className="text-[11px] text-green-600">Precio de Venta</p>
+                <p className="text-lg font-bold text-green-700">{money(basePrice)}</p>
+              </div>
             </div>
 
             <div className="flex items-center justify-between mb-2">
@@ -716,39 +730,66 @@ export default function ReferenceFormPage() {
               <div className="space-y-4">
                 {groups.map((g, gi) => {
                   const set = (patch: Partial<GroupRow>) => setGroups(groups.map((x, idx) => idx === gi ? { ...x, ...patch } : x));
+                  const accent = g.market === 'EXPORT' ? 'blue' : 'orange';
+                  const marketSizes = sizesForMarket(g.market);
                   return (
-                    <div key={gi} className="border border-gray-200 rounded-xl p-4">
-                      <div className="grid sm:grid-cols-4 gap-3">
-                        <input value={g.name} onChange={(e) => set({ name: e.target.value })} placeholder="Nombre del grupo" className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm sm:col-span-2" />
-                        <select value={g.market} onChange={(e) => { const m = e.target.value as MfgMarket; set({ market: m, sizeIds: sizesForMarket(m).map((s) => s.id) }); }} className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm"><option value="NATIONAL">Nacional</option><option value="EXPORT">Exportación</option></select>
-                        <label className="flex items-center gap-2 text-sm text-gray-700"><input type="checkbox" checked={g.isWholesale} onChange={(e) => set({ isWholesale: e.target.checked })} /> Mayorista</label>
+                    <div key={gi} className={`border rounded-xl overflow-hidden ${g.market === 'EXPORT' ? 'border-blue-200' : 'border-orange-200'}`}>
+                      {/* Header: nombre · mercado · mayorista · eliminar */}
+                      <div className={`flex items-center gap-2 flex-wrap px-3 py-2 ${g.market === 'EXPORT' ? 'bg-blue-50' : 'bg-orange-50'}`}>
+                        <input value={g.name} onChange={(e) => set({ name: e.target.value })} placeholder="Nombre del grupo" className="flex-1 min-w-[8rem] border border-gray-300 rounded-lg px-2 py-1.5 text-sm bg-white" />
+                        <select value={g.market} onChange={(e) => { const m = e.target.value as MfgMarket; set({ market: m, sizeIds: sizesForMarket(m).map((s) => s.id) }); }} className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm bg-white"><option value="NATIONAL">Nacional</option><option value="EXPORT">Exportación</option></select>
+                        <label className="inline-flex items-center gap-1.5 text-sm text-gray-700"><input type="checkbox" checked={g.isWholesale} onChange={(e) => set({ isWholesale: e.target.checked })} /> Mayorista</label>
+                        <button type="button" onClick={() => setGroups(groups.filter((_, idx) => idx !== gi))} className="ml-auto inline-flex items-center gap-1 text-xs text-red-600 hover:bg-red-50 px-2 py-1 rounded-lg"><Trash2 className="w-3.5 h-3.5" /> Eliminar</button>
                       </div>
-                      <div className="flex flex-wrap gap-1.5 mt-3">
-                        {sizesForMarket(g.market).length === 0 ? <span className="text-xs text-gray-400">El tipo de prenda no tiene tallas para {g.market === 'EXPORT' ? 'Exportación' : 'Nacional'}.</span> : sizesForMarket(g.market).map((s) => (
-                          <button key={s.id} type="button" onClick={() => set({ sizeIds: g.sizeIds.includes(s.id) ? g.sizeIds.filter((x) => x !== s.id) : [...g.sizeIds, s.id] })} className={`px-2.5 py-1 rounded-lg border text-xs font-medium ${g.sizeIds.includes(s.id) ? 'border-orange-500 bg-orange-50 text-orange-800' : 'border-gray-300 text-gray-500'}`}>{s.abbreviation}</button>
-                        ))}
-                      </div>
-                      <div className="grid sm:grid-cols-4 gap-3 mt-3 items-end">
-                        <label className="block"><span className="text-xs text-gray-500">Costo fijo adic.</span><input type="number" step="0.01" min="0" value={g.fixedCostExtra} onChange={(e) => set({ fixedCostExtra: e.target.value })} className="mt-1 w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm" /></label>
-                        <label className="block"><span className="text-xs text-gray-500">Factor</span><input type="number" step="0.0001" min="0" value={g.factor} onChange={(e) => set({ factor: e.target.value })} className="mt-1 w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm" /><span className="text-[10px] text-green-600">margen {groupProfitPct(g).toFixed(1)}%</span></label>
-                        <label className="block"><span className="text-xs text-gray-500">Precio {g.auto ? '(auto)' : ''}</span><input type="number" step="0.01" min="0" disabled={g.auto} value={g.auto ? Math.round(groupPrice(g)) : g.listPrice} onChange={(e) => set({ listPrice: e.target.value })} className="mt-1 w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm disabled:bg-gray-50 disabled:text-gray-500" /></label>
-                        <label className="flex items-center gap-2 text-sm text-gray-700"><input type="checkbox" checked={g.auto} onChange={(e) => set({ auto: e.target.checked })} /> Precio auto</label>
-                      </div>
-                      {refColors.length > 0 && (
-                        <div className="mt-3">
-                          <p className="text-xs text-gray-500 mb-1">Recargo por color (se suma en la venta)</p>
-                          <div className="flex flex-wrap gap-2">
-                            {refColors.map((c) => (
-                              <div key={c.id} className="flex items-center gap-1 border border-gray-200 rounded-lg px-2 py-1">
-                                <span className="w-3 h-3 rounded-full border border-gray-200" style={{ backgroundColor: c.hexCode }} />
-                                <span className="text-xs text-gray-600">{c.name}</span>
-                                <input type="number" step="0.01" min="0" value={g.surcharges[c.id] ?? ''} onChange={(e) => set({ surcharges: { ...g.surcharges, [c.id]: e.target.value } })} placeholder="+$0" className="w-20 border border-gray-300 rounded px-1.5 py-0.5 text-xs" />
-                              </div>
-                            ))}
+
+                      <div className="p-3 grid lg:grid-cols-3 gap-3">
+                        {/* Costos + precio final */}
+                        <div className="lg:col-span-2">
+                          <div className="grid grid-cols-3 gap-2 items-end">
+                            <label className="block"><span className="text-xs text-gray-500">Costo fijo adic.</span>
+                              <div className="mt-1 flex"><span className="inline-flex items-center px-2 rounded-l-lg border border-r-0 border-gray-300 bg-gray-100 text-gray-500 text-sm">$</span><input type="number" step="0.01" min="0" value={g.fixedCostExtra} onChange={(e) => set({ fixedCostExtra: e.target.value })} className="w-full border border-gray-300 rounded-r-lg px-2 py-1.5 text-sm" /></div>
+                            </label>
+                            <label className="block"><span className="text-xs text-gray-500">Factor</span>
+                              <div className="mt-1 flex"><span className="inline-flex items-center px-2 rounded-l-lg border border-r-0 border-gray-300 bg-gray-100 text-gray-500 text-sm">x</span><input type="number" step="0.0001" min="0" value={g.factor} onChange={(e) => set({ factor: e.target.value })} className="w-full border border-gray-300 px-2 py-1.5 text-sm" /><span className="inline-flex items-center px-1.5 rounded-r-lg border border-l-0 border-gray-300 bg-sky-500 text-white text-[11px] min-w-[46px] justify-center">{groupProfitPct(g).toFixed(1)}%</span></div>
+                            </label>
+                            <label className="block"><span className="text-xs text-gray-500">Precio Lista</span>
+                              <input type="number" step="0.01" min="0" disabled={g.auto} value={g.auto ? Math.round(groupPrice(g)) : g.listPrice} onChange={(e) => set({ listPrice: e.target.value })} className="mt-1 w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm disabled:bg-gray-50 disabled:text-gray-500" />
+                              <label className="inline-flex items-center gap-1 mt-1 text-[11px] text-gray-500"><input type="checkbox" checked={g.auto} onChange={(e) => set({ auto: e.target.checked })} /> Auto: <b className={g.market === 'EXPORT' ? 'text-blue-600' : 'text-orange-600'}>{money(Math.round(groupPrice(g)))}</b></label>
+                            </label>
                           </div>
+                          {/* Precio Final destacado */}
+                          <div className={`mt-2 rounded-lg py-2 text-center border ${g.market === 'EXPORT' ? 'bg-blue-50 border-blue-200' : 'bg-orange-50 border-orange-200'}`}>
+                            <p className="text-[11px] text-gray-500">Precio Final</p>
+                            <p className={`text-lg font-bold ${g.market === 'EXPORT' ? 'text-blue-700' : 'text-orange-700'}`}>{money(g.auto || !g.listPrice ? Math.round(groupPrice(g)) : Number(g.listPrice))}</p>
+                          </div>
+                          {/* Recargo por color */}
+                          {refColors.length > 0 && (
+                            <div className="mt-2">
+                              <p className="text-xs text-gray-500 mb-1">Recargo por color (se suma en la venta)</p>
+                              <div className="flex flex-wrap gap-2">
+                                {refColors.map((c) => (
+                                  <div key={c.id} className="flex items-center gap-1 border border-gray-200 rounded-lg px-2 py-1">
+                                    <span className="w-3 h-3 rounded-full border border-gray-200" style={{ backgroundColor: c.hexCode }} />
+                                    <span className="text-xs text-gray-600">{c.name}</span>
+                                    <input type="number" step="0.01" min="0" value={g.surcharges[c.id] ?? ''} onChange={(e) => set({ surcharges: { ...g.surcharges, [c.id]: e.target.value } })} placeholder="+$0" className="w-16 border border-gray-300 rounded px-1.5 py-0.5 text-xs" />
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                         </div>
-                      )}
-                      <div className="mt-3 text-right"><button type="button" onClick={() => setGroups(groups.filter((_, idx) => idx !== gi))} className="text-xs text-red-500 hover:underline">Eliminar grupo</button></div>
+                        {/* Tallas del grupo */}
+                        <div>
+                          <p className="text-xs text-gray-500 mb-1">Tallas del grupo</p>
+                          {marketSizes.length === 0 ? <span className="text-xs text-gray-400">El tipo de prenda no tiene tallas para {g.market === 'EXPORT' ? 'Exportación' : 'Nacional'}.</span> : (
+                            <div className="flex flex-wrap gap-1.5">
+                              {marketSizes.map((s) => (
+                                <button key={s.id} type="button" onClick={() => set({ sizeIds: g.sizeIds.includes(s.id) ? g.sizeIds.filter((x) => x !== s.id) : [...g.sizeIds, s.id] })} className={`px-2.5 py-1 rounded-lg border text-xs font-medium ${g.sizeIds.includes(s.id) ? (accent === 'blue' ? 'border-blue-500 bg-blue-50 text-blue-800' : 'border-orange-500 bg-orange-50 text-orange-800') : 'border-gray-300 text-gray-500'}`}>{s.abbreviation}</button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
                     </div>
                   );
                 })}
