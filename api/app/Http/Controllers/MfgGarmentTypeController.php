@@ -24,6 +24,7 @@ class MfgGarmentTypeController extends Controller
             'brandId' => 'nullable|integer|exists:mfg_brands,id',
             'fixedCost' => 'nullable|numeric|min:0',
             'factor' => 'nullable|numeric|min:0',
+            'factorExport' => 'nullable|numeric|min:0',
             'isActive' => 'boolean',
             'nationalSizeIds' => 'nullable|array',
             'nationalSizeIds.*' => 'integer|exists:mfg_sizes,id',

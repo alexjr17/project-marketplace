@@ -26,7 +26,7 @@ class MfgReferenceController extends Controller
     use ApiResponse;
 
     private const RELATIONS = [
-        'garmentType:id,code,name,brandId,fixedCost,factor',
+        'garmentType:id,code,name,brandId,fixedCost,factor,factorExport',
         'garmentType.brand:id,name',
         'brand:id,name',
         'collection:id,name,year,semester',

@@ -24,6 +24,7 @@ export interface MfgGarmentType {
   brandId?: number | null;
   fixedCost?: string | number;
   factor?: string | number;
+  factorExport?: string | number;
   isActive: boolean;
   brand?: { id: number; name: string } | null;
   sizes?: { id: number; name: string; abbreviation: string; sortOrder: number; pivot?: { market: MfgMarket } }[];

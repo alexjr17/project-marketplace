@@ -4,7 +4,7 @@ import toast from 'react-hot-toast';
 import manufacturingService from '../../services/manufacturing.service';
 import type { MfgGarmentType, MfgSize, MfgBrand } from '../../types/manufacturing';
 
-const empty = { code: '', name: '', composition: 'SUPERIOR' as const, brandId: null as number | null, fixedCost: 0, factor: 1, isActive: true };
+const empty = { code: '', name: '', composition: 'SUPERIOR' as const, brandId: null as number | null, fixedCost: 0, factor: 1, factorExport: 1, isActive: true };
 
 const COMPOSITION_LABEL: Record<string, string> = { SUPERIOR: 'Superior', INFERIOR: 'Inferior', SET: 'Conjunto' };
 
@@ -141,16 +141,21 @@ export default function GarmentTypesPage() {
                 </select>
                 <span className="text-xs text-gray-400">La referencia de este tipo hereda esta marca.</span>
               </label>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-3 gap-3">
                 <label className="block">
-                  <span className="text-sm font-medium text-gray-700">Costo fijo (sugerido)</span>
+                  <span className="text-sm font-medium text-gray-700">Costo fijo</span>
                   <input type="number" step="0.01" min="0" value={form.fixedCost ?? 0} onChange={(e) => setForm({ ...form, fixedCost: e.target.value === '' ? 0 : Number(e.target.value) })} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2" />
                 </label>
                 <label className="block">
-                  <span className="text-sm font-medium text-gray-700">Factor (sugerido)</span>
+                  <span className="text-sm font-medium text-gray-700">Factor nacional</span>
                   <input type="number" step="0.0001" min="0" value={form.factor ?? 1} onChange={(e) => setForm({ ...form, factor: e.target.value === '' ? 1 : Number(e.target.value) })} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2" />
                 </label>
+                <label className="block">
+                  <span className="text-sm font-medium text-gray-700">Factor exportación</span>
+                  <input type="number" step="0.0001" min="0" value={form.factorExport ?? 1} onChange={(e) => setForm({ ...form, factorExport: e.target.value === '' ? 1 : Number(e.target.value) })} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2" />
+                </label>
               </div>
+              <p className="text-xs text-gray-400 -mt-1">Se sugieren al crear la referencia y sus grupos de precio por mercado.</p>
               <div className="block">
                 <span className="text-sm font-medium text-gray-700">Tallas del tipo</span>
                 <p className="text-xs text-gray-400 mb-2">Se traen a la referencia según el mercado.</p>

@@ -13,6 +13,7 @@ class MfgGarmentType extends BaseModel
         'isActive' => 'boolean',
         'fixedCost' => 'decimal:2',
         'factor' => 'decimal:4',
+        'factorExport' => 'decimal:4',
     ];
 
     public function sizes()
