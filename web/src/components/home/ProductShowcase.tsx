@@ -1,38 +1,31 @@
 import { useState } from 'react';
 import { Package, Percent, Star } from 'lucide-react';
 import { useStoreData } from '../../hooks/useStoreData';
-import { productsService, type ProductFilters } from '../../services/products.service';
 import type { Product } from '../../types/product';
 import { ProductCard } from '../products/ProductCard';
 import { EmptyState, Skeleton, Tabs } from '../ui';
 import { HomeBlock, SectionHeader } from './SectionHeader';
+import { fetchShowcase, type ShowcaseTab } from './storeQueries';
 
-type ShowcaseTab = 'new' | 'top' | 'sale';
-
-const LIMIT = 10;
-
-const TABS: Record<ShowcaseTab, { label: string; query: ProductFilters; viewAll: string; empty: { title: string; description: string; icon: typeof Package } }> = {
+const TABS: Record<ShowcaseTab, { label: string; viewAll: string; empty: { title: string; description: string; icon: typeof Package } }> = {
   new: {
     label: 'Novedades',
-    query: { limit: LIMIT, isActive: true, sortBy: 'createdAt', sortOrder: 'desc' },
     viewAll: '/catalog?sort=newest',
     empty: { title: 'Aún no hay productos', description: 'Vuelve pronto: estamos preparando el catálogo.', icon: Package },
   },
   top: {
     label: 'Mejor calificados',
-    query: { limit: LIMIT, isActive: true, sortBy: 'rating', sortOrder: 'desc' },
     viewAll: '/catalog?sort=rating',
     empty: { title: 'Todavía no hay calificaciones', description: 'Cuando nuestros clientes califiquen sus compras, los mejores aparecerán aquí.', icon: Star },
   },
   sale: {
     label: 'Ofertas',
-    query: { limit: LIMIT, isActive: true, onSale: true, sortBy: 'createdAt', sortOrder: 'desc' },
     viewAll: '/catalog?onSale=1',
     empty: { title: 'No hay ofertas activas', description: 'Revisa más tarde: las promociones aparecen aquí.', icon: Percent },
   },
 };
 
-const fetchTab = (tab: ShowcaseTab) => () => productsService.getAll(TABS[tab].query).then((r) => r.data || []);
+const fetchTab = fetchShowcase;
 
 /** Vitrina con pestañas Novedades · Mejor calificados · Ofertas. Cada pestaña pide sus datos una vez. */
 export function ProductShowcase({ title, subtitle }: { title: string; subtitle?: string }) {

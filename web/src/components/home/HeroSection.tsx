@@ -1,164 +1,100 @@
-import { HeroCard } from './HeroCard';
 import { useSettings } from '../../context/SettingsContext';
-import type { HeroCard as HeroCardType } from '../../types/settings';
+import { useCurrency } from '../../hooks/useCurrency';
+import { useStoreData } from '../../hooks/useStoreData';
+import { productsService } from '../../services/products.service';
+import type { Product } from '../../types/product';
+import { Skeleton } from '../ui';
+import { HeroSlider } from './HeroSlider';
+import { HeroSideCard } from './HeroSideCard';
+import { buildHeroSlides, getDefaultHeroCards, heroInterval, MAX_HERO_SLIDES, resolveSideCards } from './heroModel';
+import { fetchShowcase as fetchTab } from './storeQueries';
 
-// Valores por defecto para el hero
-// Por defecto: un mensaje con UN botón principal y dos banners laterales.
-const getDefaultHeroCards = (brandColors: { primary: string; secondary: string; accent: string }, enableCustomizer: boolean): HeroCardType[] => [
-  {
-    id: 'main',
-    position: 'main',
-    order: 0,
-    title: 'Diseñado por ti,',
-    titleLine2: 'hecho por Vexa',
-    subtitle: 'Personaliza camisetas, hoodies y más con tus propios diseños.',
-    showSubtitle: true,
-    showBadge: false,
-    buttons: [
-      {
-        id: 'btn-1',
-        text: 'Ver catálogo',
-        link: '/catalog',
-        style: 'primary',
-        icon: 'shoppingBag',
-        isActive: true,
-      },
-    ],
-    background: {
-      type: 'gradient',
-      overlayOpacity: 0,
-    },
-    isActive: true,
-  },
-  {
-    id: 'side-1',
-    position: 'side',
-    order: 1,
-    title: enableCustomizer ? 'Personaliza' : 'Novedades',
-    subtitle: enableCustomizer ? 'Sube tu diseño' : 'Lo último en llegar',
-    showSubtitle: true,
-    showBadge: false,
-    icon: enableCustomizer ? 'palette' : 'sparkles',
-    buttons: [
-      {
-        id: 'btn-side-1',
-        text: enableCustomizer ? 'Personalizar' : 'Ver novedades',
-        link: enableCustomizer ? '/customize' : '/catalog?sort=newest',
-        style: 'primary',
-        isActive: true,
-      },
-    ],
-    background: {
-      type: 'gradient',
-      gradientColors: {
-        from: brandColors.secondary,
-        to: brandColors.secondary,
-      },
-      overlayOpacity: 20,
-    },
-    isActive: true,
-  },
-  {
-    id: 'side-2',
-    position: 'side',
-    order: 2,
-    title: 'Ofertas',
-    subtitle: 'Descuentos vigentes',
-    showSubtitle: true,
-    showBadge: false,
-    icon: 'percent',
-    buttons: [
-      {
-        id: 'btn-side-2',
-        text: 'Ver ofertas',
-        link: '/catalog?onSale=1',
-        style: 'primary',
-        isActive: true,
-      },
-    ],
-    background: {
-      type: 'gradient',
-      gradientColors: {
-        from: brandColors.accent,
-        to: brandColors.accent,
-      },
-      overlayOpacity: 20,
-    },
-    isActive: true,
-  },
-];
+const fetchFeatured = () =>
+  productsService.getAll({ featured: true, isActive: true, limit: MAX_HERO_SLIDES }).then((r) => r.data || []);
 
 interface HeroSectionProps {
   className?: string;
 }
 
+/**
+ * Hero "vitrina" de la portada: slider de diapositivas (configuradas o armadas con los productos
+ * destacados) y hasta 3 tarjetas laterales con producto (Personaliza, Ofertas/Novedades…).
+ * Los productos se piden con las mismas claves que la vitrina de abajo (`showcase:*`), así que
+ * no se duplican peticiones.
+ */
 export const HeroSection = ({ className = '' }: HeroSectionProps) => {
   const { settings } = useSettings();
+  const { format } = useCurrency();
 
-  // Colores de marca dinámicos
   const brandColors = settings.appearance?.brandColors || settings.general.brandColors || {
     primary: '#7c3aed',
     secondary: '#ec4899',
     accent: '#f59e0b',
   };
+  const hero = settings.home?.hero;
+  const enableCustomizer = settings.home?.enableCustomizer ?? true;
 
-  // Obtener configuración del hero
-  const heroSettings = settings.home?.hero;
+  const allCards = hero?.cards?.length ? hero.cards : getDefaultHeroCards(brandColors, enableCustomizer);
+  const mainCard = allCards.find((c) => c.position === 'main' && c.isActive);
+  const showSideCards = hero?.showSideCards ?? true;
+  const sideCardsRaw = showSideCards
+    ? allCards.filter((c) => c.position === 'side' && c.isActive).sort((a, b) => a.order - b.order).slice(0, 3)
+    : [];
 
-  // Usar cards configurados o los por defecto
-  const allCards = heroSettings?.cards?.length > 0
-    ? heroSettings.cards
-    : getDefaultHeroCards(brandColors, settings.home?.enableCustomizer ?? true);
+  const autoFromFeatured = hero?.autoSlidesFromFeatured !== false;
+  const hasConfiguredSlides = !!mainCard?.slides?.some((s) => s.isActive);
+  const needProducts = !!mainCard && ((!hasConfiguredSlides && autoFromFeatured) || sideCardsRaw.length > 0);
 
-  // Separar carta principal y laterales
-  const mainCard = allCards.find(c => c.position === 'main' && c.isActive);
-  const sideCards = allCards
-    .filter(c => c.position === 'side' && c.isActive)
-    .sort((a, b) => a.order - b.order)
-    .slice(0, 3); // Máximo 3 cartas laterales
+  const featured = useStoreData<Product[]>(needProducts && !hasConfiguredSlides && autoFromFeatured ? 'hero:featured' : null, fetchFeatured);
+  const newest = useStoreData<Product[]>(needProducts ? 'showcase:new' : null, fetchTab('new'));
+  const sale = useStoreData<Product[]>(sideCardsRaw.length > 0 ? 'showcase:sale' : null, fetchTab('sale'));
 
-  // Configuración de visibilidad
-  const showSideCards = heroSettings?.showSideCards ?? true;
+  const slides = mainCard ? buildHeroSlides({ mainCard, autoFromFeatured, featured: featured.data, newest: newest.data, format }) : [];
+  const sideCards = resolveSideCards({ cards: sideCardsRaw, sale: sale.data, newest: newest.data, featured: featured.data, format });
 
-  if (!mainCard) {
-    return null; // No mostrar hero si no hay carta principal
-  }
+  if (!mainCard) return null; // sin carta principal no hay hero
 
-  // Calcular la altura total del hero basada en cantidad de cartas
-  const getHeroHeight = () => {
-    if (!showSideCards || sideCards.length === 0) return 'md:h-[350px]';
-    switch (sideCards.length) {
-      case 1:
-        return 'md:h-[350px]';
-      case 2:
-        return 'md:h-[380px]';
-      case 3:
-        return 'md:h-[420px]';
-      default:
-        return 'md:h-[350px]';
-    }
-  };
+  // Mientras llegan los productos de las diapositivas automáticas se reserva el mismo alto.
+  const waitingSlides = !hasConfiguredSlides && autoFromFeatured && (featured.loading || newest.loading);
+  const mobileSide = hero?.sideCardsVisibleOnMobile ?? true;
+  const scrollRow = sideCards.length > 2;
+  const cols = sideCards.length === 1 ? 'grid-cols-1' : 'grid-cols-2';
+  const colsMd = ['', 'md:grid-cols-1', 'md:grid-cols-2', 'md:grid-cols-3'][sideCards.length];
 
   return (
     <div className={`py-4 md:py-6 ${className}`}>
       <div className="max-w-7xl mx-auto px-4">
-        {/* Bento Layout con Flexbox */}
-        <div className={`flex flex-col md:flex-row gap-3 md:gap-4 ${getHeroHeight()}`}>
-          {/* Main Card - Ocupa 2/3 del ancho y toda la altura */}
-          <HeroCard
-            card={mainCard}
-            isMain
-            className={`min-h-[220px] md:min-h-0 ${showSideCards && sideCards.length > 0 ? 'md:flex-[2]' : 'md:flex-1'} h-full`}
-          />
+        <div className="flex flex-col xl:flex-row gap-3 md:gap-4 xl:h-[420px]">
+          {waitingSlides ? (
+            <div className={`${sideCards.length ? 'xl:flex-[2]' : 'xl:flex-1'} min-w-0 h-[460px] sm:h-[480px] md:h-[380px] xl:h-full rounded-2xl border border-gray-200 bg-white overflow-hidden flex flex-col-reverse md:flex-row`} aria-busy="true" aria-label="Cargando vitrina">
+              <div className="flex-1 p-6 md:pl-16 space-y-3 flex flex-col justify-center">
+                <Skeleton className="h-5 w-24" />
+                <Skeleton className="h-9 w-4/5" />
+                <Skeleton className="h-4 w-3/5" />
+                <Skeleton className="h-10 w-40" />
+              </div>
+              <div className="h-[200px] md:h-auto md:flex-1 p-5 md:p-8 flex items-center justify-center">
+                <Skeleton className="h-full aspect-square rounded-2xl" />
+              </div>
+            </div>
+          ) : (
+            <HeroSlider
+              slides={slides}
+              intervalMs={heroInterval(hero)}
+              brandColors={brandColors}
+              className={`${sideCards.length ? 'xl:flex-[2]' : 'xl:flex-1'} min-w-0`}
+            />
+          )}
 
-          {/* Side Cards Container - Columna vertical */}
-          {showSideCards && sideCards.length > 0 && (
-            <div className="hidden md:flex md:flex-col md:flex-1 gap-3 md:gap-4">
-              {sideCards.map((card) => (
-                <HeroCard
-                  key={card.id}
-                  card={card}
-                  className="flex-1"
+          {sideCards.length > 0 && (
+            <div
+              className={`${mobileSide ? (scrollRow ? 'flex' : 'grid') : 'hidden'} ${scrollRow ? 'overflow-x-auto snap-x snap-mandatory -mx-4 px-4 md:mx-0 md:px-0 md:overflow-visible' : cols} ${colsMd} md:grid xl:flex xl:flex-col xl:flex-1 gap-3 md:gap-4 min-w-0`}
+            >
+              {sideCards.map((item) => (
+                <HeroSideCard
+                  key={item.card.id}
+                  item={item}
+                  className={`xl:flex-1 ${scrollRow ? 'w-[46%] flex-shrink-0 snap-start md:w-auto' : ''}`}
                 />
               ))}
             </div>

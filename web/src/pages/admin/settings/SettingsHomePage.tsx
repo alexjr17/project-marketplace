@@ -2,8 +2,11 @@ import { useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import { useSettings } from '../../../context/SettingsContext';
 import { ImageUploadField } from '../../../components/admin/ImageUploadField';
-import type { FeatureCard, ProductSection, CTASettings, WhatsAppButtonSettings, SectionFilters, HeroCard, PromoBanner, HomeBlockKey, HomeBlockSettings } from '../../../types/settings';
-import { FEATURE_ICONS, DEFAULT_HOME_BLOCKS, homeBlock } from '../../../types/settings';
+import type { FeatureCard, ProductSection, CTASettings, WhatsAppButtonSettings, SectionFilters, HeroCard, HeroSettings, HeroSlide, PromoBanner, HomeBlockKey, HomeBlockSettings } from '../../../types/settings';
+import { FEATURE_ICONS, DEFAULT_HOME_BLOCKS, HERO_SLIDE_INTERVAL_MS, homeBlock } from '../../../types/settings';
+import { getDefaultHeroCards, heroInterval, slideBackgroundConfig, slideMediaConfig } from '../../../components/home/heroModel';
+import { HeroBackgroundFields, HeroCarouselFields, HeroTypePicker, HeroVideoFields } from '../../../components/admin/HeroBackgroundFields';
+import { HERO_TYPE_LABELS, missingHeroContent } from '../../../components/admin/heroBackgroundOptions';
 import { FEATURE_ICON_COMPONENTS } from '../../../components/home/featureIcons';
 import { productsService } from '../../../services/products.service';
 import {
@@ -26,9 +29,12 @@ import {
   AlignLeft,
   AlignCenter,
   AlignRight,
+  ArrowUp,
+  ArrowDown,
+  GalleryHorizontal,
 } from 'lucide-react';
 import {
-  Alert, Badge, Button, Card, CardTitle, Checkbox, ColorInput, Dialog, EmptyState, Field, FormActions, FormGrid, IconButton,
+  Alert, Badge, Button, Card, CardTitle, Checkbox, ColorInput, Dialog, EmptyState, Field, FormActions, FormGrid, IconButton, ImageInput,
   NumberInput, Page, PageHeader, RadioGroup, SelectInput, SettingsSection, Switch, Tabs, TextArea, TextInput, toast, useConfirm,
 } from '../../../components/ui';
 
@@ -62,9 +68,9 @@ function ItemRow({ icon, title, tag, inactive, meta, actions, className = '', ..
   icon: ReactNode; title: ReactNode; tag?: ReactNode; inactive?: boolean; meta?: ReactNode; actions: ReactNode; className?: string;
 } & React.HTMLAttributes<HTMLDivElement>) {
   return (
-    <div className={`flex items-center gap-3 rounded-lg border p-3 transition-colors ${inactive ? 'border-gray-200 bg-gray-50' : 'border-gray-200 bg-white'} ${className}`} {...drag}>
+    <div className={`flex flex-wrap sm:flex-nowrap items-center gap-3 rounded-lg border p-3 transition-colors ${inactive ? 'border-gray-200 bg-gray-50' : 'border-gray-200 bg-white'} ${className}`} {...drag}>
       {icon}
-      <div className="flex-1 min-w-0">
+      <div className="flex-1 min-w-[10rem]">
         <div className="flex items-center gap-2 flex-wrap">
           {tag}
           <span className={`font-medium truncate ${inactive ? 'text-gray-500' : 'text-gray-900'}`}>{title}</span>
@@ -72,13 +78,35 @@ function ItemRow({ icon, title, tag, inactive, meta, actions, className = '', ..
         </div>
         {meta && <div className="text-xs text-gray-500 mt-0.5 truncate">{meta}</div>}
       </div>
-      <div className="flex items-center gap-1 flex-shrink-0">{actions}</div>
+      <div className="flex items-center gap-1 flex-shrink-0 ml-auto">{actions}</div>
     </div>
   );
 }
 
 const BG_LABELS: Record<string, string> = { gradient: 'Gradiente', image: 'Imagen', video: 'Video', carousel: 'Carrusel' };
 const BG_ICONS: Record<string, typeof Palette> = { gradient: Palette, image: Image, video: Film, carousel: Images };
+
+/** Diapositiva nueva del slider del hero. */
+const newHeroSlide = (): HeroSlide => ({
+  id: `slide-${Date.now()}`,
+  badge: '',
+  title: '',
+  titleLine2: '',
+  subtitle: '',
+  imageUrl: '',
+  media: { type: 'image' },
+  background: { type: 'light', overlayOpacity: 0 },
+  buttons: [
+    { id: `btn-${Date.now()}`, text: 'Ver catálogo', link: '/catalog', style: 'primary', isActive: true },
+  ],
+  isActive: true,
+});
+
+/** Tipos de fondo de una diapositiva y de su visual (derecha). */
+const SLIDE_BG_TYPES = ['light', 'brand', 'gradient', 'image', 'video', 'carousel'] as const;
+const SLIDE_MEDIA_TYPES = ['none', 'image', 'video', 'carousel'] as const;
+/** Tipos de fondo de una carta. En las laterales, "gradient" es la tarjeta blanca con la foto de un producto. */
+const CARD_BG_TYPES = ['gradient', 'image', 'video', 'carousel'] as const;
 
 // Iconos de las características (compartidos con la portada)
 const iconComponents = FEATURE_ICON_COMPONENTS;
@@ -133,6 +161,9 @@ export const SettingsHomePage = () => {
   const [editingFeature, setEditingFeature] = useState<FeatureCard | null>(null);
   const [editingSection, setEditingSection] = useState<ProductSection | null>(null);
   const [editingHeroCard, setEditingHeroCard] = useState<HeroCard | null>(null);
+  const [slideForm, setSlideForm] = useState<HeroSlide | null>(null);
+  const [editingSlideId, setEditingSlideId] = useState<string | null>(null);
+  const [intervalSec, setIntervalSec] = useState(String(heroInterval(settings.home.hero) / 1000));
   const [editingPromoBanner, setEditingPromoBanner] = useState<PromoBanner | null>(null);
 
   // Form states para modales
@@ -235,6 +266,95 @@ export const SettingsHomePage = () => {
     loadCatalogsData();
   }, []);
 
+  // Cartas efectivas del hero: lo guardado o, si no hay nada, las que la tienda usa por defecto
+  // (así lo que se ve aquí es lo que se ve en la portada, y al guardar se conservan las laterales).
+  const brandColors = settings.appearance?.brandColors || settings.general.brandColors || { primary: '#7c3aed', secondary: '#ec4899', accent: '#f59e0b' };
+  const heroBase: HeroCard[] = heroCards.length > 0 ? heroCards : getDefaultHeroCards(brandColors, settings.home.enableCustomizer ?? true);
+
+  const savedInterval = settings.home.hero?.slideIntervalMs;
+  useEffect(() => {
+    setIntervalSec(String(heroInterval({ slideIntervalMs: savedInterval }) / 1000));
+  }, [savedInterval]);
+
+  /** Guarda el hero (cartas y/o ajustes del slider) encima de lo que ya está guardado. */
+  const saveHero = async (patch: Partial<HeroSettings>) => {
+    await updateHomeSettings({ hero: { ...settings.home.hero, cards: heroBase, ...patch } });
+    if (patch.cards) setHeroCards(patch.cards);
+  };
+
+  // ── Diapositivas de la carta principal ──
+  const slidesMain = heroBase.find((c) => c.position === 'main');
+  const slides: HeroSlide[] = slidesMain?.slides ?? [];
+  const legacyMain = !!slidesMain && slidesMain.slides === undefined;
+
+  const saveSlides = async (next: HeroSlide[], okMsg?: string) => {
+    const main = slidesMain ?? getDefaultHeroCards(brandColors, settings.home.enableCustomizer ?? true)[0];
+    const cards = slidesMain
+      ? heroBase.map((c) => (c.id === main.id ? { ...c, slides: next } : c))
+      : [{ ...main, slides: next }, ...heroBase];
+    try {
+      await saveHero({ cards });
+      if (okMsg) toast.success(okMsg);
+      return true;
+    } catch {
+      toast.error('No se pudieron guardar las diapositivas');
+      return false;
+    }
+  };
+
+  const openSlide = (slide?: HeroSlide) => {
+    setEditingSlideId(slide?.id ?? null);
+    if (!slide) { setSlideForm(newHeroSlide()); return; }
+    // Las diapositivas viejas (backgroundStyle / solo imageUrl) pasan al formato nuevo al editarlas.
+    const { backgroundStyle: _style, backgroundImageUrl: _bgImage, ...rest } = slide;
+    void _style; void _bgImage;
+    setSlideForm({ ...rest, background: { ...slideBackgroundConfig(slide) }, media: { ...slideMediaConfig(slide) }, buttons: slide.buttons.map((b) => ({ ...b })) });
+  };
+
+  const handleSaveSlide = () => withSaving(async () => {
+    if (!slideForm) return;
+    if (!slideForm.title.trim()) { toast.error('Escribe el título de la diapositiva'); return; }
+    const bg = slideForm.background ?? { type: 'light' };
+    const media = slideForm.media ?? { type: 'none' };
+    const missing = missingHeroContent(bg.type, bg, 'fondo') ?? missingHeroContent(media.type, media, 'visual');
+    if (missing) { toast.error(missing); return; }
+    if (media.type === 'image' && !slideForm.imageUrl) { toast.error('Sube la imagen de la derecha o elige otro visual'); return; }
+    const clean: HeroSlide = { ...slideForm, buttons: slideForm.buttons.filter((b) => b.text.trim()).slice(0, 2) };
+    const next = editingSlideId ? slides.map((x) => (x.id === editingSlideId ? clean : x)) : [...slides, clean];
+    if (await saveSlides(next, editingSlideId ? 'Diapositiva actualizada' : 'Diapositiva creada')) setSlideForm(null);
+  });
+
+  const moveSlide = (idx: number, dir: -1 | 1) => {
+    const j = idx + dir;
+    if (j < 0 || j >= slides.length) return;
+    const next = [...slides];
+    [next[idx], next[j]] = [next[j], next[idx]];
+    saveSlides(next);
+  };
+
+  const toggleSlide = (id: string) => saveSlides(slides.map((x) => (x.id === id ? { ...x, isActive: !x.isActive } : x)));
+
+  const deleteSlide = async (id: string) => {
+    if (await confirm({ title: '¿Eliminar esta diapositiva?', message: 'Se quita del slider de la portada.', tone: 'danger' })) {
+      await saveSlides(slides.filter((x) => x.id !== id), 'Diapositiva eliminada');
+    }
+  };
+
+  const saveHeroOption = async (patch: Partial<HeroSettings>, okMsg = 'Hero actualizado') => {
+    try {
+      await saveHero(patch);
+      toast.success(okMsg);
+    } catch {
+      toast.error('No se pudo guardar');
+    }
+  };
+
+  const saveInterval = () => {
+    const sec = Math.min(30, Math.max(3, Math.round(Number(intervalSec) || HERO_SLIDE_INTERVAL_MS / 1000)));
+    setIntervalSec(String(sec));
+    if (sec * 1000 !== heroInterval(settings.home.hero)) saveHeroOption({ slideIntervalMs: sec * 1000 }, 'Intervalo guardado');
+  };
+
   // Hero card handlers
   const handleOpenHeroCardModal = (card?: HeroCard) => {
     if (card) {
@@ -252,10 +372,11 @@ export const SettingsHomePage = () => {
         buttons: card.buttons,
         background: card.background,
         isActive: card.isActive,
+        imageUrl: card.imageUrl || '',
       });
     } else {
       setEditingHeroCard(null);
-      const sideCardsCount = heroCards.filter(c => c.position === 'side').length;
+      const sideCardsCount = heroBase.filter(c => c.position === 'side').length;
       setHeroCardForm({
         position: 'side',
         order: sideCardsCount + 1,
@@ -284,6 +405,8 @@ export const SettingsHomePage = () => {
   };
 
   const handleSaveHeroCard = () => withSaving(async () => {
+    const missing = missingHeroContent(heroCardForm.background.type, heroCardForm.background);
+    if (missing) { toast.error(missing); return; }
     // Limpiar URLs vacías del carrusel antes de guardar
     const cleanedForm = {
       ...heroCardForm,
@@ -296,15 +419,16 @@ export const SettingsHomePage = () => {
     let newCards: HeroCard[];
 
     if (editingHeroCard) {
-      newCards = heroCards.map(c =>
-        c.id === editingHeroCard.id ? { ...cleanedForm, id: c.id } : c
+      // Se conserva lo que el formulario no edita (p. ej. las diapositivas de la principal).
+      newCards = heroBase.map(c =>
+        c.id === editingHeroCard.id ? { ...c, ...cleanedForm, id: c.id } : c
       );
     } else {
       const newCard: HeroCard = {
         ...cleanedForm,
         id: `card-${Date.now()}`,
       };
-      newCards = [...heroCards, newCard];
+      newCards = [...heroBase, newCard];
     }
 
     try {
@@ -326,7 +450,7 @@ export const SettingsHomePage = () => {
 
   const handleDeleteHeroCard = async (id: string) => {
     if (await confirm({ title: '¿Eliminar esta carta del hero?', message: 'Se quita de la portada.', tone: 'danger' })) {
-      const newCards = heroCards.filter(c => c.id !== id);
+      const newCards = heroBase.filter(c => c.id !== id);
       try {
         await updateHomeSettings({
           hero: {
@@ -343,7 +467,7 @@ export const SettingsHomePage = () => {
   };
 
   const handleToggleHeroCard = async (id: string) => {
-    const newCards = heroCards.map(c =>
+    const newCards = heroBase.map(c =>
       c.id === id ? { ...c, isActive: !c.isActive } : c
     );
     try {
@@ -744,8 +868,8 @@ export const SettingsHomePage = () => {
     }
   };
 
-  const mainCard = heroCards.find(c => c.position === 'main');
-  const sideCards = heroCards.filter(c => c.position === 'side').sort((a, b) => a.order - b.order);
+  const mainCard = heroBase.find(c => c.position === 'main');
+  const sideCards = heroBase.filter(c => c.position === 'side').sort((a, b) => a.order - b.order);
   const activeSide = sideCards.filter(c => c.isActive);
 
   type ContentItem =
@@ -821,7 +945,7 @@ export const SettingsHomePage = () => {
         value={tab}
         onChange={setTab}
         tabs={[
-          { value: 'hero', label: 'Hero', count: heroCards.length },
+          { value: 'hero', label: 'Hero', count: slides.length || undefined },
           { value: 'features', label: 'Características', count: settings.home.features.length },
           { value: 'blocks', label: 'Bloques' },
           { value: 'content', label: 'Secciones y banners', count: contentItems.length },
@@ -832,16 +956,91 @@ export const SettingsHomePage = () => {
 
       {/* ───────── Hero ───────── */}
       {tab === 'hero' && (
-        <Card>
-          <CardTitle
-            icon={Layers}
-            actions={sideCards.length < 3 && (
-              <Button size="sm" variant="secondary" icon={<Plus className="w-4 h-4" />} onClick={() => handleOpenHeroCardModal()}>Carta lateral</Button>
-            )}
+        <div>
+          <SettingsSection
+            title="Diapositivas"
+            description="La carta principal es un slider. Cada diapositiva lleva texto y botones a la izquierda y una imagen a la derecha. Usa las flechas para cambiar el orden."
           >
-            Cartas del hero
-          </CardTitle>
+            {legacyMain && slides.length === 0 && (
+              <Alert tone="info">La carta principal usa el formato anterior: su título, fondo y botones se muestran como la primera diapositiva. Al crear una diapositiva aquí, el slider pasa a usar solo las diapositivas.</Alert>
+            )}
+            {slides.length === 0 ? (
+              <EmptyState
+                icon={GalleryHorizontal}
+                title="Sin diapositivas"
+                description={(settings.home.hero?.autoSlidesFromFeatured ?? true)
+                  ? 'El slider se arma solo con los productos destacados (o los más nuevos).'
+                  : 'Crea la primera diapositiva o activa "Usar productos destacados".'}
+                action={<Button size="sm" icon={<Plus className="w-4 h-4" />} onClick={() => openSlide()}>Nueva diapositiva</Button>}
+              />
+            ) : (
+              <div className="space-y-2">
+                {slides.map((slide, idx) => (
+                  <ItemRow
+                    key={slide.id}
+                    inactive={!slide.isActive}
+                    icon={slide.imageUrl && slideMediaConfig(slide).type === 'image'
+                      ? <img src={slide.imageUrl} alt="" className="w-10 h-10 rounded-lg object-cover border border-gray-200 flex-shrink-0" />
+                      : <span className="w-10 h-10 rounded-lg bg-app-50 text-app-700 flex items-center justify-center text-sm font-semibold flex-shrink-0">{idx + 1}</span>}
+                    tag={slide.badge ? <Badge tone="app">{slide.badge}</Badge> : undefined}
+                    title={[slide.title, slide.titleLine2].filter(Boolean).join(' ') || 'Sin título'}
+                    meta={`Fondo: ${HERO_TYPE_LABELS[slideBackgroundConfig(slide).type]} · Visual: ${HERO_TYPE_LABELS[slideMediaConfig(slide).type]} · ${slide.buttons.filter((b) => b.isActive).length} botón(es)`}
+                    actions={
+                      <>
+                        <IconButton title="Subir" onClick={() => moveSlide(idx, -1)} disabled={idx === 0}><ArrowUp className="w-4 h-4" /></IconButton>
+                        <IconButton title="Bajar" onClick={() => moveSlide(idx, 1)} disabled={idx === slides.length - 1}><ArrowDown className="w-4 h-4" /></IconButton>
+                        <Switch checked={slide.isActive} onChange={() => toggleSlide(slide.id)} />
+                        <IconButton title="Editar" tone="app" onClick={() => openSlide(slide)}><Pencil className="w-4 h-4" /></IconButton>
+                        <IconButton title="Eliminar" tone="danger" onClick={() => deleteSlide(slide.id)}><Trash2 className="w-4 h-4" /></IconButton>
+                      </>
+                    }
+                  />
+                ))}
+                <Button size="sm" variant="secondary" icon={<Plus className="w-4 h-4" />} onClick={() => openSlide()}>Nueva diapositiva</Button>
+              </div>
+            )}
+          </SettingsSection>
 
+          <SettingsSection title="Comportamiento" description="Cómo avanza el slider y qué se muestra cuando no hay diapositivas.">
+            <Switch
+              checked={settings.home.hero?.autoSlidesFromFeatured ?? true}
+              onChange={(v) => saveHeroOption({ autoSlidesFromFeatured: v })}
+              label="Usar productos destacados cuando no haya diapositivas"
+              description="Arma el slider con hasta 5 productos destacados (o los más nuevos), con su precio y descuento."
+            />
+            <Field label="Cambiar de diapositiva cada" hint="Entre 3 y 30 segundos. Se pausa al pasar el mouse o al enfocar el slider.">
+              <NumberInput
+                suffix="s"
+                min={3}
+                max={30}
+                value={intervalSec}
+                onChange={(e) => setIntervalSec(e.target.value)}
+                onBlur={saveInterval}
+                onKeyDown={(e) => { if (e.key === 'Enter') saveInterval(); }}
+              />
+            </Field>
+            <Switch
+              checked={settings.home.hero?.showSideCards ?? true}
+              onChange={(v) => saveHeroOption({ showSideCards: v })}
+              label="Mostrar tarjetas laterales"
+            />
+            <Switch
+              checked={settings.home.hero?.sideCardsVisibleOnMobile ?? true}
+              onChange={(v) => saveHeroOption({ sideCardsVisibleOnMobile: v })}
+              label="Mostrar las laterales en celular"
+              description="Debajo del slider, en dos columnas (o en una fila deslizable si son tres)."
+            />
+          </SettingsSection>
+
+          <SettingsSection
+            title="Cartas"
+            description="La principal (formato anterior) y hasta 3 tarjetas laterales. Las laterales muestran una imagen: la que subas o la de un producto (la de ofertas, el de mayor descuento)."
+          >
+            {sideCards.length < 3 && (
+              <div className="flex justify-end">
+                <Button size="sm" variant="secondary" icon={<Plus className="w-4 h-4" />} onClick={() => handleOpenHeroCardModal()}>Carta lateral</Button>
+              </div>
+            )}
           {/* Estructura */}
           <div className="mb-4 rounded-lg border border-gray-200 p-3">
             <p className="text-xs text-gray-500 mb-2">Estructura en la tienda</p>
@@ -913,7 +1112,8 @@ export const SettingsHomePage = () => {
               </p>
             )}
           </div>
-        </Card>
+          </SettingsSection>
+        </div>
       )}
 
       {/* ───────── Características ───────── */}
@@ -1342,113 +1542,26 @@ export const SettingsHomePage = () => {
             <Checkbox label="Mostrar subtítulo" checked={heroCardForm.showSubtitle} onChange={(e) => setHeroCardForm({ ...heroCardForm, showSubtitle: e.target.checked })} />
           </div>
 
-          <div className="space-y-3 border-t border-gray-100 pt-4">
-            <Field label="Fondo">
-              <div className="grid grid-cols-4 gap-2">
-                {(['gradient', 'image', 'video', 'carousel'] as const).map((type) => {
-                  const Icon = BG_ICONS[type];
-                  return (
-                    <ChoiceButton key={type} active={heroCardForm.background.type === type} onClick={() => setHeroCardForm({ ...heroCardForm, background: { ...heroCardForm.background, type: type as any } })}>
-                      <Icon className="w-5 h-5" />{BG_LABELS[type]}
-                    </ChoiceButton>
-                  );
-                })}
-              </div>
-            </Field>
-
-            {heroCardForm.background.type === 'image' && (
-              <ImageUploadField
-                label="Imagen de fondo"
-                value={heroCardForm.background.imageUrl || ''}
-                onChange={(newUrl) => setHeroCardForm({ ...heroCardForm, background: { ...heroCardForm.background, imageUrl: newUrl } })}
-                placeholder="https://imagen.jpg"
-              />
-            )}
-
-            {heroCardForm.background.type === 'video' && (
-              <FormGrid>
-                <Field label="URL del video">
-                  <TextInput value={heroCardForm.background.videoUrl || ''} onChange={(e) => setHeroCardForm({ ...heroCardForm, background: { ...heroCardForm.background, videoUrl: e.target.value } })} placeholder="https://...mp4" />
-                </Field>
-                <Field label="Imagen de póster (opcional)">
-                  <TextInput value={heroCardForm.background.videoPoster || ''} onChange={(e) => setHeroCardForm({ ...heroCardForm, background: { ...heroCardForm.background, videoPoster: e.target.value } })} placeholder="https://..." />
-                </Field>
-              </FormGrid>
-            )}
-
-            {heroCardForm.background.type === 'carousel' && (
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-gray-700">Imágenes del carrusel</span>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    icon={<Plus className="w-4 h-4" />}
-                    onClick={() => setHeroCardForm({ ...heroCardForm, background: { ...heroCardForm.background, carouselImages: [...(heroCardForm.background.carouselImages || []), ''] } })}
-                  >
-                    Agregar imagen
-                  </Button>
-                </div>
-                {(heroCardForm.background.carouselImages || []).length === 0 ? (
-                  <p className="text-sm text-gray-400 text-center py-3">No hay imágenes. Agrega al menos una.</p>
-                ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {(heroCardForm.background.carouselImages || []).map((url, idx) => (
-                      <div key={idx} className="rounded-lg border border-gray-200 p-3">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-xs font-medium text-gray-600">Imagen {idx + 1}</span>
-                          <IconButton
-                            title="Quitar imagen"
-                            tone="danger"
-                            onClick={() => {
-                              const newImages = (heroCardForm.background.carouselImages || []).filter((_, i) => i !== idx);
-                              setHeroCardForm({ ...heroCardForm, background: { ...heroCardForm.background, carouselImages: newImages } });
-                            }}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </IconButton>
-                        </div>
-                        <ImageUploadField
-                          label=""
-                          value={url}
-                          onChange={(newUrl) => {
-                            const newImages = [...(heroCardForm.background.carouselImages || [])];
-                            newImages[idx] = newUrl;
-                            setHeroCardForm({ ...heroCardForm, background: { ...heroCardForm.background, carouselImages: newImages } });
-                          }}
-                          placeholder="https://imagen.jpg"
-                        />
-                      </div>
-                    ))}
-                  </div>
-                )}
-                <Field label="Intervalo">
-                  <NumberInput
-                    min="1"
-                    max="30"
-                    suffix="seg"
-                    value={(heroCardForm.background.carouselInterval || 5000) / 1000}
-                    onChange={(e) => setHeroCardForm({ ...heroCardForm, background: { ...heroCardForm.background, carouselInterval: (parseInt(e.target.value) || 5) * 1000 } })}
-                  />
-                </Field>
-              </div>
-            )}
-
-            <Field label={`Oscurecer fondo: ${heroCardForm.background.overlayOpacity || 0}%`}>
-              <input
-                type="range"
-                min="0"
-                max="80"
-                value={heroCardForm.background.overlayOpacity || 0}
-                onChange={(e) => setHeroCardForm({ ...heroCardForm, background: { ...heroCardForm.background, overlayOpacity: parseInt(e.target.value) } })}
-                className="w-full accent-app-600"
-              />
-            </Field>
+          <div className="border-t border-gray-100 pt-4">
+            <HeroBackgroundFields
+              value={heroCardForm.background}
+              onChange={(background) => setHeroCardForm({ ...heroCardForm, background })}
+              types={CARD_BG_TYPES}
+              brandColors={brandColors}
+              labels={heroCardForm.position === 'side' ? { gradient: 'Producto' } : undefined}
+              gradientColors={heroCardForm.position !== 'side'}
+              hint={heroCardForm.position === 'side'
+                ? 'Producto: tarjeta blanca con la foto de un producto (o la imagen de abajo). Imagen, video y carrusel ocupan toda la tarjeta.'
+                : undefined}
+            />
           </div>
 
           {heroCardForm.position === 'side' && (
             <div className="space-y-3 border-t border-gray-100 pt-4">
               <Field label="Icono">{iconPicker(heroCardForm.icon, (icon) => setHeroCardForm({ ...heroCardForm, icon }))}</Field>
+              <Field label="Imagen de la tarjeta" hint="Opcional. Vacía = la foto de un producto (en ofertas, el de mayor descuento). Se usa con el fondo Gradiente.">
+                <ImageInput ratio="square" value={heroCardForm.imageUrl || ''} onChange={(v) => setHeroCardForm({ ...heroCardForm, imageUrl: v })} />
+              </Field>
               <Field label="Enlace al hacer clic">
                 <TextInput
                   value={heroCardForm.buttons[0]?.link || ''}
@@ -1532,6 +1645,95 @@ export const SettingsHomePage = () => {
             <Switch checked={heroCardForm.isActive} onChange={(v) => setHeroCardForm({ ...heroCardForm, isActive: v })} label="Carta activa" />
           </div>
         </div>
+      </Dialog>
+
+      {/* ───────── Diapositiva del hero ───────── */}
+      <Dialog
+        open={slideForm !== null}
+        onClose={() => setSlideForm(null)}
+        title={editingSlideId ? 'Editar diapositiva' : 'Nueva diapositiva'}
+        size="lg"
+        footer={dialogFooter(() => setSlideForm(null), handleSaveSlide, !!editingSlideId)}
+      >
+        {slideForm && (
+          <div className="space-y-5">
+            <FormGrid cols={2}>
+              <Field label="Etiqueta" hint="Opcional, p. ej. Nuevo, -20%, Colección.">
+                <TextInput value={slideForm.badge || ''} onChange={(e) => setSlideForm({ ...slideForm, badge: e.target.value })} placeholder="Ej: Nuevo" />
+              </Field>
+              <Field label="Subtítulo">
+                <TextInput value={slideForm.subtitle || ''} onChange={(e) => setSlideForm({ ...slideForm, subtitle: e.target.value })} placeholder="Una línea que invite a comprar" />
+              </Field>
+              <Field label="Título" required>
+                <TextInput value={slideForm.title} onChange={(e) => setSlideForm({ ...slideForm, title: e.target.value })} placeholder="Ej: Nueva colección" />
+              </Field>
+              <Field label="Segunda línea del título">
+                <TextInput value={slideForm.titleLine2 || ''} onChange={(e) => setSlideForm({ ...slideForm, titleLine2: e.target.value })} placeholder="Ej: de temporada" />
+              </Field>
+            </FormGrid>
+
+            <div className="space-y-3 border-t border-gray-100 pt-4">
+              <Field label="Visual de la derecha" hint="Arriba en celular. Con «Ninguno» el texto ocupa todo el ancho.">
+                <HeroTypePicker
+                  value={slideForm.media?.type ?? 'none'}
+                  onChange={(type) => setSlideForm({ ...slideForm, media: { ...(slideForm.media ?? {}), type } })}
+                  types={SLIDE_MEDIA_TYPES}
+                />
+              </Field>
+              {slideForm.media?.type === 'image' && (
+                <Field label="Imagen" required hint="Recortada en cuadrado. Mejor una foto de producto.">
+                  <ImageInput ratio="square" value={slideForm.imageUrl || ''} onChange={(v) => setSlideForm({ ...slideForm, imageUrl: v })} />
+                </Field>
+              )}
+              {slideForm.media?.type === 'video' && (
+                <HeroVideoFields value={slideForm.media} onChange={(p) => setSlideForm({ ...slideForm, media: { ...slideForm.media!, ...p } })} />
+              )}
+              {slideForm.media?.type === 'carousel' && (
+                <HeroCarouselFields value={slideForm.media} onChange={(p) => setSlideForm({ ...slideForm, media: { ...slideForm.media!, ...p } })} />
+              )}
+            </div>
+
+            <div className="border-t border-gray-100 pt-4">
+              <HeroBackgroundFields
+                value={slideForm.background ?? { type: 'light' }}
+                onChange={(background) => setSlideForm({ ...slideForm, background })}
+                types={SLIDE_BG_TYPES}
+                brandColors={brandColors}
+                hint="Claro y Marca suave llevan el texto oscuro; Gradiente, Imagen, Video y Carrusel, en blanco."
+              />
+            </div>
+
+            <div className="space-y-2">
+              <span className="block text-sm font-medium text-gray-700">Botones (máx. 2)</span>
+              {slideForm.buttons.map((btn, idx) => (
+                <div key={btn.id} className="flex items-center gap-2">
+                  <div className="flex-1 grid grid-cols-1 sm:grid-cols-[1fr_1fr_9rem] gap-2">
+                    <TextInput aria-label="Texto del botón" value={btn.text} placeholder="Texto"
+                      onChange={(e) => setSlideForm({ ...slideForm, buttons: slideForm.buttons.map((b, i) => (i === idx ? { ...b, text: e.target.value } : b)) })} />
+                    <TextInput aria-label="Enlace del botón" value={btn.link} placeholder="/catalog"
+                      onChange={(e) => setSlideForm({ ...slideForm, buttons: slideForm.buttons.map((b, i) => (i === idx ? { ...b, link: e.target.value } : b)) })} />
+                    <SelectInput aria-label="Estilo del botón" value={btn.style}
+                      onChange={(e) => setSlideForm({ ...slideForm, buttons: slideForm.buttons.map((b, i) => (i === idx ? { ...b, style: e.target.value as 'primary' | 'secondary' } : b)) })}>
+                      <option value="primary">Primario</option>
+                      <option value="secondary">Secundario</option>
+                    </SelectInput>
+                  </div>
+                  <IconButton title="Quitar botón" tone="danger" onClick={() => setSlideForm({ ...slideForm, buttons: slideForm.buttons.filter((_, i) => i !== idx) })}>
+                    <X className="w-4 h-4" />
+                  </IconButton>
+                </div>
+              ))}
+              {slideForm.buttons.length < 2 && (
+                <Button size="sm" variant="ghost" icon={<Plus className="w-4 h-4" />}
+                  onClick={() => setSlideForm({ ...slideForm, buttons: [...slideForm.buttons, { id: `btn-${Date.now()}`, text: '', link: '', style: 'secondary', isActive: true }] })}>
+                  Agregar botón
+                </Button>
+              )}
+            </div>
+
+            <Switch checked={slideForm.isActive} onChange={(v) => setSlideForm({ ...slideForm, isActive: v })} label="Diapositiva activa" />
+          </div>
+        )}
       </Dialog>
 
       {/* ───────── Banner promocional ───────── */}

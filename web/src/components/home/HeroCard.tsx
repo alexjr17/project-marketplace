@@ -1,4 +1,3 @@
-import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import {
   ChevronRight,
@@ -17,6 +16,7 @@ import {
 } from 'lucide-react';
 import type { HeroCard as HeroCardType, HeroCardBackground } from '../../types/settings';
 import { useSettings } from '../../context/SettingsContext';
+import { HeroCarousel, HeroVideo } from './HeroMedia';
 
 // Mapeo de iconos disponibles
 const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -40,110 +40,6 @@ interface HeroCardProps {
   isMain?: boolean;
   className?: string;
 }
-
-// Componente para el fondo con carrusel de imágenes
-const CarouselBackground = ({
-  images,
-  interval = 5000,
-}: {
-  images: string[];
-  interval?: number;
-  transition?: 'fade' | 'slide';
-}) => {
-  const [currentIndex, setCurrentIndex] = useState(0);
-
-  useEffect(() => {
-    if (images.length <= 1) return;
-
-    const timer = setInterval(() => {
-      setCurrentIndex((prev) => (prev + 1) % images.length);
-    }, interval);
-
-    return () => clearInterval(timer);
-  }, [images.length, interval]);
-
-  if (images.length === 0) return null;
-
-  return (
-    <div className="absolute inset-0 overflow-hidden">
-      {images.map((image, index) => (
-        <div
-          key={index}
-          className={`absolute inset-0 bg-cover bg-center transition-opacity duration-1000 ${
-            index === currentIndex ? 'opacity-100' : 'opacity-0'
-          }`}
-          style={{ backgroundImage: `url(${image})` }}
-        />
-      ))}
-    </div>
-  );
-};
-
-// Helper para extraer ID de YouTube
-const getYouTubeId = (url: string): string | null => {
-  const patterns = [
-    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/,
-    /youtube\.com\/shorts\/([^&\n?#]+)/,
-  ];
-  for (const pattern of patterns) {
-    const match = url.match(pattern);
-    if (match) return match[1];
-  }
-  return null;
-};
-
-// Componente para el fondo de video
-const VideoBackground = ({
-  videoUrl,
-  poster,
-  muted = true,
-  loop = true
-}: {
-  videoUrl: string;
-  poster?: string;
-  muted?: boolean;
-  loop?: boolean;
-}) => {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const youtubeId = getYouTubeId(videoUrl);
-
-  useEffect(() => {
-    if (videoRef.current && !youtubeId) {
-      videoRef.current.play().catch(() => {
-        // Autoplay puede fallar sin interacción del usuario
-      });
-    }
-  }, [youtubeId]);
-
-  // Si es YouTube, usar iframe
-  if (youtubeId) {
-    return (
-      <div className="absolute inset-0 overflow-hidden">
-        <iframe
-          className="absolute top-1/2 left-1/2 w-[300%] h-[300%] -translate-x-1/2 -translate-y-1/2 pointer-events-none"
-          src={`https://www.youtube.com/embed/${youtubeId}?autoplay=1&mute=1&loop=1&playlist=${youtubeId}&controls=0&showinfo=0&rel=0&modestbranding=1&playsinline=1`}
-          allow="autoplay; encrypted-media"
-          allowFullScreen
-          title="Video background"
-        />
-      </div>
-    );
-  }
-
-  // Video normal (mp4, webm, etc)
-  return (
-    <video
-      ref={videoRef}
-      className="absolute inset-0 w-full h-full object-cover"
-      src={videoUrl}
-      poster={poster}
-      muted={muted}
-      loop={loop}
-      playsInline
-      autoPlay
-    />
-  );
-};
 
 // Componente para renderizar el fondo según el tipo
 const CardBackground = ({
@@ -181,8 +77,8 @@ const CardBackground = ({
       )}
 
       {background.type === 'video' && background.videoUrl && (
-        <VideoBackground
-          videoUrl={background.videoUrl}
+        <HeroVideo
+          url={background.videoUrl}
           poster={background.videoPoster}
           muted={background.videoMuted ?? true}
           loop={background.videoLoop ?? true}
@@ -190,9 +86,9 @@ const CardBackground = ({
       )}
 
       {background.type === 'carousel' && background.carouselImages && background.carouselImages.length > 0 && (
-        <CarouselBackground
+        <HeroCarousel
           images={background.carouselImages.filter(img => img.trim() !== '')}
-          interval={background.carouselInterval}
+          intervalMs={background.carouselInterval}
           transition={background.carouselTransition}
         />
       )}

@@ -180,7 +180,8 @@ Reglas:
 
 La tienda usa el mismo kit. Su color de app es el **color de marca primario**, así que los botones `primary` de la tienda salen en el color de la marca.
 
-- Identidad de marca: el **gradiente** (`brandColors.primary → secondary → accent`) se reserva para el hero, el encabezado de página de la tienda (`components/shared/PageHeader`) y los CTA grandes de portada. Va con estilo en línea desde `useSettings()`, nunca con `violet` o `pink` fijos.
+- Identidad de marca: el **gradiente** (`brandColors.primary → secondary → accent`) se reserva para el hero y los CTA grandes de portada. Va con estilo en línea desde `useSettings()`, nunca con `violet` o `pink` fijos.
+- Encabezado de cada página de la tienda: `components/shared/PageHeader` (fondo blanco, línea inferior, migas Inicio › sección anterior › página, título, subtítulo y acciones a la derecha). Mismo ancho y márgenes que el encabezado de la tienda (`max-w-7xl px-3 md:px-6`). Sin gradiente.
 - Fondo `gray-50`; contenido centrado en `max-w-7xl mx-auto px-4`.
 - Tarjeta de producto: `bg-white rounded-xl border border-gray-200 overflow-hidden`, imagen arriba con proporción fija, nombre `font-medium text-gray-900` y precio `font-semibold text-gray-900`. En hover solo sombra (`hover:shadow-md`), sin escalar.
 - Botones de compra: `Button` `primary` `lg` y `fullWidth` en móvil.

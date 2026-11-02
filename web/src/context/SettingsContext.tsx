@@ -154,7 +154,9 @@ const mockSettings: Settings = {
     hero: {
       cards: [], // Se usan los defaults de HeroSection si está vacío
       showSideCards: true,
-      sideCardsVisibleOnMobile: false,
+      sideCardsVisibleOnMobile: true,
+      autoSlidesFromFeatured: true,
+      slideIntervalMs: 6000,
     },
     features: [
       // Franja de beneficios de la portada (valores por defecto si no hay nada guardado).
