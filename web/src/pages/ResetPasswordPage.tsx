@@ -2,8 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useSettings } from '../context/SettingsContext';
-import { Button } from '../components/shared/Button';
-import { Input } from '../components/shared/Input';
+import { Alert, AppTheme, Button, Field, Spinner, TextInput } from '../components/ui';
 import { Lock, Check, X, Eye, EyeOff, ArrowLeft } from 'lucide-react';
 
 export const ResetPasswordPage = () => {
@@ -28,9 +27,10 @@ export const ResetPasswordPage = () => {
   const brandColors = settings.appearance?.brandColors || settings.general.brandColors || {
     primary: '#7c3aed',
     secondary: '#ec4899',
+    accent: '#f59e0b',
   };
 
-  const gradientStyle = `linear-gradient(135deg, ${brandColors.primary}, ${brandColors.secondary})`;
+  const gradientStyle = `linear-gradient(to right, ${brandColors.primary}, ${brandColors.secondary}, ${brandColors.accent || brandColors.secondary})`;
 
   // Validar token al cargar
   useEffect(() => {
@@ -79,172 +79,129 @@ export const ResetPasswordPage = () => {
     }
   };
 
-  // Estado de carga
-  if (validating) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center">
-          <div className="w-12 h-12 border-4 border-violet-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-gray-600">Validando enlace...</p>
+  // Contenedor común: fondo gris, franja de marca y tarjeta centrada (la ruta no usa el Layout de la tienda).
+  const shell = (children: React.ReactNode) => (
+    <AppTheme app="store">
+      <div className="min-h-screen flex flex-col bg-gray-50">
+        <div className="h-1 w-full" style={{ background: gradientStyle }} />
+        <div className="flex-1 flex items-center justify-center px-4 py-12">
+          <div className="w-full max-w-md">
+            {children}
+            <div className="text-center mt-6">
+              <Link to="/" className="text-sm text-gray-500 hover:text-gray-900 inline-flex items-center gap-1">
+                <ArrowLeft className="w-4 h-4" />
+                Volver al inicio
+              </Link>
+            </div>
+          </div>
         </div>
       </div>
-    );
+    </AppTheme>
+  );
+
+  // Estado de carga
+  if (validating) {
+    return shell(<Spinner label="Validando enlace…" />);
   }
 
   // Token inválido o expirado
   if (!tokenValid) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
-        <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 text-center">
-          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <X className="w-8 h-8 text-red-600" />
-          </div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">
-            Enlace inválido o expirado
-          </h1>
-          <p className="text-gray-600 mb-6">
-            El enlace de recuperación no es válido o ha expirado.
-            Los enlaces expiran después de 1 hora.
-          </p>
-          <Link to="/">
-            <Button className="w-full">
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Volver al inicio
-            </Button>
-          </Link>
+    return shell(
+      <div className="bg-white rounded-xl border border-gray-200 p-6 text-center">
+        <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-3">
+          <X className="w-6 h-6 text-red-600" />
         </div>
-      </div>
+        <h1 className="text-xl font-bold text-gray-900 mb-1">Enlace inválido o expirado</h1>
+        <p className="text-sm text-gray-600 mb-5">
+          El enlace de recuperación no es válido o ha expirado. Los enlaces expiran después de 1 hora.
+        </p>
+        <Button fullWidth onClick={() => navigate('/')}>Ir a la tienda</Button>
+      </div>,
     );
   }
 
   // Éxito
   if (success) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
-        <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 text-center">
-          <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <Check className="w-8 h-8 text-green-600" />
-          </div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">
-            Contraseña actualizada
-          </h1>
-          <p className="text-gray-600 mb-6">
-            Tu contraseña ha sido cambiada exitosamente.
-            Ya puedes iniciar sesión con tu nueva contraseña.
-          </p>
-          <Button onClick={() => navigate('/')} className="w-full">
-            Ir a Iniciar Sesión
-          </Button>
+    return shell(
+      <div className="bg-white rounded-xl border border-gray-200 p-6 text-center">
+        <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3">
+          <Check className="w-6 h-6 text-green-600" />
         </div>
-      </div>
+        <h1 className="text-xl font-bold text-gray-900 mb-1">Contraseña actualizada</h1>
+        <p className="text-sm text-gray-600 mb-5">
+          Tu contraseña ha sido cambiada exitosamente. Ya puedes iniciar sesión con tu nueva contraseña.
+        </p>
+        <Button fullWidth onClick={() => navigate('/')}>Ir a iniciar sesión</Button>
+      </div>,
     );
   }
 
-  // Formulario de reset
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4 py-12">
-      <div className="max-w-md w-full">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <div
-            className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4"
-            style={{ background: gradientStyle }}
-          >
-            <Lock className="w-8 h-8 text-white" />
-          </div>
-          <h1 className="text-2xl font-bold text-gray-900">
-            Nueva Contraseña
-          </h1>
-          <p className="text-gray-600 mt-2">
-            Ingresa tu nueva contraseña para <strong>{email}</strong>
-          </p>
+  const check = (ok: boolean, label: string) => (
+    <li className={`flex items-center gap-2 ${ok ? 'text-green-700' : 'text-gray-400'}`}>
+      {ok ? <Check className="w-4 h-4" /> : <X className="w-4 h-4" />}
+      {label}
+    </li>
+  );
+
+  // Formulario de cambio
+  return shell(
+    <div className="bg-white rounded-xl border border-gray-200 p-6">
+      <div className="mb-6">
+        <div className="w-11 h-11 rounded-lg bg-app-100 text-app-600 flex items-center justify-center mb-4">
+          <Lock className="w-5 h-5" />
         </div>
-
-        {/* Formulario */}
-        <div className="bg-white rounded-2xl shadow-xl p-8">
-          <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Nueva contraseña */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Nueva Contraseña
-              </label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                <Input
-                  type={showPassword ? 'text' : 'password'}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  className="pl-10 pr-10"
-                  required
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                >
-                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                </button>
-              </div>
-            </div>
-
-            {/* Confirmar contraseña */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Confirmar Contraseña
-              </label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                <Input
-                  type={showPassword ? 'text' : 'password'}
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="••••••••"
-                  className="pl-10"
-                  required
-                />
-              </div>
-            </div>
-
-            {/* Validaciones */}
-            <div className="space-y-2 text-sm">
-              <div className={`flex items-center gap-2 ${passwordChecks.length ? 'text-green-600' : 'text-gray-400'}`}>
-                {passwordChecks.length ? <Check className="w-4 h-4" /> : <X className="w-4 h-4" />}
-                Mínimo 6 caracteres
-              </div>
-              <div className={`flex items-center gap-2 ${passwordChecks.match ? 'text-green-600' : 'text-gray-400'}`}>
-                {passwordChecks.match ? <Check className="w-4 h-4" /> : <X className="w-4 h-4" />}
-                Las contraseñas coinciden
-              </div>
-            </div>
-
-            {error && (
-              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
-                {error}
-              </div>
-            )}
-
-            <Button
-              type="submit"
-              disabled={!isFormValid || loading}
-              className="w-full"
-            >
-              {loading ? 'Guardando...' : 'Cambiar Contraseña'}
-            </Button>
-          </form>
-        </div>
-
-        {/* Link de volver */}
-        <div className="text-center mt-6">
-          <Link
-            to="/"
-            className="text-sm text-gray-600 hover:text-gray-900 inline-flex items-center gap-1"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Volver al inicio
-          </Link>
-        </div>
+        <h1 className="text-xl font-bold text-gray-900">Nueva contraseña</h1>
+        <p className="text-sm text-gray-500 mt-1">
+          Ingresa tu nueva contraseña para <strong className="text-gray-700">{email}</strong>
+        </p>
       </div>
-    </div>
+
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <Field label="Nueva contraseña" required>
+          <div className="relative">
+            <TextInput
+              type={showPassword ? 'text' : 'password'}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••"
+              className="pr-10"
+              autoComplete="new-password"
+              required
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              title={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+              aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+            >
+              {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            </button>
+          </div>
+        </Field>
+
+        <Field label="Confirmar contraseña" required>
+          <TextInput
+            type={showPassword ? 'text' : 'password'}
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            placeholder="••••••••"
+            autoComplete="new-password"
+            required
+          />
+        </Field>
+
+        <ul className="space-y-1.5 text-sm">
+          {check(passwordChecks.length, 'Mínimo 6 caracteres')}
+          {check(passwordChecks.match, 'Las contraseñas coinciden')}
+        </ul>
+
+        {error && <Alert tone="error">{error}</Alert>}
+
+        <Button type="submit" size="lg" fullWidth disabled={!isFormValid} isLoading={loading}>
+          Cambiar contraseña
+        </Button>
+      </form>
+    </div>,
   );
 };

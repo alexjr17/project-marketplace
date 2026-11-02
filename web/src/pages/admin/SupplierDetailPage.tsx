@@ -1,60 +1,63 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Save, Trash2, Loader2 } from 'lucide-react';
-import { Button } from '../../components/shared/Button';
-import { Input } from '../../components/shared/Input';
-import { Modal } from '../../components/shared/Modal';
-import { useToast } from '../../context/ToastContext';
+import { Save, Trash2, Truck } from 'lucide-react';
+import {
+  Page, PageHeader, Button, Card, CardTitle, Field, TextInput, TextArea, SelectInput, Switch, FormGrid, FormActions,
+  Spinner, useConfirm, toast,
+} from '../../components/ui';
 import * as suppliersService from '../../services/suppliers.service';
+
+const LIST = '/admin-panel/suppliers';
+
+const EMPTY = {
+  code: '',
+  name: '',
+  taxId: '',
+  taxIdType: 'NIT',
+  contactName: '',
+  email: '',
+  phone: '',
+  altPhone: '',
+  website: '',
+  address: '',
+  city: '',
+  department: '',
+  postalCode: '',
+  country: 'Colombia',
+  paymentTerms: '',
+  paymentMethod: '',
+  bankName: '',
+  bankAccountType: '',
+  bankAccount: '',
+  notes: '',
+  isActive: true,
+};
+
+type FormState = typeof EMPTY;
+type TextKey = Exclude<keyof FormState, 'isActive'>;
 
 export default function SupplierDetailPage() {
   const navigate = useNavigate();
+  const confirm = useConfirm();
   const { id } = useParams<{ id: string }>();
-  const { showToast } = useToast();
   const isEditing = id !== 'new';
 
-  const [formData, setFormData] = useState({
-    code: '',
-    name: '',
-    taxId: '',
-    taxIdType: 'NIT',
-    contactName: '',
-    email: '',
-    phone: '',
-    altPhone: '',
-    website: '',
-    address: '',
-    city: '',
-    department: '',
-    postalCode: '',
-    country: 'Colombia',
-    paymentTerms: '',
-    paymentMethod: '',
-    bankName: '',
-    bankAccountType: '',
-    bankAccount: '',
-    notes: '',
-    isActive: true,
-  });
-
+  const [formData, setFormData] = useState<FormState>(EMPTY);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [errors, setErrors] = useState<{ code?: string; name?: string }>({});
 
   useEffect(() => {
-    if (isEditing) {
-      loadSupplier();
-    } else {
-      generateCode();
-    }
+    if (isEditing) loadSupplier();
+    else generateCode();
   }, [id]);
 
   const generateCode = async () => {
     try {
       const code = await suppliersService.generateCode();
-      setFormData(prev => ({ ...prev, code }));
+      setFormData((prev) => ({ ...prev, code }));
     } catch (error) {
-      showToast('Error al generar código', 'error');
+      toast.error('Error al generar código');
     }
   };
 
@@ -86,324 +89,167 @@ export default function SupplierDetailPage() {
         isActive: supplier.isActive,
       });
     } catch (error) {
-      showToast('Error al cargar proveedor', 'error');
-      navigate('/admin-panel/suppliers');
+      toast.error('Error al cargar proveedor');
+      navigate(LIST);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  /** Props de un campo de texto: valor y cambio. */
+  const bind = (key: TextKey) => ({
+    value: formData[key],
+    onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => setFormData({ ...formData, [key]: e.target.value }),
+  });
+
+  const handleSubmit = async (e?: React.FormEvent) => {
+    e?.preventDefault();
 
     if (!formData.code || !formData.name) {
-      showToast('El código y nombre son requeridos', 'error');
+      setErrors({ code: formData.code ? undefined : 'Requerido', name: formData.name ? undefined : 'Requerido' });
+      toast.error('El código y nombre son requeridos');
       return;
     }
+    setErrors({});
 
     try {
       setSaving(true);
       if (isEditing) {
         await suppliersService.updateSupplier(Number(id), formData);
-        showToast('Proveedor actualizado', 'success');
+        toast.success('Proveedor actualizado');
       } else {
         await suppliersService.createSupplier(formData);
-        showToast('Proveedor creado', 'success');
+        toast.success('Proveedor creado');
       }
-      navigate('/admin-panel/suppliers');
+      navigate(LIST);
     } catch (error: any) {
-      showToast(error.response?.data?.message || 'Error al guardar', 'error');
+      toast.error(error?.message || 'Error al guardar');
     } finally {
       setSaving(false);
     }
   };
 
   const handleDelete = async () => {
+    const ok = await confirm({ title: '¿Eliminar este proveedor?', message: 'Esta acción no se puede deshacer.', tone: 'danger' });
+    if (!ok) return;
     try {
       setSaving(true);
       await suppliersService.deleteSupplier(Number(id));
-      showToast('Proveedor eliminado', 'success');
-      navigate('/admin-panel/suppliers');
+      toast.success('Proveedor eliminado');
+      navigate(LIST);
     } catch (error: any) {
-      showToast(error.response?.data?.message || 'Error al eliminar', 'error');
+      toast.error(error?.message || 'Error al eliminar');
     } finally {
       setSaving(false);
-      setShowDeleteModal(false);
     }
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <Loader2 className="w-8 h-8 animate-spin text-orange-600" />
-      </div>
-    );
+    return <Page><Spinner label="Cargando proveedor…" /></Page>;
   }
 
   return (
-    <div className="p-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">
-            {isEditing ? 'Editar Proveedor' : 'Nuevo Proveedor'}
-          </h1>
-          <p className="text-gray-600 mt-1 text-sm">
-            {isEditing
-              ? 'Modifica la información del proveedor'
-              : 'Crea un nuevo proveedor para el sistema'}
-          </p>
-        </div>
-        <button
-          onClick={() => navigate('/admin-panel/suppliers')}
-          className="inline-flex items-center gap-2 px-4 py-2 text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 rounded-lg transition-colors"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          Volver a Proveedores
-        </button>
-      </div>
+    <Page>
+      <PageHeader
+        icon={Truck}
+        backTo={LIST}
+        title={isEditing ? (formData.name || 'Proveedor') : 'Nuevo proveedor'}
+        subtitle={isEditing ? <span className="font-mono">{formData.code}</span> : 'Registra un proveedor para tus órdenes de compra'}
+      />
 
-      {/* Form */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-        <form onSubmit={handleSubmit} className="p-6">
-          {/* Información básica */}
-          <div className="mb-8">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Información Básica</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <Input
-                label="Código *"
-                value={formData.code}
-                onChange={(e) => setFormData({ ...formData, code: e.target.value })}
-                required
-              />
-              <Input
-                label="Nombre / Razón Social *"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                required
-              />
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Tipo de Identificación
-                </label>
-                <select
-                  value={formData.taxIdType}
-                  onChange={(e) => setFormData({ ...formData, taxIdType: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                >
+      <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
+        <div className="lg:col-span-2 space-y-5">
+          <Card>
+            <CardTitle>Identificación</CardTitle>
+            <FormGrid cols={2}>
+              <Field label="Código" required error={errors.code} hint={!isEditing ? 'Se genera solo; puedes cambiarlo.' : undefined}>
+                <TextInput {...bind('code')} error={!!errors.code} className="font-mono" />
+              </Field>
+              <Field label="Nombre o razón social" required error={errors.name}>
+                <TextInput {...bind('name')} error={!!errors.name} />
+              </Field>
+              <Field label="Tipo de identificación">
+                <SelectInput {...bind('taxIdType')}>
                   <option value="NIT">NIT</option>
                   <option value="RUT">RUT</option>
                   <option value="CC">Cédula</option>
-                  <option value="CE">Cédula Extranjería</option>
-                </select>
-              </div>
-              <Input
-                label="Número de Identificación"
-                value={formData.taxId}
-                onChange={(e) => setFormData({ ...formData, taxId: e.target.value })}
-              />
-            </div>
-          </div>
+                  <option value="CE">Cédula de extranjería</option>
+                </SelectInput>
+              </Field>
+              <Field label="Número de identificación">
+                <TextInput {...bind('taxId')} />
+              </Field>
+            </FormGrid>
+          </Card>
 
-          {/* Información de contacto */}
-          <div className="mb-8">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Información de Contacto</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <Input
-                label="Nombre de Contacto"
-                value={formData.contactName}
-                onChange={(e) => setFormData({ ...formData, contactName: e.target.value })}
-              />
-              <Input
-                label="Email"
-                type="email"
-                value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-              />
-              <Input
-                label="Teléfono"
-                value={formData.phone}
-                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-              />
-              <Input
-                label="Teléfono Alternativo"
-                value={formData.altPhone}
-                onChange={(e) => setFormData({ ...formData, altPhone: e.target.value })}
-              />
-              <Input
-                label="Sitio Web"
-                value={formData.website}
-                onChange={(e) => setFormData({ ...formData, website: e.target.value })}
-              />
-            </div>
-          </div>
+          <Card>
+            <CardTitle>Contacto</CardTitle>
+            <FormGrid cols={2}>
+              <Field label="Nombre de contacto"><TextInput {...bind('contactName')} /></Field>
+              <Field label="Correo"><TextInput type="email" {...bind('email')} /></Field>
+              <Field label="Teléfono"><TextInput type="tel" {...bind('phone')} /></Field>
+              <Field label="Teléfono alternativo"><TextInput type="tel" {...bind('altPhone')} /></Field>
+              <Field label="Sitio web" className="md:col-span-2"><TextInput {...bind('website')} placeholder="https://…" /></Field>
+            </FormGrid>
+          </Card>
 
-          {/* Dirección */}
-          <div className="mb-8">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Dirección</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="md:col-span-2">
-                <Input
-                  label="Dirección"
-                  value={formData.address}
-                  onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                />
-              </div>
-              <Input
-                label="Ciudad"
-                value={formData.city}
-                onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-              />
-              <Input
-                label="Departamento"
-                value={formData.department}
-                onChange={(e) => setFormData({ ...formData, department: e.target.value })}
-              />
-              <Input
-                label="Código Postal"
-                value={formData.postalCode}
-                onChange={(e) => setFormData({ ...formData, postalCode: e.target.value })}
-              />
-              <Input
-                label="País"
-                value={formData.country}
-                onChange={(e) => setFormData({ ...formData, country: e.target.value })}
-              />
-            </div>
-          </div>
+          <Card>
+            <CardTitle>Dirección</CardTitle>
+            <FormGrid cols={2}>
+              <Field label="Dirección" className="md:col-span-2"><TextInput {...bind('address')} /></Field>
+              <Field label="Ciudad"><TextInput {...bind('city')} /></Field>
+              <Field label="Departamento"><TextInput {...bind('department')} /></Field>
+              <Field label="Código postal"><TextInput {...bind('postalCode')} /></Field>
+              <Field label="País"><TextInput {...bind('country')} /></Field>
+            </FormGrid>
+          </Card>
 
-          {/* Información de pago */}
-          <div className="mb-8">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Información de Pago</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <Input
-                label="Términos de Pago"
-                value={formData.paymentTerms}
-                onChange={(e) => setFormData({ ...formData, paymentTerms: e.target.value })}
-                placeholder="Ej: 30 días"
-              />
-              <Input
-                label="Método de Pago"
-                value={formData.paymentMethod}
-                onChange={(e) => setFormData({ ...formData, paymentMethod: e.target.value })}
-                placeholder="Ej: Transferencia"
-              />
-              <Input
-                label="Banco"
-                value={formData.bankName}
-                onChange={(e) => setFormData({ ...formData, bankName: e.target.value })}
-              />
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Tipo de Cuenta
-                </label>
-                <select
-                  value={formData.bankAccountType}
-                  onChange={(e) => setFormData({ ...formData, bankAccountType: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                >
-                  <option value="">Seleccionar...</option>
+          <Card>
+            <CardTitle>Pago</CardTitle>
+            <FormGrid cols={2}>
+              <Field label="Términos de pago"><TextInput {...bind('paymentTerms')} placeholder="Ej: 30 días" /></Field>
+              <Field label="Método de pago"><TextInput {...bind('paymentMethod')} placeholder="Ej: Transferencia" /></Field>
+              <Field label="Banco"><TextInput {...bind('bankName')} /></Field>
+              <Field label="Tipo de cuenta">
+                <SelectInput {...bind('bankAccountType')}>
+                  <option value="">Seleccionar…</option>
                   <option value="Ahorros">Ahorros</option>
                   <option value="Corriente">Corriente</option>
-                </select>
-              </div>
-              <Input
-                label="Número de Cuenta"
-                value={formData.bankAccount}
-                onChange={(e) => setFormData({ ...formData, bankAccount: e.target.value })}
-              />
-            </div>
-          </div>
+                </SelectInput>
+              </Field>
+              <Field label="Número de cuenta" className="md:col-span-2"><TextInput {...bind('bankAccount')} /></Field>
+            </FormGrid>
+          </Card>
+        </div>
 
-          {/* Notas y estado */}
-          <div className="mb-8">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Adicional</h2>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Notas</label>
-                <textarea
-                  value={formData.notes}
-                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                  rows={3}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent resize-none"
-                  placeholder="Notas adicionales sobre el proveedor..."
-                />
-              </div>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={formData.isActive}
-                  onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
-                  className="w-4 h-4 text-orange-600 rounded focus:ring-orange-500"
-                />
-                <span className="text-sm font-medium text-gray-700">Proveedor activo</span>
-              </label>
-            </div>
-          </div>
+        <div className="space-y-5">
+          <Card>
+            <CardTitle>Estado</CardTitle>
+            <Switch
+              checked={formData.isActive}
+              onChange={(v) => setFormData({ ...formData, isActive: v })}
+              label="Proveedor activo"
+              description="Solo los activos aparecen al crear órdenes de compra."
+            />
+          </Card>
+          <Card>
+            <CardTitle>Notas</CardTitle>
+            <TextArea rows={5} {...bind('notes')} placeholder="Notas sobre el proveedor…" />
+          </Card>
+        </div>
 
-          {/* Action Buttons */}
-          <div className="flex gap-3 pt-4 border-t">
+        <div className="lg:col-span-3">
+          <FormActions sticky>
             {isEditing && (
-              <Button
-                type="button"
-                variant="admin-danger"
-                onClick={() => setShowDeleteModal(true)}
-                disabled={saving}
-                className="flex-1"
-              >
-                <Trash2 className="w-4 h-4 mr-2" />
+              <Button variant="ghost" className="sm:mr-auto text-red-600 hover:bg-red-50 hover:text-red-700" icon={<Trash2 className="w-4 h-4" />} onClick={handleDelete} disabled={saving}>
                 Eliminar
               </Button>
             )}
-            <Button
-              type="submit"
-              variant="admin-primary"
-              disabled={saving}
-              className="flex-1"
-            >
-              {saving ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Guardando...
-                </>
-              ) : (
-                <>
-                  <Save className="w-4 h-4 mr-2" />
-                  {isEditing ? 'Guardar' : 'Crear'}
-                </>
-              )}
-            </Button>
-          </div>
-        </form>
-      </div>
-
-      {/* Delete Confirmation Modal */}
-      <Modal
-        isOpen={showDeleteModal}
-        onClose={() => setShowDeleteModal(false)}
-        title="Eliminar Proveedor"
-      >
-        <div className="space-y-4">
-          <p className="text-gray-600">
-            ¿Estás seguro de eliminar este proveedor? Esta acción no se puede deshacer.
-          </p>
-          <div className="flex justify-end gap-3">
-            <Button
-              variant="admin-secondary"
-              onClick={() => setShowDeleteModal(false)}
-            >
-              Cancelar
-            </Button>
-            <Button
-              variant="admin-danger"
-              onClick={handleDelete}
-              disabled={saving}
-            >
-              {saving ? 'Eliminando...' : 'Eliminar'}
-            </Button>
-          </div>
+            <Button variant="secondary" onClick={() => navigate(LIST)}>Cancelar</Button>
+            <Button type="submit" icon={<Save className="w-4 h-4" />} isLoading={saving}>{isEditing ? 'Guardar' : 'Crear proveedor'}</Button>
+          </FormActions>
         </div>
-      </Modal>
-    </div>
+      </form>
+    </Page>
   );
 }

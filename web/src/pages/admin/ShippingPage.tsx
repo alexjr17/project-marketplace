@@ -1,417 +1,213 @@
-import { useState, useMemo } from 'react';
+import { useMemo, useState } from 'react';
+import { ordersService } from '../../services/orders.service';
 import { useNavigate } from 'react-router-dom';
+import { CheckCircle, ChevronRight, ExternalLink, Package, Truck } from 'lucide-react';
 import { useOrders } from '../../context/OrdersContext';
 import { useToast } from '../../context/ToastContext';
-import { Button } from '../../components/shared/Button';
-import { Input } from '../../components/shared/Input';
-import { Modal } from '../../components/shared/Modal';
-import { ORDER_STATUS_LABELS, ORDER_STATUS_COLORS } from '../../types/order';
+import { ORDER_STATUS_LABELS } from '../../types/order';
 import {
-  Truck,
-  Package,
-  Search,
-  MapPin,
-  Phone,
-  User,
-  Clock,
-  CheckCircle,
-  ExternalLink,
-  Settings,
-} from 'lucide-react';
+  Page, PageHeader, Button, IconButton, StatCard, FilterBar, SearchInput, Tabs, Dialog, Field, TextInput,
+  TableCard, Table, THead, TBody, Th, Tr, Td, Badge, EmptyState, useConfirm,
+} from '../../components/ui';
+import { ORDER_TONE, fmtDateTime } from './orderUi';
 
+type TabKey = 'toShip' | 'shipped';
+
+/** Despachos: pedidos pagados o en preparación por enviar, y envíos en tránsito por confirmar. */
 export const ShippingPage = () => {
   const navigate = useNavigate();
-  const { orders, updateOrderStatus, updateTrackingInfo } = useOrders();
+  const { orders, updateOrderStatus, refreshOrders } = useOrders();
+  const [shipping, setShipping] = useState(false);
   const toast = useToast();
+  const confirm = useConfirm();
 
+  const [tab, setTab] = useState<TabKey>('toShip');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [trackingData, setTrackingData] = useState({ number: '', url: '' });
   const [isTrackingModalOpen, setIsTrackingModalOpen] = useState(false);
 
-  // Pedidos listos para despachar (pagados o en preparación)
-  const ordersToShip = useMemo(() => {
-    return orders.filter(
-      (order) => order.status === 'paid' || order.status === 'processing'
-    );
-  }, [orders]);
+  // Solo pedidos con datos de envío: las ventas del POS (sin envío) no se despachan y
+  // antes hacían caer la página.
+  const shippable = useMemo(() => orders.filter((o) => Boolean(o.shipping)), [orders]);
+  const ordersToShip = useMemo(() => shippable.filter((o) => o.status === 'paid' || o.status === 'processing'), [shippable]);
+  const shippedOrders = useMemo(() => shippable.filter((o) => o.status === 'shipped'), [shippable]);
+  const deliveredToday = orders.filter((o) => o.status === 'delivered' && o.deliveredAt && new Date(o.deliveredAt).toDateString() === new Date().toDateString()).length;
 
-  // Pedidos ya enviados
-  const shippedOrders = useMemo(() => {
-    return orders.filter((order) => order.status === 'shipped');
-  }, [orders]);
-
-  // Filtrar por búsqueda
   const filteredOrdersToShip = useMemo(() => {
-    if (!searchQuery) return ordersToShip;
     const query = searchQuery.toLowerCase();
-    return ordersToShip.filter(
-      (order) =>
-        order.orderNumber.toLowerCase().includes(query) ||
-        order.userName.toLowerCase().includes(query) ||
-        order.shipping.city.toLowerCase().includes(query)
-    );
+    if (!query) return ordersToShip;
+    return ordersToShip.filter((o) =>
+      o.orderNumber.toLowerCase().includes(query) || o.userName.toLowerCase().includes(query) || (o.shipping?.city ?? '').toLowerCase().includes(query));
   }, [ordersToShip, searchQuery]);
 
   const filteredShippedOrders = useMemo(() => {
-    if (!searchQuery) return shippedOrders;
     const query = searchQuery.toLowerCase();
-    return shippedOrders.filter(
-      (order) =>
-        order.orderNumber.toLowerCase().includes(query) ||
-        order.userName.toLowerCase().includes(query) ||
-        order.trackingNumber?.toLowerCase().includes(query)
-    );
+    if (!query) return shippedOrders;
+    return shippedOrders.filter((o) =>
+      o.orderNumber.toLowerCase().includes(query) || o.userName.toLowerCase().includes(query) || o.trackingNumber?.toLowerCase().includes(query));
   }, [shippedOrders, searchQuery]);
 
   const handleOpenTrackingModal = (orderId: string) => {
-    const order = orders.find((o) => o.id === orderId);
+    const order = orders.find((o) => String(o.id) === orderId);
     setSelectedOrderId(orderId);
-    setTrackingData({
-      number: order?.trackingNumber || '',
-      url: order?.trackingUrl || '',
-    });
+    setTrackingData({ number: order?.trackingNumber || '', url: order?.trackingUrl || '' });
     setIsTrackingModalOpen(true);
   };
 
-  const handleMarkAsShipped = () => {
+  const closeTracking = () => { setIsTrackingModalOpen(false); setSelectedOrderId(null); };
+
+  // La guía viaja con el cambio de estado (PATCH /orders/{id}/status). Antes se enviaba a
+  // PATCH /orders/{id}/tracking, que no existe, y el número de guía se perdía.
+  const handleMarkAsShipped = async () => {
     if (!selectedOrderId || !trackingData.number) {
       toast.error('Ingresa el número de guía');
       return;
     }
-
-    updateTrackingInfo(selectedOrderId, trackingData.number, trackingData.url || undefined);
-    updateOrderStatus(selectedOrderId, 'shipped');
-    toast.success('Pedido marcado como enviado');
-    setIsTrackingModalOpen(false);
-    setSelectedOrderId(null);
-    setTrackingData({ number: '', url: '' });
+    setShipping(true);
+    try {
+      await ordersService.changeStatus(Number(selectedOrderId), {
+        status: 'SHIPPED',
+        trackingNumber: trackingData.number.trim(),
+        trackingUrl: trackingData.url.trim() || undefined,
+      });
+      await refreshOrders();
+      toast.success('Pedido marcado como enviado');
+      setIsTrackingModalOpen(false);
+      setSelectedOrderId(null);
+      setTrackingData({ number: '', url: '' });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'No se pudo marcar como enviado');
+    } finally {
+      setShipping(false);
+    }
   };
 
-  const handleMarkAsDelivered = (orderId: string) => {
-    updateOrderStatus(orderId, 'delivered');
+  const handleMarkAsDelivered = async (orderId: string, orderNumber: string) => {
+    if (!(await confirm({ title: `¿Marcar ${orderNumber} como entregado?`, message: 'El pedido pasará a estado final y ya no admite cambios.', confirmText: 'Marcar entregado' }))) return;
+    updateOrderStatus(Number(orderId), 'delivered');
     toast.success('Pedido marcado como entregado');
   };
 
+  const selected = orders.find((o) => String(o.id) === selectedOrderId);
+  const view = (id: number) => navigate(`/admin-panel/orders/${id}`);
+
   return (
-    <div className="p-4 md:p-8">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-bold text-gray-900">Despacho</h1>
-          <p className="text-gray-600 mt-1 text-sm">Gestiona los envíos de pedidos</p>
-        </div>
+    <Page>
+      <PageHeader icon={Truck} title="Despachos" subtitle="Envía los pedidos pagados y confirma las entregas" />
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <StatCard icon={Package} tone={ordersToShip.length > 0 ? 'yellow' : 'green'} label="Por despachar" value={ordersToShip.length} hint="Pagados o en preparación" />
+        <StatCard icon={Truck} tone="blue" label="En tránsito" value={shippedOrders.length} />
+        <StatCard icon={CheckCircle} tone="green" label="Entregados hoy" value={deliveredToday} />
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-        <div className="bg-white rounded-lg shadow-sm p-4 border border-gray-100">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-purple-50 rounded-lg">
-              <Package className="w-5 h-5 text-purple-600" />
-            </div>
-            <div>
-              <p className="text-xs text-gray-500">Por Despachar</p>
-              <p className="text-xl font-bold text-purple-600">{ordersToShip.length}</p>
-            </div>
-          </div>
+      <FilterBar>
+        <div className="sm:col-span-2"><SearchInput value={searchQuery} onChange={setSearchQuery} placeholder="Buscar por pedido, cliente, ciudad o guía…" /></div>
+      </FilterBar>
+
+      <Tabs<TabKey>
+        value={tab}
+        onChange={setTab}
+        tabs={[
+          { value: 'toShip', label: 'Por despachar', count: filteredOrdersToShip.length },
+          { value: 'shipped', label: 'En tránsito', count: filteredShippedOrders.length },
+        ]}
+      />
+
+      {tab === 'toShip' && (filteredOrdersToShip.length === 0 ? (
+        <div className="bg-white rounded-xl border border-gray-200">
+          <EmptyState icon={CheckCircle} title={searchQuery ? 'Ningún pedido coincide con la búsqueda' : '¡Todo al día!'} description={searchQuery ? undefined : 'No hay pedidos pendientes de despacho.'} />
         </div>
-        <div className="bg-white rounded-lg shadow-sm p-4 border border-gray-100">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-orange-50 rounded-lg">
-              <Truck className="w-5 h-5 text-orange-600" />
-            </div>
-            <div>
-              <p className="text-xs text-gray-500">En Tránsito</p>
-              <p className="text-xl font-bold text-orange-600">{shippedOrders.length}</p>
-            </div>
-          </div>
+      ) : (
+        <TableCard>
+          <Table>
+            <THead><tr><Th>Pedido</Th><Th>Cliente</Th><Th>Dirección</Th><Th align="right">Unidades</Th><Th align="right">Acciones</Th></tr></THead>
+            <TBody>
+              {filteredOrdersToShip.map((o) => (
+                <Tr key={o.id}>
+                  <Td>
+                    <button type="button" onClick={() => view(o.id)} className="font-medium text-gray-900 hover:text-app-700 text-left whitespace-nowrap">{o.orderNumber}</button>
+                    <span className="block mt-0.5"><Badge tone={ORDER_TONE[o.status]}>{ORDER_STATUS_LABELS[o.status]}</Badge></span>
+                  </Td>
+                  <Td>
+                    <span className="text-gray-900">{o.userName}</span>
+                    <span className="block text-xs text-gray-500">{o.shipping?.phone}</span>
+                  </Td>
+                  <Td className="min-w-[14rem]">
+                    <span className="text-gray-900">{o.shipping?.address}</span>
+                    <span className="block text-xs text-gray-500">{[o.shipping?.city, o.shipping?.postalCode].filter(Boolean).join(', ')}</span>
+                    {o.shipping?.notes && <span className="block text-xs text-amber-700 mt-0.5">Nota: {o.shipping?.notes}</span>}
+                  </Td>
+                  <Td align="right">{o.items.reduce((acc, item) => acc + item.quantity, 0)}</Td>
+                  <Td align="right" className="whitespace-nowrap">
+                    <IconButton title="Ver pedido" tone="app" onClick={() => view(o.id)}><ChevronRight className="w-4 h-4" /></IconButton>
+                    <Button size="sm" icon={<Truck className="w-4 h-4" />} onClick={() => handleOpenTrackingModal(String(o.id))}>Despachar</Button>
+                  </Td>
+                </Tr>
+              ))}
+            </TBody>
+          </Table>
+        </TableCard>
+      ))}
+
+      {tab === 'shipped' && (filteredShippedOrders.length === 0 ? (
+        <div className="bg-white rounded-xl border border-gray-200">
+          <EmptyState icon={Truck} title={searchQuery ? 'Ningún envío coincide con la búsqueda' : 'Sin envíos en tránsito'} description={searchQuery ? undefined : 'Los pedidos enviados aparecerán aquí.'} />
         </div>
-        <div className="bg-white rounded-lg shadow-sm p-4 border border-gray-100">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-green-50 rounded-lg">
-              <CheckCircle className="w-5 h-5 text-green-600" />
-            </div>
-            <div>
-              <p className="text-xs text-gray-500">Entregados Hoy</p>
-              <p className="text-xl font-bold text-green-600">
-                {orders.filter(
-                  (o) =>
-                    o.status === 'delivered' &&
-                    o.deliveredAt &&
-                    new Date(o.deliveredAt).toDateString() === new Date().toDateString()
-                ).length}
-              </p>
-            </div>
-          </div>
-        </div>
-        <div className="bg-white rounded-lg shadow-sm p-4 border border-gray-100">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-blue-50 rounded-lg">
-              <Clock className="w-5 h-5 text-blue-600" />
-            </div>
-            <div>
-              <p className="text-xs text-gray-500">Tiempo Promedio</p>
-              <p className="text-xl font-bold text-blue-600">2.5 días</p>
-            </div>
-          </div>
-        </div>
-      </div>
+      ) : (
+        <TableCard>
+          <Table>
+            <THead><tr><Th>Pedido</Th><Th>Cliente</Th><Th>Guía</Th><Th>Enviado</Th><Th align="right">Acciones</Th></tr></THead>
+            <TBody>
+              {filteredShippedOrders.map((o) => (
+                <Tr key={o.id}>
+                  <Td><button type="button" onClick={() => view(o.id)} className="font-medium text-gray-900 hover:text-app-700 text-left whitespace-nowrap">{o.orderNumber}</button></Td>
+                  <Td>
+                    <span className="text-gray-900">{o.userName}</span>
+                    <span className="block text-xs text-gray-500">{o.shipping?.city}</span>
+                  </Td>
+                  <Td>
+                    {o.trackingNumber ? (
+                      <span className="inline-flex items-center gap-1.5">
+                        <span className="font-mono">{o.trackingNumber}</span>
+                        {o.trackingUrl && <a href={o.trackingUrl} target="_blank" rel="noopener noreferrer" title="Rastrear envío" className="text-app-700"><ExternalLink className="w-4 h-4" /></a>}
+                      </span>
+                    ) : <span className="text-gray-400">—</span>}
+                  </Td>
+                  <Td className="whitespace-nowrap">{fmtDateTime(o.shippedAt)}</Td>
+                  <Td align="right" className="whitespace-nowrap">
+                    <IconButton title="Ver pedido" tone="app" onClick={() => view(o.id)}><ChevronRight className="w-4 h-4" /></IconButton>
+                    <Button size="sm" variant="success" icon={<CheckCircle className="w-4 h-4" />} onClick={() => handleMarkAsDelivered(String(o.id), o.orderNumber)}>Entregado</Button>
+                  </Td>
+                </Tr>
+              ))}
+            </TBody>
+          </Table>
+        </TableCard>
+      ))}
 
-      {/* Search */}
-      <div className="bg-white rounded-lg shadow-sm p-4 mb-6">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-          <Input
-            type="text"
-            placeholder="Buscar por número de pedido, cliente, ciudad o guía..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10"
-          />
-        </div>
-      </div>
-
-      {/* Orders to Ship */}
-      <div className="mb-8">
-        <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-          <Package className="w-5 h-5 text-purple-600" />
-          Pedidos por Despachar ({filteredOrdersToShip.length})
-        </h2>
-
-        {filteredOrdersToShip.length > 0 ? (
-          <div className="grid gap-4">
-            {filteredOrdersToShip.map((order) => (
-              <div
-                key={order.id}
-                className="bg-white rounded-lg shadow-sm border border-gray-100 p-4"
-              >
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                  <div className="flex items-start gap-4">
-                    <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center flex-shrink-0">
-                      <Package className="w-6 h-6 text-white" />
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <h3 className="font-bold text-gray-900">{order.orderNumber}</h3>
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${ORDER_STATUS_COLORS[order.status]}`}>
-                          {ORDER_STATUS_LABELS[order.status]}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-4 mt-1 text-sm text-gray-500">
-                        <span className="flex items-center gap-1">
-                          <User className="w-3 h-3" />
-                          {order.userName}
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <MapPin className="w-3 h-3" />
-                          {order.shipping.city}
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <Package className="w-3 h-3" />
-                          {order.items.reduce((acc, item) => acc + item.quantity, 0)} unidades
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="admin-secondary"
-                      onClick={() => navigate(`/admin-panel/orders/${order.id}`)}
-                    >
-                      <Settings className="w-4 h-4 mr-1" />
-                      Ver
-                    </Button>
-                    <Button onClick={() => handleOpenTrackingModal(order.id)}>
-                      <Truck className="w-4 h-4 mr-1" />
-                      Despachar
-                    </Button>
-                  </div>
-                </div>
-
-                {/* Dirección de envío */}
-                <div className="mt-4 pt-4 border-t border-gray-100">
-                  <div className="flex flex-col md:flex-row md:items-center gap-4 text-sm">
-                    <div className="flex items-start gap-2">
-                      <MapPin className="w-4 h-4 text-gray-400 mt-0.5" />
-                      <div>
-                        <p className="text-gray-900">{order.shipping.address}</p>
-                        <p className="text-gray-500">
-                          {order.shipping.city}, {order.shipping.postalCode}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Phone className="w-4 h-4 text-gray-400" />
-                      <span className="text-gray-600">{order.shipping.phone}</span>
-                    </div>
-                  </div>
-                  {order.shipping.notes && (
-                    <p className="mt-2 text-sm text-orange-600 bg-orange-50 px-3 py-2 rounded-lg">
-                      <strong>Nota:</strong> {order.shipping.notes}
-                    </p>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="bg-white rounded-lg shadow-sm p-8 text-center">
-            <CheckCircle className="w-16 h-16 text-green-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">¡Todo al día!</h3>
-            <p className="text-gray-500">No hay pedidos pendientes de despacho</p>
-          </div>
-        )}
-      </div>
-
-      {/* Shipped Orders */}
-      <div>
-        <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-          <Truck className="w-5 h-5 text-orange-600" />
-          En Tránsito ({filteredShippedOrders.length})
-        </h2>
-
-        {filteredShippedOrders.length > 0 ? (
-          <div className="grid gap-4">
-            {filteredShippedOrders.map((order) => (
-              <div
-                key={order.id}
-                className="bg-white rounded-lg shadow-sm border border-gray-100 p-4"
-              >
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                  <div className="flex items-start gap-4">
-                    <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-orange-500 to-red-500 flex items-center justify-center flex-shrink-0">
-                      <Truck className="w-6 h-6 text-white" />
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <h3 className="font-bold text-gray-900">{order.orderNumber}</h3>
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${ORDER_STATUS_COLORS[order.status]}`}>
-                          {ORDER_STATUS_LABELS[order.status]}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-4 mt-1 text-sm text-gray-500 flex-wrap">
-                        <span className="flex items-center gap-1">
-                          <User className="w-3 h-3" />
-                          {order.userName}
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <MapPin className="w-3 h-3" />
-                          {order.shipping.city}
-                        </span>
-                        {order.trackingNumber && (
-                          <span className="flex items-center gap-1 font-mono text-orange-600">
-                            Guía: {order.trackingNumber}
-                          </span>
-                        )}
-                      </div>
-                      {order.shippedAt && (
-                        <p className="text-xs text-gray-400 mt-1">
-                          Enviado el {new Date(order.shippedAt).toLocaleDateString('es-ES', {
-                            day: '2-digit',
-                            month: 'short',
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    {order.trackingUrl && (
-                      <a
-                        href={order.trackingUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 px-3 py-2 text-sm text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
-                      >
-                        <ExternalLink className="w-4 h-4" />
-                        Rastrear
-                      </a>
-                    )}
-                    <Button
-                      variant="admin-secondary"
-                      onClick={() => navigate(`/admin-panel/orders/${order.id}`)}
-                    >
-                      <Settings className="w-4 h-4 mr-1" />
-                      Ver
-                    </Button>
-                    <Button
-                      variant="admin-primary"
-                      onClick={() => handleMarkAsDelivered(order.id)}
-                    >
-                      <CheckCircle className="w-4 h-4 mr-1" />
-                      Entregado
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="bg-white rounded-lg shadow-sm p-8 text-center">
-            <Truck className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">Sin envíos en tránsito</h3>
-            <p className="text-gray-500">Los pedidos enviados aparecerán aquí</p>
-          </div>
-        )}
-      </div>
-
-      {/* Tracking Modal */}
-      <Modal
-        isOpen={isTrackingModalOpen}
-        onClose={() => {
-          setIsTrackingModalOpen(false);
-          setSelectedOrderId(null);
-        }}
-        title="Despachar Pedido"
+      <Dialog
+        open={isTrackingModalOpen}
+        onClose={closeTracking}
+        title="Despachar pedido"
+        description={selected ? `${selected.orderNumber} · ${selected.userName}` : 'Ingresa la información de envío.'}
+        footer={
+          <>
+            <Button variant="secondary" onClick={closeTracking}>Cancelar</Button>
+            <Button icon={<Truck className="w-4 h-4" />} onClick={handleMarkAsShipped} isLoading={shipping}>Marcar como enviado</Button>
+          </>
+        }
       >
         <div className="space-y-4">
-          <p className="text-gray-600">
-            Ingresa la información de envío para marcar este pedido como despachado.
-          </p>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Número de Guía *
-            </label>
-            <Input
-              type="text"
-              value={trackingData.number}
-              onChange={(e) => setTrackingData({ ...trackingData, number: e.target.value })}
-              placeholder="Ej: COL123456789"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              URL de Seguimiento (opcional)
-            </label>
-            <Input
-              type="url"
-              value={trackingData.url}
-              onChange={(e) => setTrackingData({ ...trackingData, url: e.target.value })}
-              placeholder="https://tracking.example.com/..."
-            />
-          </div>
-          <div className="flex gap-3 pt-4">
-            <Button
-              variant="admin-secondary"
-              onClick={() => {
-                setIsTrackingModalOpen(false);
-                setSelectedOrderId(null);
-              }}
-              className="flex-1"
-            >
-              Cancelar
-            </Button>
-            <Button onClick={handleMarkAsShipped} className="flex-1">
-              <Truck className="w-4 h-4 mr-2" />
-              Marcar como Enviado
-            </Button>
-          </div>
+          <Field label="Número de guía" required>
+            <TextInput autoFocus value={trackingData.number} onChange={(e) => setTrackingData({ ...trackingData, number: e.target.value })} placeholder="Ej: COL123456789" />
+          </Field>
+          <Field label="URL de seguimiento" hint="Opcional. El cliente la verá en su pedido.">
+            <TextInput type="url" value={trackingData.url} onChange={(e) => setTrackingData({ ...trackingData, url: e.target.value })} placeholder="https://tracking.example.com/..." />
+          </Field>
         </div>
-      </Modal>
-    </div>
+      </Dialog>
+    </Page>
   );
 };

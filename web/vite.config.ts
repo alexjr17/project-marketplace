@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import { writeFileSync } from 'fs'
@@ -63,4 +64,15 @@ export default defineConfig({
     chunkSizeWarningLimit: 1000,
   },
   base: '/',
+  // Pruebas (Vitest + Testing Library + MSW). Ver src/test/setup.ts.
+  test: {
+    environment: 'jsdom',
+    globals: true,
+    setupFiles: ['./src/test/setup.ts'],
+    include: ['src/**/*.test.{ts,tsx}'],
+    css: false,
+    restoreMocks: true,
+    // La API apunta a una URL fija en las pruebas (MSW la intercepta).
+    env: { VITE_API_URL: 'http://api.test/api' },
+  },
 })

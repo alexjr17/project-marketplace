@@ -1,35 +1,26 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  AlertCircle,
   ArrowLeft,
   ArrowRight,
-  CheckCircle2,
   ExternalLink,
   Facebook,
   Image as ImageIcon,
   Loader2,
   Package,
   Plus,
-  Search,
   Send,
+  Share2,
   Trash2,
-  Upload,
   X,
 } from 'lucide-react';
+import { Alert, Badge, Button, Card, CardTitle, Dialog, EmptyState, FileDrop, IconButton, Page, PageHeader, SearchInput, Spinner, TextArea, TextInput, Thumb, toast, useConfirm, type Tone } from '../../components/ui';
 import socialService from '../../services/social.service';
 import productsService from '../../services/products.service';
 import type { Product } from '../../types/product';
 import type { SocialPost } from '../../types/messaging';
-import { useSettings } from '../../context/SettingsContext';
 
 export const PostsPage = () => {
-  const { settings } = useSettings();
-  const brandColors = settings.appearance?.brandColors || settings.general.brandColors || {
-    primary: '#7c3aed',
-    secondary: '#ec4899',
-    accent: '#f59e0b',
-  };
-  const gradient = `linear-gradient(135deg, ${brandColors.primary}, ${brandColors.secondary})`;
+  const confirm = useConfirm();
 
   const [posts, setPosts] = useState<SocialPost[]>([]);
   const [loading, setLoading] = useState(true);
@@ -148,7 +139,7 @@ export const PostsPage = () => {
 
   // ============ Galería de imágenes ============
 
-  const handleAddFiles = async (files: FileList | null) => {
+  const handleAddFiles = async (files: FileList | File[] | null) => {
     if (!files || files.length === 0) return;
     const arr = Array.from(files);
     setUploadingCount((n) => n + arr.length);
@@ -272,7 +263,7 @@ export const PostsPage = () => {
         setPosts((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
       }
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'No se pudo publicar el borrador');
+      toast.error(err instanceof Error ? err.message : 'No se pudo publicar el borrador');
     }
   };
 
@@ -280,358 +271,198 @@ export const PostsPage = () => {
     const confirmMsg = post.status === 'published'
       ? '¿Borrar esta publicación de Facebook? La acción no se puede deshacer.'
       : '¿Borrar este borrador?';
-    if (!confirm(confirmMsg)) return;
+    if (!(await confirm({ title: confirmMsg, tone: 'danger', confirmText: 'Borrar' }))) return;
     try {
       await socialService.remove(post.id);
       setPosts((prev) => prev.filter((p) => p.id !== post.id));
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'No se pudo borrar');
+      toast.error(err instanceof Error ? err.message : 'No se pudo borrar');
     }
   };
 
   return (
-    <div className="h-[calc(100vh-3.5rem)] overflow-y-auto bg-gray-50">
-      <div className="max-w-5xl mx-auto p-6 space-y-6">
-        <header>
-          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-            <Facebook className="w-6 h-6 text-blue-600" />
-            Publicaciones
-          </h1>
-          <p className="text-sm text-gray-500 mt-1">
-            Crea posts directamente en la Página de Facebook conectada. Instagram y programación llegan en la siguiente fase.
-          </p>
-        </header>
+    <Page className="max-w-6xl mx-auto">
+      <PageHeader
+        icon={Share2}
+        title="Publicaciones"
+        subtitle="Crea posts en la Página de Facebook conectada. Instagram y programación llegan en la siguiente fase."
+      />
 
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-          {/* Composer */}
-          <div className="lg:col-span-2 space-y-3">
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 space-y-3">
-              <h2 className="font-semibold text-gray-900 text-sm">Nueva publicación</h2>
-
-              {/* Selector de producto: auto-llena texto + imagen con un producto del marketplace */}
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 items-start">
+        {/* Nueva publicación */}
+        <div className="lg:col-span-2">
+          <Card>
+            <CardTitle icon={Facebook}>Nueva publicación</CardTitle>
+            <div className="space-y-4">
+              {/* Producto del marketplace: llena texto + imágenes */}
               {!linkedProduct ? (
-                <button
-                  type="button"
-                  onClick={openPicker}
-                  className="w-full flex items-center justify-center gap-2 border-2 border-dashed border-gray-200 hover:border-violet-300 hover:bg-violet-50/30 rounded-lg px-3 py-2.5 text-sm text-gray-600 transition-colors"
-                >
-                  <Package className="w-4 h-4" style={{ color: brandColors.primary }} />
+                <Button variant="outline" fullWidth icon={<Package className="w-4 h-4" />} onClick={openPicker}>
                   Publicar un producto del marketplace
-                </button>
+                </Button>
               ) : (
-                <div
-                  className="flex items-center gap-3 rounded-lg px-3 py-2"
-                  style={{ backgroundColor: `${brandColors.primary}10`, border: `1px solid ${brandColors.primary}30` }}
-                >
-                  {linkedProduct.images?.front && (
-                    <img
-                      src={linkedProduct.images.front}
-                      alt={linkedProduct.name}
-                      className="w-10 h-10 rounded object-cover flex-shrink-0 bg-white"
-                    />
-                  )}
+                <div className="flex items-center gap-3 rounded-lg border border-app-200 bg-app-50 px-3 py-2">
+                  <Thumb src={linkedProduct.images?.front} alt={linkedProduct.name} />
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs font-medium text-gray-700">Producto vinculado</p>
+                    <p className="text-xs text-gray-500">Producto vinculado</p>
                     <p className="text-sm font-semibold text-gray-900 truncate">{linkedProduct.name}</p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={handleClearProduct}
-                    className="p-1 text-gray-400 hover:text-gray-600 hover:bg-white rounded"
-                    title="Desvincular producto"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
+                  <IconButton title="Desvincular producto" onClick={handleClearProduct}><X className="w-4 h-4" /></IconButton>
                 </div>
               )}
 
-              <textarea
+              <TextArea
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
                 placeholder="¿Qué quieres compartir hoy?"
                 rows={6}
-                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-200 resize-none"
+                className="resize-none"
+                aria-label="Texto de la publicación"
               />
 
-              {/* Galería — subir desde el equipo o pegar URL */}
+              {/* Imágenes: subir desde el equipo o pegar URL */}
               <div className="space-y-2">
-                <label className="block text-xs font-medium text-gray-700 flex items-center gap-1">
-                  <ImageIcon className="w-3.5 h-3.5" /> Imágenes
-                  {mediaUrls.length > 1 && (
-                    <span className="text-[10px] font-normal text-violet-600 ml-1">
-                      (se publica como carrusel)
-                    </span>
-                  )}
-                </label>
+                <p className="text-sm font-medium text-gray-700 flex items-center gap-1.5">
+                  <ImageIcon className="w-4 h-4 text-gray-400" /> Imágenes
+                  {mediaUrls.length > 1 && <Badge tone="app">Carrusel</Badge>}
+                </p>
 
-                {/* Grid de previews */}
                 {mediaUrls.length > 0 && (
                   <div className="grid grid-cols-3 gap-2">
                     {mediaUrls.map((url, idx) => (
-                      <div
-                        key={`${url}-${idx}`}
-                        className="relative aspect-square rounded-lg overflow-hidden border border-gray-200 bg-gray-50 group"
-                      >
+                      <div key={`${url}-${idx}`} className="relative aspect-square rounded-lg overflow-hidden border border-gray-200 bg-gray-50 group">
                         <img
                           src={url}
                           alt={`Imagen ${idx + 1}`}
                           className="w-full h-full object-cover"
                           onError={(e) => ((e.target as HTMLImageElement).style.opacity = '0.3')}
                         />
-                        {/* Etiqueta de orden */}
                         <span className="absolute top-1 left-1 bg-black/60 text-white text-[10px] font-semibold rounded-full w-5 h-5 flex items-center justify-center">
                           {idx + 1}
                         </span>
-                        {/* Acciones (visible en hover y siempre en móvil) */}
-                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-end justify-between p-1 opacity-0 group-hover:opacity-100">
+                        {/* Acciones: siempre visibles en táctil, en hover con ratón */}
+                        <div className="absolute inset-x-0 bottom-0 flex items-center justify-between p-1 bg-gradient-to-t from-black/50 to-transparent sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                           <div className="flex gap-1">
-                            <button
-                              type="button"
-                              onClick={() => handleMoveImage(idx, -1)}
-                              disabled={idx === 0}
-                              className="w-6 h-6 rounded bg-white/90 hover:bg-white text-gray-700 disabled:opacity-30 flex items-center justify-center"
-                              title="Mover izquierda"
-                            >
-                              <ArrowLeft className="w-3 h-3" />
+                            <button type="button" onClick={() => handleMoveImage(idx, -1)} disabled={idx === 0} className="w-7 h-7 rounded-md bg-white/95 text-gray-700 disabled:opacity-30 flex items-center justify-center" title="Mover a la izquierda">
+                              <ArrowLeft className="w-3.5 h-3.5" />
                             </button>
-                            <button
-                              type="button"
-                              onClick={() => handleMoveImage(idx, 1)}
-                              disabled={idx === mediaUrls.length - 1}
-                              className="w-6 h-6 rounded bg-white/90 hover:bg-white text-gray-700 disabled:opacity-30 flex items-center justify-center"
-                              title="Mover derecha"
-                            >
-                              <ArrowRight className="w-3 h-3" />
+                            <button type="button" onClick={() => handleMoveImage(idx, 1)} disabled={idx === mediaUrls.length - 1} className="w-7 h-7 rounded-md bg-white/95 text-gray-700 disabled:opacity-30 flex items-center justify-center" title="Mover a la derecha">
+                              <ArrowRight className="w-3.5 h-3.5" />
                             </button>
                           </div>
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveImage(idx)}
-                            className="w-6 h-6 rounded bg-red-500/90 hover:bg-red-600 text-white flex items-center justify-center"
-                            title="Quitar"
-                          >
-                            <Trash2 className="w-3 h-3" />
+                          <button type="button" onClick={() => handleRemoveImage(idx)} className="w-7 h-7 rounded-md bg-white/95 text-red-600 flex items-center justify-center" title="Quitar">
+                            <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         </div>
                       </div>
                     ))}
-
                     {uploadingCount > 0 && (
-                      <div className="aspect-square rounded-lg border-2 border-dashed border-violet-300 bg-violet-50 flex flex-col items-center justify-center text-violet-600">
+                      <div className="aspect-square rounded-lg border border-dashed border-app-300 bg-app-50 flex flex-col items-center justify-center text-app-700">
                         <Loader2 className="w-5 h-5 animate-spin mb-1" />
-                        <span className="text-[10px]">Subiendo {uploadingCount}…</span>
+                        <span className="text-[11px]">Subiendo {uploadingCount}…</span>
                       </div>
                     )}
                   </div>
                 )}
+                {mediaUrls.length === 0 && uploadingCount > 0 && (
+                  <p className="text-sm text-app-700 flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Subiendo {uploadingCount}…</p>
+                )}
 
-                {/* Acciones para agregar imágenes */}
-                <div className="flex flex-wrap gap-2">
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/png,image/jpeg,image/webp"
-                    multiple
-                    className="hidden"
-                    onChange={(e) => handleAddFiles(e.target.files)}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={uploadingCount > 0}
-                    className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-50"
-                  >
-                    <Upload className="w-3.5 h-3.5" />
-                    {mediaUrls.length === 0 ? 'Subir desde mi equipo' : 'Agregar más'}
-                  </button>
-                </div>
+                <FileDrop
+                  compact
+                  multiple
+                  accept="image/png,image/jpeg,image/webp"
+                  maxSizeMB={10}
+                  disabled={uploadingCount > 0}
+                  title={mediaUrls.length === 0 ? 'Subir desde mi equipo' : 'Agregar más'}
+                  hint="PNG, JPG o WebP · máx. 10 MB c/u. La primera es la portada; con 2+ se publica como carrusel."
+                  onFiles={(files) => handleAddFiles(files)}
+                />
 
                 {/* Pegar URL (alternativa) */}
-                <details className="text-xs">
-                  <summary className="cursor-pointer text-gray-500 hover:text-gray-700 select-none">
-                    O pegar una URL pública
-                  </summary>
-                  <div className="flex gap-2 mt-1.5">
-                    <input
+                <details className="text-sm">
+                  <summary className="cursor-pointer text-gray-500 hover:text-gray-800 select-none">O pegar una URL pública</summary>
+                  <div className="flex gap-2 mt-2">
+                    <TextInput
                       value={urlInput}
                       onChange={(e) => setUrlInput(e.target.value)}
                       onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddUrl())}
                       placeholder="https://…/imagen.jpg"
-                      className="flex-1 rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-violet-200"
+                      className="font-mono text-xs"
                     />
-                    <button
-                      type="button"
-                      onClick={handleAddUrl}
-                      disabled={!urlInput.trim()}
-                      className="px-2 py-1.5 text-xs rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-50 inline-flex items-center gap-1"
-                    >
-                      <Plus className="w-3 h-3" />
-                    </button>
+                    <Button variant="secondary" onClick={handleAddUrl} disabled={!urlInput.trim()} title="Agregar URL" icon={<Plus className="w-4 h-4" />} />
                   </div>
                 </details>
-
-                <p className="text-[11px] text-gray-400">
-                  PNG, JPG, WebP (máx. 10 MB cada una). El primer item se publica como portada.
-                  Con 2+ imágenes, FB lo muestra como carrusel.
-                </p>
               </div>
 
-              {feedback && (
-                <div
-                  className={`text-xs rounded-lg px-3 py-2 flex items-start gap-2 ${
-                    feedback.ok
-                      ? 'bg-green-50 text-green-700 border border-green-200'
-                      : 'bg-red-50 text-red-700 border border-red-200'
-                  }`}
-                >
-                  {feedback.ok ? (
-                    <CheckCircle2 className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                  ) : (
-                    <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                  )}
-                  <span>{feedback.msg}</span>
-                </div>
-              )}
+              {feedback && <Alert tone={feedback.ok ? 'success' : 'error'}>{feedback.msg}</Alert>}
 
-              <div className="flex gap-2 pt-2 border-t border-gray-100">
-                <button
-                  onClick={handlePublish}
-                  disabled={publishing}
-                  className="flex-1 inline-flex items-center justify-center gap-2 text-white text-sm font-medium px-4 py-2 rounded-lg disabled:opacity-50"
-                  style={{ background: gradient }}
-                >
-                  {publishing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                  Publicar ahora
-                </button>
-                <button
-                  onClick={handleSaveDraft}
-                  disabled={publishing}
-                  className="px-4 py-2 rounded-lg border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-                >
-                  Borrador
-                </button>
+              <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 pt-4 border-t border-gray-100">
+                <Button variant="secondary" onClick={handleSaveDraft} disabled={publishing}>Guardar borrador</Button>
+                <Button onClick={handlePublish} isLoading={publishing} icon={!publishing ? <Send className="w-4 h-4" /> : undefined}>Publicar ahora</Button>
               </div>
             </div>
-          </div>
+          </Card>
+        </div>
 
-          {/* Lista de posts */}
-          <div className="lg:col-span-3 space-y-3">
-            <h2 className="text-sm font-semibold text-gray-700 px-1">
-              Publicaciones recientes
-              {posts.length > 0 && <span className="ml-1.5 text-xs text-gray-400">({posts.length})</span>}
-            </h2>
+        {/* Publicaciones recientes */}
+        <div className="lg:col-span-3 space-y-3">
+          <h2 className="text-base font-semibold text-gray-900 flex items-center gap-2">
+            Publicaciones recientes
+            {posts.length > 0 && <Badge tone="gray">{posts.length}</Badge>}
+          </h2>
 
-            {loading ? (
-              <div className="flex justify-center py-10">
-                <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
-              </div>
-            ) : posts.length === 0 ? (
-              <div className="bg-white rounded-xl border border-dashed border-gray-300 p-10 text-center text-sm text-gray-400">
-                <Facebook className="w-10 h-10 mx-auto mb-2 opacity-40" />
-                Aún no hay publicaciones. Crea la primera en el formulario de la izquierda.
-              </div>
-            ) : (
-              posts.map((post) => (
-                <PostCard
-                  key={post.id}
-                  post={post}
-                  onPublish={() => handlePublishExisting(post)}
-                  onDelete={() => handleDelete(post)}
-                />
-              ))
-            )}
-          </div>
+          {loading ? (
+            <Spinner label="Cargando publicaciones…" />
+          ) : posts.length === 0 ? (
+            <Card><EmptyState icon={Facebook} title="Aún no hay publicaciones" description="Crea la primera en el formulario de Nueva publicación." /></Card>
+          ) : (
+            posts.map((post) => (
+              <PostCard key={post.id} post={post} onPublish={() => handlePublishExisting(post)} onDelete={() => handleDelete(post)} />
+            ))
+          )}
         </div>
       </div>
 
-      {/* Modal selector de producto */}
-      {pickerOpen && (
-        <div
-          className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4"
-          onClick={() => setPickerOpen(false)}
-        >
-          <div
-            className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-3">
-              <Package className="w-5 h-5" style={{ color: brandColors.primary }} />
-              <h3 className="font-semibold text-gray-900">Elige un producto</h3>
-              <button
-                onClick={() => setPickerOpen(false)}
-                className="ml-auto p-1 text-gray-400 hover:text-gray-600"
-                aria-label="Cerrar"
-              >
-                <X className="w-5 h-5" />
-              </button>
+      {/* Selector de producto */}
+      <Dialog
+        open={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        size="lg"
+        title="Elige un producto"
+        description="Se usan el nombre, la descripción, el precio y las imágenes. Podrás editar el texto antes de publicar."
+      >
+        <div className="space-y-3">
+          <SearchInput value={productSearch} onChange={setProductSearch} placeholder="Buscar por nombre, descripción o SKU" />
+          {loadingProducts ? (
+            <Spinner />
+          ) : filteredProducts.length === 0 ? (
+            <EmptyState icon={Package} title={products.length === 0 ? 'Aún no hay productos en el marketplace' : 'Ningún producto coincide con la búsqueda'} />
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {filteredProducts.map((p) => {
+                const price = (p as { basePrice?: number; price?: number }).basePrice
+                  ?? (p as { basePrice?: number; price?: number }).price
+                  ?? 0;
+                return (
+                  <button
+                    key={p.id}
+                    onClick={() => handlePickProduct(p)}
+                    className="flex items-center gap-3 text-left p-2 rounded-lg border border-gray-200 hover:border-app-400 hover:bg-app-50 transition-colors"
+                  >
+                    <Thumb src={p.images?.front} alt={p.name} size="lg" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-900 truncate">{p.name}</p>
+                      {price > 0 && <p className="text-xs text-gray-500">${Math.round(price).toLocaleString('es-CO')} COP</p>}
+                      {p.sku && <p className="text-[11px] text-gray-400 font-mono">{p.sku}</p>}
+                    </div>
+                  </button>
+                );
+              })}
             </div>
-
-            <div className="px-5 py-3 border-b border-gray-100">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <input
-                  autoFocus
-                  value={productSearch}
-                  onChange={(e) => setProductSearch(e.target.value)}
-                  placeholder="Buscar por nombre, descripción o SKU"
-                  className="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-violet-200"
-                />
-              </div>
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-3">
-              {loadingProducts ? (
-                <div className="flex justify-center py-10">
-                  <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
-                </div>
-              ) : filteredProducts.length === 0 ? (
-                <div className="text-center text-sm text-gray-400 py-10">
-                  {products.length === 0
-                    ? 'Aún no hay productos en el marketplace.'
-                    : 'Ningún producto coincide con la búsqueda.'}
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {filteredProducts.map((p) => {
-                    const price = (p as { basePrice?: number; price?: number }).basePrice
-                      ?? (p as { basePrice?: number; price?: number }).price
-                      ?? 0;
-                    return (
-                      <button
-                        key={p.id}
-                        onClick={() => handlePickProduct(p)}
-                        className="flex items-center gap-3 text-left p-2 rounded-lg border border-gray-200 hover:border-violet-300 hover:bg-violet-50/30 transition-colors"
-                      >
-                        <div className="w-14 h-14 rounded-lg bg-gray-100 overflow-hidden flex-shrink-0 flex items-center justify-center">
-                          {p.images?.front ? (
-                            <img src={p.images.front} alt={p.name} className="w-full h-full object-cover" />
-                          ) : (
-                            <Package className="w-5 h-5 text-gray-300" />
-                          )}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-gray-900 truncate">{p.name}</p>
-                          {price > 0 && (
-                            <p className="text-xs text-gray-500">
-                              ${Math.round(price).toLocaleString('es-CO')} COP
-                            </p>
-                          )}
-                          {p.sku && <p className="text-[11px] text-gray-400 font-mono">{p.sku}</p>}
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
-            <div className="px-5 py-3 border-t border-gray-100 text-[11px] text-gray-400">
-              Solo se usa el nombre, descripción, precio e imagen frontal. Podrás editar el texto antes de publicar.
-            </div>
-          </div>
+          )}
         </div>
-      )}
-    </div>
+      </Dialog>
+    </Page>
   );
 };
 
@@ -641,112 +472,70 @@ interface PostCardProps {
   onDelete: () => void;
 }
 
-const PostCard = ({ post, onPublish, onDelete }: PostCardProps) => {
-  const statusStyle: Record<SocialPost['status'], string> = {
-    draft: 'bg-gray-100 text-gray-700',
-    scheduled: 'bg-amber-100 text-amber-700',
-    published: 'bg-green-100 text-green-700',
-    failed: 'bg-red-100 text-red-700',
-  };
-  const statusLabel: Record<SocialPost['status'], string> = {
-    draft: 'Borrador',
-    scheduled: 'Programado',
-    published: 'Publicado',
-    failed: 'Falló',
-  };
+const STATUS_TONE: Record<SocialPost['status'], Tone> = {
+  draft: 'gray',
+  scheduled: 'yellow',
+  published: 'green',
+  failed: 'red',
+};
+const STATUS_LABEL: Record<SocialPost['status'], string> = {
+  draft: 'Borrador',
+  scheduled: 'Programado',
+  published: 'Publicado',
+  failed: 'Falló',
+};
 
+const PostCard = ({ post, onPublish, onDelete }: PostCardProps) => {
+  const urls = post.mediaUrls && post.mediaUrls.length > 0 ? post.mediaUrls : (post.mediaUrl ? [post.mediaUrl] : []);
+  const when = post.publishedAt || post.createdAt;
   return (
-    <article className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-      <div className="px-4 py-3 flex items-center justify-between border-b border-gray-100">
+    <article className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      <div className="px-4 py-3 flex items-center justify-between gap-2 border-b border-gray-100">
         <div className="flex items-center gap-2">
-          <Facebook className="w-4 h-4 text-blue-600" />
-          <span className="text-xs font-medium text-gray-600 uppercase tracking-wide">{post.platform}</span>
-          <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${statusStyle[post.status]}`}>
-            {statusLabel[post.status]}
-          </span>
+          <Facebook className="w-4 h-4 text-gray-500" />
+          <span className="text-xs font-medium text-gray-600 capitalize">{post.platform}</span>
+          <Badge tone={STATUS_TONE[post.status]}>{STATUS_LABEL[post.status]}</Badge>
         </div>
-        <span className="text-[11px] text-gray-400">
-          {post.publishedAt
-            ? new Date(post.publishedAt).toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' })
-            : post.createdAt
-              ? new Date(post.createdAt).toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' })
-              : ''}
+        <span className="text-xs text-gray-400">
+          {when ? new Date(when).toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' }) : ''}
         </span>
       </div>
 
       <div className="px-4 py-3 space-y-3">
-        {(() => {
-          const urls = post.mediaUrls && post.mediaUrls.length > 0
-            ? post.mediaUrls
-            : (post.mediaUrl ? [post.mediaUrl] : []);
-          if (urls.length === 0) return null;
-          if (urls.length === 1) {
-            return (
-              <img
-                src={urls[0]}
-                alt=""
-                className="w-full max-h-72 object-cover rounded-lg border border-gray-100"
-                onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')}
-              />
-            );
-          }
-          return (
-            <div className="grid grid-cols-3 gap-1.5">
-              {urls.slice(0, 6).map((u, i) => (
-                <div key={i} className="relative aspect-square rounded overflow-hidden border border-gray-100 bg-gray-50">
-                  <img
-                    src={u}
-                    alt={`${i + 1}`}
-                    className="w-full h-full object-cover"
-                    onError={(e) => ((e.target as HTMLImageElement).style.opacity = '0.3')}
-                  />
-                  {i === 5 && urls.length > 6 && (
-                    <div className="absolute inset-0 bg-black/60 text-white text-xs font-semibold flex items-center justify-center">
-                      +{urls.length - 6}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          );
-        })()}
-        {post.content && (
-          <p className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">{post.content}</p>
+        {urls.length === 1 && (
+          <img src={urls[0]} alt="" className="w-full max-h-72 object-cover rounded-lg border border-gray-100" onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')} />
         )}
-        {post.error && (
-          <div className="text-xs bg-red-50 border border-red-200 text-red-700 rounded px-2 py-1.5 flex items-start gap-1.5">
-            <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
-            <span>{post.error}</span>
+        {urls.length > 1 && (
+          <div className="grid grid-cols-3 gap-1.5">
+            {urls.slice(0, 6).map((u, i) => (
+              <div key={i} className="relative aspect-square rounded-md overflow-hidden border border-gray-100 bg-gray-50">
+                <img src={u} alt={`${i + 1}`} className="w-full h-full object-cover" onError={(e) => ((e.target as HTMLImageElement).style.opacity = '0.3')} />
+                {i === 5 && urls.length > 6 && (
+                  <div className="absolute inset-0 bg-black/60 text-white text-xs font-semibold flex items-center justify-center">+{urls.length - 6}</div>
+                )}
+              </div>
+            ))}
           </div>
         )}
+        {post.content && <p className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">{post.content}</p>}
+        {post.error && <Alert tone="error">{post.error}</Alert>}
       </div>
 
-      <div className="px-4 py-2 border-t border-gray-100 flex items-center gap-2 justify-end">
-        {post.status === 'draft' && (
-          <button
-            onClick={onPublish}
-            className="text-xs font-medium px-3 py-1.5 rounded-lg bg-violet-600 hover:bg-violet-700 text-white inline-flex items-center gap-1"
-          >
-            <Send className="w-3 h-3" /> Publicar
-          </button>
-        )}
+      <div className="px-4 py-2.5 border-t border-gray-100 flex items-center gap-2 justify-end">
         {post.status === 'published' && post.externalUrl && (
           <a
             href={post.externalUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-xs font-medium px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 inline-flex items-center gap-1 text-gray-700"
+            className="inline-flex items-center gap-1.5 h-8 px-3 text-sm font-medium rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50"
           >
-            <ExternalLink className="w-3 h-3" /> Ver en Facebook
+            <ExternalLink className="w-4 h-4" /> Ver en Facebook
           </a>
         )}
-        <button
-          onClick={onDelete}
-          className="text-xs font-medium px-2 py-1.5 rounded-lg text-red-600 hover:bg-red-50 inline-flex items-center gap-1"
-          title="Borrar"
-        >
-          <Trash2 className="w-3 h-3" />
-        </button>
+        {post.status === 'draft' && (
+          <Button size="sm" icon={<Send className="w-4 h-4" />} onClick={onPublish}>Publicar</Button>
+        )}
+        <IconButton title="Borrar" tone="danger" onClick={onDelete}><Trash2 className="w-4 h-4" /></IconButton>
       </div>
     </article>
   );

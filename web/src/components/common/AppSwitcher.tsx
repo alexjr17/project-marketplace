@@ -1,17 +1,26 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { useSettings } from '../../context/SettingsContext';
+import { resolveAppColor, type AppKey } from '../../theme/appTheme';
 import { Grid3x3, ShoppingCart, LayoutGrid, ChevronDown, MessageSquare, Shirt } from 'lucide-react';
 
 interface AppSwitcherProps {
   /** 'sidebar' = encabezado de ancho completo (icono + nombre + chevron). */
-  variant?: 'default' | 'sidebar';
+  /** 'icon' = solo un botón con icono (encabezado de la tienda). */
+  variant?: 'default' | 'sidebar' | 'icon';
   /** Solo en variant 'sidebar': oculta el texto cuando el sidebar está contraído. */
   collapsed?: boolean;
 }
 
 export default function AppSwitcher({ variant = 'default', collapsed = false }: AppSwitcherProps) {
   const { user, hasPermission, isAdmin } = useAuth();
+  const { settings } = useSettings();
+  // Color configurado de cada app (Ajustes > Apariencia > Colores por aplicación).
+  const tint = (id: string) => {
+    const c = resolveAppColor(id as AppKey, settings.appearance);
+    return { icon: { color: c }, box: { backgroundColor: `${c}1a` } };
+  };
   const navigate = useNavigate();
   const location = useLocation();
   const [isOpen, setIsOpen] = useState(false);
@@ -46,8 +55,6 @@ export default function AppSwitcher({ variant = 'default', collapsed = false }: 
       name: 'Tienda',
       icon: LayoutGrid,
       path: '/',
-      color: 'text-blue-600',
-      bgColor: 'bg-blue-50',
       available: user?.roleId === 2 || hasPermission('store.access'),
     },
     {
@@ -55,8 +62,6 @@ export default function AppSwitcher({ variant = 'default', collapsed = false }: 
       name: 'Punto de Venta',
       icon: ShoppingCart,
       path: '/pos',
-      color: 'text-green-600',
-      bgColor: 'bg-green-50',
       available: hasPermission('pos.access'),
     },
     {
@@ -64,8 +69,6 @@ export default function AppSwitcher({ variant = 'default', collapsed = false }: 
       name: 'Administración',
       icon: Grid3x3,
       path: '/admin-panel',
-      color: 'text-purple-600',
-      bgColor: 'bg-purple-50',
       available: isAdmin, // Acceso al panel admin (admin.access o módulos admin)
     },
     {
@@ -73,8 +76,6 @@ export default function AppSwitcher({ variant = 'default', collapsed = false }: 
       name: 'Social Media',
       icon: MessageSquare,
       path: '/messaging',
-      color: 'text-pink-600',
-      bgColor: 'bg-pink-50',
       available: hasPermission('messaging.access'),
     },
     {
@@ -82,8 +83,6 @@ export default function AppSwitcher({ variant = 'default', collapsed = false }: 
       name: 'Fábrica',
       icon: Shirt,
       path: '/manufacturing',
-      color: 'text-amber-600',
-      bgColor: 'bg-amber-50',
       available: hasPermission('manufacturing.access'),
     },
   ].filter((app) => app.available);
@@ -115,8 +114,8 @@ export default function AppSwitcher({ variant = 'default', collapsed = false }: 
           isCurrent ? 'bg-gray-50 cursor-not-allowed' : 'hover:bg-gray-50 cursor-pointer'
         }`}
       >
-        <div className={`p-2 rounded-lg ${app.bgColor} flex-shrink-0`}>
-          <Icon className={`w-5 h-5 ${app.color}`} />
+        <div className="p-2 rounded-lg flex-shrink-0" style={tint(app.id).box}>
+          <Icon className="w-5 h-5" style={tint(app.id).icon} />
         </div>
         <div className="flex-1 text-left min-w-0">
           <div className="font-medium text-gray-900 truncate">{app.name}</div>
@@ -145,10 +144,10 @@ export default function AppSwitcher({ variant = 'default', collapsed = false }: 
           title={canSwitch ? 'Cambiar aplicación' : undefined}
           className="w-full flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 transition-colors disabled:hover:bg-transparent disabled:cursor-default"
         >
-          <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${currentAppData?.bgColor ?? 'bg-indigo-50'}`}>
+          <div className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0" style={tint(currentApp).box}>
             {currentAppData
-              ? <currentAppData.icon className={`w-6 h-6 ${currentAppData.color}`} />
-              : <ShoppingCart className="w-6 h-6 text-indigo-600" />}
+              ? <currentAppData.icon className="w-6 h-6" style={tint(currentApp).icon} />
+              : <ShoppingCart className="w-6 h-6" style={tint(currentApp).icon} />}
           </div>
           <div className={`min-w-0 flex-1 text-left transition-opacity duration-200 ${collapsed ? 'opacity-0' : 'opacity-100'}`}>
             <p className="font-bold text-gray-900 truncate leading-tight">{currentAppData?.name ?? 'Punto de Venta'}</p>
@@ -169,6 +168,30 @@ export default function AppSwitcher({ variant = 'default', collapsed = false }: 
     );
   }
 
+  // Variante icono: botón compacto; la lista de apps se abre igual que en la variante normal.
+  if (variant === 'icon') {
+    return (
+      <div className="relative" ref={dropdownRef}>
+        <button
+          type="button"
+          onClick={() => setIsOpen(!isOpen)}
+          title="Aplicaciones"
+          aria-label="Aplicaciones"
+          aria-expanded={isOpen}
+          className={`p-2 rounded-lg transition-colors ${isOpen ? 'bg-gray-100 text-gray-900' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'}`}
+        >
+          <LayoutGrid className="w-5 h-5" />
+        </button>
+        {isOpen && (
+          <div className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-xl border border-gray-200 py-2 z-50">
+            {appList}
+            {appButtons}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="relative" ref={dropdownRef}>
       <button
@@ -176,8 +199,8 @@ export default function AppSwitcher({ variant = 'default', collapsed = false }: 
         className="flex items-center space-x-2 px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors"
         title="Cambiar aplicación"
       >
-        <div className={`p-1.5 rounded ${currentAppData?.bgColor}`}>
-          {currentAppData && <currentAppData.icon className={`w-5 h-5 ${currentAppData.color}`} />}
+        <div className="p-1.5 rounded" style={tint(currentApp).box}>
+          {currentAppData && <currentAppData.icon className="w-5 h-5" style={tint(currentApp).icon} />}
         </div>
         <span className="hidden md:block font-medium text-gray-700">
           {currentAppData?.name}

@@ -20,11 +20,13 @@ interface ProductsContextType {
   setFilters: (filters: FilterValues) => void;
   setSortOption: (option: ProductSortOption) => void;
   setPage: (page: number) => void;
-  getProductById: (id: string) => Promise<Product | null>;
+  getProductById: (id: number) => Promise<Product | null>;
   addProduct: (product: Omit<Product, 'id' | 'createdAt' | 'updatedAt'>) => Promise<Product>;
-  updateProduct: (id: string, updates: Partial<Product>) => Promise<Product>;
-  deleteProduct: (id: string) => Promise<void>;
+  updateProduct: (id: number, updates: Partial<Product>) => Promise<Product>;
+  deleteProduct: (id: number) => Promise<void>;
   refreshProducts: () => Promise<void>;
+  /** Lo llama useProducts(): el listado solo se pide cuando una pantalla lo usa. */
+  activate: () => void;
 }
 
 const ProductsContext = createContext<ProductsContextType | undefined>(undefined);
@@ -36,6 +38,10 @@ export const ProductsProvider = ({ children }: { children: ReactNode }) => {
   const [sortOption, setSortOptionState] = useState<ProductSortOption>('newest');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // El proveedor envuelve toda la app, pero el listado solo hace falta en el catálogo y en
+  // el panel: antes se pedía en cada página (también en la portada) sin que nadie lo usara.
+  const [active, setActive] = useState(false);
+  const activate = useCallback(() => setActive(true), []);
   const [pagination, setPagination] = useState({
     page: 1,
     limit: 20,
@@ -81,6 +87,8 @@ export const ProductsProvider = ({ children }: { children: ReactNode }) => {
         inStock: filters.inStock,
         minPrice: filters.minPrice,
         maxPrice: filters.maxPrice,
+        search: filters.search?.trim() || undefined,
+        onSale: filters.onSale || undefined,
         ...sortParams,
       });
 
@@ -105,8 +113,8 @@ export const ProductsProvider = ({ children }: { children: ReactNode }) => {
 
   // Cargar productos cuando cambian filtros, orden o página
   useEffect(() => {
-    loadProducts();
-  }, [loadProducts]);
+    if (active) loadProducts();
+  }, [active, loadProducts]);
 
   const setFilters = (newFilters: FilterValues) => {
     setFiltersState(newFilters);
@@ -122,7 +130,7 @@ export const ProductsProvider = ({ children }: { children: ReactNode }) => {
     setPagination((prev) => ({ ...prev, page }));
   };
 
-  const getProductById = async (id: string): Promise<Product | null> => {
+  const getProductById = async (id: number): Promise<Product | null> => {
     // Primero buscar en cache local
     const cached = products.find((p) => p.id === id);
     if (cached) return cached;
@@ -155,7 +163,7 @@ export const ProductsProvider = ({ children }: { children: ReactNode }) => {
     };
   };
 
-  const updateProduct = async (id: string, updates: Partial<Product>): Promise<Product> => {
+  const updateProduct = async (id: number, updates: Partial<Product>): Promise<Product> => {
     const updated = await productsService.update(id, updates);
     await loadProducts(); // Recargar lista
     return {
@@ -165,7 +173,7 @@ export const ProductsProvider = ({ children }: { children: ReactNode }) => {
     };
   };
 
-  const deleteProduct = async (id: string): Promise<void> => {
+  const deleteProduct = async (id: number): Promise<void> => {
     await productsService.delete(id);
     await loadProducts(); // Recargar lista
   };
@@ -192,6 +200,7 @@ export const ProductsProvider = ({ children }: { children: ReactNode }) => {
         updateProduct,
         deleteProduct,
         refreshProducts,
+        activate,
       }}
     >
       {children}
@@ -204,5 +213,7 @@ export const useProducts = () => {
   if (context === undefined) {
     throw new Error('useProducts must be used within a ProductsProvider');
   }
+  const { activate } = context;
+  useEffect(() => { activate(); }, [activate]);
   return context;
 };

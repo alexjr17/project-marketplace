@@ -6,8 +6,12 @@ use App\Services\Ai\AiAssistantService;
 use App\Services\Ai\GroqAiAssistant;
 use App\Services\Ai\MockAiAssistant;
 use Dedoc\Scramble\Scramble;
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
+use Laravel\Sanctum\Sanctum;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -34,6 +38,14 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        $this->configureRateLimiting();
+
+        // Un usuario desactivado o suspendido no puede seguir usando sus tokens (antes el
+        // estado solo se revisaba al iniciar sesión).
+        Sanctum::authenticateAccessTokensUsing(
+            fn ($token, bool $isValid) => $isValid && ($token->tokenable?->status ?? 'ACTIVE') === 'ACTIVE'
+        );
+
         // La documentación de la API (Scramble) se publica en /api/doc
         // (como la tenía el backend anterior en Node). El JSON OpenAPI
         // queda en /api/doc.json. Por defecto Scramble la pone en /docs/api.
@@ -62,5 +74,32 @@ class AppServiceProvider extends ServiceProvider
 
             return (bool) session('scramble_docs_ok', false);
         });
+    }
+
+    /**
+     * Límites de peticiones (antes no había ninguno). Por IP y, en el login, también por
+     * email, porque la IP es falsificable tras el proxy (trustProxies '*').
+     */
+    private function configureRateLimiting(): void
+    {
+        $byUserOrIp = fn (Request $r) => $r->user()?->id ? 'u'.$r->user()->id : 'ip'.$r->ip();
+
+        // Login: 10 por minuto por IP y 5 por minuto por email (fuerza bruta de contraseñas).
+        RateLimiter::for('login', fn (Request $r) => [
+            Limit::perMinute(10)->by('ip'.$r->ip()),
+            Limit::perMinute(5)->by('email'.strtolower((string) $r->input('email'))),
+        ]);
+        // Registro, olvido y reset de contraseña: 5 por minuto por IP.
+        RateLimiter::for('auth-sensitive', fn (Request $r) => Limit::perMinute(5)->by('ip'.$r->ip()));
+        // Validar cupones: evita enumerar códigos.
+        RateLimiter::for('coupons', fn (Request $r) => Limit::perMinute(20)->by($byUserOrIp($r)));
+        // Chat web: cada mensaje dispara una llamada a la IA (con costo).
+        RateLimiter::for('webchat', fn (Request $r) => Limit::perMinute(20)->by('ip'.$r->ip()));
+        // Subidas de imágenes.
+        RateLimiter::for('uploads', fn (Request $r) => Limit::perMinute(30)->by($byUserOrIp($r)));
+        // Imágenes redimensionadas: cada variante nueva cuesta CPU y disco.
+        RateLimiter::for('images', fn (Request $r) => Limit::perMinute(300)->by('ip'.$r->ip()));
+        // Bloques públicos de la portada (reseñas destacadas, categorías con conteo).
+        RateLimiter::for('storefront', fn (Request $r) => Limit::perMinute(60)->by('ip'.$r->ip()));
     }
 }

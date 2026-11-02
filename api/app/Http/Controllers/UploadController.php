@@ -3,8 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Http\Concerns\ApiResponse;
+use App\Support\SafeRemoteFetch;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 
 /**
@@ -125,12 +125,9 @@ class UploadController extends Controller
         ]);
 
         try {
-            $response = Http::timeout(20)->get($data['url']);
-            if (! $response->successful()) {
-                return $this->error('No se pudo descargar la imagen desde la URL', 400);
-            }
+            // SafeRemoteFetch evita SSRF (IPs internas, redirecciones) y corta por tamaño.
             $result = $this->storeImageBytes(
-                $response->body(),
+                SafeRemoteFetch::get($data['url'], self::MAX_BYTES),
                 $this->folder($data['folder'] ?? null),
                 $data['publicId'] ?? null,
             );

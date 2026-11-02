@@ -1,10 +1,16 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { ArrowLeft, Shirt, Package, Loader2, AlertCircle, Search, CheckCircle2 } from 'lucide-react';
-import { Button } from '../../components/shared/Button';
-import { useToast } from '../../context/ToastContext';
+import { ArrowRightLeft, Shirt, Package, Check } from 'lucide-react';
+import {
+  Page, PageHeader, Button, Badge, Card, CardTitle, SearchInput, Checkbox, FormActions, Spinner, EmptyState, Thumb,
+  TableCard, Table, THead, TBody, Th, Tr, Td, toast,
+} from '../../components/ui';
 import { inventoryConversionsService } from '../../services/inventory-conversions.service';
 import { getVariants, type ProductVariant } from '../../services/variants.service';
+import { templateRecipesService } from '../../services/template-recipes.service';
+import { StepCard } from './InventoryStepCard';
+
+const LIST = '/admin-panel/inventory-conversions';
 
 interface FormData {
   conversionDate: string;
@@ -12,13 +18,16 @@ interface FormData {
   notes: string;
 }
 
+/** Variante con la receta de la plantilla (se carga al elegir la plantilla). */
+type TemplateVariant = ProductVariant & { templateRecipes?: any[] };
+
 interface Product {
   id: number;
   name: string;
   sku: string;
   isTemplate: boolean;
   images: string[];
-  variants: ProductVariant[];
+  variants: TemplateVariant[];
 }
 
 interface MatrixCell {
@@ -27,8 +36,8 @@ interface MatrixCell {
   colorHex: string;
   sizeId: number;
   sizeName: string;
-  templateVariant: ProductVariant | null;
-  outputVariant: ProductVariant | null;
+  templateVariant: TemplateVariant | null;
+  outputVariant: TemplateVariant | null;
   available: boolean;
 }
 
@@ -36,16 +45,52 @@ interface CellQuantity {
   colorId: number;
   sizeId: number;
   quantity: number;
-  templateVariant: ProductVariant;
-  outputVariant: ProductVariant;
+  templateVariant: TemplateVariant;
+  outputVariant: TemplateVariant;
+}
+
+/** Primera imagen del producto (el API puede mandar un arreglo o un objeto {front, back…}). */
+const firstImage = (images: unknown): string | null => {
+  if (Array.isArray(images)) return images[0] ?? null;
+  if (images && typeof images === 'object') return (Object.values(images as Record<string, unknown>).find((v) => typeof v === 'string') as string) ?? null;
+  return null;
+};
+
+/** Fila elegible de una lista (producto o plantilla). */
+function PickRow({ product, selected, onPick, icon: Icon }: { product: Product; selected: boolean; onPick: () => void; icon: typeof Package }) {
+  const img = firstImage(product.images);
+  return (
+    <button type="button" onClick={onPick} className={`w-full px-3 py-2.5 text-left flex items-center gap-3 transition-colors ${selected ? 'bg-app-50' : 'hover:bg-gray-50'}`}>
+      {img ? <Thumb src={img} alt={product.name} /> : <span className="w-10 h-10 rounded-lg border border-gray-200 bg-gray-50 flex items-center justify-center flex-shrink-0"><Icon className="w-5 h-5 text-gray-300" /></span>}
+      <span className="min-w-0 flex-1">
+        <span className="block font-medium text-gray-900 truncate">{product.name}</span>
+        <span className="block text-xs text-gray-500">{product.sku} · {product.variants.length} variantes</span>
+      </span>
+      {selected && <Check className="w-4 h-4 text-app-600" />}
+    </button>
+  );
+}
+
+/** Resumen del elegido con el botón Cambiar. */
+function PickedSummary({ product, icon: Icon, onChange }: { product: Product; icon: typeof Package; onChange: () => void }) {
+  const img = firstImage(product.images);
+  return (
+    <div className="flex items-center gap-3 rounded-lg border border-gray-200 px-3 py-2.5">
+      {img ? <Thumb src={img} alt={product.name} /> : <span className="w-10 h-10 rounded-lg border border-gray-200 bg-gray-50 flex items-center justify-center flex-shrink-0"><Icon className="w-5 h-5 text-gray-300" /></span>}
+      <div className="min-w-0 flex-1">
+        <p className="font-medium text-gray-900 truncate">{product.name}</p>
+        <p className="text-xs text-gray-500">{product.sku} · {product.variants.length} variantes</p>
+      </div>
+      <Button size="sm" variant="ghost" onClick={onChange}>Cambiar</Button>
+    </div>
+  );
 }
 
 export default function InventoryConversionFromTemplatePage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { showToast } = useToast();
 
-  // Form data from previous modal
+  // Datos del paso anterior (diálogo de Nueva conversión)
   const formData = (location.state as { formData?: FormData })?.formData || {
     conversionDate: new Date().toISOString().split('T')[0],
     description: '',
@@ -56,11 +101,9 @@ export default function InventoryConversionFromTemplatePage() {
   const [creating, setCreating] = useState(false);
   const [loadingRecipes, setLoadingRecipes] = useState(false);
 
-  // Products and templates
   const [products, setProducts] = useState<Product[]>([]);
   const [templates, setTemplates] = useState<Product[]>([]);
 
-  // Selected items
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [selectedTemplate, setSelectedTemplate] = useState<Product | null>(null);
   const [cellQuantities, setCellQuantities] = useState<Map<string, number>>(new Map());
@@ -68,7 +111,6 @@ export default function InventoryConversionFromTemplatePage() {
   // Insumos de la receta que NO se deben consumir (deseleccionados).
   const [excludedInsumoIds, setExcludedInsumoIds] = useState<Set<number>>(new Set());
 
-  // Search terms
   const [productSearch, setProductSearch] = useState('');
   const [templateSearch, setTemplateSearch] = useState('');
 
@@ -76,25 +118,21 @@ export default function InventoryConversionFromTemplatePage() {
     loadData();
   }, []);
 
-  // Load template recipes when template is selected
+  // Recetas de la plantilla al elegirla (solo cuando cambia el id)
   useEffect(() => {
     if (selectedTemplate) {
-      console.log('useEffect triggered - loading recipes for template:', selectedTemplate.id);
       loadTemplateRecipes(selectedTemplate.id);
     }
-  }, [selectedTemplate?.id]); // Only trigger when ID changes, not when the whole object changes
+  }, [selectedTemplate?.id]);
 
   const loadData = async () => {
     try {
       setLoading(true);
-
-      // Load all variants to get products with variants
       const variants = await getVariants();
 
-      // Group variants by product
+      // Agrupar variantes por producto
       const productMap = new Map<number, Product>();
-
-      variants.forEach(variant => {
+      variants.forEach((variant) => {
         if (!productMap.has(variant.product.id)) {
           productMap.set(variant.product.id, {
             id: variant.product.id,
@@ -109,14 +147,11 @@ export default function InventoryConversionFromTemplatePage() {
       });
 
       const allProducts = Array.from(productMap.values());
-      const templateProducts = allProducts.filter(p => p.isTemplate);
-      const regularProducts = allProducts.filter(p => !p.isTemplate);
-
-      setTemplates(templateProducts);
-      setProducts(regularProducts);
+      setTemplates(allProducts.filter((p) => p.isTemplate));
+      setProducts(allProducts.filter((p) => !p.isTemplate));
     } catch (error: any) {
       console.error('Error loading data:', error);
-      showToast('Error al cargar datos', 'error');
+      toast.error('Error al cargar datos');
     } finally {
       setLoading(false);
     }
@@ -124,65 +159,26 @@ export default function InventoryConversionFromTemplatePage() {
 
   const loadTemplateRecipes = async (templateId: number) => {
     try {
-      console.log('loadTemplateRecipes called for templateId:', templateId);
       setLoadingRecipes(true);
-      const authData = localStorage.getItem('marketplace_auth');
-      const token = authData ? JSON.parse(authData).token : '';
+      const recipes: any[] = await templateRecipesService.getRecipesByProduct(templateId);
 
-      // Load all recipes for this template
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
-      const response = await fetch(
-        `${apiUrl}/template-recipes/product/${templateId}`,
-        {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          },
-        }
-      );
-
-      console.log('Response status:', response.status, response.statusText);
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Response error:', errorText);
-        throw new Error('Error al cargar recetas');
-      }
-
-      // El API responde con el envoltorio { success, data: [...] }.
-      const json = await response.json();
-      const recipes: any[] = Array.isArray(json) ? json : (json?.data ?? []);
-
-      // Group recipes by variantId
       const recipesByVariant = new Map<number, any[]>();
       recipes.forEach((recipe: any) => {
-        if (!recipesByVariant.has(recipe.variantId)) {
-          recipesByVariant.set(recipe.variantId, []);
-        }
+        if (!recipesByVariant.has(recipe.variantId)) recipesByVariant.set(recipe.variantId, []);
         recipesByVariant.get(recipe.variantId)!.push(recipe);
       });
 
-      console.log('Recipes grouped by variant:', Array.from(recipesByVariant.entries()));
-
-      // Update selected template variants with their recipes
-      setSelectedTemplate(prev => {
+      setSelectedTemplate((prev) => {
         if (!prev) return prev;
-
-        const updated = {
+        return {
           ...prev,
-          variants: prev.variants.map(variant => ({
-            ...variant,
-            templateRecipes: recipesByVariant.get(variant.id) || [],
-          })),
+          variants: prev.variants.map((variant) => ({ ...variant, templateRecipes: recipesByVariant.get(variant.id) || [] })),
         };
-
-        console.log('Updated template with recipes:', updated);
-        return updated;
       });
     } catch (error: any) {
       console.error('Error loading template recipes:', error);
-      showToast('Error al cargar recetas de la plantilla', 'error');
+      toast.error('Error al cargar recetas de la plantilla');
     } finally {
-      console.log('loadTemplateRecipes finished, setting loadingRecipes to false');
       setLoadingRecipes(false);
     }
   };
@@ -190,14 +186,11 @@ export default function InventoryConversionFromTemplatePage() {
   // Insumos distintos que usa la receta de la plantilla seleccionada.
   const recipeInsumos = useMemo(() => {
     const map = new Map<number, { inputId: number; name: string; code: string; lines: number }>();
-    const variants = (selectedTemplate as any)?.variants || [];
-    for (const variant of variants) {
+    for (const variant of selectedTemplate?.variants || []) {
       for (const recipe of variant.templateRecipes || []) {
         const input = recipe?.inputVariant?.input;
         if (!input) continue;
-        if (!map.has(input.id)) {
-          map.set(input.id, { inputId: input.id, name: input.name, code: input.code, lines: 0 });
-        }
+        if (!map.has(input.id)) map.set(input.id, { inputId: input.id, name: input.name, code: input.code, lines: 0 });
         map.get(input.id)!.lines++;
       }
     }
@@ -212,162 +205,105 @@ export default function InventoryConversionFromTemplatePage() {
   const toggleInsumo = (inputId: number) => {
     setExcludedInsumoIds((prev) => {
       const next = new Set(prev);
-      if (next.has(inputId)) {
-        next.delete(inputId);
-      } else {
-        next.add(inputId);
-      }
+      if (next.has(inputId)) next.delete(inputId);
+      else next.add(inputId);
       return next;
     });
   };
 
-  // Filtered products for search
   const filteredProducts = useMemo(() => {
     if (!productSearch) return products;
     const term = productSearch.toLowerCase();
-    return products.filter(p =>
-      p.name.toLowerCase().includes(term) ||
-      p.sku.toLowerCase().includes(term)
-    );
+    return products.filter((p) => p.name.toLowerCase().includes(term) || p.sku.toLowerCase().includes(term));
   }, [productSearch, products]);
 
-  // Filtered templates for search
   const filteredTemplates = useMemo(() => {
     if (!templateSearch) return templates;
     const term = templateSearch.toLowerCase();
-    return templates.filter(t =>
-      t.name.toLowerCase().includes(term) ||
-      t.sku.toLowerCase().includes(term)
-    );
+    return templates.filter((t) => t.name.toLowerCase().includes(term) || t.sku.toLowerCase().includes(term));
   }, [templateSearch, templates]);
 
-  // Build color x size matrix
+  // Matriz color × talla
   const matrix = useMemo((): MatrixCell[] => {
     if (!selectedProduct || !selectedTemplate) return [];
-
     const cells: MatrixCell[] = [];
-
-    // Get unique colors and sizes from the product
     const colors = new Map<number, { name: string; hex: string }>();
     const sizes = new Map<number, string>();
 
-    selectedProduct.variants.forEach(v => {
-      if (v.color && !colors.has(v.color.id)) {
-        colors.set(v.color.id, { name: v.color.name, hex: v.color.hexCode });
-      }
-      if (v.size && !sizes.has(v.size.id)) {
-        sizes.set(v.size.id, v.size.abbreviation);
-      }
+    selectedProduct.variants.forEach((v) => {
+      if (v.color && !colors.has(v.color.id)) colors.set(v.color.id, { name: v.color.name, hex: v.color.hexCode });
+      if (v.size && !sizes.has(v.size.id)) sizes.set(v.size.id, v.size.abbreviation);
     });
 
-    // Build matrix cells
     colors.forEach((color, colorId) => {
       sizes.forEach((sizeName, sizeId) => {
-        // Find matching variants
-        const templateVariant = selectedTemplate.variants.find(
-          v => v.colorId === colorId && v.sizeId === sizeId
-        );
-        const outputVariant = selectedProduct.variants.find(
-          v => v.colorId === colorId && v.sizeId === sizeId
-        );
-
-        // Cell is available if both variants exist and template has stock
+        const templateVariant = selectedTemplate.variants.find((v) => v.colorId === colorId && v.sizeId === sizeId);
+        const outputVariant = selectedProduct.variants.find((v) => v.colorId === colorId && v.sizeId === sizeId);
+        // Disponible si existen ambas variantes y la plantilla tiene stock
         const available = !!(templateVariant && outputVariant && templateVariant.stock > 0);
-
         cells.push({
-          colorId,
-          colorName: color.name,
-          colorHex: color.hex,
-          sizeId,
-          sizeName,
-          templateVariant: templateVariant || null,
-          outputVariant: outputVariant || null,
-          available,
+          colorId, colorName: color.name, colorHex: color.hex, sizeId, sizeName,
+          templateVariant: templateVariant || null, outputVariant: outputVariant || null, available,
         });
       });
     });
-
     return cells;
   }, [selectedProduct, selectedTemplate]);
 
-  // Get unique colors and sizes for matrix headers
   const matrixColors = useMemo(() => {
     const unique = new Map<number, { name: string; hex: string }>();
-    matrix.forEach(cell => {
-      if (!unique.has(cell.colorId)) {
-        unique.set(cell.colorId, { name: cell.colorName, hex: cell.colorHex });
-      }
-    });
+    matrix.forEach((cell) => { if (!unique.has(cell.colorId)) unique.set(cell.colorId, { name: cell.colorName, hex: cell.colorHex }); });
     return Array.from(unique.entries()).map(([id, data]) => ({ id, ...data }));
   }, [matrix]);
 
   const matrixSizes = useMemo(() => {
     const unique = new Map<number, string>();
-    matrix.forEach(cell => {
-      if (!unique.has(cell.sizeId)) {
-        unique.set(cell.sizeId, cell.sizeName);
-      }
-    });
+    matrix.forEach((cell) => { if (!unique.has(cell.sizeId)) unique.set(cell.sizeId, cell.sizeName); });
     return Array.from(unique.entries()).map(([id, name]) => ({ id, name }));
   }, [matrix]);
 
-  // Get cell key for Map
   const getCellKey = (colorId: number, sizeId: number) => `${colorId}-${sizeId}`;
 
-  // Handle quantity change for a cell
   const handleQuantityChange = (cell: MatrixCell, value: string) => {
     const quantity = parseInt(value) || 0;
     const key = getCellKey(cell.colorId, cell.sizeId);
-
-    setCellQuantities(prev => {
+    setCellQuantities((prev) => {
       const newMap = new Map(prev);
-      if (quantity > 0) {
-        newMap.set(key, quantity);
-      } else {
-        newMap.delete(key);
-      }
+      if (quantity > 0) newMap.set(key, quantity);
+      else newMap.delete(key);
       return newMap;
     });
   };
 
-  // Reset quantities when product or template changes
+  // Reiniciar cantidades al cambiar producto o plantilla
   useEffect(() => {
     setCellQuantities(new Map());
   }, [selectedProduct, selectedTemplate]);
 
-  // Calculate selected combinations
   const selectedCombinations = useMemo((): CellQuantity[] => {
     const combinations: CellQuantity[] = [];
-
     cellQuantities.forEach((quantity, key) => {
       const [colorId, sizeId] = key.split('-').map(Number);
-      const cell = matrix.find(c => c.colorId === colorId && c.sizeId === sizeId);
-
+      const cell = matrix.find((c) => c.colorId === colorId && c.sizeId === sizeId);
       if (cell && cell.templateVariant && cell.outputVariant && quantity > 0) {
-        combinations.push({
-          colorId,
-          sizeId,
-          quantity,
-          templateVariant: cell.templateVariant,
-          outputVariant: cell.outputVariant,
-        });
+        combinations.push({ colorId, sizeId, quantity, templateVariant: cell.templateVariant, outputVariant: cell.outputVariant });
       }
     });
-
     return combinations;
   }, [cellQuantities, matrix]);
 
+  const totalUnits = selectedCombinations.reduce((sum, c) => sum + c.quantity, 0);
+
   const handleCreate = async () => {
     if (selectedCombinations.length === 0) {
-      showToast('Ingresa al menos una cantidad en la matriz', 'error');
+      toast.error('Ingresa al menos una cantidad en la matriz');
       return;
     }
 
     try {
       setCreating(true);
 
-      // Create one conversion with all combinations
-      // First, create the conversion in DRAFT mode
+      // Conversión en borrador
       const conversion = await inventoryConversionsService.createConversion({
         conversionType: 'TEMPLATE',
         templateId: selectedTemplate!.id,
@@ -376,34 +312,16 @@ export default function InventoryConversionFromTemplatePage() {
         notes: formData.notes,
       });
 
-      // Add all input items (aggregate by inputVariantId)
-      // Each template variant can have MULTIPLE ingredients, so we need to process all recipes
+      // Insumos agregados por inputVariantId (cada variante de la plantilla puede tener varios insumos)
       const inputMap = new Map<number, number>();
-
-      selectedCombinations.forEach(combo => {
-        console.log('Processing combo:', {
-          variantSku: combo.templateVariant.sku,
-          quantity: combo.quantity,
-          recipes: combo.templateVariant.templateRecipes,
-        });
-
+      selectedCombinations.forEach((combo) => {
         if (combo.templateVariant.templateRecipes && combo.templateVariant.templateRecipes.length > 0) {
-          // Process each ingredient/recipe for this template variant
           combo.templateVariant.templateRecipes.forEach((recipe: any) => {
             // Saltar los insumos que el usuario deseleccionó de la receta.
             const insumoId = recipe.inputVariant?.input?.id;
-            if (insumoId && excludedInsumoIds.has(insumoId)) {
-              return;
-            }
+            if (insumoId && excludedInsumoIds.has(insumoId)) return;
             const inputVariantId = recipe.inputVariant.id;
             const requiredQty = combo.quantity * Number(recipe.quantity);
-            console.log('Adding input:', {
-              inputVariantId,
-              inputName: recipe.inputVariant.input?.name,
-              recipeQty: recipe.quantity,
-              comboQty: combo.quantity,
-              requiredQty,
-            });
             inputMap.set(inputVariantId, (inputMap.get(inputVariantId) || 0) + requiredQty);
           });
         } else {
@@ -411,412 +329,160 @@ export default function InventoryConversionFromTemplatePage() {
         }
       });
 
-      console.log('Final input map:', Array.from(inputMap.entries()));
-
-      // Add aggregated input items
       for (const [inputVariantId, totalQty] of inputMap.entries()) {
-        await inventoryConversionsService.addInputItem(conversion.id, {
-          inputVariantId,
-          quantity: totalQty,
-        });
+        await inventoryConversionsService.addInputItem(conversion.id, { inputVariantId, quantity: totalQty });
       }
 
-      // Add all output items
       for (const combo of selectedCombinations) {
-        await inventoryConversionsService.addOutputItem(conversion.id, {
-          variantId: combo.outputVariant.id,
-          quantity: combo.quantity,
-        });
+        await inventoryConversionsService.addOutputItem(conversion.id, { variantId: combo.outputVariant.id, quantity: combo.quantity });
       }
 
-      showToast(`Conversión creada con ${selectedCombinations.length} variantes`, 'success');
-      navigate(`/admin-panel/inventory-conversions/${conversion.id}`);
+      toast.success(`Conversión creada con ${selectedCombinations.length} variantes`);
+      navigate(`${LIST}/${conversion.id}`);
     } catch (error: any) {
-      showToast(error.message || 'Error al crear conversión', 'error');
+      toast.error(error.message || 'Error al crear conversión');
     } finally {
       setCreating(false);
     }
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <Loader2 className="w-8 h-8 animate-spin text-orange-600" />
-      </div>
-    );
+    return <Page><Spinner label="Cargando productos y plantillas…" /></Page>;
   }
 
-  return (
-    <div className="p-6 space-y-6 max-w-7xl mx-auto">
-      {/* Header */}
-      <div className="flex items-center gap-4">
-        <button
-          onClick={() => navigate('/admin-panel/inventory-conversions')}
-          className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-        >
-          <ArrowLeft className="w-5 h-5" />
-        </button>
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Nueva Conversión desde Plantilla</h1>
-          <p className="text-sm text-gray-500">
-            Selecciona el producto a generar, la plantilla a usar, y la combinación de color/talla
-          </p>
-        </div>
-      </div>
+  const bothPicked = !!selectedProduct && !!selectedTemplate;
+  const hasRecipeStep = bothPicked && !loadingRecipes && recipeInsumos.length > 0;
+  const qtyStep = hasRecipeStep ? 4 : 3;
 
-      {/* Form Summary */}
-      <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-          <div>
-            <span className="text-gray-600">Fecha: </span>
-            <span className="font-medium text-gray-900">
-              {new Date(formData.conversionDate).toLocaleDateString()}
-            </span>
-          </div>
-          {formData.description && (
-            <div className="md:col-span-2">
-              <span className="text-gray-600">Descripción: </span>
-              <span className="font-medium text-gray-900">{formData.description}</span>
+  return (
+    <Page>
+      <PageHeader
+        icon={ArrowRightLeft}
+        backTo={LIST}
+        title="Conversión desde plantilla"
+        subtitle={
+          <>
+            {new Date(formData.conversionDate + 'T00:00:00').toLocaleDateString('es-CO')}
+            {formData.description && <> · {formData.description}</>}
+          </>
+        }
+      />
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+        <StepCard step={1} done={!!selectedProduct} title="Producto a generar" description="El producto terminado que entra al inventario.">
+          {selectedProduct ? (
+            <PickedSummary product={selectedProduct} icon={Package} onChange={() => { setSelectedProduct(null); setSelectedTemplate(null); }} />
+          ) : (
+            <div className="space-y-3">
+              <SearchInput value={productSearch} onChange={setProductSearch} placeholder="Buscar producto…" />
+              <div className="max-h-72 overflow-y-auto rounded-lg border border-gray-200 divide-y divide-gray-100">
+                {filteredProducts.length === 0 ? (
+                  <EmptyState icon={Package} title="No hay productos con variantes" description="Genera variantes para los productos en Plantillas o Variantes." />
+                ) : filteredProducts.map((p) => (
+                  <PickRow key={p.id} product={p} icon={Package} selected={false} onPick={() => { setSelectedProduct(p); setSelectedTemplate(null); }} />
+                ))}
+              </div>
             </div>
           )}
-        </div>
+        </StepCard>
+
+        <StepCard step={2} done={!!selectedTemplate} disabled={!selectedProduct} title="Plantilla a usar" description={selectedProduct ? 'La prenda base con su receta de insumos.' : 'Primero elige el producto.'}>
+          {selectedTemplate ? (
+            <PickedSummary product={selectedTemplate} icon={Shirt} onChange={() => setSelectedTemplate(null)} />
+          ) : (
+            <div className="space-y-3">
+              <SearchInput value={templateSearch} onChange={setTemplateSearch} placeholder="Buscar plantilla…" />
+              <div className="max-h-72 overflow-y-auto rounded-lg border border-gray-200 divide-y divide-gray-100">
+                {filteredTemplates.length === 0 ? (
+                  <EmptyState icon={Shirt} title="No hay plantillas con variantes" description="Genera variantes para las plantillas en la página de Plantillas." />
+                ) : filteredTemplates.map((t) => (
+                  <PickRow key={t.id} product={t} icon={Shirt} selected={false} onPick={() => setSelectedTemplate(t)} />
+                ))}
+              </div>
+            </div>
+          )}
+        </StepCard>
       </div>
 
-      {/* Two Column Layout - Product and Template Selection */}
-      <div className="grid lg:grid-cols-2 gap-6">
-        {/* Left: Select Product (Output) */}
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <div className="px-4 py-3 bg-green-50 border-b border-green-100">
-            <div className="flex items-center gap-2">
-              <Package className="w-5 h-5 text-green-600" />
-              <h2 className="font-semibold text-gray-900">1. Producto a Generar</h2>
-            </div>
-          </div>
-
-          <div className="p-4 space-y-3">
-            {/* Search */}
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-              <input
-                type="text"
-                value={productSearch}
-                onChange={(e) => setProductSearch(e.target.value)}
-                placeholder="Buscar producto..."
-                className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500"
-              />
-            </div>
-
-            {/* Product List */}
-            <div className="max-h-[300px] overflow-y-auto border border-gray-200 rounded-lg">
-              {filteredProducts.length === 0 ? (
-                <div className="p-6 text-center">
-                  <Package className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                  <p className="text-sm font-medium text-gray-700 mb-1">
-                    No hay productos con variantes
-                  </p>
-                  <p className="text-xs text-gray-500">
-                    Genera variantes para los productos en la página de Templates o Variantes
-                  </p>
-                </div>
-              ) : (
-                filteredProducts.map((product) => (
-                  <button
-                    key={product.id}
-                    onClick={() => {
-                      setSelectedProduct(product);
-                      setSelectedTemplate(null);
-                    }}
-                    className={`w-full p-3 text-left hover:bg-gray-50 border-b border-gray-100 last:border-b-0 transition-colors ${
-                      selectedProduct?.id === product.id ? 'bg-green-50' : ''
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      {product.images.length > 0 ? (
-                        <img
-                          src={product.images[0]}
-                          alt={product.name}
-                          className="w-12 h-12 object-cover rounded border border-gray-200"
-                        />
-                      ) : (
-                        <div className="w-12 h-12 bg-gray-100 rounded border border-gray-200 flex items-center justify-center">
-                          <Package className="w-6 h-6 text-gray-400" />
-                        </div>
-                      )}
-                      <div className="flex-1">
-                        <p className="font-medium text-gray-900">{product.name}</p>
-                        <p className="text-sm text-gray-500">
-                          {product.sku} • {product.variants.length} variantes
-                        </p>
-                      </div>
-                    </div>
-                  </button>
-                ))
-              )}
-            </div>
-
-            {/* Selected Product Summary */}
-            {selectedProduct && (
-              <div className="p-3 bg-green-50 rounded-lg border border-green-200">
-                <p className="text-xs text-gray-600 mb-2">Producto seleccionado:</p>
-                <div className="flex items-center gap-2">
-                  {selectedProduct.images.length > 0 ? (
-                    <img
-                      src={selectedProduct.images[0]}
-                      alt={selectedProduct.name}
-                      className="w-10 h-10 object-cover rounded border border-green-300"
-                    />
-                  ) : (
-                    <div className="w-10 h-10 bg-green-100 rounded border border-green-300 flex items-center justify-center">
-                      <Package className="w-5 h-5 text-green-600" />
-                    </div>
-                  )}
-                  <div>
-                    <p className="font-medium text-gray-900">{selectedProduct.name}</p>
-                    <p className="text-sm text-gray-600">{selectedProduct.sku}</p>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Right: Select Template */}
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <div className="px-4 py-3 bg-indigo-50 border-b border-indigo-100">
-            <div className="flex items-center gap-2">
-              <Shirt className="w-5 h-5 text-indigo-600" />
-              <h2 className="font-semibold text-gray-900">2. Plantilla a Usar</h2>
-            </div>
-          </div>
-
-          <div className="p-4 space-y-3">
-            {!selectedProduct ? (
-              <div className="flex flex-col items-center justify-center py-12 text-center">
-                <AlertCircle className="w-12 h-12 text-gray-300 mb-3" />
-                <p className="text-sm text-gray-500">
-                  Primero selecciona un producto
-                </p>
-              </div>
-            ) : (
-              <>
-                {/* Search */}
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                  <input
-                    type="text"
-                    value={templateSearch}
-                    onChange={(e) => setTemplateSearch(e.target.value)}
-                    placeholder="Buscar plantilla..."
-                    className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500"
-                  />
-                </div>
-
-                {/* Template List */}
-                <div className="max-h-[300px] overflow-y-auto border border-gray-200 rounded-lg">
-                  {filteredTemplates.length === 0 ? (
-                    <div className="p-6 text-center">
-                      <Shirt className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                      <p className="text-sm font-medium text-gray-700 mb-1">
-                        No hay plantillas con variantes
-                      </p>
-                      <p className="text-xs text-gray-500">
-                        Genera variantes para las plantillas en la página de Templates
-                      </p>
-                    </div>
-                  ) : (
-                    filteredTemplates.map((template) => (
-                      <button
-                        key={template.id}
-                        onClick={() => {
-                          setSelectedTemplate(template);
-                        }}
-                        className={`w-full p-3 text-left hover:bg-gray-50 border-b border-gray-100 last:border-b-0 transition-colors ${
-                          selectedTemplate?.id === template.id ? 'bg-indigo-50' : ''
-                        }`}
-                      >
-                        <div className="flex items-center gap-3">
-                          {template.images.length > 0 ? (
-                            <img
-                              src={template.images[0]}
-                              alt={template.name}
-                              className="w-12 h-12 object-cover rounded border border-gray-200"
-                            />
-                          ) : (
-                            <div className="w-12 h-12 bg-gray-100 rounded border border-gray-200 flex items-center justify-center">
-                              <Shirt className="w-6 h-6 text-gray-400" />
-                            </div>
-                          )}
-                          <div className="flex-1">
-                            <p className="font-medium text-gray-900">{template.name}</p>
-                            <p className="text-sm text-gray-500">
-                              {template.sku} • {template.variants.length} variantes
-                            </p>
-                          </div>
-                        </div>
-                      </button>
-                    ))
-                  )}
-                </div>
-
-                {/* Selected Template Summary */}
-                {selectedTemplate && (
-                  <div className="p-3 bg-indigo-50 rounded-lg border border-indigo-200">
-                    <p className="text-xs text-gray-600 mb-2">Plantilla seleccionada:</p>
-                    <div className="flex items-center gap-2">
-                      {selectedTemplate.images.length > 0 ? (
-                        <img
-                          src={selectedTemplate.images[0]}
-                          alt={selectedTemplate.name}
-                          className="w-10 h-10 object-cover rounded border border-indigo-300"
-                        />
-                      ) : (
-                        <div className="w-10 h-10 bg-indigo-100 rounded border border-indigo-300 flex items-center justify-center">
-                          <Shirt className="w-5 h-5 text-indigo-600" />
-                        </div>
-                      )}
-                      <div>
-                        <p className="font-medium text-gray-900">{selectedTemplate.name}</p>
-                        <p className="text-sm text-gray-600">{selectedTemplate.sku}</p>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Loading Recipes Indicator */}
       {selectedTemplate && loadingRecipes && (
-        <div className="bg-white rounded-xl border border-gray-200 p-6">
-          <div className="flex items-center justify-center gap-3">
-            <Loader2 className="w-5 h-5 animate-spin text-indigo-600" />
-            <p className="text-sm text-gray-600">Cargando recetas de la plantilla...</p>
-          </div>
-        </div>
+        <Card><Spinner className="py-6" label="Cargando recetas de la plantilla…" /></Card>
       )}
 
-      {/* Insumos de la receta: seleccionar / deseleccionar lo que se consume */}
-      {selectedProduct && selectedTemplate && !loadingRecipes && recipeInsumos.length > 0 && (
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <div className="px-4 py-3 bg-orange-50 border-b border-orange-100">
-            <h2 className="font-semibold text-gray-900">3. Insumos de la receta</h2>
-            <p className="text-xs text-gray-600 mt-1">
-              Marca los insumos que esta conversión debe consumir. Si desmarcas uno, no se
-              descontará de inventario.
-            </p>
-          </div>
-          <div className="p-4 space-y-2">
+      {/* Insumos de la receta: elegir lo que se consume */}
+      {hasRecipeStep && (
+        <StepCard
+          step={3}
+          done
+          title="Insumos de la receta"
+          description="Desmarca un insumo si esta conversión no debe descontarlo del inventario."
+          actions={<Badge tone="app">{recipeInsumos.length - excludedInsumoIds.size} de {recipeInsumos.length}</Badge>}
+        >
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
             {recipeInsumos.map((insumo) => {
               const checked = !excludedInsumoIds.has(insumo.inputId);
               return (
-                <label
-                  key={insumo.inputId}
-                  className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
-                    checked ? 'border-orange-300 bg-orange-50/50' : 'border-gray-200 bg-gray-50'
-                  }`}
-                >
-                  <input
-                    type="checkbox"
+                <div key={insumo.inputId} className={`flex items-center justify-between gap-3 rounded-lg border px-3 py-2.5 ${checked ? 'border-gray-200' : 'border-gray-200 bg-gray-50'}`}>
+                  <Checkbox
                     checked={checked}
                     onChange={() => toggleInsumo(insumo.inputId)}
-                    className="w-4 h-4 text-orange-600 border-gray-300 rounded focus:ring-orange-500"
+                    label={<span className="font-medium text-gray-900">{insumo.name}</span>}
+                    description={`${insumo.code} · ${insumo.lines} variante(s) en la receta`}
                   />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-900">{insumo.name}</p>
-                    <p className="text-xs text-gray-500">
-                      {insumo.code} · {insumo.lines} variante(s) en la receta
-                    </p>
-                  </div>
-                  {!checked && (
-                    <span className="text-xs text-gray-400">No se consume</span>
-                  )}
-                </label>
+                  {!checked && <Badge>No se consume</Badge>}
+                </div>
               );
             })}
           </div>
-        </div>
+        </StepCard>
       )}
 
-      {/* Matrix: Color x Size */}
-      {selectedProduct && selectedTemplate && matrix.length > 0 && !loadingRecipes && (
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <div className="px-4 py-3 bg-orange-50 border-b border-orange-100">
-            <h2 className="font-semibold text-gray-900">4. Ingresa Cantidades por Color y Talla</h2>
-            <p className="text-xs text-gray-600 mt-1">
-              Ingresa la cantidad a producir en cada combinación (puedes seleccionar múltiples)
-            </p>
-          </div>
-
-          <div className="p-4 overflow-x-auto">
-            <table className="w-full border-collapse">
-              <thead>
+      {/* Matriz color × talla */}
+      <StepCard
+        step={qtyStep}
+        done={selectedCombinations.length > 0}
+        disabled={!bothPicked || loadingRecipes}
+        title="Cantidades por color y talla"
+        description={bothPicked ? 'Escribe cuántas unidades producir en cada combinación. “N/A”: falta la variante o la plantilla no tiene stock.' : 'Elige el producto y la plantilla para ver la matriz.'}
+      >
+        {matrix.length === 0 ? (
+          <EmptyState title="Sin combinaciones" description="El producto no tiene variantes de color y talla." />
+        ) : (
+          <div className="overflow-x-auto rounded-lg border border-gray-200">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
-                  <th className="border border-gray-300 bg-gray-50 p-2 text-sm font-medium text-gray-700">
-                    Color / Talla
-                  </th>
-                  {matrixSizes.map(size => (
-                    <th
-                      key={size.id}
-                      className="border border-gray-300 bg-gray-50 p-2 text-sm font-medium text-gray-700"
-                    >
-                      {size.name}
-                    </th>
-                  ))}
+                  <th className="px-3 py-2.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Color / talla</th>
+                  {matrixSizes.map((size) => <th key={size.id} className="px-2 py-2.5 text-center text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[76px]">{size.name}</th>)}
                 </tr>
               </thead>
-              <tbody>
-                {matrixColors.map(color => (
+              <tbody className="divide-y divide-gray-100">
+                {matrixColors.map((color) => (
                   <tr key={color.id}>
-                    <td className="border border-gray-300 bg-gray-50 p-2">
-                      <div className="flex items-center gap-2">
-                        <div
-                          className="w-5 h-5 rounded border border-gray-300"
-                          style={{ backgroundColor: color.hex }}
-                        />
-                        <span className="text-sm font-medium text-gray-700">{color.name}</span>
-                      </div>
+                    <td className="px-3 py-2 whitespace-nowrap">
+                      <span className="flex items-center gap-2">
+                        <span className="w-4 h-4 rounded-full border border-gray-300" style={{ backgroundColor: color.hex }} />
+                        <span className="font-medium text-gray-800">{color.name}</span>
+                      </span>
                     </td>
-                    {matrixSizes.map(size => {
-                      const cell = matrix.find(
-                        c => c.colorId === color.id && c.sizeId === size.id
-                      );
-                      const cellKey = getCellKey(color.id, size.id);
-                      const currentQty = cellQuantities.get(cellKey) || 0;
-
-                      if (!cell) {
-                        return (
-                          <td key={`${color.id}-${size.id}`} className="border border-gray-300 p-2">
-                            <div className="text-center text-xs text-gray-400">-</div>
-                          </td>
-                        );
+                    {matrixSizes.map((size) => {
+                      const cell = matrix.find((c) => c.colorId === color.id && c.sizeId === size.id);
+                      const currentQty = cellQuantities.get(getCellKey(color.id, size.id)) || 0;
+                      if (!cell || !cell.available) {
+                        return <td key={size.id} className="px-2 py-2 text-center text-xs text-gray-300">N/A</td>;
                       }
-
                       return (
-                        <td key={`${color.id}-${size.id}`} className="border border-gray-300 p-2">
-                          {cell.available ? (
-                            <div className="flex flex-col items-center gap-1">
-                              <input
-                                type="number"
-                                min="0"
-                                max={cell.templateVariant?.stock || 0}
-                                value={currentQty || ''}
-                                onChange={(e) => handleQuantityChange(cell, e.target.value)}
-                                placeholder="0"
-                                className={`w-16 px-2 py-1 text-center text-sm border rounded focus:ring-2 focus:ring-orange-500 ${
-                                  currentQty > 0 ? 'border-orange-500 bg-orange-50' : 'border-gray-300'
-                                }`}
-                              />
-                              <span className="text-xs text-gray-500">
-                                Máx: {cell.templateVariant?.stock || 0}
-                              </span>
-                            </div>
-                          ) : (
-                            <div className="text-center">
-                              <span className="text-xs text-gray-400">N/A</span>
-                            </div>
-                          )}
+                        <td key={size.id} className="px-2 py-2 text-center">
+                          <input
+                            type="number"
+                            min="0"
+                            max={cell.templateVariant?.stock || 0}
+                            value={currentQty || ''}
+                            onChange={(e) => handleQuantityChange(cell, e.target.value)}
+                            placeholder="0"
+                            aria-label={`Cantidad ${color.name} ${size.name}`}
+                            className={`w-16 h-9 rounded-lg border text-center text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-app-200 focus:border-app-500 ${currentQty > 0 ? 'border-app-400 bg-app-50 font-semibold text-app-700' : 'border-gray-300'}`}
+                          />
+                          <span className="block text-[11px] text-gray-400 mt-0.5">máx. {cell.templateVariant?.stock || 0}</span>
                         </td>
                       );
                     })}
@@ -825,94 +491,52 @@ export default function InventoryConversionFromTemplatePage() {
               </tbody>
             </table>
           </div>
-        </div>
-      )}
+        )}
+      </StepCard>
 
-      {/* Summary and Actions */}
+      {/* Resumen */}
       {selectedCombinations.length > 0 && (
-        <div className="bg-white rounded-xl border border-gray-200 p-6">
-          <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
-            <Package className="w-5 h-5 text-orange-600" />
-            Resumen: {selectedCombinations.length} variante{selectedCombinations.length !== 1 ? 's' : ''} seleccionada{selectedCombinations.length !== 1 ? 's' : ''}
-          </h3>
-
-          {/* List of selected combinations */}
-          <div className="space-y-2 mb-6 max-h-64 overflow-y-auto">
-            {selectedCombinations.map((combo, idx) => (
-              <div key={`${combo.colorId}-${combo.sizeId}`} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200">
-                <div className="flex items-center gap-3">
-                  <div
-                    className="w-8 h-8 rounded border border-gray-300 flex-shrink-0"
-                    style={{ backgroundColor: matrix.find(c => c.colorId === combo.colorId)?.colorHex || '#ccc' }}
-                  />
-                  <div>
-                    <p className="font-medium text-gray-900">
-                      {matrix.find(c => c.colorId === combo.colorId)?.colorName} • {matrix.find(c => c.sizeId === combo.sizeId)?.sizeName}
-                    </p>
-                    <p className="text-xs text-gray-500">
-                      SKU: {combo.outputVariant.sku}
-                    </p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <p className="font-semibold text-orange-600">{combo.quantity} unidades</p>
-                  <p className="text-xs text-gray-500">
-                    Stock plantilla: {combo.templateVariant.stock}
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Total Summary */}
-          <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 mb-6">
-            <div className="flex justify-between items-center">
-              <span className="font-medium text-gray-700">Total a Producir:</span>
-              <span className="text-lg font-bold text-orange-600">
-                {selectedCombinations.reduce((sum, c) => sum + c.quantity, 0)} unidades
-              </span>
-            </div>
-          </div>
-
-          {/* Actions */}
-          <div className="flex justify-end gap-3">
-            <Button
-              variant="admin-outline"
-              onClick={() => navigate('/admin-panel/inventory-conversions')}
-            >
-              Cancelar
-            </Button>
-            <Button
-              variant="admin-orange"
-              onClick={handleCreate}
-              disabled={creating}
-            >
-              {creating ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Creando...
-                </>
-              ) : (
-                <>
-                  <Package className="w-4 h-4" />
-                  Crear Conversión
-                </>
-              )}
-            </Button>
-          </div>
-        </div>
+        <section className="space-y-3">
+          <CardTitle icon={Package}>Resumen</CardTitle>
+          <TableCard footer={<div className="flex justify-between text-sm"><span className="text-gray-500">Total a producir</span><span className="font-bold text-gray-900 tabular-nums">{totalUnits} unidades</span></div>}>
+            <Table>
+              <THead>
+                <tr><Th>Variante</Th><Th>SKU</Th><Th align="right">Stock plantilla</Th><Th align="right">Cantidad</Th></tr>
+              </THead>
+              <TBody>
+                {selectedCombinations.map((combo) => {
+                  const c = matrix.find((m) => m.colorId === combo.colorId && m.sizeId === combo.sizeId);
+                  return (
+                    <Tr key={`${combo.colorId}-${combo.sizeId}`}>
+                      <Td>
+                        <span className="flex items-center gap-2">
+                          <span className="w-4 h-4 rounded-full border border-gray-300" style={{ backgroundColor: c?.colorHex || '#ccc' }} />
+                          <span className="font-medium text-gray-900">{c?.colorName} · {c?.sizeName}</span>
+                        </span>
+                      </Td>
+                      <Td className="font-mono text-xs">{combo.outputVariant.sku}</Td>
+                      <Td align="right" className="tabular-nums">{combo.templateVariant.stock}</Td>
+                      <Td align="right" className="font-semibold text-gray-900 tabular-nums">{combo.quantity}</Td>
+                    </Tr>
+                  );
+                })}
+              </TBody>
+            </Table>
+          </TableCard>
+        </section>
       )}
 
-      {/* Help Text */}
-      <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-        <p className="text-sm text-gray-600">
-          <strong>Flujo:</strong> Selecciona el producto que quieres generar, luego la plantilla con la receta de insumos.
-          La matriz muestra todas las combinaciones de color y talla del producto. Ingresa las cantidades directamente en las celdas
-          (puedes seleccionar múltiples combinaciones). Las celdas con "N/A" no están disponibles (falta la variante de plantilla
-          o producto, o no hay stock). Al crear la conversión, se agregarán automáticamente todos los insumos necesarios
-          según la receta de la plantilla para todas las variantes seleccionadas.
-        </p>
-      </div>
-    </div>
+      <FormActions sticky>
+        <span className="sm:mr-auto self-center text-sm text-gray-500">
+          {selectedCombinations.length > 0
+            ? <>{selectedCombinations.length} variante{selectedCombinations.length !== 1 ? 's' : ''} · <b className="text-gray-900">{totalUnits} unidades</b></>
+            : 'Sin cantidades todavía'}
+        </span>
+        <Button variant="secondary" onClick={() => navigate(LIST)}>Cancelar</Button>
+        <Button icon={<Package className="w-4 h-4" />} isLoading={creating} disabled={selectedCombinations.length === 0} onClick={handleCreate}>
+          Crear conversión
+        </Button>
+      </FormActions>
+    </Page>
   );
 }

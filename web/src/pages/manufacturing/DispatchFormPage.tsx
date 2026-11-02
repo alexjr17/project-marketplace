@@ -1,9 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Save, Package } from 'lucide-react';
-import toast from 'react-hot-toast';
+import { Save, Package, Truck } from 'lucide-react';
+import toast from '../../lib/toast';
 import manufacturingService from '../../services/manufacturing.service';
 import type { MfgClient, MfgWarehouse, MfgPurchaseOrder, MfgAvailableStock, MfgDispatchType } from '../../types/manufacturing';
+import {
+  Page, PageHeader, Button, Card, CardTitle, Field, SelectInput, TextArea, FormGrid, FormActions, Thumb, Spinner, EmptyState,
+} from '../../components/ui';
+import QtyMatrix from '../../components/manufacturing/QtyMatrix';
 
 export default function DispatchFormPage() {
   const navigate = useNavigate();
@@ -106,111 +110,83 @@ export default function DispatchFormPage() {
     finally { setSaving(false); }
   };
 
-  if (loading) return <div className="py-16 text-center text-gray-400">Cargando…</div>;
+  if (loading) return <Page><Spinner label="Cargando…" /></Page>;
 
   return (
-    <div className="max-w-4xl mx-auto">
-      <button onClick={() => navigate('/manufacturing/dispatches')} className="inline-flex items-center gap-2 text-gray-500 hover:text-gray-800 mb-4 text-sm">
-        <ArrowLeft className="w-4 h-4" /> Volver a despachos
-      </button>
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">Nuevo despacho</h1>
+    <Page>
+      <PageHeader icon={Truck} backTo="/manufacturing/dispatches" title="Nuevo despacho" subtitle="Elige el origen y las cantidades a entregar por talla y color." />
 
-      <section className="bg-white rounded-xl border border-gray-200 p-5 mb-5">
-        <div className="grid sm:grid-cols-2 gap-4">
-          <label className="block">
-            <span className="text-sm font-medium text-gray-700">Cliente</span>
-            <select value={clientId} onChange={(e) => setClientId(e.target.value === '' ? '' : Number(e.target.value))} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2">
+      <Card>
+        <CardTitle>Datos del despacho</CardTitle>
+        <FormGrid>
+          <Field label="Cliente">
+            <SelectInput value={clientId} onChange={(e) => setClientId(e.target.value === '' ? '' : Number(e.target.value))}>
               <option value="">— Sin asignar —</option>
               {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
-          </label>
-          <label className="block">
-            <span className="text-sm font-medium text-gray-700">Desde pedido (opcional)</span>
-            <select value={poId} onChange={(e) => onPedido(e.target.value === '' ? '' : Number(e.target.value))} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2">
+            </SelectInput>
+          </Field>
+          <Field label="Desde pedido (opcional)" hint="Precarga las cantidades pendientes según disponibilidad.">
+            <SelectInput value={poId} onChange={(e) => onPedido(e.target.value === '' ? '' : Number(e.target.value))}>
               <option value="">— Ninguno —</option>
               {pedidos.map((p) => <option key={p.id} value={p.id}>{p.code} · {p.client?.name ?? ''}</option>)}
-            </select>
-          </label>
-          <label className="block">
-            <span className="text-sm font-medium text-gray-700">Bodega origen</span>
-            <select value={warehouseId} onChange={(e) => onWarehouse(e.target.value === '' ? '' : Number(e.target.value))} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2">
+            </SelectInput>
+          </Field>
+          <Field label="Bodega origen">
+            <SelectInput value={warehouseId} onChange={(e) => onWarehouse(e.target.value === '' ? '' : Number(e.target.value))}>
               <option value="">Todas</option>
               {warehouses.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
-            </select>
-          </label>
-          <label className="block">
-            <span className="text-sm font-medium text-gray-700">Tipo</span>
-            <select value={type} onChange={(e) => setType(e.target.value as MfgDispatchType)} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2">
+            </SelectInput>
+          </Field>
+          <Field label="Tipo">
+            <SelectInput value={type} onChange={(e) => setType(e.target.value as MfgDispatchType)}>
               <option value="VENTA">Venta</option>
               <option value="CONSIGNACION">Consignación</option>
               <option value="TRASLADO">Traslado</option>
               <option value="MUESTRA">Muestra</option>
-            </select>
-          </label>
-          <label className="block sm:col-span-2">
-            <span className="text-sm font-medium text-gray-700">Notas</span>
-            <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2" />
-          </label>
-        </div>
-      </section>
+            </SelectInput>
+          </Field>
+          <Field label="Notas" className="md:col-span-2"><TextArea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} /></Field>
+        </FormGrid>
+      </Card>
 
-      <section className="bg-white rounded-xl border border-gray-200 p-5 mb-5">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="font-semibold text-gray-900">Producto disponible</h2>
-          <span className="text-sm text-gray-500">A despachar: <b className="text-gray-800">{total}</b> und</span>
-        </div>
+      <Card>
+        <CardTitle actions={<span className="text-sm text-gray-500">A despachar: <b className="text-gray-900 tabular-nums">{total.toLocaleString('es-CO')}</b> und</span>}>Producto disponible</CardTitle>
         {groups.length === 0 ? (
-          <div className="py-8 text-center text-gray-400 border border-dashed border-gray-200 rounded-lg">No hay producto terminado disponible{warehouseId !== '' ? ' en esta bodega' : ''}.</div>
+          <EmptyState icon={Package} title="Sin producto disponible" description={`No hay producto terminado disponible${warehouseId !== '' ? ' en esta bodega' : ''}.`} />
         ) : (
-          <div className="space-y-4">
+          <div className="divide-y divide-gray-100">
             {groups.map((g) => (
-              <div key={g.refId} className="border border-gray-200 rounded-xl p-4">
+              <div key={g.refId} className="py-4 first:pt-0 last:pb-0">
                 <div className="flex items-center gap-3 mb-3">
-                  {g.imagePath
-                    ? <img src={g.imagePath} alt="" className="w-11 h-11 rounded-lg object-cover border border-gray-100" />
-                    : <div className="w-11 h-11 rounded-lg bg-gray-50 border border-dashed border-gray-200 flex items-center justify-center text-gray-300"><Package className="w-5 h-5" /></div>}
-                  <p className="font-semibold text-gray-900"><span className="font-mono text-gray-500">{g.refCode}</span> {g.refName}</p>
+                  <Thumb src={g.imagePath} alt={g.refName} />
+                  <p className="font-medium text-gray-900"><span className="font-mono text-gray-500 mr-1">{g.refCode}</span>{g.refName}</p>
                 </div>
-                <div className="overflow-x-auto border border-gray-100 rounded-lg">
-                  <table className="text-sm w-full">
-                    <thead><tr className="bg-gray-50">
-                      <th className="p-2 text-left text-gray-500 font-medium sticky left-0 bg-gray-50">Talla \ Color</th>
-                      {g.C.map(([cid, c]) => <th key={cid} className="p-2 text-center font-medium text-gray-700 min-w-[84px]"><span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full border border-gray-200" style={{ backgroundColor: c.hex }} />{c.name}</span></th>)}
-                    </tr></thead>
-                    <tbody>{g.S.map(([sid, s]) => (
-                      <tr key={sid} className="border-t border-gray-100">
-                        <td className="p-2 font-semibold text-gray-800 sticky left-0 bg-white">{s.abbr}</td>
-                        {g.C.map(([cid]) => {
-                          const avail = g.avail.get(`${sid}-${cid}`) ?? 0;
-                          const key = `${g.refId}-${sid}-${cid}`;
-                          return (
-                            <td key={cid} className="p-1.5 text-center">
-                              {avail > 0 ? (
-                                <>
-                                  <input type="number" min="0" max={avail} value={qty[key] ?? ''} onChange={(e) => setQty((p) => ({ ...p, [key]: e.target.value }))}
-                                    className="w-14 border border-gray-300 rounded px-1 py-1 text-center text-sm" placeholder="0" />
-                                  <div className="text-[10px] text-gray-400">de {avail}</div>
-                                </>
-                              ) : <span className="text-gray-300">—</span>}
-                            </td>
-                          );
-                        })}
-                      </tr>
-                    ))}</tbody>
-                  </table>
-                </div>
+                <QtyMatrix
+                  sizes={g.S.map(([sid, s]) => ({ id: sid, label: s.abbr }))}
+                  colors={g.C.map(([cid, c]) => ({ id: cid, name: c.name, hex: c.hex }))}
+                  get={(sid, cid) => g.avail.get(`${sid}-${cid}`) ?? 0}
+                  cell={(sid, cid, avail) => {
+                    const key = `${g.refId}-${sid}-${cid}`;
+                    return avail > 0 ? (
+                      <span className="inline-flex flex-col items-end">
+                        <input type="number" min="0" max={avail} value={qty[key] ?? ''} onChange={(e) => setQty((p) => ({ ...p, [key]: e.target.value }))}
+                          aria-label="Cantidad a despachar" placeholder="0"
+                          className="w-16 h-8 rounded-md border border-gray-300 px-2 text-right text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-app-200 focus:border-app-500" />
+                        <span className="text-[10px] text-gray-400">de {avail}</span>
+                      </span>
+                    ) : '—';
+                  }}
+                />
               </div>
             ))}
           </div>
         )}
-      </section>
+      </Card>
 
-      <div className="flex justify-end gap-2 pb-8">
-        <button onClick={() => navigate('/manufacturing/dispatches')} className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700">Cancelar</button>
-        <button onClick={save} disabled={saving} className="inline-flex items-center gap-2 px-5 py-2 rounded-lg bg-orange-500 hover:bg-orange-600 text-white font-medium disabled:opacity-60">
-          <Save className="w-4 h-4" /> {saving ? 'Creando…' : 'Crear despacho'}
-        </button>
-      </div>
-    </div>
+      <FormActions sticky>
+        <Button variant="secondary" onClick={() => navigate('/manufacturing/dispatches')}>Cancelar</Button>
+        <Button icon={<Save className="w-4 h-4" />} isLoading={saving} onClick={save}>Crear despacho</Button>
+      </FormActions>
+    </Page>
   );
 }

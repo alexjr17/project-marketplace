@@ -117,7 +117,7 @@ export default function CustomerSelect({ value, onChange }: Props) {
     <div className="relative" ref={boxRef}>
       {/* Campo de cliente: prefijo "Cliente" para que se entienda de inmediato.
           Al enfocar se limpia para buscar; iconos para editar y volver al default. */}
-      <div className="flex items-center gap-1.5 pl-2 pr-1.5 bg-white border border-gray-300 rounded-lg focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent">
+      <div className="flex items-center gap-1.5 pl-2 pr-1.5 bg-white border border-gray-300 rounded-lg h-11 focus-within:ring-2 focus-within:ring-app-200 focus-within:border-app-500 transition-colors">
         <div className="flex items-center gap-1 pr-2 mr-0.5 border-r border-gray-200 text-gray-500 flex-shrink-0">
           {open ? <Search className="w-4 h-4" /> : <User className="w-4 h-4" />}
           <span className="text-xs font-medium">Cliente</span>
@@ -130,7 +130,7 @@ export default function CustomerSelect({ value, onChange }: Props) {
           onFocus={() => { setQuery(''); setOpen(true); }}
           placeholder={open ? 'Buscar o registrar...' : 'Consumidor Final'}
           autoComplete="off"
-          className="flex-1 min-w-0 py-2 text-sm bg-transparent outline-none"
+          className="flex-1 min-w-0 h-full text-sm font-medium text-gray-900 placeholder:text-gray-400 placeholder:font-normal bg-transparent outline-none"
         />
         {/* Acciones del cliente seleccionado (no en modo búsqueda) */}
         {hasRealCustomer && !open && (
@@ -139,7 +139,7 @@ export default function CustomerSelect({ value, onChange }: Props) {
               type="button"
               onClick={openEditForm}
               title="Editar / completar datos del cliente"
-              className="p-1 text-gray-400 hover:text-blue-600 flex-shrink-0"
+              className="p-2 rounded-md text-gray-400 hover:text-app-700 hover:bg-app-50 flex-shrink-0"
             >
               <UserCog className="w-4 h-4" />
             </button>
@@ -147,7 +147,7 @@ export default function CustomerSelect({ value, onChange }: Props) {
               type="button"
               onClick={clearToDefault}
               title="Quitar cliente (volver a Consumidor Final)"
-              className="p-1 text-gray-400 hover:text-red-600 flex-shrink-0"
+              className="p-2 rounded-md text-gray-400 hover:text-red-600 hover:bg-red-50 flex-shrink-0"
             >
               <RotateCcw className="w-4 h-4" />
             </button>
@@ -156,7 +156,7 @@ export default function CustomerSelect({ value, onChange }: Props) {
       </div>
 
       {open && (
-        <div className="absolute z-30 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-72 overflow-y-auto">
+        <div className="absolute z-30 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl max-h-72 overflow-y-auto">
           {loading && (
             <div className="px-3 py-2 text-sm text-gray-400 flex items-center gap-2">
               <Loader2 className="w-4 h-4 animate-spin" /> Buscando...
@@ -167,7 +167,7 @@ export default function CustomerSelect({ value, onChange }: Props) {
               key={c.id}
               type="button"
               onClick={() => selectExisting(c)}
-              className="w-full text-left px-3 py-2 hover:bg-blue-50 border-b last:border-b-0"
+              className="w-full text-left px-3 py-2.5 hover:bg-gray-50 border-b border-gray-100 last:border-b-0"
             >
               <p className="text-sm font-medium text-gray-900">{c.name}</p>
               <p className="text-xs text-gray-500">
@@ -180,21 +180,21 @@ export default function CustomerSelect({ value, onChange }: Props) {
               type="button"
               onMouseDown={(e) => e.preventDefault()}
               onClick={selectTypedName}
-              className="w-full text-left px-3 py-2 hover:bg-green-50 flex items-center gap-2 text-green-700 border-t"
+              className="w-full text-left px-3 py-2 hover:bg-app-50 flex items-center gap-2 text-app-700 border-t border-gray-100"
             >
               <UserPlus className="w-4 h-4 flex-shrink-0" />
               <span className="text-sm">Usar cliente: <strong>{query.trim()}</strong></span>
             </button>
           )}
           {!loading && query.trim().length < 2 && (
-            <div className="px-3 py-2 text-xs text-gray-400 border-b">Escribe al menos 2 letras para buscar.</div>
+            <div className="px-3 py-2 text-xs text-gray-400 border-b border-gray-100">Escribe al menos 2 letras para buscar.</div>
           )}
           {/* Registrar cliente nuevo con información completa (siempre disponible) */}
           <button
             type="button"
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => openNewForm(query.trim() || undefined)}
-            className="w-full text-left px-3 py-2.5 hover:bg-blue-50 flex items-center gap-2 text-blue-700 border-t bg-gray-50 font-medium"
+            className="w-full text-left px-3 py-2.5 hover:bg-gray-50 flex items-center gap-2 text-gray-700 border-t border-gray-100 font-medium"
           >
             <UserPlus className="w-4 h-4 flex-shrink-0" />
             <span className="text-sm">Registrar con datos completos (opcional)</span>

@@ -2,22 +2,8 @@ import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { X, CheckCircle, Package, Eye, Loader2 } from 'lucide-react';
 import type { TemplateSearchResult, TemplateZoneInfo } from '../../services/pos.service';
 import { applyColorToImage } from '../../utils/imageColorizer';
-import axios from 'axios';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
-
-const getAuthToken = () => {
-  const authData = localStorage.getItem('marketplace_auth');
-  if (authData) {
-    try {
-      const parsed = JSON.parse(authData);
-      return parsed.token;
-    } catch {
-      return null;
-    }
-  }
-  return null;
-};
+import { Button } from '../ui';
+import { templateRecipesService } from '../../services/template-recipes.service';
 
 interface ZoneSelectionModalProps {
   template: TemplateSearchResult;
@@ -120,24 +106,17 @@ export default function ZoneSelectionModal({ template, onConfirm, onCancel }: Zo
     const fetchStock = async () => {
       setIsLoadingStock(true);
       try {
-        const response = await axios.get(
-          `${API_URL}/template-recipes/variant-stock/${template.templateId}`,
-          {
-            params: {
-              colorId: template.scannedVariant.colorId,
-              sizeId: template.scannedVariant.sizeId,
-            },
-            headers: {
-              Authorization: `Bearer ${getAuthToken()}`,
-            },
-          }
+        const data = await templateRecipesService.getVariantStock(
+          template.templateId,
+          template.scannedVariant?.colorId,
+          template.scannedVariant?.sizeId,
         );
 
-        if (response.data.success && response.data.data) {
+        if (data) {
           setStockInfo({
-            availableStock: response.data.data.availableStock || 0,
-            variantId: response.data.data.variantId || null,
-            sku: response.data.data.sku || '',
+            availableStock: data.availableStock || 0,
+            variantId: data.variantId || null,
+            sku: data.sku || '',
           });
         } else {
           setStockInfo({ availableStock: 0, variantId: null, sku: '' });
@@ -263,36 +242,33 @@ export default function ZoneSelectionModal({ template, onConfirm, onCancel }: Zo
     return groups;
   }, [template.zones]);
 
-  // Colors for zone types
-  const typeColors: { [key: string]: { bg: string; border: string; text: string; selectedBg: string; selectedBorder: string } } = {
-    'DTF': { bg: 'bg-purple-50', border: 'border-purple-200', text: 'text-purple-700', selectedBg: 'bg-purple-100', selectedBorder: 'border-purple-500' },
-    'Bordado': { bg: 'bg-blue-50', border: 'border-blue-200', text: 'text-blue-700', selectedBg: 'bg-blue-100', selectedBorder: 'border-blue-500' },
-    'Sublimación': { bg: 'bg-pink-50', border: 'border-pink-200', text: 'text-pink-700', selectedBg: 'bg-pink-100', selectedBorder: 'border-pink-500' },
-    'Vinilo': { bg: 'bg-green-50', border: 'border-green-200', text: 'text-green-700', selectedBg: 'bg-green-100', selectedBorder: 'border-green-500' },
-    'Otro': { bg: 'bg-gray-50', border: 'border-gray-200', text: 'text-gray-700', selectedBg: 'bg-gray-100', selectedBorder: 'border-gray-500' },
+  // Punto de color por tipo de zona (coincide con el color del marcador sobre la imagen).
+  const typeDot: { [key: string]: string } = {
+    'DTF': 'bg-purple-500',
+    'Bordado': 'bg-blue-500',
+    'Sublimación': 'bg-pink-500',
+    'Vinilo': 'bg-green-500',
+    'Otro': 'bg-gray-500',
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2 lg:p-4">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-5xl max-h-[95vh] lg:max-h-[90vh] overflow-hidden flex flex-col">
-        {/* Header */}
-        <div className="px-4 lg:px-6 py-3 lg:py-4 border-b border-gray-200 flex items-center justify-between bg-gradient-to-r from-indigo-50 to-purple-50">
+    <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-[100] sm:p-4" role="dialog" aria-modal="true">
+      <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full max-w-5xl max-h-[95vh] lg:max-h-[90vh] overflow-hidden flex flex-col">
+        {/* Encabezado */}
+        <div className="px-5 py-4 border-b border-gray-100 flex items-start justify-between gap-4">
           <div className="min-w-0 flex-1">
-            <h2 className="text-lg lg:text-2xl font-bold text-gray-900 truncate">{template.name}</h2>
-            <p className="text-xs lg:text-sm text-gray-600">Selecciona las zonas de personalización</p>
+            <h2 className="text-lg font-semibold text-gray-900 truncate">{template.name}</h2>
+            <p className="text-sm text-gray-500 mt-0.5">Selecciona las zonas de personalización</p>
           </div>
-          <button
-            onClick={onCancel}
-            className="text-gray-400 hover:text-gray-600 transition-colors ml-2 flex-shrink-0"
-          >
-            <X className="w-5 h-5 lg:w-6 lg:h-6" />
+          <button onClick={onCancel} title="Cerrar" className="p-1.5 -mr-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 flex-shrink-0">
+            <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Content - Responsive Layout */}
         <div className="flex-1 overflow-y-auto flex flex-col lg:flex-row">
           {/* Left Column - Image with Zone Markers */}
-          <div className="w-full lg:w-1/3 bg-gray-50 p-2 lg:p-6 flex flex-col items-center justify-start lg:justify-center border-b lg:border-b-0 lg:border-r border-gray-200">
+          <div className="w-full lg:w-1/3 bg-gray-50 p-3 lg:p-6 flex flex-col items-center justify-start lg:justify-center border-b lg:border-b-0 lg:border-r border-gray-200">
             {currentImage ? (
               <div className="relative w-full max-w-[180px] sm:max-w-[220px] lg:max-w-sm">
                 <img
@@ -300,10 +276,10 @@ export default function ZoneSelectionModal({ template, onConfirm, onCancel }: Zo
                   src={currentImage}
                   alt={template.name}
                   onLoad={handleImageLoad}
-                  className="w-full rounded-lg shadow-lg object-contain max-h-[150px] sm:max-h-[180px] lg:max-h-none"
+                  className="w-full rounded-lg border border-gray-200 bg-white object-contain max-h-[150px] sm:max-h-[180px] lg:max-h-none"
                 />
                 {/* SKU Badge */}
-                <div className="absolute top-1 right-1 lg:top-2 lg:right-2 bg-white px-1.5 lg:px-3 py-0.5 lg:py-1 rounded-full shadow-md">
+                <div className="absolute top-1 right-1 lg:top-2 lg:right-2 bg-white/95 border border-gray-200 px-1.5 lg:px-2.5 py-0.5 rounded-full">
                   <span className="text-[10px] lg:text-xs font-semibold text-gray-700">SKU: {template.sku}</span>
                 </div>
                 {/* Zone Markers - Show only zones of current view type */}
@@ -311,7 +287,6 @@ export default function ZoneSelectionModal({ template, onConfirm, onCancel }: Zo
                   .filter(zone => zone.zoneTypeSlug === currentViewZoneType)
                   .map(zone => {
                     const displayDimensions = getZoneDisplayDimensions(zone);
-                    const colors = typeColors[zone.zoneType] || typeColors['Otro'];
 
                     // Extraer el color base del Tailwind color class
                     const getBorderColor = () => {
@@ -366,11 +341,11 @@ export default function ZoneSelectionModal({ template, onConfirm, onCancel }: Zo
 
             {/* Info Compacta - Todo en una card */}
             <div className="mt-2 lg:mt-4 w-full max-w-[180px] sm:max-w-[220px] lg:max-w-sm">
-              <div className="bg-white border-2 border-gray-300 rounded-lg p-2 lg:p-3 space-y-1.5 lg:space-y-2">
+              <div className="bg-white border border-gray-200 rounded-lg p-3 space-y-2">
                 {/* Precio Base */}
                 <div className="flex items-center justify-between pb-1.5 lg:pb-2 border-b border-gray-200">
-                  <span className="text-xs font-medium text-gray-600">Precio Base</span>
-                  <span className="text-base lg:text-lg font-bold text-indigo-600">
+                  <span className="text-xs font-medium text-gray-500">Precio base</span>
+                  <span className="text-base lg:text-lg font-bold text-gray-900">
                     ${Number(template.basePrice).toLocaleString()}
                   </span>
                 </div>
@@ -411,18 +386,15 @@ export default function ZoneSelectionModal({ template, onConfirm, onCancel }: Zo
                 {/* Stock */}
                 {stockInfo ? (
                   <div className={`flex items-center justify-between pt-2 border-t ${
-                    stockInfo.availableStock > 0 ? 'border-green-200' : 'border-red-200'
+                    'border-gray-200'
                   }`}>
-                    <span className="text-xs font-medium text-gray-600">Stock Disponible</span>
+                    <span className="text-xs font-medium text-gray-500">Stock disponible</span>
                     <div className="flex items-center gap-2">
                       <span className={`text-lg font-bold ${
                         stockInfo.availableStock > 0 ? 'text-green-600' : 'text-red-600'
                       }`}>
                         {stockInfo.availableStock}
                       </span>
-                      {stockInfo.availableStock === 0 && (
-                        <span className="text-xs text-red-600 font-medium">⚠️</span>
-                      )}
                     </div>
                   </div>
                 ) : isLoadingStock ? (
@@ -436,39 +408,36 @@ export default function ZoneSelectionModal({ template, onConfirm, onCancel }: Zo
           </div>
 
           {/* Right Column - Zones */}
-          <div className="flex-1 p-3 lg:p-6 overflow-y-auto">
-            <div className="space-y-4 lg:space-y-6">
+          <div className="flex-1 p-4 lg:p-6 overflow-y-auto">
+            <div className="space-y-5">
               {Object.entries(zonesByType).map(([type, zones]) => {
-                const colors = typeColors[type] || typeColors['Otro'];
-                // Get the slug of this type from the first zone
+                const dot = typeDot[type] || typeDot['Otro'];
+                // Slug del tipo, tomado de la primera zona
                 const typeSlug = zones[0]?.zoneTypeSlug;
                 const isViewing = typeSlug === currentViewZoneType;
 
                 return (
                   <div key={type}>
-                    {/* Type Header - Clickeable para cambiar vista */}
+                    {/* Tipo: clic para ver sus zonas sobre la imagen */}
                     <button
                       onClick={() => setViewingZoneTypeSlug(typeSlug)}
-                      className={`w-full ${colors.bg} ${colors.border} border-l-4 rounded-r-lg px-3 lg:px-4 py-1.5 lg:py-2 mb-2 lg:mb-3 flex items-center justify-between transition-all cursor-pointer ${
-                        isViewing
-                          ? `${colors.selectedBg} ring-2 ring-inset ${colors.selectedBorder} shadow-md`
-                          : `hover:${colors.selectedBg} hover:shadow-sm`
+                      className={`w-full rounded-lg border px-3 h-10 mb-2 flex items-center justify-between transition-colors ${
+                        isViewing ? 'border-app-300 bg-app-50' : 'border-gray-200 bg-white hover:bg-gray-50'
                       }`}
-                      title={isViewing ? `Viendo ${type}` : `Click para ver ${type}`}
+                      title={isViewing ? `Viendo ${type}` : `Clic para ver ${type}`}
                     >
-                      <h3 className={`font-semibold text-sm lg:text-base ${colors.text} flex items-center gap-1.5 lg:gap-2`}>
-                        <Eye className={`w-4 h-4 lg:w-5 lg:h-5 ${isViewing ? 'fill-current' : ''}`} />
+                      <h3 className="font-semibold text-sm text-gray-900 flex items-center gap-2">
+                        <span className={`w-2.5 h-2.5 rounded-full ${dot}`} />
                         {type}
                       </h3>
-                      {isViewing && (
-                        <span className={`text-xs px-1.5 lg:px-2 py-0.5 lg:py-1 rounded-full ${colors.selectedBg} ${colors.text} font-medium`}>
-                          Visible
-                        </span>
-                      )}
+                      <span className={`flex items-center gap-1 text-xs font-medium ${isViewing ? 'text-app-700' : 'text-gray-400'}`}>
+                        <Eye className="w-4 h-4" />
+                        {isViewing ? 'Visible' : 'Ver'}
+                      </span>
                     </button>
 
-                    {/* Zones Grid */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 lg:gap-3">
+                    {/* Zonas */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       {zones.map(zone => {
                         const selectedIdForType = selectedZonesByType.get(zone.zoneTypeSlug);
                         const isSelected = selectedIdForType === zone.id;
@@ -479,38 +448,21 @@ export default function ZoneSelectionModal({ template, onConfirm, onCancel }: Zo
                             key={zone.id}
                             onClick={() => toggleZone(zone.id)}
                             disabled={isDisabled}
-                            className={`
-                              relative border-2 rounded-lg p-3 lg:p-4 transition-all text-left
-                              ${isSelected
-                                ? `${colors.selectedBg} ${colors.selectedBorder} shadow-md`
-                                : `bg-white ${colors.border} hover:shadow-sm`}
-                              ${isDisabled ? 'opacity-70' : 'cursor-pointer hover:scale-105'}
-                            `}
+                            className={`relative min-h-[72px] border rounded-lg p-3 transition-colors text-left ${
+                              isSelected ? 'border-app-500 bg-app-50 ring-1 ring-app-500' : 'border-gray-200 bg-white hover:border-gray-300'
+                            } ${isDisabled ? 'opacity-70' : 'cursor-pointer'}`}
                           >
-                            {/* Checkmark */}
-                            <div className="absolute top-2 right-2">
+                            <div className="absolute top-3 right-3">
                               {isSelected ? (
-                                <CheckCircle className={`w-4 h-4 lg:w-5 lg:h-5 ${colors.text}`} />
+                                <CheckCircle className="w-5 h-5 text-app-600" />
                               ) : (
-                                <div className={`w-4 h-4 lg:w-5 lg:h-5 border-2 ${colors.border} rounded-full`} />
+                                <div className="w-5 h-5 border-2 border-gray-300 rounded-full" />
                               )}
                             </div>
-
-                            {/* Zone Name */}
-                            <h4 className="font-medium text-sm lg:text-base text-gray-900 pr-6 mb-1 lg:mb-2">{zone.name}</h4>
-
-                            {/* Price */}
-                            <p className={`text-base lg:text-lg font-bold ${colors.text}`}>
-                              +${Number(zone.price).toLocaleString()}
-                            </p>
-
-                            {/* Required Badge */}
+                            <h4 className="font-medium text-sm text-gray-900 pr-7 mb-1">{zone.name}</h4>
+                            <p className="text-base font-bold text-gray-900">+${Number(zone.price).toLocaleString()}</p>
                             {zone.isRequired && (
-                              <div className="mt-1 lg:mt-2">
-                                <span className="inline-block px-2 py-0.5 bg-orange-100 text-orange-800 text-xs rounded">
-                                  Requerida
-                                </span>
-                              </div>
+                              <span className="mt-1.5 inline-block px-2 py-0.5 bg-amber-100 text-amber-800 text-xs font-medium rounded-full">Requerida</span>
                             )}
                           </button>
                         );
@@ -520,13 +472,13 @@ export default function ZoneSelectionModal({ template, onConfirm, onCancel }: Zo
                 );
               })}
 
-              {/* Blocked Zones Warning */}
+              {/* Zonas bloqueadas */}
               {template.zones.filter(z => z.isBlocked).length > 0 && (
-                <div className="mt-3 lg:mt-4 p-3 lg:p-4 bg-red-50 border border-red-200 rounded-lg">
-                  <h4 className="text-xs lg:text-sm font-medium text-red-900 mb-1 lg:mb-2">⚠️ Zonas No Disponibles</h4>
-                  <div className="space-y-0.5 lg:space-y-1">
+                <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+                  <h4 className="text-sm font-medium text-red-900 mb-1">Zonas no disponibles</h4>
+                  <div className="space-y-0.5">
                     {template.zones.filter(z => z.isBlocked).map(zone => (
-                      <div key={zone.id} className="text-xs text-red-600">
+                      <div key={zone.id} className="text-xs text-red-700">
                         • {zone.name} ({zone.zoneType})
                       </div>
                     ))}
@@ -537,45 +489,25 @@ export default function ZoneSelectionModal({ template, onConfirm, onCancel }: Zo
           </div>
         </div>
 
-        {/* Footer - Summary and Actions */}
-        <div className="px-4 lg:px-6 py-3 lg:py-4 border-t border-gray-200 bg-gray-50">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 lg:gap-6">
-            {/* Summary */}
+        {/* Pie: resumen y acciones */}
+        <div className="px-5 py-3 border-t border-gray-100 bg-gray-50">
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
             <div className="flex-1">
-              <div className="flex items-baseline gap-2 mb-1">
-                <span className="text-xs lg:text-sm text-gray-600">Total con</span>
-                <span className="text-xs lg:text-sm font-semibold text-gray-900">
-                  {selectedZones.length} zona{selectedZones.length !== 1 ? 's' : ''} seleccionada{selectedZones.length !== 1 ? 's' : ''}
-                </span>
-              </div>
+              <p className="text-xs text-gray-500">
+                Total con <span className="font-semibold text-gray-900">{selectedZones.length} zona{selectedZones.length !== 1 ? 's' : ''} seleccionada{selectedZones.length !== 1 ? 's' : ''}</span>
+              </p>
               <div className="flex items-baseline gap-2 flex-wrap">
-                <span className="text-2xl lg:text-3xl font-bold text-green-600">
-                  ${totalPrice.toLocaleString()}
-                </span>
+                <span className="text-2xl font-bold text-gray-900">${totalPrice.toLocaleString()}</span>
                 {selectedZones.length > 0 && (
-                  <span className="text-xs lg:text-sm text-gray-500">
+                  <span className="text-xs text-gray-500">
                     (Base ${Number(template.basePrice).toLocaleString()} + Zonas ${(totalPrice - Number(template.basePrice)).toLocaleString()})
                   </span>
                 )}
               </div>
             </div>
-
-            {/* Action Buttons */}
-            <div className="flex gap-2 lg:gap-3">
-              <button
-                onClick={onCancel}
-                className="flex-1 lg:flex-none px-4 lg:px-6 py-2.5 lg:py-3 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors font-medium text-sm lg:text-base"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={handleConfirm}
-                className="flex-1 lg:flex-none px-4 lg:px-8 py-2.5 lg:py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium shadow-md hover:shadow-lg flex items-center justify-center gap-2 text-sm lg:text-base"
-              >
-                <CheckCircle className="w-4 h-4 lg:w-5 lg:h-5" />
-                <span className="hidden sm:inline">Agregar al Carrito</span>
-                <span className="sm:hidden">Agregar</span>
-              </button>
+            <div className="flex flex-col-reverse sm:flex-row gap-2">
+              <Button variant="secondary" size="lg" onClick={onCancel}>Cancelar</Button>
+              <Button size="lg" icon={<CheckCircle className="w-5 h-5" />} onClick={handleConfirm}>Agregar al carrito</Button>
             </div>
           </div>
         </div>

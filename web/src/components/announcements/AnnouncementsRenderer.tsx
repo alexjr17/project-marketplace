@@ -10,7 +10,7 @@ const SIZE_CLASS: Record<string, string> = {
 
 const VARIANT_BAR: Record<string, string> = {
   info: 'bg-blue-600 text-white',
-  promo: 'bg-gradient-to-r from-violet-600 to-pink-600 text-white',
+  promo: 'bg-app-600 text-white',
   warning: 'bg-amber-500 text-white',
   success: 'bg-green-600 text-white',
   dark: 'bg-gray-900 text-white',

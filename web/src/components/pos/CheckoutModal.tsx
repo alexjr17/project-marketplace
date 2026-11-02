@@ -13,9 +13,11 @@ import {
   CreditCard,
   Hash,
   MessageCircle,
+  Wallet,
 } from 'lucide-react';
 import * as posService from '../../services/pos.service';
 import type { SelectedCustomer } from './CustomerSelect';
+import { Button, Field, MoneyInput, SelectInput, TextInput, toast } from '../ui';
 
 type CheckoutStep = 'customer' | 'processing' | 'completed';
 
@@ -242,17 +244,17 @@ export const CheckoutModal = ({
 
     // Fiado: exige cliente identificado.
     if (isDebt && !customer) {
-      alert('Para una venta a crédito (Debe) selecciona o registra un cliente.');
+      toast.error('Para una venta a crédito (Debe) selecciona o registra un cliente.');
       return;
     }
 
     // Validar monto recibido para efectivo / mixto.
     if (paymentMethod === 'cash' && cashNum < total) {
-      alert('El monto recibido es menor al total.');
+      toast.error('El monto recibido es menor al total.');
       return;
     }
     if (paymentMethod === 'mixed' && paid < total) {
-      alert('Lo pagado (efectivo + transfer) es menor al total.');
+      toast.error('Lo pagado (efectivo + transfer) es menor al total.');
       return;
     }
 
@@ -351,210 +353,132 @@ export const CheckoutModal = ({
 
   if (!isOpen) return null;
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+  const methodLabel =
+    paymentMethod === 'cash' ? 'Efectivo' :
+    paymentMethod === 'card' ? 'Tarjeta' :
+    paymentMethod === 'transfer' ? 'Transferencia' :
+    paymentMethod === 'debe' ? 'Debe (fiado)' : 'Mixto';
 
-      {/* Modal — compacto para cobrar; ancho solo en el recibo final (PDF) */}
-      <div className={`relative bg-white rounded-xl shadow-2xl w-full max-h-[95vh] mx-4 flex flex-col overflow-hidden ${step === 'completed' ? 'max-w-4xl' : 'max-w-md'}`}>
-        {/* Header */}
-        <div className={`px-6 py-4 ${
-          step === 'completed'
-            ? 'bg-gradient-to-r from-green-500 to-green-600'
-            : step === 'processing'
-            ? 'bg-gradient-to-r from-blue-500 to-blue-600'
-            : 'bg-gradient-to-r from-orange-500 to-orange-600'
-        }`}>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="bg-white/20 rounded-full p-2">
-                {step === 'completed' ? (
-                  <CheckCircle className="w-6 h-6 text-white" />
-                ) : step === 'processing' ? (
-                  <Loader2 className="w-6 h-6 text-white animate-spin" />
-                ) : (
-                  <User className="w-6 h-6 text-white" />
-                )}
-              </div>
-              <div>
-                <h2 className="text-xl font-bold text-white">
-                  {step === 'completed'
-                    ? 'Venta Exitosa'
-                    : step === 'processing'
-                    ? 'Procesando Venta...'
-                    : 'Confirmar Cobro'}
-                </h2>
-                <p className="text-white/80 text-sm">
-                  {step === 'completed' && completedData
-                    ? `Recibo #${completedData.sale.orderNumber}`
-                    : step === 'processing'
-                    ? 'Por favor espere...'
-                    : 'Revisa el cliente y el pago'}
-                </p>
-              </div>
+  const confirmDisabled =
+    (isDebt && !customer) ||
+    (paymentMethod === 'cash' && cashNum < total) ||
+    (paymentMethod === 'mixed' && paid < total);
+
+  const row = (label: string, value: React.ReactNode, cls = 'text-gray-700') => (
+    <div className="flex justify-between gap-3">
+      <span className="text-gray-500">{label}</span>
+      <span className={`font-medium ${cls}`}>{value}</span>
+    </div>
+  );
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center sm:p-4" role="dialog" aria-modal="true">
+      {/* Fondo */}
+      <div className="absolute inset-0 bg-black/50" />
+
+      {/* Modal: compacto para cobrar; ancho solo en el recibo final (PDF) */}
+      <div className={`relative bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full max-h-[95vh] flex flex-col overflow-hidden animate-fade-in ${step === 'completed' ? 'max-w-4xl' : 'max-w-md'}`}>
+        {/* Encabezado */}
+        <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className={`p-2 rounded-full ${step === 'completed' ? 'bg-green-100 text-green-600' : 'bg-app-100 text-app-600'}`}>
+              {step === 'completed' ? (
+                <CheckCircle className="w-6 h-6" />
+              ) : step === 'processing' ? (
+                <Loader2 className="w-6 h-6 animate-spin" />
+              ) : (
+                <Wallet className="w-6 h-6" />
+              )}
             </div>
-            {step !== 'processing' && (
-              <button
-                onClick={onClose}
-                className="p-2 hover:bg-white/20 rounded-lg transition-colors"
-              >
-                <X className="w-5 h-5 text-white" />
-              </button>
-            )}
+            <div className="min-w-0">
+              <h2 className="text-lg font-semibold text-gray-900">
+                {step === 'completed' ? 'Venta exitosa' : step === 'processing' ? 'Procesando venta…' : 'Confirmar cobro'}
+              </h2>
+              <p className="text-sm text-gray-500 truncate">
+                {step === 'completed' && completedData
+                  ? `Recibo #${completedData.sale.orderNumber}`
+                  : step === 'processing'
+                  ? 'Por favor espere…'
+                  : `${methodLabel} · Revisa el cliente y el pago`}
+              </p>
+            </div>
           </div>
+          {step !== 'processing' && (
+            <button onClick={onClose} title="Cerrar" className="p-1.5 -mr-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100">
+              <X className="w-5 h-5" />
+            </button>
+          )}
         </div>
 
-        {/* Content */}
+        {/* Contenido */}
         <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
-          {/* STEP: Customer Data */}
+          {/* PASO: Cliente y pago */}
           {step === 'customer' && (
-            <div className="flex-1 p-4 lg:p-5 overflow-y-auto">
-              <div className="space-y-4">
+            <div className="flex-1 flex flex-col min-h-0">
+              <div className="flex-1 p-5 overflow-y-auto space-y-4">
                 {/* Cliente: editor inline (sin modal encima) */}
                 {editingCustomer ? (
-                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-2.5">
-                    <div className="flex items-center gap-2 text-blue-700">
+                  <div className="rounded-lg border border-app-200 p-3 space-y-3">
+                    <div className="flex items-center gap-2 text-app-700">
                       <UserCog className="w-4 h-4" />
                       <span className="text-sm font-semibold">Datos del cliente</span>
                     </div>
-                    <div>
-                      <input
-                        autoFocus
-                        type="text"
-                        value={custName}
-                        onChange={(e) => setCustName(e.target.value)}
-                        placeholder="Nombre *"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
-                    </div>
+                    <TextInput autoFocus value={custName} onChange={(e) => setCustName(e.target.value)} placeholder="Nombre *" />
                     <div className="grid grid-cols-2 gap-2">
-                      <input
-                        type="text"
-                        value={custCedula}
-                        onChange={(e) => setCustCedula(e.target.value)}
-                        placeholder="Cédula / NIT"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
-                      <input
-                        type="tel"
-                        value={custPhone}
-                        onChange={(e) => setCustPhone(e.target.value)}
-                        placeholder="Teléfono"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
+                      <TextInput value={custCedula} onChange={(e) => setCustCedula(e.target.value)} placeholder="Cédula / NIT" />
+                      <TextInput type="tel" value={custPhone} onChange={(e) => setCustPhone(e.target.value)} placeholder="Teléfono" />
                     </div>
-                    <input
-                      type="email"
-                      value={custEmail}
-                      onChange={(e) => setCustEmail(e.target.value)}
-                      placeholder="Email (opcional)"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
+                    <TextInput type="email" value={custEmail} onChange={(e) => setCustEmail(e.target.value)} placeholder="Email (opcional)" />
                     <p className="text-xs text-gray-500">Solo el nombre es obligatorio. Lo demás es opcional.</p>
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setEditingCustomer(false)}
-                        className="flex-1 px-3 py-1.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 text-sm font-medium"
-                      >
-                        Cancelar
-                      </button>
-                      <button
-                        type="button"
-                        onClick={saveCustomerInline}
-                        disabled={!custName.trim()}
-                        className="flex-1 px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 text-sm font-medium"
-                      >
-                        Guardar
-                      </button>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Button variant="secondary" onClick={() => setEditingCustomer(false)}>Cancelar</Button>
+                      <Button onClick={saveCustomerInline} disabled={!custName.trim()}>Guardar</Button>
                     </div>
                   </div>
                 ) : customer ? (
-                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex items-start gap-3">
-                    <User className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                  <div className="rounded-lg border border-gray-200 p-3 flex items-start gap-3">
+                    <div className="p-2 rounded-full bg-gray-100 flex-shrink-0"><User className="w-4 h-4 text-gray-500" /></div>
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-bold text-gray-900 truncate">{customer.name}</p>
-                      {customer.cedula && (
-                        <p className="text-xs text-gray-600 truncate">CC/NIT {customer.cedula}</p>
-                      )}
-                      {customer.phone && (
-                        <p className="text-xs text-gray-600 truncate">{customer.phone}</p>
-                      )}
+                      <p className="text-sm font-semibold text-gray-900 truncate">{customer.name}</p>
+                      {customer.cedula && <p className="text-xs text-gray-600 truncate">CC/NIT {customer.cedula}</p>}
+                      {customer.phone && <p className="text-xs text-gray-600 truncate">{customer.phone}</p>}
                       <p className="text-xs text-gray-400 truncate">
                         {customer.id ? 'Cliente existente' : 'Cliente nuevo · se registra al cobrar'}
                       </p>
                     </div>
-                    <button
-                      type="button"
-                      onClick={startEditCustomer}
-                      title="Editar / completar datos del cliente"
-                      className="flex-shrink-0 inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-blue-700 bg-white border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors"
-                    >
-                      <UserCog className="w-3.5 h-3.5" />
+                    <Button variant="ghost" size="sm" icon={<UserCog className="w-4 h-4" />} onClick={startEditCustomer} title="Editar / completar datos del cliente">
                       Editar
-                    </button>
+                    </Button>
                   </div>
                 ) : (
-                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 flex items-center justify-between gap-3">
+                  <div className="rounded-lg border border-gray-200 p-3 flex items-center justify-between gap-3">
                     <div className="min-w-0">
                       <p className="text-sm text-gray-500">Sin cliente (consumidor final)</p>
-                      {isDebt && (
-                        <p className="mt-1 text-xs text-amber-700">
-                          Registra un cliente para el fiado.
-                        </p>
-                      )}
+                      {isDebt && <p className="mt-1 text-xs text-amber-700">Registra un cliente para el fiado.</p>}
                     </div>
-                    <button
-                      type="button"
-                      onClick={startEditCustomer}
-                      className="flex-shrink-0 inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
-                    >
-                      <UserPlus className="w-3.5 h-3.5" />
+                    <Button variant="outline" size="sm" icon={<UserPlus className="w-4 h-4" />} onClick={startEditCustomer}>
                       Registrar
-                    </button>
+                    </Button>
                   </div>
                 )}
 
-                {/* Transaction Details - Only for card, transfer or mixed */}
+                {/* Datos de la transacción: tarjeta, transferencia o mixto */}
                 {(paymentMethod === 'card' || paymentMethod === 'transfer' || paymentMethod === 'mixed') && (
-                  <div className="bg-blue-50 rounded-lg p-4 space-y-4">
-                    <div className="flex items-center gap-2 mb-2">
-                      <CreditCard className="w-5 h-5 text-blue-600" />
-                      <span className="font-medium text-blue-800">
-                        Datos de la Transacción
-                      </span>
+                  <div className="rounded-lg border border-gray-200 p-3 space-y-3">
+                    <div className="flex items-center gap-2">
+                      <CreditCard className="w-4 h-4 text-app-600" />
+                      <span className="text-sm font-semibold text-gray-900">Datos de la transacción</span>
                     </div>
-
-                    {/* Card Reference */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Referencia / Autorización
-                      </label>
+                    <Field label="Referencia / Autorización">
                       <div className="relative">
-                        <Hash className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-                        <input
-                          type="text"
-                          value={cardReference}
-                          onChange={(e) => setCardReference(e.target.value)}
-                          placeholder="Número de autorización del datafono"
-                          className="w-full pl-10 pr-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-                        />
+                        <Hash className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4 pointer-events-none" />
+                        <TextInput value={cardReference} onChange={(e) => setCardReference(e.target.value)} placeholder="Número de autorización del datáfono" className="pl-9" />
                       </div>
-                    </div>
-
+                    </Field>
                     <div className="grid grid-cols-2 gap-3">
-                      {/* Transaction Type */}
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Tipo de Transacción
-                        </label>
-                        <select
-                          value={cardType}
-                          onChange={(e) => setCardType(e.target.value)}
-                          className="w-full px-3 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-                        >
-                          <option value="">Seleccionar...</option>
+                      <Field label="Tipo">
+                        <SelectInput value={cardType} onChange={(e) => setCardType(e.target.value)}>
+                          <option value="">Seleccionar…</option>
                           <option value="nequi">Nequi</option>
                           <option value="bancolombia">Bancolombia</option>
                           <option value="daviplata">Daviplata</option>
@@ -566,240 +490,157 @@ export const CheckoutModal = ({
                           <option value="amex">American Express</option>
                           <option value="datafono">Datáfono</option>
                           <option value="otro">Otro</option>
-                        </select>
-                      </div>
-
-                      {/* Last 4 Digits / Phone */}
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Últimos 4 dígitos / Celular
-                        </label>
-                        <input
-                          type="text"
+                        </SelectInput>
+                      </Field>
+                      <Field label="Últimos 4 / Celular">
+                        <TextInput
                           value={cardLastFour}
                           onChange={(e) => {
-                            // Only allow digits, max 10
+                            // Solo dígitos, máximo 10
                             const value = e.target.value.replace(/\D/g, '').slice(0, 10);
                             setCardLastFour(value);
                           }}
                           placeholder="1234 o 3001234567"
                           maxLength={10}
-                          className="w-full px-3 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                          inputMode="numeric"
                         />
-                      </div>
+                      </Field>
                     </div>
-
-                    <p className="text-xs text-blue-600">
-                      * Estos datos ayudan a rastrear las transacciones digitales
-                    </p>
+                    <p className="text-xs text-gray-500">Estos datos ayudan a rastrear las transacciones digitales.</p>
                   </div>
                 )}
 
-                {/* Pago + Resumen */}
-                <div className="bg-gray-50 rounded-lg p-4 space-y-4">
-                  {/* Amount inputs (depending on method) */}
-                  {paymentMethod === 'cash' && (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Monto recibido
-                      </label>
-                      <input
-                        ref={cashInputRef}
-                        type="number"
-                        value={cashAmount}
-                        onChange={(e) => onCashAmountChange(e.target.value)}
-                        placeholder="0.00"
-                        step="0.01"
-                        min="0"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent text-base"
-                      />
-                    </div>
-                  )}
+                {/* Montos según el método */}
+                {paymentMethod === 'cash' && (
+                  <Field label="Monto recibido">
+                    <MoneyInput
+                      ref={cashInputRef}
+                      value={cashAmount}
+                      onChange={(e) => onCashAmountChange(e.target.value)}
+                      placeholder="0"
+                      className="h-12 text-lg font-semibold"
+                    />
+                  </Field>
+                )}
 
-                  {paymentMethod === 'mixed' && (
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Efectivo
-                        </label>
-                        <input
-                          type="number"
-                          value={cashAmount}
-                          onChange={(e) => onCashAmountChange(e.target.value)}
-                          placeholder="0.00"
-                          step="0.01"
-                          min="0"
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent text-base"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Transfer
-                        </label>
-                        <input
-                          type="number"
-                          value={cardAmount}
-                          onChange={(e) => onCardAmountChange(e.target.value)}
-                          placeholder="0.00"
-                          step="0.01"
-                          min="0"
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-base"
-                        />
-                      </div>
-                    </div>
-                  )}
-
-                  {paymentMethod === 'debe' && (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Abono ahora (opcional)
-                      </label>
-                      <div className="flex gap-2">
-                        <input
-                          type="number"
-                          value={abonoAmount}
-                          onChange={(e) => onAbonoAmountChange(e.target.value)}
-                          placeholder="0"
-                          step="0.01"
-                          min="0"
-                          max={total}
-                          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent text-base"
-                        />
-                        <select
-                          value={abonoMethod}
-                          onChange={(e) => onAbonoMethodChange(e.target.value as 'cash' | 'transfer')}
-                          className="px-2 py-2 border border-gray-300 rounded-lg text-sm bg-white"
-                        >
-                          <option value="cash">Efectivo</option>
-                          <option value="transfer">Transfer</option>
-                        </select>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Summary */}
-                  <div className="space-y-1.5 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-gray-500">Productos:</span>
-                      <span className="font-medium text-gray-700">{itemCount}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-500">Subtotal:</span>
-                      <span className="font-medium text-gray-700">${subtotal.toLocaleString()}</span>
-                    </div>
-                    {discount > 0 && (
-                      <div className="flex justify-between">
-                        <span className="text-gray-500">Descuento:</span>
-                        <span className="font-medium text-red-600">-${discount.toLocaleString()}</span>
-                      </div>
-                    )}
-                    {tax > 0 && (
-                      <div className="flex justify-between">
-                        <span className="text-gray-500">IVA:</span>
-                        <span className="font-medium text-gray-700">${tax.toLocaleString()}</span>
-                      </div>
-                    )}
-                    <div className="flex justify-between items-center border-t border-gray-300 pt-2 mt-2">
-                      <span className="text-gray-700 font-semibold">Total:</span>
-                      <span className="text-xl font-bold text-gray-900">${total.toLocaleString()}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-500">Método:</span>
-                      <span className="font-medium text-gray-700">
-                        {paymentMethod === 'cash' ? 'Efectivo' :
-                         paymentMethod === 'card' ? 'Tarjeta' :
-                         paymentMethod === 'transfer' ? 'Transferencia' :
-                         paymentMethod === 'debe' ? 'Debe (fiado)' : 'Mixto'}
-                      </span>
-                    </div>
-                    {(paymentMethod === 'cash' || paymentMethod === 'mixed') && paid > 0 && (
-                      <div className="flex justify-between">
-                        <span className="text-gray-500">Recibido:</span>
-                        <span className="font-medium text-gray-700">${paid.toLocaleString()}</span>
-                      </div>
-                    )}
-                    {(paymentMethod === 'cash' || paymentMethod === 'mixed') && change > 0 && (
-                      <div className="flex justify-between items-center">
-                        <span className="text-green-700 font-semibold">Vuelto:</span>
-                        <span className="text-lg font-bold text-green-600">${change.toLocaleString()}</span>
-                      </div>
-                    )}
-                    {paymentMethod === 'debe' && (
-                      <>
-                        <div className="flex justify-between">
-                          <span className="text-gray-500">Abono ahora:</span>
-                          <span className="font-medium text-green-700">${abonoNum.toLocaleString()}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-500">Queda debiendo:</span>
-                          <span className="font-bold text-amber-700">
-                            ${Math.max(0, total - abonoNum).toLocaleString()}
-                          </span>
-                        </div>
-                      </>
-                    )}
+                {paymentMethod === 'mixed' && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field label="Efectivo">
+                      <MoneyInput ref={cashInputRef} value={cashAmount} onChange={(e) => onCashAmountChange(e.target.value)} placeholder="0" className="h-12 text-lg font-semibold" />
+                    </Field>
+                    <Field label="Transferencia">
+                      <MoneyInput value={cardAmount} onChange={(e) => onCardAmountChange(e.target.value)} placeholder="0" className="h-12 text-lg font-semibold" />
+                    </Field>
                   </div>
-                </div>
+                )}
 
-                {/* Action Buttons */}
-                <div className="flex gap-3 pt-4">
-                  <button
-                    onClick={onClose}
-                    className="flex-1 px-4 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium transition-colors"
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    onClick={handleConfirmSale}
-                    disabled={
-                      (isDebt && !customer) ||
-                      (paymentMethod === 'cash' && cashNum < total) ||
-                      (paymentMethod === 'mixed' && paid < total)
-                    }
-                    className="flex-1 px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium flex items-center justify-center gap-2 transition-colors"
-                  >
-                    <CheckCircle className="w-5 h-5" />
-                    {isDebt ? 'Registrar Fiado' : 'Confirmar Venta'}
-                  </button>
+                {paymentMethod === 'debe' && (
+                  <Field label="Abono ahora" hint="Opcional">
+                    <div className="flex gap-2">
+                      <div className="flex-1">
+                        <MoneyInput value={abonoAmount} onChange={(e) => onAbonoAmountChange(e.target.value)} placeholder="0" max={total} className="h-12 text-lg font-semibold" />
+                      </div>
+                      <SelectInput value={abonoMethod} onChange={(e) => onAbonoMethodChange(e.target.value as 'cash' | 'transfer')} className="!w-auto h-12">
+                        <option value="cash">Efectivo</option>
+                        <option value="transfer">Transfer</option>
+                      </SelectInput>
+                    </div>
+                  </Field>
+                )}
+
+                {/* Resumen */}
+                <div className="rounded-lg border border-gray-200 p-3 space-y-1.5 text-sm">
+                  {row('Productos', itemCount)}
+                  {row('Subtotal', `$${subtotal.toLocaleString()}`)}
+                  {discount > 0 && row('Descuento', `-$${discount.toLocaleString()}`, 'text-red-600')}
+                  {tax > 0 && row('IVA', `$${tax.toLocaleString()}`)}
+                  <div className="flex justify-between items-center border-t border-gray-200 pt-2 mt-2">
+                    <span className="text-gray-900 font-semibold">Total</span>
+                    <span className="text-2xl font-bold text-gray-900">${total.toLocaleString()}</span>
+                  </div>
+                  {(paymentMethod === 'cash' || paymentMethod === 'mixed') && paid > 0 && row('Recibido', `$${paid.toLocaleString()}`)}
+                  {(paymentMethod === 'cash' || paymentMethod === 'mixed') && change > 0 && (
+                    <div className="flex justify-between items-center rounded-md bg-green-50 px-2 py-1.5 -mx-1">
+                      <span className="text-green-800 font-semibold">Vuelto</span>
+                      <span className="text-xl font-bold text-green-700">${change.toLocaleString()}</span>
+                    </div>
+                  )}
+                  {paymentMethod === 'debe' && (
+                    <>
+                      {row('Abono ahora', `$${abonoNum.toLocaleString()}`, 'text-green-700')}
+                      {row('Queda debiendo', `$${Math.max(0, total - abonoNum).toLocaleString()}`, 'font-bold text-amber-700')}
+                    </>
+                  )}
                 </div>
+              </div>
+
+              {/* Acciones */}
+              <div className="px-5 py-3 border-t border-gray-100 bg-gray-50 grid grid-cols-2 gap-2">
+                <Button variant="secondary" size="lg" onClick={onClose}>Cancelar</Button>
+                <Button variant="success" size="lg" icon={<CheckCircle className="w-5 h-5" />} onClick={handleConfirmSale} disabled={confirmDisabled}>
+                  {isDebt ? 'Registrar fiado' : 'Confirmar venta'}
+                </Button>
               </div>
             </div>
           )}
 
-          {/* STEP: Processing */}
+          {/* PASO: Procesando */}
           {step === 'processing' && (
-            <div className="flex-1 flex items-center justify-center p-6">
+            <div className="flex-1 flex items-center justify-center p-8">
               <div className="text-center">
-                <Loader2 className="w-16 h-16 text-blue-500 animate-spin mx-auto mb-4" />
-                <h3 className="text-xl font-semibold text-gray-900 mb-2">
-                  Procesando venta...
-                </h3>
-                <p className="text-gray-600">
-                  Por favor espere mientras se registra la transacción
-                </p>
+                <span className="block w-12 h-12 border-4 border-app-200 border-t-app-600 rounded-full animate-spin mx-auto mb-4" />
+                <h3 className="text-lg font-semibold text-gray-900 mb-1">Procesando venta…</h3>
+                <p className="text-sm text-gray-500">Por favor espere mientras se registra la transacción</p>
               </div>
             </div>
           )}
 
-          {/* STEP: Completed */}
+          {/* PASO: Completado */}
           {step === 'completed' && completedData && (
             <>
-              {/* Left Panel - Acciones compactas (el detalle ya va en el recibo) */}
-              <div className="lg:w-72 border-b lg:border-b-0 lg:border-r border-gray-200 p-4 space-y-3 overflow-y-auto">
+              {/* Panel izquierdo: acciones (el detalle ya va en el recibo) */}
+              <div className="lg:w-80 border-b lg:border-b-0 lg:border-r border-gray-200 p-4 space-y-3 overflow-y-auto">
+                {completedData.change > 0 && (
+                  <div className="rounded-lg bg-green-50 border border-green-200 px-4 py-3 flex items-center justify-between">
+                    <span className="text-sm font-semibold text-green-800">Vuelto</span>
+                    <span className="text-2xl font-bold text-green-700">${completedData.change.toLocaleString()}</span>
+                  </div>
+                )}
+
+                {/* Nueva venta: acción principal */}
+                <Button size="lg" fullWidth onClick={onClose} title="Nueva venta — atajo: Enter">
+                  Nueva venta
+                  <ArrowRight className="w-5 h-5" />
+                  <kbd className="text-[10px] font-bold bg-white/20 rounded px-1.5 py-0.5 ml-1">Enter</kbd>
+                </Button>
+
+                {/* Acciones secundarias: imprimir / descargar / whatsapp */}
+                <div className="grid grid-cols-3 gap-2">
+                  <ReceiptAction onClick={handlePrint} disabled={loadingPdf || printing} title="Imprimir — atajo: I" hotkey="I" icon={printing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Printer className="w-5 h-5" />}>
+                    {printing ? 'Imprimiendo' : 'Imprimir'}
+                  </ReceiptAction>
+                  <ReceiptAction onClick={handleDownload} disabled={!pdfUrl || loadingPdf} title="Descargar PDF — atajo: D" hotkey="D" icon={<Download className="w-5 h-5" />}>
+                    Descargar
+                  </ReceiptAction>
+                  <ReceiptAction onClick={handleWhatsApp} title="Enviar por WhatsApp — atajo: W" hotkey="W" icon={<MessageCircle className="w-5 h-5" />}>
+                    WhatsApp
+                  </ReceiptAction>
+                </div>
+
                 {/* Email */}
-                <div className="bg-purple-50 rounded-lg p-3">
+                <div className="rounded-lg border border-gray-200 p-3">
                   <div className="flex items-center gap-2 mb-2">
-                    <Mail className="w-4 h-4 text-purple-600" />
-                    <span className="font-medium text-purple-800 text-sm">Enviar por email</span>
+                    <Mail className="w-4 h-4 text-app-600" />
+                    <span className="font-medium text-gray-900 text-sm">Enviar por email</span>
                   </div>
                   {emailSent ? (
-                    <div className="flex items-center gap-2 text-xs text-purple-700">
-                      <CheckCircle className="w-3 h-3 text-green-500" />
-                      <span>Enviada a: {emailInput}</span>
+                    <div className="flex items-center gap-2 text-xs text-gray-600">
+                      <CheckCircle className="w-3.5 h-3.5 text-green-600" />
+                      <span className="truncate">Enviada a: {emailInput}</span>
                     </div>
                   ) : (
                     <div className="flex gap-2">
-                      <input
+                      <TextInput
                         ref={emailRef}
                         type="email"
                         value={emailInput}
@@ -807,90 +648,24 @@ export const CheckoutModal = ({
                         onKeyDown={(e) => e.key === 'Enter' && handleSendEmail()}
                         placeholder="cliente@email.com"
                         title="Email — atajo: E para enfocar"
-                        className="flex-1 min-w-0 px-3 py-2 border border-purple-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
+                        className="min-w-0"
                       />
-                      <button
-                        onClick={handleSendEmail}
-                        disabled={sendingEmail || !emailInput.trim()}
-                        className="px-3 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 text-sm flex-shrink-0"
-                      >
-                        {sendingEmail ? (
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                        ) : (
-                          <Mail className="w-4 h-4" />
-                        )}
-                      </button>
+                      <Button variant="outline" onClick={handleSendEmail} disabled={!emailInput.trim()} isLoading={sendingEmail} title="Enviar" icon={!sendingEmail ? <Mail className="w-4 h-4" /> : undefined} />
                     </div>
                   )}
                 </div>
-
-                {/* Acciones secundarias compactas: imprimir / descargar / whatsapp */}
-                <div className="grid grid-cols-3 gap-2">
-                  <button
-                    onClick={handlePrint}
-                    disabled={loadingPdf || printing}
-                    title="Imprimir — atajo: I"
-                    className="relative flex flex-col items-center justify-center gap-1 px-2 py-2.5 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 disabled:opacity-50 text-xs font-medium transition-colors"
-                  >
-                    <span className="absolute top-1 right-1.5 text-[10px] font-bold text-blue-300">I</span>
-                    {printing ? (
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                    ) : (
-                      <Printer className="w-5 h-5" />
-                    )}
-                    {printing ? 'Imprimiendo' : 'Imprimir'}
-                  </button>
-
-                  <button
-                    onClick={handleDownload}
-                    disabled={!pdfUrl || loadingPdf}
-                    title="Descargar PDF — atajo: D"
-                    className="relative flex flex-col items-center justify-center gap-1 px-2 py-2.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 disabled:opacity-50 text-xs font-medium transition-colors"
-                  >
-                    <span className="absolute top-1 right-1.5 text-[10px] font-bold text-gray-400">D</span>
-                    <Download className="w-5 h-5" />
-                    Descargar
-                  </button>
-
-                  <button
-                    onClick={handleWhatsApp}
-                    title="Enviar por WhatsApp — atajo: W"
-                    className="relative flex flex-col items-center justify-center gap-1 px-2 py-2.5 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 text-xs font-medium transition-colors"
-                  >
-                    <span className="absolute top-1 right-1.5 text-[10px] font-bold text-green-300">W</span>
-                    <MessageCircle className="w-5 h-5" />
-                    WhatsApp
-                  </button>
-                </div>
-
-                {/* Nueva Venta — fila completa */}
-                <button
-                  onClick={onClose}
-                  title="Nueva venta — atajo: Enter"
-                  className="w-full px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center justify-center gap-2 font-semibold transition-colors"
-                >
-                  Nueva Venta
-                  <ArrowRight className="w-5 h-5" />
-                  <span className="text-[10px] font-bold bg-white/20 rounded px-1.5 py-0.5 ml-1">Enter</span>
-                </button>
               </div>
 
-              {/* Right Panel - PDF Preview */}
+              {/* Panel derecho: vista previa del PDF */}
               <div className="flex-1 bg-gray-100 p-4 overflow-hidden">
-                <div className="h-full bg-white rounded-lg shadow-inner overflow-hidden">
+                <div className="h-full bg-white rounded-lg border border-gray-200 overflow-hidden">
                   {loadingPdf ? (
-                    <div className="h-full flex items-center justify-center min-h-[400px]">
-                      <div className="text-center">
-                        <Loader2 className="w-10 h-10 animate-spin text-blue-500 mx-auto mb-3" />
-                        <p className="text-gray-600">Generando recibo...</p>
-                      </div>
+                    <div className="h-full flex flex-col items-center justify-center gap-2 min-h-[400px] text-gray-500">
+                      <span className="w-8 h-8 border-[3px] border-app-200 border-t-app-600 rounded-full animate-spin" />
+                      <p className="text-sm">Generando recibo…</p>
                     </div>
                   ) : pdfUrl ? (
-                    <iframe
-                      src={pdfUrl}
-                      className="w-full h-full min-h-[400px]"
-                      title="Vista previa del recibo"
-                    />
+                    <iframe src={pdfUrl} className="w-full h-full min-h-[400px]" title="Vista previa del recibo" />
                   ) : (
                     <div className="h-full flex items-center justify-center min-h-[400px]">
                       <p className="text-gray-500">Error al cargar el recibo</p>
@@ -905,5 +680,24 @@ export const CheckoutModal = ({
     </div>
   );
 };
+
+/** Botón cuadrado de acción del recibo, con su atajo de teclado en la esquina. */
+function ReceiptAction({ onClick, disabled, title, hotkey, icon, children }: {
+  onClick: () => void; disabled?: boolean; title: string; hotkey: string; icon: React.ReactNode; children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      className="relative flex flex-col items-center justify-center gap-1 h-16 px-2 rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50 text-xs font-medium transition-colors"
+    >
+      <span className="absolute top-1 right-1.5 text-[10px] font-bold text-gray-300">{hotkey}</span>
+      {icon}
+      {children}
+    </button>
+  );
+}
 
 export default CheckoutModal;

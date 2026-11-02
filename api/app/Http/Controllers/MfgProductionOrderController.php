@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Http\Concerns\ApiResponse;
-use App\Models\MfgLot;
 use App\Models\MfgOrderInputSubstitution;
 use App\Models\MfgProcess;
 use App\Models\MfgProductionOrder;
@@ -12,6 +11,7 @@ use App\Models\MfgProductMovement;
 use App\Models\MfgReferenceMaterial;
 use App\Models\MfgWarehouse;
 use App\Models\MfgWarehouseStock;
+use App\Services\NumberSequenceService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -24,6 +24,8 @@ use Illuminate\Support\Facades\DB;
 class MfgProductionOrderController extends Controller
 {
     use ApiResponse;
+
+    public function __construct(private NumberSequenceService $numbers) {}
 
     private const RELATIONS = [
         'reference:id,code,name,imagePath,garmentTypeId',
@@ -114,7 +116,7 @@ class MfgProductionOrderController extends Controller
 
     public function generateNumber()
     {
-        return $this->success(['code' => MfgProductionOrder::nextCode()]);
+        return $this->success(['code' => $this->numbers->peek(NumberSequenceService::MFG_PRODUCTION_ORDER)]);
     }
 
     /** El semestre se toma de la colección (que ya incluye año+semestre). */
@@ -205,7 +207,8 @@ class MfgProductionOrderController extends Controller
                 $order->semester = $this->semesterFromCollection($order->collectionId) ?? ($data['semester'] ?? $order->semester);
             }
             if (array_key_exists('market', $data)) {
-                $order->market = $data['market'];
+                // market es NOT NULL: un null explícito vuelve a Nacional (como al crear).
+                $order->market = $data['market'] ?? 'NATIONAL';
             }
             if (array_key_exists('internalCode', $data)) {
                 $order->internalCode = $data['internalCode'];
@@ -418,7 +421,7 @@ class MfgProductionOrderController extends Controller
         $whId = $warehouseId ?? $order->warehouseId ?? optional(MfgWarehouse::orderBy('id')->first())->id;
 
         $lot = $order->lots()->create([
-            'code' => $this->nextLotCode(),
+            'code' => $this->numbers->next(NumberSequenceService::MFG_LOT),
             'warehouseId' => $whId,
             'status' => 'AVAILABLE',
         ]);
@@ -558,18 +561,6 @@ class MfgProductionOrderController extends Controller
                 $register($m, $m->colorId, $m->colorId ? ($byColor[$m->colorId] ?? 0) : $total);
             }
         }
-    }
-
-    private function nextLotCode(): string
-    {
-        $year = now()->year;
-        $prefix = 'L-'.$year.'-';
-        $last = MfgLot::where('code', 'like', $prefix.'%')
-            ->orderByRaw('CAST(SUBSTRING_INDEX(code, "-", -1) AS UNSIGNED) DESC')
-            ->first();
-        $n = $last ? ((int) substr(strrchr($last->code, '-'), 1)) + 1 : 1;
-
-        return sprintf('%s%04d', $prefix, $n);
     }
 
     public function changeStatus(Request $request, int $id)

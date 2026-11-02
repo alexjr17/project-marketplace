@@ -17,7 +17,6 @@ import type {
   ProductSection,
   WhatsAppButtonSettings,
   CatalogSettings,
-  PromoBanner,
 } from '../types/settings';
 import { settingsService } from '../services/settings.service';
 import { useAuth } from './AuthContext';
@@ -155,32 +154,43 @@ const mockSettings: Settings = {
     hero: {
       cards: [], // Se usan los defaults de HeroSection si está vacío
       showSideCards: true,
-      sideCardsVisibleOnMobile: false,
+      sideCardsVisibleOnMobile: true,
+      autoSlidesFromFeatured: true,
+      slideIntervalMs: 6000,
     },
     features: [
+      // Franja de beneficios de la portada (valores por defecto si no hay nada guardado).
       {
         id: 'feature-1',
-        icon: 'palette',
-        title: 'Personalización Fácil',
-        description: 'Editor visual intuitivo para crear diseños únicos en minutos',
+        icon: 'truck',
+        title: 'Envío a domicilio',
+        description: 'Recibe tu pedido donde estés',
         isActive: true,
         order: 1,
       },
       {
         id: 'feature-2',
-        icon: 'sparkles',
-        title: 'Alta Calidad',
-        description: 'Productos premium con impresión de alta resolución',
+        icon: 'shield',
+        title: 'Pago seguro',
+        description: 'Tus datos y tu pago, protegidos',
         isActive: true,
         order: 2,
       },
       {
         id: 'feature-3',
-        icon: 'package',
-        title: 'Entrega Rápida',
-        description: 'Producción y envío en tiempo récord',
+        icon: 'palette',
+        title: 'Personaliza',
+        description: 'Sube tu diseño y lo estampamos por ti',
         isActive: true,
         order: 3,
+      },
+      {
+        id: 'feature-4',
+        icon: 'refresh',
+        title: 'Cambios y garantía',
+        description: 'Te ayudamos si algo no queda bien',
+        isActive: true,
+        order: 4,
       },
     ],
     showFeatures: true,
@@ -451,6 +461,10 @@ export const SettingsProvider = ({ children }: { children: ReactNode }) => {
           catalog: withFallback(publicSettings.catalog, prev.catalog),
           // El cliente también necesita la config de envíos para calcular el costo.
           shipping: withFallback(publicSettings.shipping, prev.shipping),
+          // Métodos de pago (el backend ya quita las claves secretas) y páginas legales:
+          // antes no se copiaban y el checkout mostraba los métodos por defecto.
+          payment: withFallback(publicSettings.payment, prev.payment),
+          legal: withFallback(publicSettings.legal, prev.legal),
         }));
       } catch (err) {
         console.error('Error loading public settings:', err);
@@ -543,12 +557,9 @@ export const SettingsProvider = ({ children }: { children: ReactNode }) => {
         updatedAt: new Date(),
       }));
     } catch (err) {
+      // Antes se aplicaba igual y la pantalla decía "guardado" aunque fallara.
       console.error('Error updating appearance settings:', err);
-      setSettings((prev) => ({
-        ...prev,
-        appearance: newAppearance,
-        updatedAt: new Date(),
-      }));
+      throw err;
     }
   };
 

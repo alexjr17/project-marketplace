@@ -34,6 +34,9 @@ export type Permission =
   // Ventas
   | 'orders.view'              // Pedidos
   | 'reviews.view'             // Reseñas
+  // Marketing
+  | 'discounts.view'           // Cupones
+  | 'announcements.view'       // Anuncios
   | 'payments.view'            // Pagos
   // Envíos
   | 'shipping.carriers'        // Transportadoras
@@ -44,7 +47,8 @@ export type Permission =
   // Punto de Venta (admin)
   | 'variants.view'            // Variantes
   // Catálogo
-  | 'products.view'            // Productos
+  | 'products.view'            // Productos (ver)
+  | 'products.manage'          // Productos (crear, editar, eliminar)
   | 'templates.view'           // Plantillas/Modelos
   | 'categories.view'          // Categorías
   | 'product_types.view'       // Tipos de Producto
@@ -91,6 +95,7 @@ export type AdminModule =
   | 'supplies'
   | 'purchases'
   | 'users'
+  | 'marketing'
   | 'settings';
 
 // Interfaz de Rol
@@ -184,6 +189,7 @@ export const PERMISSION_GROUPS: {
     module: 'catalog',
     label: 'Catálogo',
     permissions: [
+      { id: 'products.manage', label: 'Gestionar productos', description: 'Crear, editar y eliminar productos' },
       { id: 'products.view', label: 'Productos', description: 'Productos del catálogo' },
       { id: 'variants.view', label: 'Variantes', description: 'Variantes de productos' },
       { id: 'templates.view', label: 'Plantillas/Modelos', description: 'Plantillas y modelos' },
@@ -232,11 +238,18 @@ export const PERMISSION_GROUPS: {
   },
   {
     module: 'users',
-    label: 'Usuarios',
+    label: 'Clientes',
+    // Administradores y Roles son solo del SuperAdmin (no se asignan a otros roles).
     permissions: [
-      { id: 'users.view', label: 'Clientes', description: 'Usuarios registrados' },
-      { id: 'admins.view', label: 'Administradores', description: 'Administradores del sistema' },
-      { id: 'roles.view', label: 'Roles y Permisos', description: 'Roles y permisos' },
+      { id: 'users.view', label: 'Clientes', description: 'Ver y gestionar clientes registrados' },
+    ],
+  },
+  {
+    module: 'marketing',
+    label: 'Marketing',
+    permissions: [
+      { id: 'discounts.view', label: 'Cupones', description: 'Cupones y descuentos' },
+      { id: 'announcements.view', label: 'Anuncios', description: 'Publicidad en la tienda' },
     ],
   },
   {
@@ -307,7 +320,7 @@ export const APPLICATIONS: {
     name: 'Administración',
     description: 'Panel de gestión del negocio',
     access: { id: 'admin.access', label: 'Acceso a Administración', description: 'Entrar al panel de administración' },
-    modules: ['dashboard', 'sales', 'shipping', 'catalog', 'production', 'supplies', 'purchases', 'users', 'settings'],
+    modules: ['dashboard', 'sales', 'shipping', 'catalog', 'production', 'supplies', 'purchases', 'users', 'marketing', 'settings'],
   },
   {
     id: 'messaging',

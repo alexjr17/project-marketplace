@@ -11,6 +11,8 @@ use App\Models\ProductSize;
 use App\Models\ProductType;
 use App\Models\ProductVariant;
 use App\Services\DiscountService;
+use App\Services\NumberSequenceService;
+use App\Services\ProductCatalogService;
 use App\Services\VariantService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -25,13 +27,23 @@ class ProductController extends Controller
     public function __construct(
         private VariantService $variants,
         private DiscountService $discounts,
+        private NumberSequenceService $numbers,
+        private ProductCatalogService $catalog,
     ) {}
 
     /** Descuentos automáticos vigentes (tienda), cacheados por request. */
     private ?Collection $autoDiscounts = null;
 
+    /** Petición para la que se cargaron (Laravel reutiliza la instancia del controlador). */
+    private ?Request $autoDiscountsFor = null;
+
     private function autoDiscounts(): Collection
     {
+        if ($this->autoDiscountsFor !== request()) {
+            $this->autoDiscountsFor = request();
+            $this->autoDiscounts = null;
+        }
+
         return $this->autoDiscounts ??= $this->discounts->activeAutoDiscounts('online');
     }
 
@@ -107,9 +119,10 @@ class ProductController extends Controller
             'maxPrice' => 'nullable|numeric',
             'featured' => 'nullable',
             'isActive' => 'nullable',
+            'onSale' => 'nullable',
             'color' => 'nullable|string',
             'size' => 'nullable|string',
-            'sortBy' => ['nullable', Rule::in(['name', 'basePrice', 'createdAt', 'rating', 'stock'])],
+            'sortBy' => ['nullable', Rule::in(['name', 'basePrice', 'createdAt', 'rating', 'reviewsCount', 'stock'])],
             'sortOrder' => ['nullable', Rule::in(['asc', 'desc'])],
         ]);
 
@@ -117,6 +130,8 @@ class ProductController extends Controller
         $limit = (int) ($data['limit'] ?? 12);
 
         $query = Product::with(self::PRODUCT_RELATIONS)->where('isTemplate', false);
+        // Público: solo activos. El equipo con products.view/manage sigue viendo inactivos.
+        $this->catalog->applyVisibility($query, $request->user());
 
         if (! empty($data['search'])) {
             // Insensible a mayúsculas/minúsculas (en Postgres LIKE sí distingue).
@@ -128,12 +143,13 @@ class ProductController extends Controller
             });
         }
         if (! empty($data['category'])) {
+            // Categoría inexistente → lista vacía (antes filtraba por categoryId NULL).
             $catId = Category::where('slug', $data['category'])->value('id');
-            $query->where('categoryId', $catId);
+            $catId ? $query->where('categoryId', $catId) : $query->whereRaw('1 = 0');
         }
         if (! empty($data['type'])) {
             $typeId = ProductType::where('slug', $data['type'])->value('id');
-            $query->where('typeId', $typeId);
+            $typeId ? $query->where('typeId', $typeId) : $query->whereRaw('1 = 0');
         }
         if (isset($data['minPrice'])) {
             $query->where('basePrice', '>=', $data['minPrice']);
@@ -146,6 +162,9 @@ class ProductController extends Controller
         }
         if (isset($data['isActive'])) {
             $query->where('isActive', filter_var($data['isActive'], FILTER_VALIDATE_BOOLEAN));
+        }
+        if (isset($data['onSale']) && filter_var($data['onSale'], FILTER_VALIDATE_BOOLEAN)) {
+            $this->catalog->applyOnSale($query, $this->autoDiscounts());
         }
         if (! empty($data['color'])) {
             $query->whereHas('productColors.color', fn ($q) => $q->where('slug', $data['color']));
@@ -172,9 +191,13 @@ class ProductController extends Controller
         ]);
     }
 
-    public function show(int $id)
+    public function show(Request $request, int $id)
     {
         $product = Product::with(self::PRODUCT_RELATIONS)->find($id);
+        // Público: un producto inactivo o una plantilla no existe para la tienda.
+        if ($product && ! $this->catalog->isVisible($product, $request->user())) {
+            $product = null;
+        }
 
         return $product
             ? $this->success($this->formatProduct($product))
@@ -188,6 +211,7 @@ class ProductController extends Controller
         $products = Product::with(self::PRODUCT_RELATIONS)
             ->where('featured', true)
             ->where('isActive', true)
+            ->where('isTemplate', false)
             ->orderByDesc('createdAt')
             ->take($limit)
             ->get();
@@ -207,6 +231,7 @@ class ProductController extends Controller
         $products = Product::with(self::PRODUCT_RELATIONS)
             ->where('categoryId', $catId)
             ->where('isActive', true)
+            ->where('isTemplate', false)
             ->orderByDesc('createdAt')
             ->take($limit)
             ->get();
@@ -462,7 +487,8 @@ class ProductController extends Controller
                 $prefix = strtoupper(substr($slug, 0, 3));
             }
         }
-        $count = Product::count() + 1;
+        // Consecutivo global atómico; nunca por debajo de la cantidad de productos (como antes).
+        $count = $this->numbers->nextValue(NumberSequenceService::PRODUCT_SKU, fn () => Product::count());
         $timestamp = strtoupper(base_convert((string) (now()->timestamp * 1000), 10, 36));
 
         return $prefix.'-'.str_pad((string) $count, 4, '0', STR_PAD_LEFT).'-'.$timestamp;

@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use RuntimeException;
+use App\Services\PasswordService;
 use App\Http\Concerns\ApiResponse;
 use App\Models\Address;
 use App\Models\Role;
@@ -142,77 +144,53 @@ class AuthController extends Controller
         return $this->success($payload, 'Perfil actualizado exitosamente');
     }
 
-    public function forgotPassword(Request $request)
+    public function forgotPassword(Request $request, PasswordService $passwords)
     {
         $data = $request->validate(['email' => 'required|email']);
-        $email = strtolower(trim($data['email']));
-
-        $user = User::where('email', $email)->first();
-
-        if ($user) {
-            $resetToken = bin2hex(random_bytes(32)); // 64 caracteres hex
-            $user->resetToken = hash('sha256', $resetToken);
-            $user->resetTokenExp = now()->addHour();
-            $user->save();
-
-            $frontendUrl = env('FRONTEND_URL', 'http://localhost:5173');
-            $resetUrl = $frontendUrl.'/reset-password?token='.$resetToken.'&email='.urlencode($email);
-
-            Log::info("[Auth] Token de recuperación para {$email}: {$resetToken}");
-            Log::info("[Auth] URL de reset: {$resetUrl}");
-            // TODO (Fase 4): enviar el email real de recuperación.
-        }
+        $passwords->requestReset($data['email']);
 
         // Siempre responde igual para no revelar si el email existe.
         return $this->success(null, 'Si el email existe, recibirás instrucciones para recuperar tu contraseña');
     }
 
-    public function resetPassword(Request $request)
+    public function resetPassword(Request $request, PasswordService $passwords)
     {
         $data = $request->validate([
             'token' => 'required|string',
             'password' => 'required|string|min:6|max:100',
         ]);
 
-        $user = User::where('resetToken', hash('sha256', $data['token']))
-            ->where('resetTokenExp', '>', now())
-            ->first();
-
-        if (! $user) {
-            return $this->error('Token inválido o expirado', 400);
+        try {
+            $passwords->resetWithToken($data['token'], $data['password']);
+        } catch (RuntimeException $e) {
+            return $this->error($e->getMessage(), 400);
         }
-
-        $user->passwordHash = Hash::make($data['password']);
-        $user->resetToken = null;
-        $user->resetTokenExp = null;
-        $user->save();
 
         return $this->success(null, 'Contraseña actualizada exitosamente');
     }
 
-    public function changePassword(Request $request)
+    public function changePassword(Request $request, PasswordService $passwords)
     {
         $data = $request->validate([
             'currentPassword' => 'required|string',
             'newPassword' => 'required|string|min:6|max:100',
         ]);
 
-        $user = $request->user();
-
-        if (! Hash::check($data['currentPassword'], $user->passwordHash)) {
-            return $this->error('La contraseña actual es incorrecta', 400);
+        try {
+            $passwords->change($request->user(), $data['currentPassword'], $data['newPassword']);
+        } catch (RuntimeException $e) {
+            return $this->error($e->getMessage(), 400);
         }
-
-        $user->passwordHash = Hash::make($data['newPassword']);
-        $user->save();
 
         return $this->success(null, 'Contraseña cambiada exitosamente');
     }
 
     public function logout(Request $request)
     {
-        // Revoca el token actual si la petición viene autenticada.
-        $request->user()?->currentAccessToken()?->delete();
+        // Revoca el token actual si la petición viene autenticada. La ruta es pública
+        // (sin auth:sanctum), así que el usuario se resuelve con el guard sanctum: con
+        // $request->user() llegaba null y el token nunca se revocaba.
+        $request->user('sanctum')?->currentAccessToken()?->delete();
 
         return $this->success(null, 'Sesión cerrada exitosamente');
     }

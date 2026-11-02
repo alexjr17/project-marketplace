@@ -40,7 +40,8 @@ class RoleSeeder extends Seeder
                 'description' => 'Cliente del marketplace - Sin acceso al panel administrativo',
                 'isSystem' => true,
                 'isActive' => true,
-                'permissions' => ['products.view', 'orders.view', 'orders.create'],
+                // Sin permisos del panel: ve la tienda y sus pedidos (/orders/my).
+                'permissions' => [],
             ],
             [
                 'id' => 3,
@@ -49,13 +50,13 @@ class RoleSeeder extends Seeder
                 'description' => 'Administrador del marketplace con acceso al panel',
                 'isSystem' => false,
                 'isActive' => true,
+                // Operación de la tienda (ver la migración role_permissions_by_module).
                 'permissions' => [
-                    'dashboard.view',
-                    'products.view', 'products.create', 'products.edit',
-                    'orders.view', 'orders.edit',
-                    'users.view',
-                    'catalogs.view', 'catalogs.create', 'catalogs.edit',
-                    'reports.view',
+                    'admin.access', 'dashboard.view',
+                    'orders.view', 'shipping.dispatch', 'payments.view', 'reviews.view',
+                    'products.view', 'products.manage', 'variants.view', 'templates.view',
+                    'categories.view', 'product_types.view', 'sizes.view', 'colors.view',
+                    'users.view', 'discounts.view', 'announcements.view',
                 ],
             ],
             [
@@ -66,7 +67,7 @@ class RoleSeeder extends Seeder
                 'isSystem' => false,
                 'isActive' => true,
                 'permissions' => [
-                    'pos.access', 'pos.create_sale', 'pos.view_sales',
+                    'pos.access', 'pos.create_sale', 'pos.view_sales', 'pos.cancel_sale',
                     'pos.cash_register', 'pos.open_close_session', 'products.view',
                 ],
             ],

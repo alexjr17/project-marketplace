@@ -131,7 +131,7 @@ export const ReviewForm = ({
           onChange={(e) => setTitle(e.target.value)}
           placeholder="Resume tu experiencia en una frase"
           maxLength={200}
-          className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-transparent text-sm"
+          className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-app-500 focus:border-transparent text-sm"
         />
       </div>
 
@@ -147,7 +147,7 @@ export const ReviewForm = ({
           placeholder="Cuéntanos qué te pareció el producto, la calidad, el material, etc."
           rows={4}
           maxLength={2000}
-          className={`w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-transparent text-sm resize-none ${
+          className={`w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-app-500 focus:border-transparent text-sm resize-none ${
             errors.comment ? 'border-red-300' : 'border-gray-200'
           }`}
         />
@@ -155,7 +155,7 @@ export const ReviewForm = ({
           {errors.comment && (
             <p className="text-sm text-red-500">{errors.comment}</p>
           )}
-          <p className={`text-xs ml-auto ${comment.length > 1800 ? 'text-orange-500' : 'text-gray-400'}`}>
+          <p className={`text-xs ml-auto ${comment.length > 1800 ? 'text-amber-600' : 'text-gray-400'}`}>
             {comment.length}/2000
           </p>
         </div>
@@ -176,7 +176,7 @@ export const ReviewForm = ({
         <button
           type="submit"
           disabled={isLoading || rating === 0}
-          className="px-5 py-2 bg-violet-600 text-white text-sm font-medium rounded-lg hover:bg-violet-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-colors"
+          className="px-5 py-2 bg-app-600 text-white text-sm font-medium rounded-lg hover:bg-app-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-colors"
         >
           {isLoading && <Loader2 className="w-4 h-4 animate-spin" />}
           {isEditing ? 'Actualizar reseña' : 'Publicar reseña'}

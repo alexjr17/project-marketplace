@@ -4,8 +4,8 @@
 // "/uploads/templates/x.png"). En desarrollo el proxy de Vite las redirige a
 // la API, pero en producción (front en un dominio distinto al backend) una
 // ruta relativa apuntaría al dominio del front y daría 404. Este helper las
-// convierte en absolutas usando el origen del backend (VITE_API_URL sin "/api").
-const API_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:8000/api').replace(/\/api\/?$/, '');
+// convierte en absolutas usando el origen del backend (lib/config: API_ORIGIN).
+import { API_ORIGIN as API_BASE } from '../lib/config';
 
 export function assetUrl(path?: string | null): string {
   if (!path) return '';

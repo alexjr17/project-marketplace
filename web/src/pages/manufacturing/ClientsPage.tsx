@@ -1,14 +1,21 @@
 import { useEffect, useState } from 'react';
-import { Plus, Pencil, Trash2, Users } from 'lucide-react';
-import toast from 'react-hot-toast';
+import { Plus, Users } from 'lucide-react';
+import toast from '../../lib/toast';
 import manufacturingService from '../../services/manufacturing.service';
 import type { MfgClient } from '../../types/manufacturing';
+import {
+  Page, PageHeader, Button, FilterBar, SearchInput, TableCard, Table, THead, TBody, Th, Tr, Td, TableMessage,
+  Drawer, Field, TextInput, NumberInput, SelectInput, Switch, FormGrid, CardTitle, useConfirm,
+} from '../../components/ui';
+import { ActiveBadge, RowActions, matchText } from '../../components/manufacturing/mfgUi';
 
 const empty = { name: '', documentId: '', documentType: '', businessName: '', email: '', phone: '', city: '', invoiceAddress: '', dispatchAddress: '', creditDays: null as number | null, isActive: true };
 
 export default function ClientsPage() {
+  const confirm = useConfirm();
   const [items, setItems] = useState<MfgClient[]>([]);
   const [loading, setLoading] = useState(true);
+  const [q, setQ] = useState('');
   const [modal, setModal] = useState(false);
   const [editing, setEditing] = useState<MfgClient | null>(null);
   const [form, setForm] = useState<Partial<MfgClient>>(empty);
@@ -37,130 +44,86 @@ export default function ClientsPage() {
   };
 
   const remove = async (c: MfgClient) => {
-    if (!confirm(`¿Eliminar el cliente "${c.name}"?`)) return;
+    if (!(await confirm({ title: `¿Eliminar el cliente "${c.name}"?`, message: 'No se puede deshacer.', tone: 'danger' }))) return;
     try { await manufacturingService.deleteClient(c.id); toast.success('Cliente eliminado'); load(); }
     catch (e: any) { toast.error(e?.message || 'No se pudo eliminar'); }
   };
 
+  const set = (patch: Partial<MfgClient>) => setForm({ ...form, ...patch });
+  const rows = items.filter((c) => matchText(q, c.name, c.businessName, c.documentId, c.city, c.phone));
+
   return (
-    <div>
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-orange-100 rounded-lg"><Users className="w-6 h-6 text-orange-600" /></div>
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Clientes</h1>
-            <p className="text-sm text-gray-500">Clientes a los que se les hacen los pedidos de producción.</p>
-          </div>
-        </div>
-        <button onClick={openNew} className="inline-flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white font-medium px-4 py-2 rounded-lg">
-          <Plus className="w-4 h-4" /> Nuevo cliente
-        </button>
-      </div>
+    <Page>
+      <PageHeader
+        icon={Users}
+        title="Clientes"
+        subtitle="Clientes a los que se les hacen los pedidos de producción."
+        actions={<Button icon={<Plus className="w-4 h-4" />} onClick={openNew}>Nuevo cliente</Button>}
+      />
 
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-50 text-gray-500 text-left">
-            <tr>
-              <th className="px-4 py-3 font-medium">Nombre</th>
-              <th className="px-4 py-3 font-medium">Negocio</th>
-              <th className="px-4 py-3 font-medium">Documento</th>
-              <th className="px-4 py-3 font-medium">Ciudad</th>
-              <th className="px-4 py-3 font-medium">Teléfono</th>
-              <th className="px-4 py-3" />
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {loading ? (
-              <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-400">Cargando…</td></tr>
-            ) : items.length === 0 ? (
-              <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-400">Sin clientes. Crea el primero.</td></tr>
-            ) : items.map((c) => (
-              <tr key={c.id} className="hover:bg-gray-50">
-                <td className="px-4 py-3 font-medium text-gray-900">{c.name}</td>
-                <td className="px-4 py-3 text-gray-600">{c.businessName || '—'}</td>
-                <td className="px-4 py-3 text-gray-600">{c.documentId || '—'}</td>
-                <td className="px-4 py-3 text-gray-600">{c.city || '—'}</td>
-                <td className="px-4 py-3 text-gray-600">{c.phone || '—'}</td>
-                <td className="px-4 py-3">
-                  <div className="flex items-center justify-end gap-1">
-                    <button onClick={() => openEdit(c)} className="p-2 text-gray-500 hover:text-orange-600 hover:bg-orange-50 rounded-lg"><Pencil className="w-4 h-4" /></button>
-                    <button onClick={() => remove(c)} className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg"><Trash2 className="w-4 h-4" /></button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <FilterBar>
+        <SearchInput value={q} onChange={setQ} placeholder="Buscar cliente…" />
+      </FilterBar>
 
-      {modal && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => setModal(false)}>
-          <div className="bg-white rounded-2xl w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-lg font-bold text-gray-900 mb-4">{editing ? 'Editar cliente' : 'Nuevo cliente'}</h2>
-            <div className="space-y-3">
-              <label className="block">
-                <span className="text-sm font-medium text-gray-700">Nombre *</span>
-                <input value={form.name ?? ''} onChange={(e) => setForm({ ...form, name: e.target.value })} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2" />
-              </label>
-              <label className="block">
-                <span className="text-sm font-medium text-gray-700">Nombre del negocio / razón social</span>
-                <input value={form.businessName ?? ''} onChange={(e) => setForm({ ...form, businessName: e.target.value })} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2" />
-              </label>
-              <div className="grid grid-cols-3 gap-3">
-                <label className="block">
-                  <span className="text-sm font-medium text-gray-700">Tipo doc.</span>
-                  <select value={form.documentType ?? ''} onChange={(e) => setForm({ ...form, documentType: e.target.value })} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2">
-                    <option value="">—</option>
-                    <option value="C.C">C.C</option>
-                    <option value="NIT">NIT</option>
-                    <option value="Otro">Otro</option>
-                  </select>
-                </label>
-                <label className="block col-span-2">
-                  <span className="text-sm font-medium text-gray-700">Documento / NIT</span>
-                  <input value={form.documentId ?? ''} onChange={(e) => setForm({ ...form, documentId: e.target.value })} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2" />
-                </label>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <label className="block">
-                  <span className="text-sm font-medium text-gray-700">Email</span>
-                  <input type="email" value={form.email ?? ''} onChange={(e) => setForm({ ...form, email: e.target.value })} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2" />
-                </label>
-                <label className="block">
-                  <span className="text-sm font-medium text-gray-700">Teléfono</span>
-                  <input value={form.phone ?? ''} onChange={(e) => setForm({ ...form, phone: e.target.value })} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2" />
-                </label>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <label className="block">
-                  <span className="text-sm font-medium text-gray-700">Ciudad</span>
-                  <input value={form.city ?? ''} onChange={(e) => setForm({ ...form, city: e.target.value })} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2" />
-                </label>
-                <label className="block">
-                  <span className="text-sm font-medium text-gray-700">Plazo crédito (días)</span>
-                  <input type="number" min="0" value={form.creditDays ?? ''} onChange={(e) => setForm({ ...form, creditDays: e.target.value === '' ? null : Number(e.target.value) })} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2" />
-                </label>
-              </div>
-              <label className="block">
-                <span className="text-sm font-medium text-gray-700">Dirección de facturación</span>
-                <input value={form.invoiceAddress ?? ''} onChange={(e) => setForm({ ...form, invoiceAddress: e.target.value })} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2" />
-              </label>
-              <label className="block">
-                <span className="text-sm font-medium text-gray-700">Dirección de despacho</span>
-                <input value={form.dispatchAddress ?? ''} onChange={(e) => setForm({ ...form, dispatchAddress: e.target.value })} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2" />
-              </label>
-              <label className="flex items-center gap-2">
-                <input type="checkbox" checked={form.isActive ?? true} onChange={(e) => setForm({ ...form, isActive: e.target.checked })} />
-                <span className="text-sm text-gray-700">Activo</span>
-              </label>
+      <TableCard>
+        <Table>
+          <THead><tr><Th>Nombre</Th><Th>Negocio</Th><Th>Documento</Th><Th>Ciudad</Th><Th>Teléfono</Th><Th align="center">Estado</Th><Th align="right">Acciones</Th></tr></THead>
+          <TBody>
+            {loading ? <TableMessage colSpan={7}>Cargando…</TableMessage>
+              : rows.length === 0 ? <TableMessage colSpan={7}>{items.length ? 'Sin resultados para la búsqueda.' : 'Sin clientes. Crea el primero.'}</TableMessage>
+              : rows.map((c) => (
+                <Tr key={c.id} onClick={() => openEdit(c)}>
+                  <Td className="font-medium text-gray-900">{c.name}</Td>
+                  <Td>{c.businessName || '—'}</Td>
+                  <Td className="whitespace-nowrap">{c.documentType ? <span className="text-gray-400 mr-1">{c.documentType}</span> : null}{c.documentId || '—'}</Td>
+                  <Td>{c.city || '—'}</Td>
+                  <Td className="whitespace-nowrap">{c.phone || '—'}</Td>
+                  <Td align="center"><ActiveBadge active={c.isActive} /></Td>
+                  <Td align="right"><RowActions onEdit={() => openEdit(c)} onDelete={() => remove(c)} /></Td>
+                </Tr>
+              ))}
+          </TBody>
+        </Table>
+      </TableCard>
+
+      <Drawer
+        open={modal}
+        onClose={() => setModal(false)}
+        title={editing ? 'Editar cliente' : 'Nuevo cliente'}
+        description={editing ? editing.name : 'Datos del cliente para pedidos y despachos.'}
+        footer={<>
+          <Button variant="secondary" onClick={() => setModal(false)}>Cancelar</Button>
+          <Button isLoading={saving} onClick={save}>Guardar</Button>
+        </>}
+      >
+        <div className="space-y-6">
+          <section className="space-y-4">
+            <CardTitle>Identificación</CardTitle>
+            <Field label="Nombre" required><TextInput value={form.name ?? ''} onChange={(e) => set({ name: e.target.value })} autoFocus /></Field>
+            <Field label="Nombre del negocio / razón social"><TextInput value={form.businessName ?? ''} onChange={(e) => set({ businessName: e.target.value })} /></Field>
+            <div className="grid grid-cols-3 gap-4">
+              <Field label="Tipo doc.">
+                <SelectInput value={form.documentType ?? ''} onChange={(e) => set({ documentType: e.target.value })}>
+                  <option value="">—</option><option value="C.C">C.C</option><option value="NIT">NIT</option><option value="Otro">Otro</option>
+                </SelectInput>
+              </Field>
+              <Field label="Documento / NIT" className="col-span-2"><TextInput value={form.documentId ?? ''} onChange={(e) => set({ documentId: e.target.value })} /></Field>
             </div>
-            <div className="flex justify-end gap-2 mt-6">
-              <button onClick={() => setModal(false)} className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700">Cancelar</button>
-              <button onClick={save} disabled={saving} className="px-4 py-2 rounded-lg bg-orange-500 hover:bg-orange-600 text-white font-medium disabled:opacity-60">{saving ? 'Guardando…' : 'Guardar'}</button>
-            </div>
-          </div>
+          </section>
+          <section className="space-y-4">
+            <CardTitle>Contacto y condiciones</CardTitle>
+            <FormGrid>
+              <Field label="Email"><TextInput type="email" value={form.email ?? ''} onChange={(e) => set({ email: e.target.value })} /></Field>
+              <Field label="Teléfono"><TextInput value={form.phone ?? ''} onChange={(e) => set({ phone: e.target.value })} /></Field>
+              <Field label="Ciudad"><TextInput value={form.city ?? ''} onChange={(e) => set({ city: e.target.value })} /></Field>
+              <Field label="Plazo de crédito"><NumberInput min="0" suffix="días" value={form.creditDays ?? ''} onChange={(e) => set({ creditDays: e.target.value === '' ? null : Number(e.target.value) })} /></Field>
+            </FormGrid>
+            <Field label="Dirección de facturación"><TextInput value={form.invoiceAddress ?? ''} onChange={(e) => set({ invoiceAddress: e.target.value })} /></Field>
+            <Field label="Dirección de despacho"><TextInput value={form.dispatchAddress ?? ''} onChange={(e) => set({ dispatchAddress: e.target.value })} /></Field>
+            <Switch label="Activo" checked={form.isActive ?? true} onChange={(v) => set({ isActive: v })} />
+          </section>
         </div>
-      )}
-    </div>
+      </Drawer>
+    </Page>
   );
 }

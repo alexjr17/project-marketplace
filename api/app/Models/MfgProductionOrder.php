@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Services\NumberSequenceService;
+
 /**
  * Orden de producción manual de la app Fábrica.
  */
@@ -16,17 +18,13 @@ class MfgProductionOrder extends BaseModel
         'estimatedDeliveryAt' => 'datetime',
     ];
 
-    /** Próximo código OP-{año}-####. */
+    /**
+     * Consume el próximo código OP-{año}-#### (NumberSequenceService). Se conserva aquí
+     * porque createForReference() lo usa; cuando Fábrica pase a su Service, sale del modelo.
+     */
     public static function nextCode(): string
     {
-        $year = now()->year;
-        $prefix = 'OP-'.$year.'-';
-        $last = self::where('code', 'like', $prefix.'%')
-            ->orderByRaw('CAST(SUBSTRING_INDEX(code, "-", -1) AS UNSIGNED) DESC')
-            ->first();
-        $n = $last ? ((int) substr(strrchr($last->code, '-'), 1)) + 1 : 1;
-
-        return sprintf('%s%04d', $prefix, $n);
+        return app(NumberSequenceService::class)->next(NumberSequenceService::MFG_PRODUCTION_ORDER);
     }
 
     /** Genera las etapas de la orden desde el catálogo de procesos activos (en orden). */

@@ -1,9 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Save } from 'lucide-react';
-import toast from 'react-hot-toast';
+import { Save, ClipboardList, Shirt } from 'lucide-react';
+import toast from '../../lib/toast';
 import manufacturingService from '../../services/manufacturing.service';
 import type { MfgReference, MfgWarehouse, MfgCollection, MfgProductionOrderInput, MfgMarket } from '../../types/manufacturing';
+import {
+  Page, PageHeader, Button, Card, CardTitle, Field, TextInput, SelectInput, DateInput, TextArea, RadioGroup, Combobox, FormGrid, FormActions,
+  Spinner, EmptyState, Alert,
+} from '../../components/ui';
+import QtyMatrix from '../../components/manufacturing/QtyMatrix';
 
 export default function ProductionOrderFormPage() {
   const navigate = useNavigate();
@@ -100,117 +105,66 @@ export default function ProductionOrderFormPage() {
     }
   };
 
-  if (loading) return <div className="py-16 text-center text-gray-400">Cargando…</div>;
+  if (loading) return <Page><Spinner label="Cargando…" /></Page>;
 
   return (
-    <div className="max-w-4xl mx-auto">
-      <button onClick={() => navigate('/manufacturing/orders')} className="inline-flex items-center gap-2 text-gray-500 hover:text-gray-800 mb-4 text-sm">
-        <ArrowLeft className="w-4 h-4" /> Volver a órdenes
-      </button>
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">Nueva orden de producción</h1>
+    <Page>
+      <PageHeader icon={ClipboardList} backTo="/manufacturing/orders" title="Nueva orden de producción" subtitle="Elige la referencia y las cantidades por talla y color." />
 
-      <section className="bg-white rounded-xl border border-gray-200 p-5 mb-5">
-        <div className="grid sm:grid-cols-2 gap-4">
-          <label className="block">
-            <span className="text-sm font-medium text-gray-700">Referencia *</span>
-            <select value={referenceId} onChange={(e) => onReferenceChange(e.target.value === '' ? '' : Number(e.target.value))} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2">
-              <option value="">— Selecciona —</option>
-              {references.map((r) => <option key={r.id} value={r.id}>{r.code} · {r.name}</option>)}
-            </select>
-          </label>
-          <label className="block">
-            <span className="text-sm font-medium text-gray-700">Bodega destino</span>
-            <select value={warehouseId} onChange={(e) => setWarehouseId(e.target.value === '' ? '' : Number(e.target.value))} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2">
+      <Card>
+        <CardTitle>Datos de la orden</CardTitle>
+        <FormGrid>
+          <Field label="Referencia" required>
+            <Combobox options={references.map((r) => ({ value: r.id, label: `${r.code} · ${r.name}` }))} value={referenceId === '' ? null : referenceId}
+              onChange={(v) => onReferenceChange(v === null ? '' : Number(v))} placeholder="Buscar referencia…" clearable={false} />
+          </Field>
+          <Field label="Bodega destino">
+            <SelectInput value={warehouseId} onChange={(e) => setWarehouseId(e.target.value === '' ? '' : Number(e.target.value))}>
               <option value="">— Sin asignar —</option>
               {warehouses.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
-            </select>
-          </label>
-          <label className="block">
-            <span className="text-sm font-medium text-gray-700">Código interno</span>
-            <input value={internalCode} onChange={(e) => setInternalCode(e.target.value)} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2" placeholder="Ej. FAB-001" />
-          </label>
-          <label className="block">
-            <span className="text-sm font-medium text-gray-700">Colección</span>
-            <select value={collectionId} onChange={(e) => setCollectionId(e.target.value === '' ? '' : Number(e.target.value))} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2">
+            </SelectInput>
+          </Field>
+          <Field label="Código interno"><TextInput value={internalCode} onChange={(e) => setInternalCode(e.target.value)} placeholder="Ej. FAB-001" /></Field>
+          <Field label="Colección">
+            <SelectInput value={collectionId} onChange={(e) => setCollectionId(e.target.value === '' ? '' : Number(e.target.value))}>
               <option value="">— Sin colección —</option>
               {collections.map((c) => <option key={c.id} value={c.id}>{c.name}{c.year ? ` (${c.year})` : ''}</option>)}
-            </select>
-          </label>
-          <label className="block">
-            <span className="text-sm font-medium text-gray-700">Mercado</span>
-            <select value={market} onChange={(e) => setMarket(e.target.value as MfgMarket)} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2">
-              <option value="NATIONAL">Nacional</option>
-              <option value="EXPORT">Exportación</option>
-            </select>
-          </label>
-          <label className="block">
-            <span className="text-sm font-medium text-gray-700">Fecha programada</span>
-            <input type="date" value={scheduledAt} onChange={(e) => setScheduledAt(e.target.value)} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2" />
-          </label>
-          <label className="block">
-            <span className="text-sm font-medium text-gray-700">Fecha entrega estimada</span>
-            <input type="date" value={estimatedDeliveryAt} onChange={(e) => setEstimatedDeliveryAt(e.target.value)} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2" />
-          </label>
-          <label className="block sm:col-span-2">
-            <span className="text-sm font-medium text-gray-700">Notas</span>
-            <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2" />
-          </label>
-        </div>
-      </section>
+            </SelectInput>
+          </Field>
+          <Field label="Mercado" hint="Define las tallas de la matriz." className="md:col-span-2">
+            <RadioGroup variant="segmented" value={market} onChange={(v) => setMarket(v as MfgMarket)}
+              options={[{ value: 'NATIONAL', label: 'Nacional' }, { value: 'EXPORT', label: 'Exportación' }]} />
+          </Field>
+          <Field label="Fecha programada"><DateInput value={scheduledAt} onChange={(e) => setScheduledAt(e.target.value)} /></Field>
+          <Field label="Fecha de entrega estimada"><DateInput value={estimatedDeliveryAt} onChange={(e) => setEstimatedDeliveryAt(e.target.value)} /></Field>
+          <Field label="Notas" className="md:col-span-2"><TextArea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} /></Field>
+        </FormGrid>
+      </Card>
 
-      {/* Matriz talla × color */}
-      <section className="bg-white rounded-xl border border-gray-200 p-5 mb-5">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="font-semibold text-gray-900">Cantidades (talla × color)</h2>
-          <span className="text-sm text-gray-500">Total: <b className="text-gray-800">{total}</b></span>
-        </div>
+      <Card>
+        <CardTitle actions={<span className="text-sm text-gray-500">Total: <b className="text-gray-900 tabular-nums">{total.toLocaleString('es-CO')}</b> und</span>}>Cantidades (talla × color)</CardTitle>
+        {loadingRef ? <Spinner label="Cargando referencia…" />
+          : !ref ? <EmptyState icon={Shirt} title="Selecciona una referencia" description="Al elegirla verás su matriz de tallas y colores." />
+          : sizes.length === 0 || colors.length === 0 ? <Alert tone="warning">La referencia no tiene colores o tallas {market === 'EXPORT' ? 'de exportación' : 'nacionales'} en su ficha técnica.</Alert>
+          : (
+            <QtyMatrix
+              totals
+              sizes={sizes.map((s) => ({ id: s.id, label: s.abbreviation }))}
+              colors={colors.map((c) => ({ id: c.id, name: c.name, hex: c.hexCode }))}
+              get={(sid, cid) => Number(qty[sid]?.[cid] ?? 0) || 0}
+              cell={(sid, cid) => (
+                <input type="number" min="0" value={qty[sid]?.[cid] ?? ''} onChange={(e) => setCell(sid, cid, e.target.value)}
+                  aria-label="Cantidad" placeholder="0"
+                  className="w-20 h-8 rounded-md border border-gray-300 px-2 text-right text-sm tabular-nums text-gray-900 focus:outline-none focus:ring-2 focus:ring-app-200 focus:border-app-500" />
+              )}
+            />
+          )}
+      </Card>
 
-        {loadingRef ? (
-          <div className="py-8 text-center text-gray-400">Cargando referencia…</div>
-        ) : !ref ? (
-          <div className="py-8 text-center text-gray-400 border border-dashed border-gray-200 rounded-lg">Selecciona una referencia para ver su matriz.</div>
-        ) : sizes.length === 0 || colors.length === 0 ? (
-          <div className="py-8 text-center text-gray-400 border border-dashed border-gray-200 rounded-lg">La referencia no tiene colores o tallas en su ficha técnica.</div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="text-sm border-collapse">
-              <thead>
-                <tr>
-                  <th className="p-2 text-left text-gray-500 font-medium sticky left-0 bg-white">Talla \ Color</th>
-                  {colors.map((c) => (
-                    <th key={c.id} className="p-2 text-center font-medium text-gray-700 min-w-[90px]">
-                      <span className="inline-flex items-center gap-1">
-                        <span className="w-3 h-3 rounded-full border border-gray-200" style={{ backgroundColor: c.hexCode }} />
-                        {c.name}
-                      </span>
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {sizes.map((s) => (
-                  <tr key={s.id}>
-                    <td className="p-2 font-semibold text-gray-800 sticky left-0 bg-white">{s.abbreviation}</td>
-                    {colors.map((c) => (
-                      <td key={c.id} className="p-1">
-                        <input type="number" min="0" value={qty[s.id]?.[c.id] ?? ''} onChange={(e) => setCell(s.id, c.id, e.target.value)}
-                          className="w-20 border border-gray-300 rounded-lg px-2 py-1.5 text-center" placeholder="0" />
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
-
-      <div className="flex justify-end gap-2 pb-8">
-        <button onClick={() => navigate('/manufacturing/orders')} className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700">Cancelar</button>
-        <button onClick={save} disabled={saving} className="inline-flex items-center gap-2 px-5 py-2 rounded-lg bg-orange-500 hover:bg-orange-600 text-white font-medium disabled:opacity-60">
-          <Save className="w-4 h-4" /> {saving ? 'Creando…' : 'Crear orden'}
-        </button>
-      </div>
-    </div>
+      <FormActions sticky>
+        <Button variant="secondary" onClick={() => navigate('/manufacturing/orders')}>Cancelar</Button>
+        <Button icon={<Save className="w-4 h-4" />} isLoading={saving} onClick={save}>Crear orden</Button>
+      </FormActions>
+    </Page>
   );
 }

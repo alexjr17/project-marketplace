@@ -23,7 +23,7 @@ class ViewerBoundary extends Component<{ children: ReactNode; onReset: () => voi
           <p className="text-[11px] text-red-500 font-mono">{this.state.error}</p>
           <button
             onClick={() => { this.setState({ error: null }); this.props.onReset(); }}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700"
+            className="px-4 py-2 bg-app-600 text-white rounded-lg text-sm font-medium hover:bg-app-700"
           >
             Probar con otro modelo
           </button>
@@ -162,7 +162,7 @@ export default function Preview3D() {
     <div className="h-screen flex flex-col bg-gray-100">
       <header className="bg-white border-b border-gray-200 px-5 py-3 flex items-center justify-between">
         <h1 className="text-lg font-bold text-gray-900">Prueba 3D — Personalización de prenda</h1>
-        <a href="/" className="text-sm text-blue-600 hover:underline">Volver</a>
+        <a href="/" className="text-sm text-app-600 hover:underline">Volver</a>
       </header>
 
       <div className="flex-1 flex flex-col lg:flex-row min-h-0">
@@ -171,13 +171,13 @@ export default function Preview3D() {
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">1. Modelo 3D (.glb / .gltf)</label>
             <input type="file" accept=".glb,.gltf,model/gltf-binary" onChange={onModel}
-              className="block w-full text-sm text-gray-600 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" />
+              className="block w-full text-sm text-gray-600 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-app-50 file:text-app-700 hover:file:bg-app-100" />
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">2. Diseño (imagen PNG/JPG)</label>
             <input type="file" accept="image/*" onChange={onImage}
-              className="block w-full text-sm text-gray-600 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100" />
+              className="block w-full text-sm text-gray-600 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-app-50 file:text-app-700 hover:file:bg-app-100" />
           </div>
 
           <div className="bg-blue-50 border border-blue-100 rounded-lg p-3 text-xs text-blue-800">
@@ -228,7 +228,7 @@ export default function Preview3D() {
             <button
               onClick={() => setAutoRotate((r) => !r)}
               className={`w-full px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                autoRotate ? 'bg-indigo-600 text-white hover:bg-indigo-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                autoRotate ? 'bg-app-600 text-white hover:bg-app-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               }`}
             >
               ⟳ {autoRotate ? 'Detener giro' : 'Girar automático'}

@@ -1,28 +1,17 @@
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { useRoles } from '../context/RolesContext';
-import { useSettings } from '../context/SettingsContext';
-import { Button } from '../components/shared/Button';
-import { Input } from '../components/shared/Input';
+import { PageHeader } from '../components/shared/PageHeader';
+import { Seo } from '../components/seo/Seo';
+import { Badge, Button, Card, CardTitle, DescriptionList, EmptyState, Field, FormActions, Tabs, TextInput } from '../components/ui';
 import { AddressesSection } from '../components/profile/AddressesSection';
 import { useToast } from '../context/ToastContext';
-import { User, Mail, Calendar, Shield, Edit2, Save, X, CreditCard, Phone, Loader2, MapPin } from 'lucide-react';
+import { User, Calendar, Shield, Edit2, Save, Lock, LogIn } from 'lucide-react';
 
 type ProfileTab = 'general' | 'addresses';
 
 export const ProfilePage = () => {
   const { user, updateProfile, isAdmin, isSuperAdmin } = useAuth();
-  const { getRoleById } = useRoles();
-  const { settings } = useSettings();
   const toast = useToast();
-
-  // Colores de marca dinámicos
-  const brandColors = settings.appearance?.brandColors || settings.general.brandColors || {
-    primary: '#7c3aed',
-    secondary: '#ec4899',
-    accent: '#f59e0b',
-  };
-  const gradientBgStyle = `linear-gradient(to bottom right, ${brandColors.primary}, ${brandColors.secondary}, ${brandColors.accent})`;
 
   const [activeTab, setActiveTab] = useState<ProfileTab>('general');
   const [isEditing, setIsEditing] = useState(false);
@@ -35,11 +24,12 @@ export const ProfilePage = () => {
 
   if (!user) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-4">
-        <div className="text-center">
-          <User className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-          <h2 className="text-xl font-bold text-gray-900 mb-2">No has iniciado sesión</h2>
-          <p className="text-gray-600">Por favor inicia sesión para ver tu perfil</p>
+      <div className="min-h-screen bg-gray-50">
+        <PageHeader title="Mi perfil" backLabel="Inicio" backTo="/" />
+        <div className="max-w-4xl mx-auto px-4 py-8">
+          <Card padded={false}>
+            <EmptyState icon={LogIn} title="No has iniciado sesión" description="Por favor inicia sesión para ver tu perfil." />
+          </Card>
         </div>
       </div>
     );
@@ -73,230 +63,121 @@ export const ProfilePage = () => {
     setIsEditing(false);
   };
 
-  const tabs: { id: ProfileTab; label: string; icon: typeof User }[] = [
-    { id: 'general', label: 'Información General', icon: User },
-    { id: 'addresses', label: 'Direcciones', icon: MapPin },
+  const tabs: { value: ProfileTab; label: string }[] = [
+    { value: 'general', label: 'Información general' },
+    { value: 'addresses', label: 'Direcciones' },
   ];
 
-  return (
-    <div className="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-3xl mx-auto">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Mi Perfil</h1>
-          <p className="text-gray-600 mt-2">Gestiona tu información personal</p>
-        </div>
+  const memberSince = new Date(user.createdAt).toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' });
 
-        {/* Profile Card */}
-        <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
-          {/* Header con Avatar */}
-          <div className="px-8 py-12" style={{ background: gradientBgStyle }}>
-            <div className="flex flex-col sm:flex-row items-center gap-6">
-              <div className="w-24 h-24 rounded-full bg-white flex items-center justify-center shadow-lg">
-                <span
-                  className="text-4xl font-bold bg-clip-text text-transparent"
-                  style={{ backgroundImage: gradientBgStyle, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}
-                >
-                  {user.name.charAt(0).toUpperCase()}
-                </span>
-              </div>
-              <div className="text-center sm:text-left">
-                <h2 className="text-2xl font-bold text-white">{user.name}</h2>
-                <p className="text-white/80 mt-1">{user.email}</p>
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <Seo title="Mi perfil" />
+      <PageHeader title="Mi perfil" subtitle="Gestiona tu información personal" backLabel="Inicio" backTo="/" />
+
+      <div className="max-w-4xl mx-auto px-4 py-6 lg:py-8 space-y-5">
+        {/* Identidad */}
+        <Card>
+          <div className="flex items-center gap-4">
+            <div className="w-14 h-14 rounded-full bg-app-100 text-app-700 flex items-center justify-center text-xl font-bold flex-shrink-0">
+              {user.name.charAt(0).toUpperCase()}
+            </div>
+            <div className="min-w-0 flex-1">
+              <h2 className="text-lg font-semibold text-gray-900 truncate">{user.name}</h2>
+              <p className="text-sm text-gray-500 truncate">{user.email}</p>
+              <div className="flex flex-wrap items-center gap-2 mt-1.5">
                 {(isAdmin || isSuperAdmin) && (
-                  <span className="inline-block mt-3 px-3 py-1 bg-white/20 backdrop-blur-sm text-white text-sm font-medium rounded-full">
-                    <Shield className="w-4 h-4 inline mr-1" />
-                    {getRoleById(user.roleId)?.name || 'Administrador'}
-                  </span>
+                  <Badge tone="app"><Shield className="w-3 h-3" />{user.roleName || 'Administrador'}</Badge>
                 )}
+                <span className="text-xs text-gray-400 flex items-center gap-1"><Calendar className="w-3 h-3" />Miembro desde {memberSince}</span>
               </div>
             </div>
           </div>
+        </Card>
 
-          {/* Menú de pestañas */}
-          <div className="flex border-b border-gray-200 px-4 sm:px-8">
-            {tabs.map((tab) => {
-              const isActive = activeTab === tab.id;
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className="flex items-center gap-2 px-4 py-4 text-sm font-medium border-b-2 -mb-px transition-colors"
-                  style={{
-                    borderColor: isActive ? brandColors.primary : 'transparent',
-                    color: isActive ? brandColors.primary : '#6b7280',
-                  }}
-                >
-                  <tab.icon className="w-4 h-4" />
-                  {tab.label}
-                </button>
-              );
-            })}
-          </div>
+        <Tabs tabs={tabs} value={activeTab} onChange={(v) => setActiveTab(v)} />
 
-          {/* Contenido de pestañas */}
-          <div className="p-8">
-            {activeTab === 'general' && (
-              <>
-                <div className="flex justify-between items-center mb-6">
-                  <h3 className="text-lg font-bold text-gray-900">Información Personal</h3>
-                  {!isEditing && (
-                    <Button
-                      onClick={() => setIsEditing(true)}
-                      variant="outline"
-                      className="flex items-center gap-2"
-                    >
-                      <Edit2 className="w-4 h-4" />
+        {activeTab === 'general' && (
+          <>
+            <Card>
+              <CardTitle
+                icon={User}
+                actions={
+                  !isEditing && (
+                    <Button size="sm" variant="outline" onClick={() => setIsEditing(true)} icon={<Edit2 className="w-4 h-4" />}>
                       Editar
                     </Button>
-                  )}
-                </div>
+                  )
+                }
+              >
+                Información personal
+              </CardTitle>
 
-                <form onSubmit={handleSubmit} className="space-y-6">
-                  {/* Nombre */}
-                  <div>
-                    <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
-                      <User className="w-4 h-4" />
-                      Nombre Completo
-                    </label>
-                    {isEditing ? (
-                      <Input
+              {isEditing ? (
+                <form onSubmit={handleSubmit}>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <Field label="Nombre completo" required className="md:col-span-2">
+                      <TextInput
                         type="text"
                         value={formData.name}
                         onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                         placeholder="Tu nombre completo"
                         required
                       />
-                    ) : (
-                      <div className="px-4 py-3 bg-gray-50 rounded-lg text-gray-900 font-medium">
-                        {user.name}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Email - Solo lectura */}
-                  <div>
-                    <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
-                      <Mail className="w-4 h-4" />
-                      Correo Electrónico
-                    </label>
-                    <div className="px-4 py-3 bg-gray-50 rounded-lg text-gray-900 font-medium">
-                      {user.email}
-                    </div>
-                    <p className="text-xs text-gray-500 mt-1">El correo electrónico no se puede modificar</p>
-                  </div>
-
-                  {/* Cédula */}
-                  <div>
-                    <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
-                      <CreditCard className="w-4 h-4" />
-                      Cédula / Documento de Identidad
-                    </label>
-                    {isEditing ? (
-                      <Input
+                    </Field>
+                    <Field label="Cédula / documento de identidad">
+                      <TextInput
                         type="text"
                         value={formData.cedula}
                         onChange={(e) => setFormData({ ...formData, cedula: e.target.value })}
                         placeholder="Número de identificación"
                       />
-                    ) : (
-                      <div className="px-4 py-3 bg-gray-50 rounded-lg text-gray-900 font-medium">
-                        {user.profile?.cedula || 'No especificado'}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Teléfono */}
-                  <div>
-                    <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
-                      <Phone className="w-4 h-4" />
-                      Teléfono
-                    </label>
-                    {isEditing ? (
-                      <Input
+                    </Field>
+                    <Field label="Teléfono">
+                      <TextInput
                         type="tel"
                         value={formData.phone}
                         onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                         placeholder="+57 300 123 4567"
                       />
-                    ) : (
-                      <div className="px-4 py-3 bg-gray-50 rounded-lg text-gray-900 font-medium">
-                        {user.profile?.phone || 'No especificado'}
-                      </div>
-                    )}
+                    </Field>
+                    <Field label="Correo electrónico" hint="El correo electrónico no se puede modificar" className="md:col-span-2">
+                      <TextInput value={user.email} disabled />
+                    </Field>
                   </div>
-
-                  {/* Fecha de Creación */}
-                  <div>
-                    <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
-                      <Calendar className="w-4 h-4" />
-                      Miembro Desde
-                    </label>
-                    <div className="px-4 py-3 bg-gray-50 rounded-lg text-gray-900 font-medium">
-                      {new Date(user.createdAt).toLocaleDateString('es-ES', {
-                        year: 'numeric',
-                        month: 'long',
-                        day: 'numeric'
-                      })}
-                    </div>
-                  </div>
-
-                  {/* Botones de Acción */}
-                  {isEditing && (
-                    <div className="flex gap-3 pt-4">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={handleCancel}
-                        disabled={isSaving}
-                        className="flex-1 flex items-center justify-center gap-2"
-                      >
-                        <X className="w-4 h-4" />
-                        Cancelar
-                      </Button>
-                      <Button
-                        type="submit"
-                        disabled={isSaving}
-                        className="flex-1 flex items-center justify-center gap-2"
-                      >
-                        {isSaving ? (
-                          <>
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                            Guardando...
-                          </>
-                        ) : (
-                          <>
-                            <Save className="w-4 h-4" />
-                            Guardar Cambios
-                          </>
-                        )}
-                      </Button>
-                    </div>
-                  )}
+                  <FormActions>
+                    <Button variant="secondary" onClick={handleCancel} disabled={isSaving}>Cancelar</Button>
+                    <Button type="submit" isLoading={isSaving} icon={<Save className="w-4 h-4" />}>Guardar cambios</Button>
+                  </FormActions>
                 </form>
-              </>
-            )}
+              ) : (
+                <DescriptionList
+                  items={[
+                    { label: 'Nombre completo', value: user.name },
+                    { label: 'Correo electrónico', value: user.email },
+                    { label: 'Cédula / documento', value: user.profile?.cedula || <span className="text-gray-400">No especificado</span> },
+                    { label: 'Teléfono', value: user.profile?.phone || <span className="text-gray-400">No especificado</span> },
+                  ]}
+                />
+              )}
+            </Card>
 
-            {activeTab === 'addresses' && (
-              <AddressesSection brandColor={brandColors.primary} />
-            )}
-          </div>
-        </div>
+            <Card>
+              <CardTitle icon={Lock}>Seguridad</CardTitle>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <p className="text-sm text-gray-500">Cambia la contraseña con la que inicias sesión.</p>
+                <Button variant="secondary" onClick={() => toast.info('Función de cambio de contraseña próximamente')}>
+                  Cambiar contraseña
+                </Button>
+              </div>
+            </Card>
+          </>
+        )}
 
-        {/* Sección de Seguridad */}
-        {activeTab === 'general' && (
-          <div className="mt-6 bg-white rounded-2xl shadow-sm p-8">
-            <h3 className="text-lg font-bold text-gray-900 mb-4">Seguridad</h3>
-            <div className="space-y-4">
-              <Button
-                variant="outline"
-                className="w-full sm:w-auto"
-                onClick={() => toast.info('Función de cambio de contraseña próximamente')}
-              >
-                Cambiar Contraseña
-              </Button>
-            </div>
-          </div>
+        {activeTab === 'addresses' && (
+          <Card>
+            <AddressesSection />
+          </Card>
         )}
       </div>
     </div>

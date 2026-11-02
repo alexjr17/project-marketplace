@@ -13,49 +13,37 @@ import {
 import {
   ArrowRightLeft,
   Plus,
-  Search,
-  Settings,
-  ChevronLeft,
-  ChevronRight,
-  Loader2,
-  Calendar,
-  Package,
+  Eye,
   Boxes,
+  Package,
   FileEdit,
   Clock,
   CheckCircle,
   DollarSign,
   Wrench,
   Shirt,
+  ArrowLeft,
 } from 'lucide-react';
-import { Button } from '../../components/shared/Button';
-import { Modal } from '../../components/shared/Modal';
-import { useToast } from '../../context/ToastContext';
+import {
+  Page, PageHeader, Button, IconButton, StatCard, Badge, FilterBar, SearchInput, SelectInput, Field,
+  TextInput, TextArea, DateInput, TableCard, Table, THead, TBody, Th, Tr, Td, TableMessage, Pager, Dialog,
+  Spinner, EmptyState, toast,
+} from '../../components/ui';
 import {
   inventoryConversionsService,
   type InventoryConversion,
   type ConversionStatus,
   type ConversionStats,
 } from '../../services/inventory-conversions.service';
+import { CONVERSION_STATUS, formatCOP } from './InventoryConversionShared';
 
-// Labels y colores para estados
-const STATUS_LABELS: Record<ConversionStatus, string> = {
-  DRAFT: 'Borrador',
-  PENDING: 'Pendiente',
-  APPROVED: 'Aprobada',
-  CANCELLED: 'Cancelada',
-};
+type CreateType = 'manual' | 'template';
 
-const STATUS_COLORS: Record<ConversionStatus, string> = {
-  DRAFT: 'bg-gray-100 text-gray-700',
-  PENDING: 'bg-yellow-100 text-yellow-700',
-  APPROVED: 'bg-green-100 text-green-700',
-  CANCELLED: 'bg-red-100 text-red-700',
-};
+/** Columnas con su alineación (el Th/Td del kit la recibe por `meta`). */
+type Align = 'left' | 'center' | 'right';
 
 export default function InventoryConversionsPage() {
   const navigate = useNavigate();
-  const { showToast } = useToast();
   const [conversions, setConversions] = useState<InventoryConversion[]>([]);
   const [stats, setStats] = useState<ConversionStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -63,7 +51,6 @@ export default function InventoryConversionsPage() {
   const [statusFilter, setStatusFilter] = useState<ConversionStatus | ''>('');
   const [sorting, setSorting] = useState<SortingState>([]);
 
-  // Load data
   useEffect(() => {
     loadData();
   }, [statusFilter]);
@@ -81,15 +68,15 @@ export default function InventoryConversionsPage() {
       setStats(statsData);
     } catch (error) {
       console.error('Error loading data:', error);
-      showToast('Error al cargar datos', 'error');
+      toast.error('Error al cargar datos');
     } finally {
       setLoading(false);
     }
   };
 
-  // Create conversion modal
+  // Ventana de creación: primero el tipo, luego fecha / descripción / notas.
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [selectedType, setSelectedType] = useState<'manual' | 'template' | null>(null);
+  const [selectedType, setSelectedType] = useState<CreateType | null>(null);
   const [formData, setFormData] = useState({
     conversionDate: new Date().toISOString().split('T')[0],
     description: '',
@@ -107,143 +94,120 @@ export default function InventoryConversionsPage() {
     });
   };
 
-  const handleSelectType = (type: 'manual' | 'template') => {
-    setSelectedType(type);
-  };
-
   const handleCreateConversion = async () => {
     try {
       setCreating(true);
       if (selectedType === 'manual') {
         const newConversion = await inventoryConversionsService.createConversion(formData);
-        showToast('Conversión creada', 'success');
+        toast.success('Conversión creada');
         setShowCreateModal(false);
         navigate(`/admin-panel/inventory-conversions/${newConversion.id}`);
       } else {
-        // Para plantilla, navegar a una página especial de selección
+        // Para plantilla, navegar a la pantalla de selección
         setShowCreateModal(false);
         navigate('/admin-panel/inventory-conversions/new-from-template', {
-          state: { formData }
+          state: { formData },
         });
       }
     } catch (error: any) {
-      showToast(error.message || 'Error al crear conversión', 'error');
+      toast.error(error.message || 'Error al crear conversión');
     } finally {
       setCreating(false);
     }
   };
 
-  // Navigate to view/edit page
   const handleView = (conversion: InventoryConversion) => {
     navigate(`/admin-panel/inventory-conversions/${conversion.id}`);
   };
 
-  // Format currency
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('es-CO', {
-      style: 'currency',
-      currency: 'COP',
-      minimumFractionDigits: 0,
-    }).format(value);
-  };
-
-  // Table columns
   const columns = useMemo<ColumnDef<InventoryConversion>[]>(
     () => [
       {
         accessorKey: 'conversionNumber',
-        header: '# Conversión',
+        header: 'Conversión',
         cell: ({ row }) => (
-          <span className="font-mono text-sm font-medium text-gray-900">
-            {row.original.conversionNumber}
-          </span>
+          <div className="min-w-0">
+            <p className="font-mono font-medium text-gray-900">{row.original.conversionNumber}</p>
+            {row.original.description && (
+              <p className="text-xs text-gray-500 truncate max-w-[16rem]">{row.original.description}</p>
+            )}
+          </div>
         ),
       },
       {
         accessorKey: 'conversionDate',
         header: 'Fecha',
         cell: ({ row }) => (
-          <div className="flex items-center gap-1.5 text-sm text-gray-600">
-            <Calendar className="w-3.5 h-3.5" />
-            {new Date(row.original.conversionDate).toLocaleDateString()}
-          </div>
+          <span className="whitespace-nowrap">{new Date(row.original.conversionDate).toLocaleDateString('es-CO')}</span>
         ),
       },
       {
+        id: 'type',
+        header: 'Tipo',
+        cell: ({ row }) =>
+          row.original.conversionType === 'TEMPLATE'
+            ? <Badge tone="blue"><Shirt className="w-3 h-3" />Plantilla</Badge>
+            : <Badge tone="gray"><Wrench className="w-3 h-3" />Manual</Badge>,
+      },
+      {
         id: 'items',
-        header: 'Items',
+        header: 'Insumos → Productos',
+        meta: { align: 'center' },
         cell: ({ row }) => (
-          <div className="flex items-center gap-3 text-sm">
-            <span className="flex items-center gap-1 text-orange-600" title="Insumos consumidos">
-              <Boxes className="w-3.5 h-3.5" />
-              {row.original.inputItems.length}
+          <span className="inline-flex items-center gap-2 whitespace-nowrap">
+            <span className="inline-flex items-center gap-1" title="Insumos consumidos">
+              <Boxes className="w-3.5 h-3.5 text-gray-400" />{row.original.inputItems.length}
             </span>
-            <span className="text-gray-400">→</span>
-            <span className="flex items-center gap-1 text-blue-600" title="Productos generados">
-              <Package className="w-3.5 h-3.5" />
-              {row.original.outputItems.length}
+            <span className="text-gray-300">→</span>
+            <span className="inline-flex items-center gap-1" title="Productos generados">
+              <Package className="w-3.5 h-3.5 text-gray-400" />{row.original.outputItems.length}
             </span>
-          </div>
+          </span>
         ),
       },
       {
         id: 'costs',
-        header: 'Costos',
+        header: 'Costo insumos',
+        meta: { align: 'right' },
         cell: ({ row }) => (
-          <div className="text-sm">
-            <div className="text-gray-600">
-              <span className="text-orange-600">{formatCurrency(row.original.totalInputCost)}</span>
-              <span className="mx-1 text-gray-400">→</span>
-              <span className="text-blue-600">{formatCurrency(row.original.totalOutputCost)}</span>
-            </div>
-          </div>
+          <span className="font-medium text-gray-900 whitespace-nowrap">{formatCOP(row.original.totalInputCost)}</span>
         ),
       },
       {
         accessorKey: 'createdByName',
         header: 'Creado por',
-        cell: ({ row }) => (
-          <span className="text-sm text-gray-600">
-            {row.original.createdByName || '-'}
-          </span>
-        ),
+        cell: ({ row }) => <span className="text-gray-600">{row.original.createdByName || '—'}</span>,
       },
       {
         accessorKey: 'status',
         header: 'Estado',
-        cell: ({ row }) => (
-          <span
-            className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-              STATUS_COLORS[row.original.status]
-            }`}
-          >
-            {STATUS_LABELS[row.original.status]}
-          </span>
-        ),
+        meta: { align: 'center' },
+        cell: ({ row }) => {
+          const s = CONVERSION_STATUS[row.original.status];
+          return <Badge tone={s.tone}>{s.label}</Badge>;
+        },
       },
       {
         id: 'actions',
-        header: () => <div className="text-right">Acciones</div>,
+        header: 'Acciones',
+        meta: { align: 'right' },
         cell: ({ row }) => (
-          <div className="flex justify-end">
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                handleView(row.original);
-              }}
-              className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-              title="Ver detalles"
-            >
-              <Settings className="w-4 h-4" />
-            </button>
-          </div>
+          <IconButton
+            title="Ver detalle"
+            tone="app"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleView(row.original);
+            }}
+          >
+            <Eye className="w-4 h-4" />
+          </IconButton>
         ),
       },
     ],
     []
   );
 
-  // Filter data
   const filteredData = useMemo(() => {
     if (!searchTerm) return conversions;
     const term = searchTerm.toLowerCase();
@@ -255,7 +219,6 @@ export default function InventoryConversionsPage() {
     );
   }, [conversions, searchTerm]);
 
-  // Table instance
   const table = useReactTable({
     data: filteredData,
     columns,
@@ -268,389 +231,163 @@ export default function InventoryConversionsPage() {
     initialState: { pagination: { pageSize: 10 } },
   });
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <Loader2 className="w-8 h-8 animate-spin text-orange-600" />
-      </div>
-    );
-  }
+  const alignOf = (meta: unknown): Align => ((meta as { align?: Align } | undefined)?.align ?? 'left');
+  const { pageIndex, pageSize } = table.getState().pagination;
+  const totalRows = table.getFilteredRowModel().rows.length;
+  const hasFilters = !!searchTerm || !!statusFilter;
 
   return (
-    <div className="p-6 space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-orange-100 rounded-lg">
-            <ArrowRightLeft className="w-6 h-6 text-orange-600" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Conversión de Inventario</h1>
-            <p className="text-sm text-gray-500">
-              Convierte insumos consumibles en productos terminados
-            </p>
-          </div>
-        </div>
-        <Button onClick={handleCreate} variant="admin-orange" size="sm">
-          <Plus className="w-4 h-4" />
-          Nueva Conversión
-        </Button>
-      </div>
+    <Page>
+      <PageHeader
+        icon={ArrowRightLeft}
+        title="Conversiones"
+        subtitle="Convierte insumos o plantillas en productos terminados"
+        actions={<Button icon={<Plus className="w-4 h-4" />} onClick={handleCreate}>Nueva conversión</Button>}
+      />
 
-      {/* Stats */}
       {stats && (
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-          <div className="bg-white rounded-xl border border-gray-200 p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-blue-100 rounded-lg">
-                <ArrowRightLeft className="w-5 h-5 text-blue-600" />
-              </div>
-              <div>
-                <p className="text-xs text-gray-500">Total</p>
-                <p className="text-xl font-bold text-gray-900">{stats.total}</p>
-              </div>
-            </div>
-          </div>
-          <div className="bg-white rounded-xl border border-gray-200 p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-gray-100 rounded-lg">
-                <FileEdit className="w-5 h-5 text-gray-600" />
-              </div>
-              <div>
-                <p className="text-xs text-gray-500">Borradores</p>
-                <p className="text-xl font-bold text-gray-600">{stats.byStatus.DRAFT}</p>
-              </div>
-            </div>
-          </div>
-          <div className="bg-white rounded-xl border border-gray-200 p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-yellow-100 rounded-lg">
-                <Clock className="w-5 h-5 text-yellow-600" />
-              </div>
-              <div>
-                <p className="text-xs text-gray-500">Pendientes</p>
-                <p className="text-xl font-bold text-yellow-600">{stats.byStatus.PENDING}</p>
-              </div>
-            </div>
-          </div>
-          <div className="bg-white rounded-xl border border-gray-200 p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-green-100 rounded-lg">
-                <CheckCircle className="w-5 h-5 text-green-600" />
-              </div>
-              <div>
-                <p className="text-xs text-gray-500">Aprobadas</p>
-                <p className="text-xl font-bold text-green-600">{stats.byStatus.APPROVED}</p>
-              </div>
-            </div>
-          </div>
-          <div className="bg-white rounded-xl border border-gray-200 p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-orange-100 rounded-lg">
-                <DollarSign className="w-5 h-5 text-orange-600" />
-              </div>
-              <div>
-                <p className="text-xs text-gray-500">Costo Total</p>
-                <p className="text-lg font-bold text-orange-600">
-                  {formatCurrency(stats.totalInputCost)}
-                </p>
-              </div>
-            </div>
-          </div>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <StatCard icon={FileEdit} tone="gray" label="Borradores" value={stats.byStatus.DRAFT} hint={`${stats.total} en total`} />
+          <StatCard icon={Clock} tone="yellow" label="Pendientes de aprobar" value={stats.byStatus.PENDING} />
+          <StatCard icon={CheckCircle} tone="green" label="Aprobadas" value={stats.byStatus.APPROVED} />
+          <StatCard icon={DollarSign} label="Costo de insumos" value={formatCOP(stats.totalInputCost)} />
         </div>
       )}
 
-      {/* Filters */}
-      <div className="bg-white rounded-xl border border-gray-200 p-4">
-        <div className="flex flex-col sm:flex-row gap-4">
-          <div className="relative flex-1 max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Buscar por número, usuario o descripción..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500"
-            />
-          </div>
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as ConversionStatus | '')}
-            className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500"
-          >
-            <option value="">Todos los estados</option>
-            <option value="DRAFT">Borrador</option>
-            <option value="PENDING">Pendiente</option>
-            <option value="APPROVED">Aprobada</option>
-            <option value="CANCELLED">Cancelada</option>
-          </select>
-        </div>
-      </div>
+      <FilterBar>
+        <SearchInput
+          className="sm:col-span-2"
+          value={searchTerm}
+          onChange={(v) => { setSearchTerm(v); table.setPageIndex(0); }}
+          placeholder="Buscar por número, usuario o descripción…"
+        />
+        <SelectInput
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value as ConversionStatus | '')}
+          aria-label="Estado"
+        >
+          <option value="">Todos los estados</option>
+          {(Object.keys(CONVERSION_STATUS) as ConversionStatus[]).map((s) => (
+            <option key={s} value={s}>{CONVERSION_STATUS[s].label}</option>
+          ))}
+        </SelectInput>
+      </FilterBar>
 
-      {/* Table */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50 border-b border-gray-200">
+      <TableCard
+        footer={totalRows > 0 ? (
+          <Pager
+            page={pageIndex + 1}
+            pageSize={pageSize}
+            total={totalRows}
+            onPage={(p) => table.setPageIndex(p - 1)}
+            onPageSize={(s) => table.setPageSize(s)}
+          />
+        ) : undefined}
+      >
+        {!loading && totalRows === 0 ? (
+          <EmptyState
+            icon={ArrowRightLeft}
+            title={hasFilters ? 'Sin resultados' : 'Aún no hay conversiones'}
+            description={hasFilters ? 'Prueba con otro término o estado.' : 'Crea una conversión para transformar insumos en productos.'}
+            action={!hasFilters ? <Button icon={<Plus className="w-4 h-4" />} onClick={handleCreate}>Nueva conversión</Button> : undefined}
+          />
+        ) : (
+          <Table>
+            <THead>
               {table.getHeaderGroups().map((headerGroup) => (
                 <tr key={headerGroup.id}>
                   {headerGroup.headers.map((header) => (
-                    <th
-                      key={header.id}
-                      className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase"
-                    >
-                      {header.isPlaceholder
-                        ? null
-                        : flexRender(header.column.columnDef.header, header.getContext())}
-                    </th>
+                    <Th key={header.id} align={alignOf(header.column.columnDef.meta)}>
+                      {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
+                    </Th>
                   ))}
                 </tr>
               ))}
-            </thead>
-            <tbody className="divide-y divide-gray-200">
-              {table.getRowModel().rows.length === 0 ? (
-                <tr>
-                  <td colSpan={columns.length} className="px-4 py-12 text-center">
-                    <ArrowRightLeft className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                    <p className="text-gray-500">No hay conversiones de inventario</p>
-                    <p className="text-sm text-gray-400 mt-1">
-                      Crea una nueva conversión para transformar insumos en productos
-                    </p>
-                  </td>
-                </tr>
+            </THead>
+            <TBody>
+              {loading ? (
+                <TableMessage colSpan={columns.length}><Spinner className="py-2" label="Cargando…" /></TableMessage>
               ) : (
                 table.getRowModel().rows.map((row) => (
-                  <tr
-                    key={row.id}
-                    className="hover:bg-gray-50 cursor-pointer"
-                    onClick={() => handleView(row.original)}
-                  >
+                  <Tr key={row.id} onClick={() => handleView(row.original)}>
                     {row.getVisibleCells().map((cell) => (
-                      <td key={cell.id} className="px-4 py-3">
+                      <Td key={cell.id} align={alignOf(cell.column.columnDef.meta)}>
                         {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                      </td>
+                      </Td>
                     ))}
-                  </tr>
+                  </Tr>
                 ))
               )}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Pagination */}
-        {table.getRowModel().rows.length > 0 && (
-          <div className="px-6 py-4 border-t border-gray-200 flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="text-sm text-gray-700">
-              Mostrando{' '}
-              <span className="font-medium">
-                {table.getState().pagination.pageIndex * table.getState().pagination.pageSize + 1}
-              </span>{' '}
-              a{' '}
-              <span className="font-medium">
-                {Math.min(
-                  (table.getState().pagination.pageIndex + 1) * table.getState().pagination.pageSize,
-                  table.getFilteredRowModel().rows.length
-                )}
-              </span>{' '}
-              de <span className="font-medium">{table.getFilteredRowModel().rows.length}</span> conversiones
-            </div>
-
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => table.previousPage()}
-                disabled={!table.getCanPreviousPage()}
-                className="p-2 rounded-lg border border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                <ChevronLeft className="w-5 h-5" />
-              </button>
-
-              <div className="flex gap-1">
-                {Array.from({ length: Math.min(table.getPageCount(), 10) }, (_, i) => i + 1).map((page) => (
-                  <button
-                    key={page}
-                    onClick={() => table.setPageIndex(page - 1)}
-                    className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
-                      table.getState().pagination.pageIndex === page - 1
-                        ? 'bg-orange-500 text-white'
-                        : 'text-gray-700 hover:bg-gray-100'
-                    }`}
-                  >
-                    {page}
-                  </button>
-                ))}
-                {table.getPageCount() > 10 && (
-                  <span className="px-2 py-1 text-gray-500">...</span>
-                )}
-              </div>
-
-              <button
-                onClick={() => table.nextPage()}
-                disabled={!table.getCanNextPage()}
-                className="p-2 rounded-lg border border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                <ChevronRight className="w-5 h-5" />
-              </button>
-            </div>
-          </div>
+            </TBody>
+          </Table>
         )}
-      </div>
+      </TableCard>
 
-      {/* Modal de creación de conversión */}
-      <Modal
-        isOpen={showCreateModal}
+      {/* Nueva conversión: 1) tipo, 2) datos generales */}
+      <Dialog
+        open={showCreateModal}
         onClose={() => setShowCreateModal(false)}
-        title="Nueva Conversión de Inventario"
-      >
-        <div className="p-6">
-          {!selectedType ? (
-            <>
-              <p className="text-gray-600 mb-6">
-                Elige cómo deseas crear la conversión de inventario:
-              </p>
-
-              <div className="grid grid-cols-2 gap-4">
-                {/* Opción Manual */}
-                <button
-                  onClick={() => handleSelectType('manual')}
-                  className="group relative p-6 border-2 border-gray-200 rounded-xl hover:border-orange-500 hover:bg-orange-50 transition-all duration-200 text-left"
-                >
-                  <div className="flex flex-col items-center text-center">
-                    <div className="w-16 h-16 rounded-full bg-orange-100 group-hover:bg-orange-200 flex items-center justify-center mb-4 transition-colors">
-                      <Wrench className="w-8 h-8 text-orange-600" />
-                    </div>
-                    <h3 className="font-semibold text-gray-900 mb-2">Manual</h3>
-                    <p className="text-sm text-gray-600">
-                      Selecciona insumos y productos manualmente
-                    </p>
-                  </div>
-                </button>
-
-                {/* Opción Desde Plantilla */}
-                <button
-                  onClick={() => handleSelectType('template')}
-                  className="group relative p-6 border-2 border-gray-200 rounded-xl hover:border-indigo-500 hover:bg-indigo-50 transition-all duration-200 text-left"
-                >
-                  <div className="flex flex-col items-center text-center">
-                    <div className="w-16 h-16 rounded-full bg-indigo-100 group-hover:bg-indigo-200 flex items-center justify-center mb-4 transition-colors">
-                      <Shirt className="w-8 h-8 text-indigo-600" />
-                    </div>
-                    <h3 className="font-semibold text-gray-900 mb-2">Desde Plantilla</h3>
-                    <p className="text-sm text-gray-600">
-                      Convierte una plantilla en producto terminado
-                    </p>
-                  </div>
-                </button>
-              </div>
-
-              <div className="mt-6 pt-4 border-t border-gray-200">
-                <Button
-                  variant="admin-secondary"
-                  onClick={() => setShowCreateModal(false)}
-                  className="w-full"
-                >
-                  Cancelar
-                </Button>
-              </div>
-            </>
+        title="Nueva conversión"
+        description={!selectedType ? 'Elige cómo quieres crearla' : selectedType === 'manual' ? 'Conversión manual' : 'Conversión desde plantilla'}
+        footer={
+          !selectedType ? (
+            <Button variant="secondary" onClick={() => setShowCreateModal(false)}>Cancelar</Button>
           ) : (
             <>
-              {/* Formulario de conversión */}
-              <div className="mb-6 p-4 bg-gray-50 rounded-lg flex items-center gap-3">
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                  selectedType === 'manual' ? 'bg-orange-100' : 'bg-indigo-100'
-                }`}>
-                  {selectedType === 'manual' ? (
-                    <Wrench className="w-5 h-5 text-orange-600" />
-                  ) : (
-                    <Shirt className="w-5 h-5 text-indigo-600" />
-                  )}
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-gray-900">
-                    {selectedType === 'manual' ? 'Conversión Manual' : 'Conversión desde Plantilla'}
-                  </p>
-                  <p className="text-xs text-gray-600">
-                    {selectedType === 'manual'
-                      ? 'Selecciona insumos y productos manualmente'
-                      : 'Convierte plantilla en producto terminado'
-                    }
-                  </p>
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                {/* Fecha de conversión */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Fecha de Conversión
-                  </label>
-                  <input
-                    type="date"
-                    value={formData.conversionDate}
-                    onChange={(e) => setFormData({ ...formData, conversionDate: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
-                  />
-                </div>
-
-                {/* Descripción */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Descripción (opcional)
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.description}
-                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    placeholder="Describe el motivo de la conversión..."
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
-                  />
-                </div>
-
-                {/* Notas */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Notas (opcional)
-                  </label>
-                  <textarea
-                    value={formData.notes}
-                    onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                    placeholder="Notas adicionales..."
-                    rows={3}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
-                  />
-                </div>
-              </div>
-
-              {/* Acciones */}
-              <div className="flex gap-3 mt-6 pt-4 border-t border-gray-200">
-                <Button
-                  variant="admin-secondary"
-                  onClick={() => setSelectedType(null)}
-                  className="flex-1"
-                  disabled={creating}
-                >
-                  Atrás
-                </Button>
-                <Button
-                  variant="admin-primary"
-                  onClick={handleCreateConversion}
-                  className="flex-1"
-                  disabled={creating}
-                >
-                  {creating ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Creando...
-                    </>
-                  ) : (
-                    'Crear Conversión'
-                  )}
-                </Button>
-              </div>
+              <Button variant="secondary" icon={<ArrowLeft className="w-4 h-4" />} onClick={() => setSelectedType(null)} disabled={creating}>
+                Atrás
+              </Button>
+              <Button onClick={handleCreateConversion} isLoading={creating}>
+                {selectedType === 'manual' ? 'Crear conversión' : 'Continuar'}
+              </Button>
             </>
-          )}
-        </div>
-      </Modal>
-    </div>
+          )
+        }
+      >
+        {!selectedType ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {([
+              { type: 'manual' as const, icon: Wrench, title: 'Manual', text: 'Eliges los insumos a consumir y los productos a generar.' },
+              { type: 'template' as const, icon: Shirt, title: 'Desde plantilla', text: 'Usa la receta de una plantilla para producir por color y talla.' },
+            ]).map((o) => (
+              <button
+                key={o.type}
+                type="button"
+                onClick={() => setSelectedType(o.type)}
+                className="group flex flex-col items-start gap-2 rounded-xl border border-gray-200 p-4 text-left transition-colors hover:border-app-400 hover:bg-app-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-app-500"
+              >
+                <span className="rounded-lg bg-app-50 p-2.5 text-app-600 group-hover:bg-white"><o.icon className="w-5 h-5" /></span>
+                <span className="font-semibold text-gray-900">{o.title}</span>
+                <span className="text-sm text-gray-500">{o.text}</span>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <Field label="Fecha de conversión" required>
+              <DateInput
+                value={formData.conversionDate}
+                onChange={(e) => setFormData({ ...formData, conversionDate: e.target.value })}
+              />
+            </Field>
+            <Field label="Descripción" hint={selectedType === 'template' ? 'Si la dejas vacía se usa el nombre de la plantilla.' : undefined}>
+              <TextInput
+                value={formData.description}
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                placeholder="Motivo de la conversión"
+              />
+            </Field>
+            <Field label="Notas">
+              <TextArea
+                value={formData.notes}
+                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                placeholder="Notas adicionales"
+                rows={3}
+              />
+            </Field>
+          </div>
+        )}
+      </Dialog>
+    </Page>
   );
 }

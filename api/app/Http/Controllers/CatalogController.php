@@ -9,6 +9,7 @@ use App\Models\Product;
 use App\Models\ProductType;
 use App\Models\ProductTypeSize;
 use App\Models\Size;
+use App\Services\ProductCatalogService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 
@@ -196,6 +197,12 @@ class CatalogController extends Controller
         }
 
         return $this->success($query->orderBy('name')->get());
+    }
+
+    /** Categorías activas con nº de productos e imagen, para las tarjetas de la portada. */
+    public function categoriesWithStats(ProductCatalogService $catalog)
+    {
+        return $this->success($catalog->categoriesWithStats());
     }
 
     public function getCategory(int $id)

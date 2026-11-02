@@ -8,6 +8,7 @@ use App\Models\MfgLotItem;
 use App\Models\MfgProductMovement;
 use App\Models\MfgPurchaseOrder;
 use App\Models\MfgWarehouseStock;
+use App\Services\NumberSequenceService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -19,6 +20,8 @@ use Illuminate\Support\Facades\DB;
 class MfgDispatchController extends Controller
 {
     use ApiResponse;
+
+    public function __construct(private NumberSequenceService $numbers) {}
 
     private const RELATIONS = [
         'client:id,name,city',
@@ -56,7 +59,7 @@ class MfgDispatchController extends Controller
 
     public function generateNumber()
     {
-        return $this->success(['code' => $this->nextCode()]);
+        return $this->success(['code' => $this->numbers->peek(NumberSequenceService::MFG_DISPATCH)]);
     }
 
     /** Existencias disponibles de producto terminado (suma de lotes con saldo). */
@@ -120,7 +123,7 @@ class MfgDispatchController extends Controller
         $data = $this->validateData($request);
         $dispatch = DB::transaction(function () use ($data, $request) {
             $d = MfgDispatch::create([
-                'code' => $this->nextCode(),
+                'code' => $this->numbers->next(NumberSequenceService::MFG_DISPATCH),
                 'clientId' => $data['clientId'] ?? null,
                 'purchaseOrderId' => $data['purchaseOrderId'] ?? null,
                 'warehouseId' => $data['warehouseId'] ?? null,
@@ -392,17 +395,5 @@ class MfgDispatchController extends Controller
                 'sizeId' => $it['sizeId'], 'quantity' => $it['quantity'],
             ]);
         }
-    }
-
-    private function nextCode(): string
-    {
-        $year = now()->year;
-        $prefix = 'DES-'.$year.'-';
-        $last = MfgDispatch::where('code', 'like', $prefix.'%')
-            ->orderByRaw('CAST(SUBSTRING_INDEX(code, "-", -1) AS UNSIGNED) DESC')
-            ->first();
-        $n = $last ? ((int) substr(strrchr($last->code, '-'), 1)) + 1 : 1;
-
-        return sprintf('%s%04d', $prefix, $n);
     }
 }

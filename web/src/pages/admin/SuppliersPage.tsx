@@ -10,34 +10,24 @@ import {
   type ColumnDef,
   type SortingState,
 } from '@tanstack/react-table';
+import { Truck, Plus, Pencil, Phone, Mail, Building2, CheckCircle, ClipboardList } from 'lucide-react';
 import {
-  Truck,
-  Plus,
-  Search,
-  Settings,
-  Phone,
-  Mail,
-  MapPin,
-  Building2,
-  ChevronLeft,
-  ChevronRight,
-  Loader2,
-} from 'lucide-react';
-import { Button } from '../../components/shared/Button';
-import { useToast } from '../../context/ToastContext';
+  Page, PageHeader, Button, IconButton, StatCard, Badge, FilterBar, SearchInput,
+  TableCard, Table, THead, TBody, Th, Tr, Td, TableMessage, Pager, toast,
+} from '../../components/ui';
 import * as suppliersService from '../../services/suppliers.service';
 import type { Supplier, SupplierStats } from '../../services/suppliers.service';
 
+const ALIGN: Record<string, 'left' | 'right' | 'center'> = { orders: 'right', isActive: 'center', actions: 'right' };
+
 export default function SuppliersPage() {
   const navigate = useNavigate();
-  const { showToast } = useToast();
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [stats, setStats] = useState<SupplierStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [sorting, setSorting] = useState<SortingState>([]);
 
-  // Load data
   useEffect(() => {
     loadData();
   }, []);
@@ -45,53 +35,32 @@ export default function SuppliersPage() {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [suppliersData, statsData] = await Promise.all([
-        suppliersService.getSuppliers(),
-        suppliersService.getStats(),
-      ]);
+      const [suppliersData, statsData] = await Promise.all([suppliersService.getSuppliers(), suppliersService.getStats()]);
       setSuppliers(suppliersData);
       setStats(statsData);
     } catch (error) {
       console.error('Error loading suppliers:', error);
-      showToast('Error al cargar proveedores', 'error');
+      toast.error('Error al cargar proveedores');
     } finally {
       setLoading(false);
     }
   };
 
-  // Navigate to create page
-  const handleCreate = () => {
-    navigate('/admin-panel/suppliers/new');
-  };
+  const handleCreate = () => navigate('/admin-panel/suppliers/new');
+  const handleEdit = (supplier: Supplier) => navigate(`/admin-panel/suppliers/${supplier.id}`);
 
-  // Navigate to edit page
-  const handleEdit = (supplier: Supplier) => {
-    navigate(`/admin-panel/suppliers/${supplier.id}`);
-  };
-
-  // Table columns
   const columns = useMemo<ColumnDef<Supplier>[]>(
     () => [
       {
-        accessorKey: 'code',
-        header: 'Código',
-        cell: ({ row }) => (
-          <span className="font-mono text-sm font-medium text-gray-900">
-            {row.original.code}
-          </span>
-        ),
-      },
-      {
         accessorKey: 'name',
-        header: 'Nombre',
+        header: 'Proveedor',
         cell: ({ row }) => (
-          <div>
+          <div className="min-w-[180px]">
             <p className="font-medium text-gray-900">{row.original.name}</p>
-            {row.original.taxId && (
-              <p className="text-xs text-gray-500">
-                {row.original.taxIdType}: {row.original.taxId}
-              </p>
-            )}
+            <p className="text-xs text-gray-500">
+              <span className="font-mono">{row.original.code}</span>
+              {row.original.taxId && <> · {row.original.taxIdType}: {row.original.taxId}</>}
+            </p>
           </div>
         ),
       },
@@ -99,80 +68,45 @@ export default function SuppliersPage() {
         accessorKey: 'contactName',
         header: 'Contacto',
         cell: ({ row }) => (
-          <div className="space-y-1">
-            {row.original.contactName && (
-              <p className="text-sm text-gray-900">{row.original.contactName}</p>
-            )}
-            {row.original.phone && (
-              <p className="text-xs text-gray-500 flex items-center gap-1">
-                <Phone className="w-3 h-3" />
-                {row.original.phone}
-              </p>
-            )}
-            {row.original.email && (
-              <p className="text-xs text-gray-500 flex items-center gap-1">
-                <Mail className="w-3 h-3" />
-                {row.original.email}
-              </p>
-            )}
+          <div className="space-y-0.5">
+            {row.original.contactName && <p className="text-gray-900">{row.original.contactName}</p>}
+            {row.original.phone && <p className="text-xs text-gray-500 flex items-center gap-1"><Phone className="w-3 h-3" />{row.original.phone}</p>}
+            {row.original.email && <p className="text-xs text-gray-500 flex items-center gap-1"><Mail className="w-3 h-3" />{row.original.email}</p>}
+            {!row.original.contactName && !row.original.phone && !row.original.email && <span className="text-gray-400">—</span>}
           </div>
         ),
       },
       {
         accessorKey: 'city',
         header: 'Ubicación',
-        cell: ({ row }) => (
-          <div className="flex items-center gap-1 text-sm text-gray-600">
-            <MapPin className="w-4 h-4" />
-            {row.original.city || '-'}
-            {row.original.department && `, ${row.original.department}`}
-          </div>
-        ),
+        cell: ({ row }) => row.original.city
+          ? <span className="whitespace-nowrap">{row.original.city}{row.original.department && `, ${row.original.department}`}</span>
+          : <span className="text-gray-400">—</span>,
       },
       {
-        accessorKey: '_count.purchaseOrders',
-        header: 'OCs',
-        cell: ({ row }) => (
-          <span className="text-sm text-gray-600">
-            {row.original._count?.purchaseOrders || 0}
-          </span>
-        ),
+        id: 'orders',
+        accessorFn: (s) => s._count?.purchaseOrders || 0,
+        header: 'Órdenes',
+        cell: ({ row }) => <span className="tabular-nums">{row.original._count?.purchaseOrders || 0}</span>,
       },
       {
         accessorKey: 'isActive',
         header: 'Estado',
-        cell: ({ row }) => (
-          <span
-            className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-              row.original.isActive
-                ? 'bg-green-100 text-green-800'
-                : 'bg-gray-100 text-gray-800'
-            }`}
-          >
-            {row.original.isActive ? 'Activo' : 'Inactivo'}
-          </span>
-        ),
+        cell: ({ row }) => <Badge tone={row.original.isActive ? 'green' : 'gray'}>{row.original.isActive ? 'Activo' : 'Inactivo'}</Badge>,
       },
       {
         id: 'actions',
-        header: () => <div className="text-right">Acciones</div>,
+        header: 'Acciones',
         cell: ({ row }) => (
-          <div className="flex items-center justify-end">
-            <button
-              onClick={() => handleEdit(row.original)}
-              className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-              title="Editar"
-            >
-              <Settings className="w-4 h-4" />
-            </button>
-          </div>
+          <IconButton title="Editar" tone="app" onClick={(e) => { e.stopPropagation(); handleEdit(row.original); }}>
+            <Pencil className="w-4 h-4" />
+          </IconButton>
         ),
       },
     ],
     []
   );
 
-  // Filter data
   const filteredData = useMemo(() => {
     if (!searchTerm) return suppliers;
     const term = searchTerm.toLowerCase();
@@ -186,7 +120,6 @@ export default function SuppliersPage() {
     );
   }, [suppliers, searchTerm]);
 
-  // Table instance
   const table = useReactTable({
     data: filteredData,
     columns,
@@ -196,159 +129,75 @@ export default function SuppliersPage() {
     getFilteredRowModel: getFilteredRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
-    initialState: {
-      pagination: { pageSize: 10 },
-    },
+    initialState: { pagination: { pageSize: 10 } },
   });
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <Loader2 className="w-8 h-8 animate-spin text-orange-600" />
-      </div>
-    );
-  }
+  const { pageIndex, pageSize } = table.getState().pagination;
 
   return (
-    <div className="p-6 space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Proveedores</h1>
-          <p className="text-sm text-gray-500 mt-1">Gestión de proveedores</p>
-        </div>
-        <Button onClick={handleCreate} variant="admin-orange" size="sm">
-          <Plus className="w-4 h-4" />
-          Nuevo Proveedor
-        </Button>
-      </div>
+    <Page>
+      <PageHeader
+        icon={Truck}
+        title="Proveedores"
+        subtitle="Empresas y personas a las que les compras"
+        actions={<Button icon={<Plus className="w-4 h-4" />} onClick={handleCreate}>Nuevo proveedor</Button>}
+      />
 
-      {/* Stats */}
       {stats && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="bg-white rounded-xl border border-gray-200 p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-blue-100 rounded-lg">
-                <Building2 className="w-5 h-5 text-blue-600" />
-              </div>
-              <div>
-                <p className="text-sm text-gray-500">Total</p>
-                <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
-              </div>
-            </div>
-          </div>
-          <div className="bg-white rounded-xl border border-gray-200 p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-green-100 rounded-lg">
-                <Truck className="w-5 h-5 text-green-600" />
-              </div>
-              <div>
-                <p className="text-sm text-gray-500">Activos</p>
-                <p className="text-2xl font-bold text-gray-900">{stats.active}</p>
-              </div>
-            </div>
-          </div>
-          <div className="bg-white rounded-xl border border-gray-200 p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-purple-100 rounded-lg">
-                <Building2 className="w-5 h-5 text-purple-600" />
-              </div>
-              <div>
-                <p className="text-sm text-gray-500">Con Órdenes</p>
-                <p className="text-2xl font-bold text-gray-900">{stats.withOrders}</p>
-              </div>
-            </div>
-          </div>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <StatCard icon={Building2} label="Proveedores" value={stats.total.toLocaleString('es-CO')} />
+          <StatCard icon={CheckCircle} tone="green" label="Activos" value={stats.active.toLocaleString('es-CO')} hint={stats.total - stats.active > 0 ? `${stats.total - stats.active} inactivos` : undefined} />
+          <StatCard icon={ClipboardList} tone="blue" label="Con órdenes" value={stats.withOrders.toLocaleString('es-CO')} to="/admin-panel/purchase-orders" hint="Ver órdenes de compra" />
         </div>
       )}
 
-      {/* Search */}
-      <div className="bg-white rounded-xl border border-gray-200 p-4">
-        <div className="relative max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Buscar por código, nombre, NIT..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-          />
-        </div>
-      </div>
+      <FilterBar>
+        <SearchInput className="sm:col-span-2" value={searchTerm} onChange={setSearchTerm} placeholder="Buscar por código, nombre, NIT, contacto…" />
+      </FilterBar>
 
-      {/* Table */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50 border-b border-gray-200">
-              {table.getHeaderGroups().map((headerGroup) => (
-                <tr key={headerGroup.id}>
-                  {headerGroup.headers.map((header) => (
-                    <th
-                      key={header.id}
-                      className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                    >
-                      {header.isPlaceholder
-                        ? null
-                        : flexRender(header.column.columnDef.header, header.getContext())}
-                    </th>
+      <TableCard
+        footer={filteredData.length > 0 ? (
+          <Pager page={pageIndex + 1} pageSize={pageSize} total={filteredData.length} onPage={(p) => table.setPageIndex(p - 1)} onPageSize={(s) => table.setPageSize(s)} />
+        ) : undefined}
+      >
+        <Table>
+          <THead>
+            {table.getHeaderGroups().map((hg) => (
+              <tr key={hg.id}>
+                {hg.headers.map((header) => (
+                  <Th key={header.id} align={ALIGN[header.column.id] ?? 'left'}>
+                    {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
+                  </Th>
+                ))}
+              </tr>
+            ))}
+          </THead>
+          <TBody>
+            {loading ? (
+              <TableMessage colSpan={columns.length}>Cargando proveedores…</TableMessage>
+            ) : table.getRowModel().rows.length === 0 ? (
+              <TableMessage colSpan={columns.length}>
+                {searchTerm ? 'Ningún proveedor coincide con la búsqueda.' : (
+                  <span className="flex flex-col items-center gap-3">
+                    <span>Aún no hay proveedores.</span>
+                    <Button size="sm" variant="outline" icon={<Plus className="w-4 h-4" />} onClick={handleCreate}>Nuevo proveedor</Button>
+                  </span>
+                )}
+              </TableMessage>
+            ) : (
+              table.getRowModel().rows.map((row) => (
+                <Tr key={row.id} onClick={() => handleEdit(row.original)}>
+                  {row.getVisibleCells().map((cell) => (
+                    <Td key={cell.id} align={ALIGN[cell.column.id] ?? 'left'}>
+                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                    </Td>
                   ))}
-                </tr>
-              ))}
-            </thead>
-            <tbody className="divide-y divide-gray-200">
-              {table.getRowModel().rows.length === 0 ? (
-                <tr>
-                  <td colSpan={columns.length} className="px-4 py-12 text-center">
-                    <Truck className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                    <p className="text-gray-500">No hay proveedores</p>
-                  </td>
-                </tr>
-              ) : (
-                table.getRowModel().rows.map((row) => (
-                  <tr key={row.id} className="hover:bg-gray-50">
-                    {row.getVisibleCells().map((cell) => (
-                      <td key={cell.id} className="px-4 py-3">
-                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                      </td>
-                    ))}
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Pagination */}
-        {table.getPageCount() > 1 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200">
-            <p className="text-sm text-gray-500">
-              Mostrando {table.getState().pagination.pageIndex * 10 + 1} -{' '}
-              {Math.min(
-                (table.getState().pagination.pageIndex + 1) * 10,
-                filteredData.length
-              )}{' '}
-              de {filteredData.length}
-            </p>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => table.previousPage()}
-                disabled={!table.getCanPreviousPage()}
-                className="p-2 rounded-lg border border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => table.nextPage()}
-                disabled={!table.getCanNextPage()}
-                className="p-2 rounded-lg border border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
+                </Tr>
+              ))
+            )}
+          </TBody>
+        </Table>
+      </TableCard>
+    </Page>
   );
 }

@@ -1,4 +1,4 @@
-import type { ProductType } from '../types/product';
+import type { ProductTypeSlug } from '../types/product';
 
 // Medidas en centímetros
 export interface SizeMeasurements {
@@ -16,7 +16,7 @@ export interface SizeMeasurements {
 }
 
 export interface SizeChart {
-  productType: ProductType;
+  productType: ProductTypeSlug;
   productName: string;
   sizes: SizeMeasurements[];
   guide: string; // Guía de cómo medir
@@ -83,18 +83,18 @@ export const sizeCharts: SizeChart[] = [
 ];
 
 // Helper para obtener la guía de tallas de un producto
-export const getSizeChart = (productType: ProductType): SizeChart | undefined => {
+export const getSizeChart = (productType: ProductTypeSlug): SizeChart | undefined => {
   return sizeCharts.find(chart => chart.productType === productType);
 };
 
 // Helper para obtener las tallas disponibles de un producto
-export const getAvailableSizes = (productType: ProductType): string[] => {
+export const getAvailableSizes = (productType: ProductTypeSlug): string[] => {
   const chart = getSizeChart(productType);
   return chart?.sizes.map(s => s.size) || [];
 };
 
 // Helper para obtener las medidas de una talla específica
-export const getSizeMeasurements = (productType: ProductType, size: string): SizeMeasurements | undefined => {
+export const getSizeMeasurements = (productType: ProductTypeSlug, size: string): SizeMeasurements | undefined => {
   const chart = getSizeChart(productType);
   return chart?.sizes.find(s => s.size === size);
 };

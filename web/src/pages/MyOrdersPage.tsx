@@ -1,83 +1,83 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
-import { Package, Clock, CheckCircle2, Truck, XCircle, ChevronRight, ShoppingBag, Search, Filter, Eye, MapPin, Calendar, CreditCard, Loader2, AlertCircle, Ban, RefreshCw, FileText } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Package, Clock, CheckCircle2, Truck, XCircle, ChevronRight, ShoppingBag, MapPin, CreditCard, AlertCircle, Ban, RefreshCw, FileText, Sparkles, LogIn } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useOrders } from '../context/OrdersContext';
 import { usePayments } from '../context/PaymentsContext';
-import { ORDER_STATUS_USER_LABELS, ORDER_STATUS_COLORS } from '../types/order';
+import { ORDER_STATUS_USER_LABELS } from '../types/order';
 import type { Order, OrderStatus } from '../types/order';
 import type { Payment, PaymentStatus } from '../services/payments.service';
+import { PageHeader } from '../components/shared/PageHeader';
+import { Seo } from '../components/seo/Seo';
+import { Badge, Button, Card, Dialog, EmptyState, SearchInput, SelectInput, Skeleton, Spinner, type Tone } from '../components/ui';
 
-const STATUS_ICONS: Record<OrderStatus, React.ReactNode> = {
-  pending: <Clock className="w-4 h-4" />,
-  paid: <CheckCircle2 className="w-4 h-4" />,
-  processing: <Package className="w-4 h-4" />,
-  shipped: <Truck className="w-4 h-4" />,
-  delivered: <CheckCircle2 className="w-4 h-4" />,
-  cancelled: <XCircle className="w-4 h-4" />,
+/** Estado del pedido → icono y tono del Badge (tonos con significado del estándar). */
+const STATUS_UI: Record<OrderStatus, { icon: React.ReactNode; tone: Tone }> = {
+  pending: { icon: <Clock className="w-3 h-3" />, tone: 'yellow' },
+  paid: { icon: <CheckCircle2 className="w-3 h-3" />, tone: 'blue' },
+  processing: { icon: <Package className="w-3 h-3" />, tone: 'blue' },
+  shipped: { icon: <Truck className="w-3 h-3" />, tone: 'blue' },
+  delivered: { icon: <CheckCircle2 className="w-3 h-3" />, tone: 'green' },
+  cancelled: { icon: <XCircle className="w-3 h-3" />, tone: 'red' },
 };
 
-const PAYMENT_STATUS_CONFIG: Record<
-  PaymentStatus,
-  { color: string; bg: string; label: string; icon: React.ReactNode }
-> = {
-  PENDING: {
-    color: 'text-yellow-700',
-    bg: 'bg-yellow-100',
-    label: 'Pendiente',
-    icon: <Clock className="w-4 h-4" />,
-  },
-  PROCESSING: {
-    color: 'text-blue-700',
-    bg: 'bg-blue-100',
-    label: 'Procesando',
-    icon: <RefreshCw className="w-4 h-4" />,
-  },
-  APPROVED: {
-    color: 'text-green-700',
-    bg: 'bg-green-100',
-    label: 'Aprobado',
-    icon: <CheckCircle2 className="w-4 h-4" />,
-  },
-  DECLINED: {
-    color: 'text-red-700',
-    bg: 'bg-red-100',
-    label: 'Rechazado',
-    icon: <XCircle className="w-4 h-4" />,
-  },
-  FAILED: {
-    color: 'text-red-700',
-    bg: 'bg-red-100',
-    label: 'Fallido',
-    icon: <AlertCircle className="w-4 h-4" />,
-  },
-  CANCELLED: {
-    color: 'text-gray-700',
-    bg: 'bg-gray-100',
-    label: 'Cancelado',
-    icon: <Ban className="w-4 h-4" />,
-  },
-  EXPIRED: {
-    color: 'text-orange-700',
-    bg: 'bg-orange-100',
-    label: 'Expirado',
-    icon: <Clock className="w-4 h-4" />,
-  },
-  REFUNDED: {
-    color: 'text-purple-700',
-    bg: 'bg-purple-100',
-    label: 'Reembolsado',
-    icon: <RefreshCw className="w-4 h-4" />,
-  },
-  PARTIAL_REFUND: {
-    color: 'text-purple-700',
-    bg: 'bg-purple-100',
-    label: 'Reembolso Parcial',
-    icon: <RefreshCw className="w-4 h-4" />,
-  },
+const PAYMENT_STATUS_CONFIG: Record<PaymentStatus, { tone: Tone; label: string; icon: React.ReactNode }> = {
+  PENDING: { tone: 'yellow', label: 'Pendiente', icon: <Clock className="w-3 h-3" /> },
+  PROCESSING: { tone: 'blue', label: 'Procesando', icon: <RefreshCw className="w-3 h-3" /> },
+  APPROVED: { tone: 'green', label: 'Aprobado', icon: <CheckCircle2 className="w-3 h-3" /> },
+  DECLINED: { tone: 'red', label: 'Rechazado', icon: <XCircle className="w-3 h-3" /> },
+  FAILED: { tone: 'red', label: 'Fallido', icon: <AlertCircle className="w-3 h-3" /> },
+  CANCELLED: { tone: 'gray', label: 'Cancelado', icon: <Ban className="w-3 h-3" /> },
+  EXPIRED: { tone: 'gray', label: 'Expirado', icon: <Clock className="w-3 h-3" /> },
+  REFUNDED: { tone: 'blue', label: 'Reembolsado', icon: <RefreshCw className="w-3 h-3" /> },
+  PARTIAL_REFUND: { tone: 'blue', label: 'Reembolso parcial', icon: <RefreshCw className="w-3 h-3" /> },
 };
+
+/** Etapas visibles del seguimiento (en orden). */
+const STAGES: { status: OrderStatus; label: string }[] = [
+  { status: 'pending', label: 'Recibido' },
+  { status: 'paid', label: 'Confirmado' },
+  { status: 'processing', label: 'Preparando' },
+  { status: 'shipped', label: 'En camino' },
+  { status: 'delivered', label: 'Entregado' },
+];
+
+function OrderStatusBadge({ status }: { status: OrderStatus }) {
+  const ui = STATUS_UI[status];
+  return <Badge tone={ui?.tone ?? 'gray'}>{ui?.icon}{ORDER_STATUS_USER_LABELS[status] ?? status}</Badge>;
+}
+
+/** Barra de etapas del pedido. */
+function OrderProgress({ status }: { status: OrderStatus }) {
+  const current = STAGES.findIndex((s) => s.status === status);
+  return (
+    <div>
+      <div className="flex gap-1">
+        {STAGES.map((s, i) => (
+          <span key={s.status} className={`h-1.5 flex-1 rounded-full ${i <= current ? 'bg-app-600' : 'bg-gray-200'}`} />
+        ))}
+      </div>
+      <div className="mt-1.5 hidden sm:flex justify-between text-[11px] text-gray-400">
+        {STAGES.map((s, i) => (
+          <span key={s.status} className={i === current ? 'text-app-700 font-medium' : ''}>{s.label}</span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ItemThumb({ src, alt, size = 'w-12 h-12' }: { src?: string; alt: string; size?: string }) {
+  return src ? (
+    <img src={src} alt={alt} className={`${size} object-cover rounded-lg border border-gray-200 bg-gray-50 flex-shrink-0`} />
+  ) : (
+    <div className={`${size} bg-gray-100 rounded-lg border border-gray-200 flex items-center justify-center flex-shrink-0`}>
+      <Package className="w-5 h-5 text-gray-400" />
+    </div>
+  );
+}
 
 export const MyOrdersPage = () => {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const { getMyOrders } = useOrders();
   const { getMyOrderPayments } = usePayments();
@@ -127,28 +127,22 @@ export const MyOrdersPage = () => {
     loadPayments();
   }, [selectedOrder, getMyOrderPayments]);
 
+  const header = <PageHeader title="Mis pedidos" subtitle="Historial y seguimiento de tus compras" backLabel="Inicio" backTo="/" />;
+
   if (!user) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-4">
-        <div className="text-center">
-          <ShoppingBag className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-          <h2 className="text-xl font-bold text-gray-900 mb-2">Inicia sesion</h2>
-          <p className="text-gray-600">Para ver tus pedidos debes iniciar sesion</p>
+      <div className="min-h-screen bg-gray-50">
+        <Seo title="Mis pedidos" />
+        {header}
+        <div className="max-w-5xl mx-auto px-4 py-8">
+          <Card padded={false}>
+            <EmptyState icon={LogIn} title="Inicia sesión" description="Para ver tus pedidos debes iniciar sesión." />
+          </Card>
         </div>
       </div>
     );
   }
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center p-4">
-        <div className="text-center">
-          <Loader2 className="w-12 h-12 text-violet-600 mx-auto mb-4 animate-spin" />
-          <p className="text-gray-600">Cargando tus pedidos...</p>
-        </div>
-      </div>
-    );
-  }
   const filteredOrders = orders.filter((order) => {
     const matchesSearch = searchQuery === '' || order.orderNumber.toLowerCase().includes(searchQuery.toLowerCase()) || order.items.some((item) => item.productName.toLowerCase().includes(searchQuery.toLowerCase()));
     const matchesStatus = statusFilter === 'all' || order.status === statusFilter;
@@ -157,265 +151,188 @@ export const MyOrdersPage = () => {
 
   const formatCurrency = (amount: number) => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(amount);
   const formatDate = (date: Date) => new Date(date).toLocaleDateString('es-CO', { year: 'numeric', month: 'short', day: 'numeric' });
-  const getStatusProgress = (status: OrderStatus): number => ({ pending: 20, paid: 40, processing: 60, shipped: 80, delivered: 100, cancelled: 0 })[status];
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-4xl mx-auto">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Mis Pedidos</h1>
-          <p className="text-gray-600 mt-2">Historial y seguimiento de tus compras</p>
+    <div className="min-h-screen bg-gray-50">
+      <Seo title="Mis pedidos" />
+      {header}
+
+      <div className="max-w-5xl mx-auto px-4 py-6 lg:py-8 space-y-4">
+        {/* Filtros */}
+        <div className="bg-white rounded-xl border border-gray-200 p-3 flex flex-col sm:flex-row gap-2">
+          <SearchInput value={searchQuery} onChange={setSearchQuery} placeholder="Buscar por número de pedido o producto…" className="flex-1" />
+          <SelectInput value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as OrderStatus | 'all')} className="sm:w-48" aria-label="Filtrar por estado">
+            <option value="all">Todos los estados</option>
+            {Object.entries(ORDER_STATUS_USER_LABELS).map(([value, label]) => (<option key={value} value={value}>{label}</option>))}
+          </SelectInput>
         </div>
 
-        <div className="bg-white rounded-xl shadow-sm p-4 mb-6">
-          <div className="flex flex-col sm:flex-row gap-4">
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-              <input type="text" placeholder="Buscar por numero de pedido..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-400 focus:border-transparent" />
-            </div>
-            <div className="relative">
-              <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-              <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as OrderStatus | 'all')} className="pl-10 pr-8 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-400 appearance-none bg-white">
-                <option value="all">Todos</option>
-                {Object.entries(ORDER_STATUS_USER_LABELS).map(([value, label]) => (<option key={value} value={value}>{label}</option>))}
-              </select>
-            </div>
-          </div>
-        </div>
-
-        {filteredOrders.length === 0 ? (
-          <div className="bg-white rounded-xl shadow-sm p-12 text-center">
-            <Package className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">{orders.length === 0 ? 'No tienes pedidos aun' : 'No se encontraron pedidos'}</h3>
-            <p className="text-gray-600 mb-6">{orders.length === 0 ? 'Cuando realices tu primera compra, aparecera aqui' : 'Intenta con otros filtros'}</p>
-            {orders.length === 0 && (<Link to="/catalog" className="inline-flex items-center gap-2 px-6 py-3 bg-gray-800 text-white rounded-lg hover:bg-gray-700"><ShoppingBag className="w-5 h-5" />Ver Catalogo</Link>)}
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {filteredOrders.map((order) => (
-              <div key={order.id} className="bg-white rounded-xl shadow-sm overflow-hidden hover:shadow-md transition-shadow">
-                <div className="p-4 border-b border-gray-100">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center"><Package className="w-5 h-5 text-gray-600" /></div>
-                      <div>
-                        <p className="font-bold text-gray-900">{order.orderNumber}</p>
-                        <p className="text-sm text-gray-500 flex items-center gap-1"><Calendar className="w-3 h-3" />{formatDate(order.createdAt)}</p>
-                      </div>
-                    </div>
-                    <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium ${ORDER_STATUS_COLORS[order.status]}`}>{STATUS_ICONS[order.status]}{ORDER_STATUS_USER_LABELS[order.status]}</span>
-                  </div>
-                </div>
-                {order.status !== 'cancelled' && (
-                  <div className="px-4 py-3 bg-gray-50">
-                    <div className="flex items-center justify-between text-xs text-gray-500 mb-2"><span>Recibido</span><span>Confirmado</span><span>Preparando</span><span>En camino</span><span>Entregado</span></div>
-                    <div className="h-2 bg-gray-200 rounded-full overflow-hidden"><div className="h-full bg-gray-600 rounded-full" style={{ width: `${getStatusProgress(order.status)}%` }} /></div>
-                  </div>
-                )}
-                <div className="p-4">
-                  <div className="flex items-center gap-4 overflow-x-auto pb-2">
-                    {order.items.slice(0, 4).map((item) => (
-                      item.productImage ? (
-                        <img key={item.id} src={item.productImage} alt={item.productName} className="w-16 h-16 object-cover rounded-lg border border-gray-200 flex-shrink-0" />
-                      ) : (
-                        <div key={item.id} className="w-16 h-16 bg-gray-200 rounded-lg flex items-center justify-center flex-shrink-0">
-                          <Package className="w-8 h-8 text-gray-400" />
-                        </div>
-                      )
-                    ))}
-                    {order.items.length > 4 && (<div className="w-16 h-16 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0"><span className="text-sm font-medium text-gray-600">+{order.items.length - 4}</span></div>)}
-                    <div className="flex-1 min-w-0 pl-2">
-                      <p className="text-sm text-gray-600 truncate">{order.items.length === 1 ? order.items[0].productName : `${order.items.length} productos`}</p>
-                      <p className="font-bold text-gray-900">{formatCurrency(order.total)}</p>
-                    </div>
-                  </div>
-                </div>
-                <div className="px-4 py-3 bg-gray-50 border-t border-gray-100 flex items-center justify-end">
-                  <button onClick={() => setSelectedOrder(order)} className="inline-flex items-center gap-1 text-gray-700 hover:text-gray-900 font-medium text-sm"><Eye className="w-4 h-4" />Ver detalles<ChevronRight className="w-4 h-4" /></button>
-                </div>
+        {isLoading ? (
+          <div className="space-y-3">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="bg-white rounded-xl border border-gray-200 p-4 space-y-3">
+                <div className="flex justify-between"><Skeleton className="h-4 w-40" /><Skeleton className="h-5 w-20 rounded-full" /></div>
+                <Skeleton className="h-1.5 w-full" />
+                <div className="flex gap-2"><Skeleton className="h-12 w-12" /><Skeleton className="h-12 w-12" /><Skeleton className="h-4 w-32 self-center" /></div>
               </div>
+            ))}
+          </div>
+        ) : filteredOrders.length === 0 ? (
+          <Card padded={false}>
+            <EmptyState
+              icon={Package}
+              title={orders.length === 0 ? 'No tienes pedidos aún' : 'No se encontraron pedidos'}
+              description={orders.length === 0 ? 'Cuando realices tu primera compra, aparecerá aquí.' : 'Intenta con otros filtros.'}
+              action={orders.length === 0 ? <Button icon={<ShoppingBag className="w-4 h-4" />} onClick={() => navigate('/catalog')}>Ver catálogo</Button> : undefined}
+            />
+          </Card>
+        ) : (
+          <div className="space-y-3">
+            {filteredOrders.map((order) => (
+              <button
+                type="button"
+                key={order.id}
+                onClick={() => setSelectedOrder(order)}
+                className="w-full text-left bg-white rounded-xl border border-gray-200 hover:shadow-md transition-shadow p-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-app-500"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-gray-900">{order.orderNumber}</p>
+                    <p className="text-xs text-gray-500 mt-0.5">{formatDate(order.createdAt)} · {order.items.length} {order.items.length === 1 ? 'producto' : 'productos'}</p>
+                  </div>
+                  <OrderStatusBadge status={order.status} />
+                </div>
+
+                {order.status !== 'cancelled' && <div className="mt-3"><OrderProgress status={order.status} /></div>}
+
+                <div className="mt-3 flex items-center gap-3">
+                  <div className="flex -space-x-2">
+                    {order.items.slice(0, 4).map((item) => (
+                      <span key={item.id} className="ring-2 ring-white rounded-lg"><ItemThumb src={item.productImage} alt={item.productName} size="w-11 h-11" /></span>
+                    ))}
+                    {order.items.length > 4 && (
+                      <span className="w-11 h-11 ring-2 ring-white bg-gray-100 rounded-lg flex items-center justify-center text-xs font-medium text-gray-600">+{order.items.length - 4}</span>
+                    )}
+                  </div>
+                  <p className="flex-1 min-w-0 text-sm text-gray-600 truncate">
+                    {order.items.length === 1 ? order.items[0].productName : order.items.map((i) => i.productName).join(', ')}
+                  </p>
+                  <div className="text-right flex items-center gap-2">
+                    <span className="text-base font-semibold text-gray-900">{formatCurrency(order.total)}</span>
+                    <ChevronRight className="w-4 h-4 text-gray-400" />
+                  </div>
+                </div>
+              </button>
             ))}
           </div>
         )}
       </div>
 
-      {selectedOrder && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-white border-b border-gray-200 p-4 flex items-center justify-between">
-              <div><h3 className="text-lg font-bold text-gray-900">Pedido {selectedOrder.orderNumber}</h3><p className="text-sm text-gray-500">{formatDate(selectedOrder.createdAt)}</p></div>
-              <button onClick={() => setSelectedOrder(null)} className="p-2 hover:bg-gray-100 rounded-full"><XCircle className="w-6 h-6 text-gray-400" /></button>
+      <Dialog
+        open={!!selectedOrder}
+        onClose={() => setSelectedOrder(null)}
+        size="lg"
+        title={selectedOrder ? `Pedido ${selectedOrder.orderNumber}` : ''}
+        description={selectedOrder ? formatDate(selectedOrder.createdAt) : undefined}
+        footer={<Button variant="secondary" onClick={() => setSelectedOrder(null)}>Cerrar</Button>}
+      >
+        {selectedOrder && (
+          <div className="space-y-5">
+            <div className="flex items-center gap-2">
+              <OrderStatusBadge status={selectedOrder.status} />
             </div>
-            <div className="p-6 space-y-6">
-              <div className="flex items-center gap-3">
-                <span className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-full font-medium ${ORDER_STATUS_COLORS[selectedOrder.status]}`}>{STATUS_ICONS[selectedOrder.status]}{ORDER_STATUS_USER_LABELS[selectedOrder.status]}</span>
-              </div>
+            {selectedOrder.status !== 'cancelled' && <OrderProgress status={selectedOrder.status} />}
 
-              {/* Sección de Pago */}
-              <div className="p-4 bg-gray-100 rounded-xl">
-                <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                  <CreditCard className="w-4 h-4" />
-                  Información de Pago
-                </h4>
+            {/* Productos */}
+            <section>
+              <h4 className="text-sm font-semibold text-gray-900 mb-2">Productos</h4>
+              <ul className="divide-y divide-gray-100 border border-gray-200 rounded-lg">
+                {selectedOrder.items.map((item) => (
+                  <li key={item.id} className="flex items-center gap-3 p-3">
+                    <ItemThumb src={item.productImage} alt={item.productName} />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-900 truncate">{item.productName}</p>
+                      <p className="text-xs text-gray-500">{[item.size && `Talla ${item.size}`, item.color && `Color ${item.color}`, `Cant. ${item.quantity}`].filter(Boolean).join(' · ')}</p>
+                      {item.customization && <Badge tone="app" className="mt-1"><Sparkles className="w-3 h-3" />Personalizado</Badge>}
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-semibold text-gray-900">{formatCurrency(item.unitPrice * item.quantity)}</p>
+                      <p className="text-xs text-gray-500">{formatCurrency(item.unitPrice)} c/u</p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </section>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Pago */}
+              <section className="rounded-lg border border-gray-200 p-4">
+                <h4 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2"><CreditCard className="w-4 h-4 text-gray-400" />Pago</h4>
                 {loadingPayments ? (
-                  <div className="flex items-center justify-center py-4">
-                    <Loader2 className="w-6 h-6 text-violet-600 animate-spin" />
-                  </div>
+                  <Spinner className="py-4" />
                 ) : !orderPayments || orderPayments.length === 0 ? (
-                  <div className="text-sm text-gray-500">
-                    <p className="flex items-center gap-2">
-                      <AlertCircle className="w-4 h-4 text-gray-400" />
-                      No hay información de pago disponible
-                    </p>
-                  </div>
+                  <p className="text-sm text-gray-500">No hay información de pago disponible</p>
                 ) : (
-                  <div className="space-y-3">
+                  <div className="space-y-3 divide-y divide-gray-100">
                     {orderPayments.map((payment) => {
-                      const statusConfig = PAYMENT_STATUS_CONFIG[payment.status];
+                      const statusConfig = PAYMENT_STATUS_CONFIG[payment.status] ?? { tone: 'gray' as Tone, label: payment.status, icon: null };
                       return (
-                        <div key={payment.id} className="bg-white rounded-lg p-4 space-y-2">
-                          <div className="flex items-center justify-between">
-                            <span className="text-sm font-medium text-gray-700">Estado del Pago</span>
-                            <span
-                              className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${statusConfig.bg} ${statusConfig.color}`}
-                            >
-                              {statusConfig.icon}
-                              {statusConfig.label}
-                            </span>
-                          </div>
-
-                          <div className="flex items-center justify-between border-t border-gray-100 pt-2">
-                            <span className="text-sm text-gray-600">Método</span>
-                            <span className="font-medium text-gray-900 capitalize">{payment.paymentMethod}</span>
-                          </div>
-
+                        <dl key={payment.id} className="space-y-1.5 text-sm pt-3 first:pt-0">
+                          <div className="flex items-center justify-between gap-2"><dt className="text-gray-500">Estado</dt><dd><Badge tone={statusConfig.tone}>{statusConfig.icon}{statusConfig.label}</Badge></dd></div>
+                          <div className="flex items-center justify-between gap-2"><dt className="text-gray-500">Método</dt><dd className="font-medium text-gray-900 capitalize">{payment.paymentMethod}</dd></div>
                           {payment.transactionId && (
-                            <div className="flex items-center justify-between border-t border-gray-100 pt-2">
-                              <span className="text-sm text-gray-600">Referencia</span>
-                              <span className="font-mono font-bold text-violet-600 text-sm">{payment.transactionId}</span>
-                            </div>
+                            <div className="flex items-center justify-between gap-2"><dt className="text-gray-500">Referencia</dt><dd className="font-mono text-xs text-gray-900 truncate">{payment.transactionId}</dd></div>
                           )}
-
-                          {payment.receiptData && (
-                            <div className="flex items-center gap-2 border-t border-gray-100 pt-2 text-green-600">
-                              <FileText className="w-4 h-4" />
-                              <span className="text-sm font-medium">Comprobante subido</span>
-                            </div>
-                          )}
-
-                          {payment.status === 'PENDING' && !payment.receiptData && (
-                            <div className="flex items-center gap-2 border-t border-gray-100 pt-2 text-yellow-600">
-                              <AlertCircle className="w-4 h-4" />
-                              <span className="text-sm">Pendiente de comprobante</span>
-                            </div>
-                          )}
-
-                          {payment.failureReason && (
-                            <div className="border-t border-gray-100 pt-2">
-                              <p className="text-sm text-red-600">
-                                <strong>Razón:</strong> {payment.failureReason}
-                              </p>
-                            </div>
-                          )}
-                        </div>
+                          {payment.receiptData && <p className="flex items-center gap-1.5 text-green-700"><FileText className="w-4 h-4" />Comprobante subido</p>}
+                          {payment.status === 'PENDING' && !payment.receiptData && <p className="flex items-center gap-1.5 text-amber-700"><AlertCircle className="w-4 h-4" />Pendiente de comprobante</p>}
+                          {payment.failureReason && <p className="text-red-600"><strong>Razón:</strong> {payment.failureReason}</p>}
+                        </dl>
                       );
                     })}
                   </div>
                 )}
-              </div>
+              </section>
 
-              {/* Sección de Tracking */}
-              <div className="mt-4 p-4 bg-gray-100 rounded-xl">
-                <h4 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
-                  <Truck className="w-4 h-4" />
-                  Información de Envío
-                </h4>
+              {/* Envío */}
+              <section className="rounded-lg border border-gray-200 p-4">
+                <h4 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2"><Truck className="w-4 h-4 text-gray-400" />Envío</h4>
                 {selectedOrder.trackingNumber ? (
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-600">Número de guía:</span>
-                      <span className="font-mono font-bold text-gray-900">{selectedOrder.trackingNumber}</span>
-                    </div>
+                  <div className="space-y-3 text-sm">
+                    <div className="flex items-center justify-between gap-2"><span className="text-gray-500">Número de guía</span><span className="font-mono font-semibold text-gray-900">{selectedOrder.trackingNumber}</span></div>
                     {selectedOrder.trackingUrl && (
-                      <a
-                        href={selectedOrder.trackingUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition-colors text-sm font-medium w-full justify-center"
-                      >
-                        <Truck className="w-4 h-4" />
-                        Rastrear mi pedido
+                      <a href={selectedOrder.trackingUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center gap-2 w-full h-9 rounded-lg bg-app-600 hover:bg-app-700 text-white text-sm font-medium">
+                        <Truck className="w-4 h-4" />Rastrear mi pedido
                       </a>
                     )}
                   </div>
                 ) : (
-                  <div className="text-sm text-gray-500">
-                    {selectedOrder.status === 'pending' || selectedOrder.status === 'paid' || selectedOrder.status === 'processing' ? (
-                      <p className="flex items-center gap-2">
-                        <Clock className="w-4 h-4 text-yellow-500" />
-                        Tu número de guía estará disponible cuando el pedido sea enviado
-                      </p>
-                    ) : selectedOrder.status === 'cancelled' ? (
-                      <p className="flex items-center gap-2">
-                        <XCircle className="w-4 h-4 text-red-500" />
-                        Pedido cancelado - No aplica envío
-                      </p>
-                    ) : (
-                      <p>No hay información de rastreo disponible</p>
-                    )}
-                  </div>
+                  <p className="text-sm text-gray-500">
+                    {selectedOrder.status === 'pending' || selectedOrder.status === 'paid' || selectedOrder.status === 'processing'
+                      ? 'Tu número de guía estará disponible cuando el pedido sea enviado.'
+                      : selectedOrder.status === 'cancelled'
+                        ? 'Pedido cancelado: no aplica envío.'
+                        : 'No hay información de rastreo disponible.'}
+                  </p>
                 )}
-              </div>
-              <div>
-                <h4 className="font-semibold text-gray-900 mb-3">Productos</h4>
-                <div className="space-y-3">
-                  {selectedOrder.items.map((item) => (
-                    <div key={item.id} className="flex items-center gap-4 p-3 bg-gray-50 rounded-lg">
-                      {item.productImage ? (
-                        <img src={item.productImage} alt={item.productName} className="w-16 h-16 object-cover rounded-lg" />
-                      ) : (
-                        <div className="w-16 h-16 bg-gray-200 rounded-lg flex items-center justify-center">
-                          <Package className="w-8 h-8 text-gray-400" />
-                        </div>
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-gray-900">{item.productName}</p>
-                        <p className="text-sm text-gray-500">{[item.size && `Talla: ${item.size}`, item.color && `Color: ${item.color}`, `Cant: ${item.quantity}`].filter(Boolean).join(' | ')}</p>
-                        {item.customization && <p className="text-xs text-gray-600 font-medium mt-1">✨ Personalizado</p>}
-                      </div>
-                      <div className="text-right">
-                        <p className="font-bold text-gray-900">{formatCurrency(item.unitPrice * item.quantity)}</p>
-                        <p className="text-xs text-gray-500">{formatCurrency(item.unitPrice)} c/u</p>
-                      </div>
-                    </div>
-                  ))}
+                <div className="mt-3 pt-3 border-t border-gray-100 text-sm text-gray-600">
+                  <p className="flex items-center gap-1.5 font-medium text-gray-900"><MapPin className="w-4 h-4 text-gray-400" />{selectedOrder.shipping.name || selectedOrder.shipping.recipientName}</p>
+                  <p className="pl-5">{selectedOrder.shipping.address}</p>
+                  <p className="pl-5">{selectedOrder.shipping.city}{selectedOrder.shipping.postalCode && `, ${selectedOrder.shipping.postalCode}`}</p>
+                  <p className="pl-5">{selectedOrder.shipping.phone}</p>
                 </div>
-              </div>
-              <div>
-                <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2"><MapPin className="w-4 h-4" />Direccion de envio</h4>
-                <div className="p-4 bg-gray-50 rounded-lg text-sm text-gray-600">
-                  <p className="font-medium text-gray-900">{selectedOrder.shipping.recipientName}</p>
-                  <p>{selectedOrder.shipping.address}</p>
-                  <p>{selectedOrder.shipping.city}{selectedOrder.shipping.postalCode && `, ${selectedOrder.shipping.postalCode}`}</p>
-                  <p>{selectedOrder.shipping.phone}</p>
-                </div>
-              </div>
-              <div>
-                <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2"><CreditCard className="w-4 h-4" />Resumen</h4>
-                <div className="p-4 bg-gray-50 rounded-lg space-y-2 text-sm">
-                  <div className="flex justify-between"><span className="text-gray-600">Subtotal</span><span>{formatCurrency(selectedOrder.subtotal)}</span></div>
-                  <div className="flex justify-between"><span className="text-gray-600">Envio</span><span>{selectedOrder.shippingCost === 0 ? 'Gratis' : formatCurrency(selectedOrder.shippingCost)}</span></div>
-                  {selectedOrder.discount > 0 && (<div className="flex justify-between text-green-600"><span>Descuento</span><span>-{formatCurrency(selectedOrder.discount)}</span></div>)}
-                  <div className="flex justify-between font-bold text-lg pt-2 border-t border-gray-200"><span>Total</span><span className="text-gray-900">{formatCurrency(selectedOrder.total)}</span></div>
-                </div>
-              </div>
+              </section>
             </div>
-            <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 p-4">
-              <button onClick={() => setSelectedOrder(null)} className="w-full py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 font-medium">Cerrar</button>
-            </div>
+
+            {/* Resumen */}
+            <section className="rounded-lg bg-gray-50 p-4 space-y-2 text-sm">
+              <div className="flex justify-between"><span className="text-gray-500">Subtotal</span><span className="text-gray-900">{formatCurrency(selectedOrder.subtotal)}</span></div>
+              <div className="flex justify-between"><span className="text-gray-500">Envío</span><span className="text-gray-900">{selectedOrder.shippingCost === 0 ? 'Gratis' : formatCurrency(selectedOrder.shippingCost)}</span></div>
+              {selectedOrder.discount > 0 && (<div className="flex justify-between text-green-700"><span>Descuento</span><span>-{formatCurrency(selectedOrder.discount)}</span></div>)}
+              <div className="flex justify-between pt-2 border-t border-gray-200"><span className="font-semibold text-gray-900">Total</span><span className="text-base font-bold text-gray-900">{formatCurrency(selectedOrder.total)}</span></div>
+            </section>
           </div>
-        </div>
-      )}
+        )}
+      </Dialog>
     </div>
   );
 };

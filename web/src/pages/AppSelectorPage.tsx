@@ -2,6 +2,8 @@ import { useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useSettings } from '../context/SettingsContext';
+import { APP_LABELS, resolveAppColor, type AppKey } from '../theme/appTheme';
+import { AppTheme, Badge, Button, EmptyState } from '../components/ui';
 import {
   Store,
   ShoppingCart,
@@ -14,16 +16,12 @@ import {
 } from 'lucide-react';
 
 interface AppCard {
-  id: string;
-  name: string;
+  /** Clave de la app: define su nombre (APP_LABELS) y su color configurado (Ajustes → Apariencia). */
+  id: AppKey;
   tag: string;
   description: string;
   icon: LucideIcon;
   path: string;
-  /** clases tailwind para el acento del card */
-  ring: string;
-  iconBg: string;
-  iconColor: string;
   available: boolean;
 }
 
@@ -43,68 +41,48 @@ export default function AppSelectorPage() {
     secondary: '#ec4899',
     accent: '#f59e0b',
   };
-  const gradientBgStyle = `linear-gradient(to bottom right, ${brandColors.primary}, ${brandColors.secondary}, ${brandColors.accent})`;
+  const gradient = `linear-gradient(to right, ${brandColors.primary}, ${brandColors.secondary}, ${brandColors.accent})`;
 
   const apps = useMemo<AppCard[]>(() => {
     const all: AppCard[] = [
       {
         id: 'store',
-        name: 'Tienda',
         tag: 'Venta online',
         description: 'Explora el catálogo y gestiona la tienda en línea.',
         icon: Store,
         path: '/',
-        ring: 'hover:ring-blue-400/60',
-        iconBg: 'bg-blue-500/15',
-        iconColor: 'text-blue-300',
         available: hasPermission('store.access'),
       },
       {
         id: 'pos',
-        name: 'Punto de Venta',
         tag: 'Caja registradora',
         description: 'Controla las ventas, la caja y los fiados de tu negocio.',
         icon: ShoppingCart,
         path: '/pos',
-        ring: 'hover:ring-emerald-400/60',
-        iconBg: 'bg-emerald-500/15',
-        iconColor: 'text-emerald-300',
         available: hasPermission('pos.access'),
       },
       {
         id: 'admin',
-        name: 'Administración',
         tag: 'Panel de gestión',
         description: 'Productos, pedidos, inventario, clientes y configuración.',
         icon: LayoutGrid,
         path: '/admin-panel',
-        ring: 'hover:ring-purple-400/60',
-        iconBg: 'bg-purple-500/15',
-        iconColor: 'text-purple-300',
         available: isAdmin,
       },
       {
         id: 'messaging',
-        name: 'Social Media',
         tag: 'Inbox + publicaciones',
         description: 'Conversaciones, canales conectados y publicaciones.',
         icon: MessageSquare,
         path: '/messaging',
-        ring: 'hover:ring-pink-400/60',
-        iconBg: 'bg-pink-500/15',
-        iconColor: 'text-pink-300',
         available: hasPermission('messaging.access'),
       },
       {
         id: 'manufacturing',
-        name: 'Fábrica',
         tag: 'Producción',
         description: 'Referencias, órdenes de producción, códigos de barras y despachos.',
         icon: Shirt,
         path: '/manufacturing',
-        ring: 'hover:ring-amber-400/60',
-        iconBg: 'bg-amber-500/15',
-        iconColor: 'text-amber-300',
         available: hasPermission('manufacturing.access'),
       },
     ];
@@ -119,78 +97,79 @@ export default function AppSelectorPage() {
   }, [apps, navigate]);
 
   const firstName = user?.name?.split(' ').slice(0, 2).join(' ') || 'de nuevo';
+  const siteName = settings.general?.siteName || 'Mi cuenta';
+  const logo = settings.general?.logo;
 
   return (
-    <div className="min-h-screen w-full flex flex-col" style={{ background: gradientBgStyle }}>
-      {/* Barra superior */}
-      <header className="flex items-center justify-between px-6 py-5 sm:px-10">
-        <span className="text-white/90 font-semibold tracking-tight">
-          {user?.roleName ? `Rol: ${user.roleName}` : 'Mi cuenta'}
-        </span>
-        <button
-          onClick={logout}
-          className="inline-flex items-center gap-2 text-white/80 hover:text-white text-sm font-medium transition-colors"
-        >
-          <LogOut className="w-4 h-4" />
-          Cerrar sesión
-        </button>
-      </header>
+    <AppTheme app="store">
+      <div className="min-h-screen w-full flex flex-col bg-gray-50">
+        {/* Franja de marca */}
+        <div className="h-1 w-full" style={{ background: gradient }} />
 
-      <main className="flex-1 flex flex-col justify-center px-6 sm:px-10 pb-12 max-w-6xl mx-auto w-full">
-        <div className="mb-8 sm:mb-12">
-          <h1 className="text-white text-3xl sm:text-4xl font-extrabold leading-tight">
-            Hola {firstName},
-          </h1>
-          <p className="text-white/85 text-2xl sm:text-3xl font-bold mt-1">
-            Selecciona la aplicación que deseas usar
-          </p>
-        </div>
-
-        {apps.length === 0 ? (
-          <div className="bg-white/10 border border-white/15 rounded-2xl p-8 text-center text-white/90 max-w-lg">
-            <p className="font-semibold text-lg mb-1">No tienes aplicaciones asignadas</p>
-            <p className="text-white/70 text-sm">
-              Tu rol no tiene acceso a ninguna aplicación. Contacta al administrador.
-            </p>
+        {/* Barra superior */}
+        <header className="bg-white border-b border-gray-200">
+          <div className="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5 min-w-0">
+              {logo ? (
+                <img src={logo} alt={siteName} className="h-8 w-auto max-w-[140px] object-contain" />
+              ) : (
+                <span className="font-semibold text-gray-900 truncate">{siteName}</span>
+              )}
+              {user?.roleName && <Badge>{user.roleName}</Badge>}
+            </div>
+            <Button variant="ghost" size="sm" onClick={logout} icon={<LogOut className="w-4 h-4" />}>
+              Cerrar sesión
+            </Button>
           </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-            {apps.map((app) => {
-              const Icon = app.icon;
-              return (
-                <button
-                  key={app.id}
-                  onClick={() => navigate(app.path)}
-                  className={`group text-left bg-slate-900/60 backdrop-blur border border-white/10 rounded-2xl p-6 ring-1 ring-transparent transition-all hover:-translate-y-1 hover:bg-slate-900/80 ${app.ring}`}
-                >
-                  <span className="inline-flex items-center px-3 py-1 rounded-full bg-white/10 text-white/80 text-xs font-medium">
-                    {app.tag}
-                  </span>
-                  <div className="flex items-center gap-3 mt-4">
-                    <div className={`p-2.5 rounded-xl ${app.iconBg}`}>
-                      <Icon className={`w-6 h-6 ${app.iconColor}`} />
+        </header>
+
+        <main className="flex-1 w-full max-w-5xl mx-auto px-4 py-10 sm:py-16">
+          <div className="mb-8">
+            <p className="text-sm text-gray-500">Hola {firstName}</p>
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mt-1">Selecciona la aplicación que deseas usar</h1>
+          </div>
+
+          {apps.length === 0 ? (
+            <div className="bg-white rounded-xl border border-gray-200">
+              <EmptyState
+                icon={LayoutGrid}
+                title="No tienes aplicaciones asignadas"
+                description="Tu rol no tiene acceso a ninguna aplicación. Contacta al administrador."
+              />
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {apps.map((app) => {
+                const Icon = app.icon;
+                const color = resolveAppColor(app.id, settings.appearance);
+                return (
+                  <button
+                    type="button"
+                    key={app.id}
+                    onClick={() => navigate(app.path)}
+                    className="group relative text-left bg-white rounded-xl border border-gray-200 p-5 hover:shadow-md transition-shadow overflow-hidden focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+                    style={{ ['--tw-ring-color' as string]: color }}
+                  >
+                    <span className="absolute inset-x-0 top-0 h-1" style={{ backgroundColor: color }} />
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="w-11 h-11 rounded-lg flex items-center justify-center" style={{ backgroundColor: `${color}1a`, color }}>
+                        <Icon className="w-6 h-6" />
+                      </div>
+                      <span className="text-xs font-medium text-gray-500 bg-gray-100 rounded-full px-2 py-0.5">{app.tag}</span>
                     </div>
-                    <h2 className="text-white text-2xl font-extrabold">{app.name}</h2>
-                  </div>
-                  <p className="text-white/65 text-sm mt-3 leading-relaxed min-h-[3rem]">
-                    {app.description}
-                  </p>
-                  <div className="mt-5 flex items-center justify-between">
-                    <span className="inline-flex items-center justify-center w-11 h-11 rounded-full border-2 border-white/30 text-white group-hover:border-white group-hover:bg-white group-hover:text-slate-900 transition-colors">
-                      <ArrowRight className="w-5 h-5" />
+                    <h2 className="text-lg font-semibold text-gray-900 mt-4">{APP_LABELS[app.id]}</h2>
+                    <p className="text-sm text-gray-500 mt-1 leading-relaxed min-h-[2.5rem]">{app.description}</p>
+                    <span className="mt-4 inline-flex items-center gap-1.5 text-sm font-medium" style={{ color }}>
+                      Entrar
+                      <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5" />
                     </span>
-                    <span className="flex gap-1">
-                      <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: brandColors.accent }} />
-                      <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: brandColors.accent, opacity: 0.7 }} />
-                      <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: brandColors.accent, opacity: 0.4 }} />
-                    </span>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        )}
-      </main>
-    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </main>
+      </div>
+    </AppTheme>
   );
 }

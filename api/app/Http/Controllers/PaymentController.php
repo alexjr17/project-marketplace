@@ -29,7 +29,8 @@ class PaymentController extends Controller
         if (! $order) {
             return $this->error('Pedido no encontrado', 404);
         }
-        if ($order->userId !== null && $order->userId !== $request->user()->id) {
+        // Solo pedidos propios: antes un pedido sin usuario (venta POS) aceptaba a cualquiera.
+        if ((int) $order->userId !== (int) $request->user()->id) {
             return $this->error('Pedido no encontrado', 404);
         }
 
@@ -61,6 +62,13 @@ class PaymentController extends Controller
             'payerPhone' => 'nullable|string',
             'payerDocument' => 'nullable|string',
         ]);
+
+        // Solo sobre pedidos propios (el SuperAdmin puede sobre cualquiera). Antes se podía
+        // registrar un pago sobre el pedido de otro usuario.
+        $order = Order::find($data['orderId']);
+        if (! $order || ($order->userId !== $request->user()->id && (int) $request->user()->roleId !== 1)) {
+            return $this->error('Pedido no encontrado', 404);
+        }
 
         try {
             $payment = $this->payments->createPayment($data);

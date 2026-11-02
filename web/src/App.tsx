@@ -1,4 +1,5 @@
 import { lazy, Suspense } from 'react';
+import { ADMIN_NAV, SETTINGS_NAV, canSee, entryPath } from './components/admin/adminNav';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Layout } from './components/layout/Layout';
 
@@ -10,6 +11,8 @@ import { ProductsProvider } from './context/ProductsContext';
 import { CatalogsProvider } from './context/CatalogsContext';
 import { CartProvider } from './context/CartContext';
 import { ToastProvider } from './context/ToastContext';
+import { ConfirmProvider } from './components/ui/Confirm';
+import { AppTheme } from './components/ui/AppTheme';
 import { UsersProvider } from './context/UsersContext';
 import { OrdersProvider } from './context/OrdersContext';
 import { PaymentsProvider } from './context/PaymentsContext';
@@ -80,6 +83,8 @@ const ReviewsPage = lazy(() => import('./pages/admin/ReviewsPage'));
 const AnnouncementsPage = lazy(() => import('./pages/admin/AnnouncementsPage'));
 const DiscountsPage = lazy(() => import('./pages/admin/DiscountsPage'));
 const SettingsGeneralPage = lazy(() => import('./pages/admin/settings').then(m => ({ default: m.SettingsGeneralPage })));
+const SettingsHubPage = lazy(() => import('./pages/admin/settings/SettingsHubPage').then(m => ({ default: m.SettingsHubPage })));
+const DesignSystemPage = lazy(() => import('./pages/admin/settings/DesignSystemPage').then(m => ({ default: m.DesignSystemPage })));
 const SettingsAppearancePage = lazy(() => import('./pages/admin/settings').then(m => ({ default: m.SettingsAppearancePage })));
 const SettingsShippingPage = lazy(() => import('./pages/admin/settings').then(m => ({ default: m.SettingsShippingPage })));
 const SettingsPaymentPage = lazy(() => import('./pages/admin/settings').then(m => ({ default: m.SettingsPaymentPage })));
@@ -126,8 +131,29 @@ import type { Permission } from './types/roles';
 
 // Protected route for admin access
 // Cliente (roleId 2) NUNCA puede acceder al panel admin, sin importar permisos
+/** Pantalla mínima mientras se restaura la sesión. */
+const RouteLoading = () => (
+  <div className="flex h-screen items-center justify-center bg-gray-50">
+    <span className="h-8 w-8 animate-spin rounded-full border-[3px] border-gray-200 border-t-gray-600" />
+  </div>
+);
+
+/**
+ * Inicio del panel: el Resumen si el rol tiene dashboard.view; si no, el primer módulo que
+ * puede ver (antes redirigía a /admin-panel mismo y quedaba en blanco, p. ej. el Cajero).
+ */
+const AdminHome = () => {
+  const { hasPermission } = useAuth();
+  if (hasPermission('dashboard.view')) return <DashboardPage />;
+  const first = ADMIN_NAV.flatMap((sec) => sec.items).find((i) => canSee(i, hasPermission))
+    ?? SETTINGS_NAV.find((g) => canSee(g, hasPermission));
+  return <Navigate to={first ? entryPath(first, hasPermission) : '/apps'} replace />;
+};
+
 const AdminRoute = ({ children }: { children: React.ReactNode }) => {
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, isLoading } = useAuth();
+  // Mientras se restaura la sesión (F5) no redirigir: el usuario aún es null.
+  if (isLoading) return <RouteLoading />;
 
   // Si no está autenticado, redirigir al inicio
   if (!isAuthenticated || !user) {
@@ -159,7 +185,9 @@ const PermissionRoute = ({
 
 // Protected route for POS access
 const POSRoute = ({ children }: { children: React.ReactNode }) => {
-  const { user, isAuthenticated, hasPermission } = useAuth();
+  const { user, isAuthenticated, hasPermission, isLoading } = useAuth();
+  // Mientras se restaura la sesión (F5) no redirigir: el usuario aún es null.
+  if (isLoading) return <RouteLoading />;
 
   if (!isAuthenticated || !user) {
     return <Navigate to="/" replace />;
@@ -174,7 +202,9 @@ const POSRoute = ({ children }: { children: React.ReactNode }) => {
 
 // Protected route for Fábrica (manufacturing) access.
 const ManufacturingRoute = ({ children }: { children: React.ReactNode }) => {
-  const { user, isAuthenticated, hasPermission } = useAuth();
+  const { user, isAuthenticated, hasPermission, isLoading } = useAuth();
+  // Mientras se restaura la sesión (F5) no redirigir: el usuario aún es null.
+  if (isLoading) return <RouteLoading />;
 
   if (!isAuthenticated || !user) {
     return <Navigate to="/" replace />;
@@ -189,7 +219,9 @@ const ManufacturingRoute = ({ children }: { children: React.ReactNode }) => {
 
 // Selector de aplicaciones (/apps): requiere sesión iniciada.
 const AppsRoute = ({ children }: { children: React.ReactNode }) => {
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated, user, isLoading } = useAuth();
+  // Mientras se restaura la sesión (F5) no redirigir: el usuario aún es null.
+  if (isLoading) return <RouteLoading />;
   if (!isAuthenticated || !user) {
     return <Navigate to="/" replace />;
   }
@@ -221,7 +253,9 @@ const MessagingHome = () => {
 
 // Protected route for Social Media (messaging) access
 const MessagingRoute = ({ children }: { children: React.ReactNode }) => {
-  const { user, isAuthenticated, hasPermission } = useAuth();
+  const { user, isAuthenticated, hasPermission, isLoading } = useAuth();
+  // Mientras se restaura la sesión (F5) no redirigir: el usuario aún es null.
+  if (isLoading) return <RouteLoading />;
 
   if (!isAuthenticated || !user) {
     return <Navigate to="/" replace />;
@@ -240,6 +274,7 @@ function App() {
       <AuthProvider>
         <RolesProvider>
           <ToastProvider>
+          <ConfirmProvider>
             <ProductsProvider>
               <CatalogsProvider>
                 <UsersProvider>
@@ -256,7 +291,7 @@ function App() {
                               path="/messaging/*"
                               element={
                                 <MessagingRoute>
-                                  <MessagingLayout>
+                                  <AppTheme app="messaging"><MessagingLayout>
                                     <Routes>
                                       <Route path="/" element={<MessagingHome />} />
                                       <Route path="/inbox" element={<PermissionRoute permission="messaging.inbox" fallback={<MessagingHome />}><MessagingInboxPage /></PermissionRoute>} />
@@ -266,7 +301,7 @@ function App() {
                                       <Route path="/channels" element={<PermissionRoute permission="messaging.channels" fallback={<MessagingHome />}><MessagingChannelsPage /></PermissionRoute>} />
                                       <Route path="*" element={<MessagingHome />} />
                                     </Routes>
-                                  </MessagingLayout>
+                                  </MessagingLayout></AppTheme>
                                 </MessagingRoute>
                               }
                             />
@@ -276,7 +311,7 @@ function App() {
                               path="/pos/*"
                               element={
                                 <POSRoute>
-                                  <POSLayout>
+                                  <AppTheme app="pos"><POSLayout>
                                     <Routes>
                                       <Route path="/" element={<Navigate to="/pos/sale" replace />} />
                                       <Route path="/sale" element={<NewSalePage />} />
@@ -286,7 +321,7 @@ function App() {
                                       <Route path="/cash" element={<CashRegisterPage />} />
                                       <Route path="*" element={<Navigate to="/pos/sale" replace />} />
                                     </Routes>
-                                  </POSLayout>
+                                  </POSLayout></AppTheme>
                                 </POSRoute>
                               }
                             />
@@ -296,7 +331,7 @@ function App() {
                               path="/manufacturing/*"
                               element={
                                 <ManufacturingRoute>
-                                  <ManufacturingLayout>
+                                  <AppTheme app="manufacturing"><ManufacturingLayout>
                                     <Routes>
                                       <Route path="/" element={<Navigate to="/manufacturing/orders" replace />} />
                                       <Route path="/orders" element={<ProductionOrdersPage />} />
@@ -326,7 +361,7 @@ function App() {
                                       <Route path="/warehouses" element={<WarehousesPage />} />
                                       <Route path="*" element={<Navigate to="/manufacturing/orders" replace />} />
                                     </Routes>
-                                  </ManufacturingLayout>
+                                  </ManufacturingLayout></AppTheme>
                                 </ManufacturingRoute>
                               }
                             />
@@ -336,13 +371,13 @@ function App() {
                               path="/admin-panel/*"
                               element={
                               <AdminRoute>
-                                <AdminLayout>
+                                <AppTheme app="admin"><AdminLayout>
                                   <Routes>
                                     {/* Dashboard */}
                                     <Route
                                       path="/"
                                       element={
-                                        <PermissionRoute permission="dashboard.view">
+                                        <PermissionRoute permission="dashboard.view" fallback={<AdminHome />}>
                                           <DashboardPage />
                                         </PermissionRoute>
                                       }
@@ -727,15 +762,23 @@ function App() {
                                     />
 
                                     {/* Publicidad / Anuncios */}
-                                    <Route path="/announcements" element={<AnnouncementsPage />} />
+                                    <Route path="/announcements" element={<PermissionRoute permission="announcements.view"><AnnouncementsPage /></PermissionRoute>} />
 
                                     {/* Cupones / Descuentos */}
-                                    <Route path="/discounts" element={<DiscountsPage />} />
+                                    <Route path="/discounts" element={<PermissionRoute permission="discounts.view"><DiscountsPage /></PermissionRoute>} />
 
                                     {/* Configuración */}
                                     <Route
                                       path="/settings"
-                                      element={<Navigate to="/admin-panel/settings/general" replace />}
+                                      element={<SettingsHubPage />}
+                                    />
+                                    <Route
+                                      path="/settings/design-system"
+                                      element={
+                                        <PermissionRoute permission="settings.appearance">
+                                          <DesignSystemPage />
+                                        </PermissionRoute>
+                                      }
                                     />
                                     <Route
                                       path="/settings/general"
@@ -829,7 +872,7 @@ function App() {
 
                                     <Route path="*" element={<NotFoundPage />} />
                                   </Routes>
-                                </AdminLayout>
+                                </AdminLayout></AppTheme>
                               </AdminRoute>
                             }
                           />
@@ -861,7 +904,7 @@ function App() {
                           <Route
                             path="/*"
                             element={
-                              <Layout>
+                              <AppTheme app="store"><Layout>
                                 <Routes>
                                   <Route path="/" element={<HomeOrSelector />} />
                                   <Route path="/catalog" element={<CatalogPage />} />
@@ -876,7 +919,7 @@ function App() {
                                   <Route path="/legal/:slug" element={<LegalPage />} />
                                   <Route path="*" element={<NotFoundPage />} />
                                 </Routes>
-                              </Layout>
+                              </Layout></AppTheme>
                             }
                           />
                         </Routes>
@@ -890,6 +933,7 @@ function App() {
                 </UsersProvider>
               </CatalogsProvider>
             </ProductsProvider>
+            </ConfirmProvider>
           </ToastProvider>
         </RolesProvider>
       </AuthProvider>

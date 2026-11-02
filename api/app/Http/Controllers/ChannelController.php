@@ -55,8 +55,14 @@ class ChannelController extends Controller
             $channel->aiAutoReply = (bool) $data['aiAutoReply'];
         }
         if (array_key_exists('config', $data) && is_array($data['config'])) {
+            // Un secreto que vuelve enmascarado (tal como lo devolvió la API) no se toca.
+            $incoming = array_filter(
+                $data['config'],
+                fn ($v, $k) => ! (in_array($k, self::SECRET_KEYS, true) && is_string($v) && str_starts_with($v, self::MASK)),
+                ARRAY_FILTER_USE_BOTH,
+            );
             // Merge: campos no provistos conservan su valor anterior.
-            $channel->config = array_merge((array) $channel->config, $data['config']);
+            $channel->config = array_merge((array) $channel->config, $incoming);
         }
         $channel->save();
 
@@ -105,6 +111,23 @@ class ChannelController extends Controller
         return array_values(array_filter($required, fn ($k) => empty($config[$k] ?? null)));
     }
 
+    /** Claves secretas del canal: nunca salen completas en las respuestas. */
+    private const SECRET_KEYS = ['appSecret', 'pageAccessToken', 'permanentAccessToken', 'authToken'];
+
+    private const MASK = '••••';
+
+    private function maskedConfig(Channel $c): array
+    {
+        $config = (array) $c->config;
+        foreach (self::SECRET_KEYS as $key) {
+            if (! empty($config[$key]) && is_string($config[$key])) {
+                $config[$key] = self::MASK.substr($config[$key], -4);
+            }
+        }
+
+        return $config;
+    }
+
     private function format(Channel $c): array
     {
         return [
@@ -113,7 +136,7 @@ class ChannelController extends Controller
             'name' => $c->name,
             'isActive' => (bool) $c->isActive,
             'aiAutoReply' => (bool) $c->aiAutoReply,
-            'config' => (array) $c->config,
+            'config' => $this->maskedConfig($c),
             'createdAt' => optional($c->createdAt)->toIso8601String(),
             'updatedAt' => optional($c->updatedAt)->toIso8601String(),
         ];

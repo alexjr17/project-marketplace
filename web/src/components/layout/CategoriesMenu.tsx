@@ -2,22 +2,14 @@ import { useState, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronDown, ChevronRight, Grid3X3 } from 'lucide-react';
 import { useCatalogs } from '../../context/CatalogsContext';
-import { useSettings } from '../../context/SettingsContext';
 
 export const CategoriesMenu = () => {
   const { categories, productTypes, isLoading } = useCatalogs();
-  const { settings } = useSettings();
   const [isOpen, setIsOpen] = useState(false);
   const [activeCategory, setActiveCategory] = useState<number | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Colores de marca
-  const brandColors = settings.appearance?.brandColors || settings.general.brandColors || {
-    primary: '#7c3aed',
-    secondary: '#ec4899',
-    accent: '#f59e0b',
-  };
 
   // Filtrar solo categorías y tipos activos
   const activeCategories = categories.filter(c => c.isActive);
@@ -79,10 +71,10 @@ export const CategoriesMenu = () => {
     >
       {/* Trigger Button */}
       <button
-        className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-all ${
+        className={`flex items-center gap-1.5 h-8 px-3 rounded-lg font-medium text-sm whitespace-nowrap transition-colors ${
           isOpen
-            ? 'bg-gray-100 text-gray-900'
-            : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+            ? 'bg-app-50 text-app-700'
+            : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
         }`}
       >
         <Grid3X3 className="w-4 h-4" strokeWidth={isOpen ? 2.5 : 2} />
@@ -94,7 +86,7 @@ export const CategoriesMenu = () => {
 
       {/* Mega Menu Dropdown */}
       {isOpen && (
-        <div className="absolute top-full left-0 mt-1 bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden z-50 animate-fade-in-up min-w-[280px]">
+        <div className="absolute top-full left-0 mt-1 bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden z-50 animate-fade-in-up min-w-[280px]">
           <div className="flex">
             {/* Categorías principales */}
             <div className="w-56 border-r border-gray-100 py-2 bg-gray-50">
@@ -142,8 +134,8 @@ export const CategoriesMenu = () => {
               <div className="border-t border-gray-200 mt-2 pt-2 px-4">
                 <Link
                   to="/catalog"
-                  className="flex items-center gap-2 py-2 text-sm font-semibold transition-colors"
-                  style={{ color: brandColors.primary }}
+                  className="flex items-center gap-2 py-2 text-sm font-semibold text-app-700 hover:text-app-800 transition-colors"
+
                   onClick={() => setIsOpen(false)}
                 >
                   Ver todo el catálogo

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
+import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { usePOS } from '../../context/POSContext';
-import { Button } from '../../components/shared/Button';
 import { useToast } from '../../context/ToastContext';
 import * as posService from '../../services/pos.service';
 import settingsService from '../../services/settings.service';
@@ -9,19 +9,37 @@ import OpenSessionPrompt from '../../components/pos/OpenSessionPrompt';
 import PrintPreviewModal from '../../components/pos/PrintPreviewModal';
 import type { PrintSettings } from '../../types/settings';
 import { DEFAULT_PRINT_SETTINGS } from '../../types/settings';
-import { History, Receipt, Calendar, DollarSign, CreditCard, User, Printer, Mail, X, Loader2, CheckCircle, Smartphone, Eye, RefreshCw, Camera, Upload, Image as ImageIcon, ChevronLeft, ChevronRight, Clock, Pencil, Trash2, Undo2, Minus, Plus } from 'lucide-react';
+import { History, Receipt, DollarSign, CreditCard, Printer, Mail, X, CheckCircle, Smartphone, Eye, RefreshCw, Camera, Image as ImageIcon, Clock, Pencil, Trash2, Undo2, Minus, Plus, TrendingUp, Ban } from 'lucide-react';
+import { Alert, Badge, Button, Dialog, EmptyState, Field, FileDrop, Page, PageHeader, Pager, RadioGroup, SelectInput, Spinner, StatCard, TableCard, Table, THead, TBody, Th, Tr, Td, TextInput, Timeline, type Tone } from '../../components/ui';
 
 // Estado de la venta → etiqueta + estilo del badge.
-function statusInfo(status: string): { label: string; cls: string } {
+function statusInfo(status: string): { label: string; tone: Tone } {
   switch (status) {
-    case 'PAID': return { label: 'Pagado', cls: 'bg-green-100 text-green-700' };
-    case 'PENDING': return { label: 'Pendiente', cls: 'bg-amber-100 text-amber-700' };
-    case 'CANCELLED': return { label: 'Cancelado', cls: 'bg-red-100 text-red-700' };
-    default: return { label: status || '—', cls: 'bg-gray-100 text-gray-700' };
+    case 'PAID': return { label: 'Pagado', tone: 'green' };
+    case 'PENDING': return { label: 'Pendiente', tone: 'yellow' };
+    case 'CANCELLED': return { label: 'Cancelado', tone: 'red' };
+    default: return { label: status || '—', tone: 'gray' };
   }
 }
 
+const METHOD_LABEL: Record<string, string> = {
+  cash: 'Efectivo', card: 'Tarjeta', transfer: 'Transferencia', mixed: 'Mixto', debe: 'Fiado',
+};
+
+/** Icono del método de pago (colores con significado: efectivo verde, fiado ámbar). */
+function MethodIcon({ method }: { method: string }) {
+  if (method === 'cash') return <DollarSign className="w-4 h-4 text-green-600" />;
+  if (method === 'card') return <CreditCard className="w-4 h-4 text-blue-600" />;
+  if (method === 'transfer') return <Smartphone className="w-4 h-4 text-blue-600" />;
+  if (method === 'mixed') return <span className="flex -space-x-1"><DollarSign className="w-4 h-4 text-green-600" /><Smartphone className="w-4 h-4 text-blue-600" /></span>;
+  if (method === 'debe') return <Clock className="w-4 h-4 text-amber-600" />;
+  return null;
+}
+
 export default function SalesHistoryPage() {
+  // Editar, devolver y anular exigen pos.cancel_sale (el backend lo valida).
+  const { hasPermission } = useAuth();
+  const canModifySales = hasPermission('pos.cancel_sale');
   const { currentSession, isLoadingSession } = usePOS();
   const { showToast } = useToast();
   const navigate = useNavigate();
@@ -117,20 +135,32 @@ export default function SalesHistoryPage() {
     }
   };
 
-  // Anular una venta (devuelve stock, queda como Cancelada)
-  const handleCancelSale = async (sale: any) => {
-    const reason = window.prompt(`¿Anular la venta ${sale.orderNumber}? Se devolverá el stock.\nMotivo de la anulación:`);
-    if (reason === null) return;
-    if (!reason.trim()) {
+  // Anular una venta (devuelve stock, queda como Cancelada). El motivo se pide en un diálogo.
+  const [cancelSale, setCancelSale] = useState<any | null>(null);
+  const [cancelReason, setCancelReason] = useState('');
+  const [isCancelling, setIsCancelling] = useState(false);
+
+  const handleCancelSale = (sale: any) => {
+    setCancelSale(sale);
+    setCancelReason('');
+  };
+
+  const confirmCancelSale = async () => {
+    if (!cancelSale) return;
+    if (!cancelReason.trim()) {
       showToast('El motivo es requerido', 'error');
       return;
     }
+    setIsCancelling(true);
     try {
-      await posService.cancelSale(sale.id, reason.trim());
+      await posService.cancelSale(cancelSale.id, cancelReason.trim());
       showToast('Venta anulada', 'success');
+      setCancelSale(null);
       loadSales();
     } catch (error: any) {
-      showToast(error.response?.data?.message || 'No se pudo anular la venta', 'error');
+      showToast(error?.message || 'No se pudo anular la venta', 'error');
+    } finally {
+      setIsCancelling(false);
     }
   };
 
@@ -173,7 +203,7 @@ export default function SalesHistoryPage() {
       setReturnModalSale(null);
       loadSales();
     } catch (error: any) {
-      showToast(error.response?.data?.message || 'No se pudo registrar la devolución', 'error');
+      showToast(error?.message || 'No se pudo registrar la devolución', 'error');
     } finally {
       setIsReturning(false);
     }
@@ -227,7 +257,7 @@ export default function SalesHistoryPage() {
       setEmailInput('');
     } catch (error: any) {
       console.error('Error sending invoice:', error);
-      showToast(error.response?.data?.message || 'Error al enviar recibo', 'error');
+      showToast(error?.message || 'Error al enviar recibo', 'error');
     } finally {
       setIsSendingEmail(false);
     }
@@ -309,8 +339,7 @@ export default function SalesHistoryPage() {
   };
 
   // Manejar selección de archivo
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+  const handleFileSelect = (file?: File) => {
     if (file) {
       if (file.size > 10 * 1024 * 1024) {
         showToast('La imagen no debe superar 10MB', 'error');
@@ -435,8 +464,7 @@ export default function SalesHistoryPage() {
       // En caso de error, restaurar la imagen para reintentar
       setEvidencePreview(imageToUpload);
       setIsUploadingEvidence(false);
-      const errorMsg = error?.response?.data?.message
-        || error?.message
+      const errorMsg = error?.message
         || 'Error al subir';
       showToast(`Error: ${errorMsg}`, 'error');
     }
@@ -457,486 +485,195 @@ export default function SalesHistoryPage() {
   }, [sales.length, totalPages, currentPage]);
 
   if (isLoadingSession) {
-    return (
-      <div className="flex flex-col items-center justify-center py-24 text-gray-500">
-        <Loader2 className="w-10 h-10 animate-spin text-indigo-500 mb-3" />
-        <p className="text-sm">Validando sesión de caja…</p>
-      </div>
-    );
+    return <Spinner label="Validando sesión de caja…" className="py-24" />;
   }
 
   if (!currentSession) {
     return (
-      <OpenSessionPrompt
-        title="Sin Sesion de Caja"
-        message="Abre una sesion de caja para ver el historial de ventas"
-      />
+      <Page>
+        <PageHeader icon={History} title="Historial de ventas" subtitle="Ventas de la sesión de caja" />
+        <OpenSessionPrompt
+          title="Sin sesión de caja"
+          message="Abre una sesión de caja para ver el historial de ventas"
+        />
+      </Page>
     );
   }
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-gray-500">Cargando historial...</div>
-      </div>
-    );
-  }
+  const closeEmailModal = () => {
+    setEmailModalSale(null);
+    setEmailInput('');
+  };
+
+  const countBy = (m: string) => sales.filter((x) => x.paymentMethod === m).length;
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-            <History className="w-6 h-6 text-blue-600" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Historial de Ventas</h1>
-            <p className="text-gray-600 mt-1">
-              Ventas de la sesión actual - {currentSession.cashRegister?.name}
-            </p>
-          </div>
+    <Page>
+      <PageHeader
+        icon={History}
+        title="Historial de ventas"
+        subtitle={`Ventas de la sesión actual · ${currentSession.cashRegister?.name ?? ''}`}
+        actions={
+          <Button variant="secondary" icon={<RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />} onClick={loadSales} disabled={loading}>
+            Actualizar
+          </Button>
+        }
+      />
+
+      {/* Indicadores */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <StatCard icon={Receipt} label="Total ventas" value={currentSession.salesCount} />
+        <StatCard icon={DollarSign} tone="green" label="Total vendido" value={`$${currentSession.totalSales.toLocaleString()}`} />
+        <StatCard
+          icon={TrendingUp}
+          tone="blue"
+          label="Ticket promedio"
+          value={`$${currentSession.salesCount > 0 ? Math.round(currentSession.totalSales / currentSession.salesCount).toLocaleString() : 0}`}
+        />
+        <StatCard
+          icon={CreditCard}
+          tone="gray"
+          label="Por método"
+          value={
+            <span className="flex items-center gap-3 text-base">
+              <span className="flex items-center gap-1" title="Efectivo"><DollarSign className="w-4 h-4 text-green-600" />{countBy('cash')}</span>
+              <span className="flex items-center gap-1" title="Transferencia"><Smartphone className="w-4 h-4 text-blue-600" />{countBy('transfer')}</span>
+              <span className="flex items-center gap-1" title="Mixto"><span className="text-xs font-semibold text-gray-500">M</span>{countBy('mixed')}</span>
+            </span>
+          }
+        />
+      </div>
+
+      {/* Filtro por estado */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <h2 className="text-base font-semibold text-gray-900">Ventas realizadas</h2>
+        <div className="overflow-x-auto">
+          <RadioGroup
+            variant="segmented"
+            value={statusFilter}
+            onChange={(v) => { setStatusFilter(v); setCurrentPage(1); }}
+            options={[
+              { value: 'all', label: 'Todas' },
+              { value: 'PAID', label: 'Pagadas' },
+              { value: 'PENDING', label: 'Pendientes' },
+              { value: 'CANCELLED', label: 'Canceladas' },
+            ]}
+          />
         </div>
-        <button
-          onClick={loadSales}
-          disabled={loading}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+      </div>
+
+      {loading ? (
+        <Spinner label="Cargando historial…" />
+      ) : sales.length === 0 ? (
+        <TableCard>
+          <EmptyState icon={History} title="No hay ventas registradas en esta sesión" description="Las ventas que realices aparecerán aquí" />
+        </TableCard>
+      ) : (
+        <TableCard
+          footer={filteredSales.length > pageSize ? (
+            <Pager page={currentPage} pageSize={pageSize} total={filteredSales.length} onPage={setCurrentPage} />
+          ) : undefined}
         >
-          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-          Actualizar
-        </button>
-      </div>
-
-      {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-white rounded-lg shadow-sm p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-medium text-gray-500">Total Ventas</p>
-              <p className="text-xl font-bold text-gray-900 mt-1">
-                {currentSession.salesCount}
-              </p>
-            </div>
-            <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-              <Receipt className="w-5 h-5 text-blue-600" />
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-lg shadow-sm p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-medium text-gray-500">Total Vendido</p>
-              <p className="text-xl font-bold text-gray-900 mt-1">
-                ${currentSession.totalSales.toLocaleString()}
-              </p>
-            </div>
-            <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
-              <DollarSign className="w-5 h-5 text-green-600" />
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-lg shadow-sm p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-medium text-gray-500">Ticket Promedio</p>
-              <p className="text-xl font-bold text-gray-900 mt-1">
-                $
-                {currentSession.salesCount > 0
-                  ? Math.round(currentSession.totalSales / currentSession.salesCount).toLocaleString()
-                  : 0}
-              </p>
-            </div>
-            <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
-              <Receipt className="w-5 h-5 text-purple-600" />
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-lg shadow-sm p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-medium text-gray-500">Por Método</p>
-              <div className="flex items-center gap-3 mt-1">
-                <div className="flex items-center gap-1" title="Efectivo">
-                  <DollarSign className="w-3.5 h-3.5 text-green-600" />
-                  <span className="text-sm font-semibold text-gray-700">
-                    {sales.filter(s => s.paymentMethod === 'cash').length}
-                  </span>
-                </div>
-                <div className="flex items-center gap-1" title="Transferencia">
-                  <Smartphone className="w-3.5 h-3.5 text-purple-600" />
-                  <span className="text-sm font-semibold text-gray-700">
-                    {sales.filter(s => s.paymentMethod === 'transfer').length}
-                  </span>
-                </div>
-                <div className="flex items-center gap-1" title="Mixto">
-                  <span className="text-xs text-orange-600 font-semibold">M</span>
-                  <span className="text-sm font-semibold text-gray-700">
-                    {sales.filter(s => s.paymentMethod === 'mixed').length}
-                  </span>
-                </div>
-              </div>
-            </div>
-            <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
-              <CreditCard className="w-5 h-5 text-orange-600" />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Sales List */}
-      <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-        <div className="p-4 border-b border-gray-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <h2 className="text-lg font-semibold text-gray-900">Ventas Realizadas</h2>
-          <div className="flex items-center gap-1 flex-wrap">
-            {([
-              { key: 'all', label: 'Todas' },
-              { key: 'PAID', label: 'Pagadas' },
-              { key: 'PENDING', label: 'Pendientes' },
-              { key: 'CANCELLED', label: 'Canceladas' },
-            ] as const).map((f) => (
-              <button
-                key={f.key}
-                onClick={() => { setStatusFilter(f.key); setCurrentPage(1); }}
-                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${statusFilter === f.key ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
-              >
-                {f.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {sales.length === 0 ? (
-          <div className="p-12 text-center">
-            <History className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-            <p className="text-gray-600">No hay ventas registradas en esta sesión</p>
-            <p className="text-sm text-gray-500 mt-1">
-              Las ventas que realices aparecerán aquí
-            </p>
-          </div>
-        ) : (
-        <>
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Fecha/Hora
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    # Orden
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Cliente
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Productos
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Pago
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Estado
-                  </th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Total
-                  </th>
-                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Acciones
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {paginatedSales.map((sale) => (
-                  <tr key={sale.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
+          <Table>
+            <THead>
+              <tr>
+                <Th>Fecha / hora</Th>
+                <Th># Orden</Th>
+                <Th>Cliente</Th>
+                <Th align="right">Productos</Th>
+                <Th>Pago</Th>
+                <Th align="center">Estado</Th>
+                <Th align="right">Total</Th>
+                <Th align="right">Acciones</Th>
+              </tr>
+            </THead>
+            <TBody>
+              {paginatedSales.length === 0 ? (
+                <tr><td colSpan={8}><EmptyState title="Sin ventas con este estado" /></td></tr>
+              ) : paginatedSales.map((sale) => {
+                const st = statusInfo(sale.status);
+                return (
+                  <Tr key={sale.id} onClick={() => setSummarySale(sale)}>
+                    <Td className="whitespace-nowrap">
+                      <div className="text-gray-900">{new Date(sale.createdAt).toLocaleDateString()}</div>
+                      <div className="text-xs text-gray-500">{new Date(sale.createdAt).toLocaleTimeString()}</div>
+                    </Td>
+                    <Td className="whitespace-nowrap font-mono text-gray-900">{sale.orderNumber}</Td>
+                    <Td className="whitespace-nowrap">
+                      <div className="text-gray-900">{sale.posCustomer?.name || sale.customerName || 'Cliente general'}</div>
+                      {sale.posCustomer?.cedula && <div className="text-xs text-gray-500">CC: {sale.posCustomer.cedula}</div>}
+                    </Td>
+                    <Td align="right" className="whitespace-nowrap tabular-nums">{sale.items?.length || 0}</Td>
+                    <Td className="whitespace-nowrap">
                       <div className="flex items-center gap-2">
-                        <Calendar className="w-4 h-4 text-gray-400" />
-                        <div className="text-sm">
-                          <div className="text-gray-900">
-                            {new Date(sale.createdAt).toLocaleDateString()}
-                          </div>
-                          <div className="text-gray-500">
-                            {new Date(sale.createdAt).toLocaleTimeString()}
-                          </div>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="text-sm font-mono text-gray-900">
-                        {sale.orderNumber}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center gap-2">
-                        <User className="w-4 h-4 text-gray-400" />
+                        <MethodIcon method={sale.paymentMethod} />
                         <div>
-                          <span className="text-sm text-gray-900 block">
-                            {sale.posCustomer?.name || sale.customerName || 'Cliente general'}
-                          </span>
-                          {sale.posCustomer?.cedula && (
-                            <span className="text-xs text-gray-500">
-                              CC: {sale.posCustomer.cedula}
-                            </span>
-                          )}
+                          <span className="text-gray-700 font-medium">{METHOD_LABEL[sale.paymentMethod] ?? sale.paymentMethod}</span>
+                          {sale.cardType && <span className="text-xs text-gray-500 block capitalize">{sale.cardType}</span>}
                         </div>
                       </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="text-sm text-gray-600">
-                        {sale.items?.length || 0} productos
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center gap-2">
-                        {sale.paymentMethod === 'cash' && (
-                          <DollarSign className="w-4 h-4 text-green-600" />
-                        )}
-                        {sale.paymentMethod === 'card' && (
-                          <CreditCard className="w-4 h-4 text-blue-600" />
-                        )}
-                        {sale.paymentMethod === 'transfer' && (
-                          <Smartphone className="w-4 h-4 text-purple-600" />
-                        )}
-                        {sale.paymentMethod === 'mixed' && (
-                          <div className="flex -space-x-1">
-                            <DollarSign className="w-4 h-4 text-green-600" />
-                            <Smartphone className="w-4 h-4 text-purple-600" />
-                          </div>
-                        )}
-                        {sale.paymentMethod === 'debe' && (
-                          <Clock className="w-4 h-4 text-amber-600" />
-                        )}
-                        <div className="text-sm">
-                          <span className="text-gray-700 font-medium">
-                            {sale.paymentMethod === 'cash' && 'Efectivo'}
-                            {sale.paymentMethod === 'card' && 'Tarjeta'}
-                            {sale.paymentMethod === 'transfer' && 'Transferencia'}
-                            {sale.paymentMethod === 'mixed' && 'Mixto'}
-                            {sale.paymentMethod === 'debe' && 'Fiado'}
-                          </span>
-                          {sale.cardType && (
-                            <span className="text-xs text-gray-500 block capitalize">
-                              {sale.cardType}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      {(() => {
-                        const s = statusInfo(sale.status);
-                        return (
-                          <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-medium ${s.cls}`}>
-                            {s.label}
-                          </span>
-                        );
-                      })()}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right">
-                      <span className="text-sm font-semibold text-gray-900">
-                        ${sale.total.toLocaleString()}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-center">
-                      <div className="flex justify-center">
-                        <Button
-                          variant="admin-secondary"
-                          size="sm"
-                          onClick={() => setSummarySale(sale)}
-                          title="Ver resumen y acciones"
-                        >
-                          <Eye className="w-4 h-4" />
-                          Resumen
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Pagination */}
-          {filteredSales.length > pageSize && (
-            <div className="px-6 py-4 border-t border-gray-200 flex flex-col sm:flex-row items-center justify-between gap-4">
-              <div className="text-sm text-gray-700">
-                Mostrando{' '}
-                <span className="font-medium">{startIndex + 1}</span> a{' '}
-                <span className="font-medium">{Math.min(endIndex, filteredSales.length)}</span> de{' '}
-                <span className="font-medium">{filteredSales.length}</span> ventas
-              </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
-                  disabled={currentPage === 1}
-                  className="p-2 rounded-lg border border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  <ChevronLeft className="w-5 h-5" />
-                </button>
-
-                <div className="flex gap-1">
-                  {Array.from({ length: totalPages }, (_, i) => i + 1)
-                    .filter((page) => {
-                      // Show first, last, current and adjacent pages
-                      if (page === 1 || page === totalPages) return true;
-                      if (Math.abs(page - currentPage) <= 1) return true;
-                      return false;
-                    })
-                    .reduce((acc: (number | string)[], page, idx, arr) => {
-                      // Add ellipsis where there are gaps
-                      if (idx > 0 && page - (arr[idx - 1] as number) > 1) {
-                        acc.push('...');
-                      }
-                      acc.push(page);
-                      return acc;
-                    }, [])
-                    .map((page, idx) =>
-                      page === '...' ? (
-                        <span key={`ellipsis-${idx}`} className="px-2 py-1 text-gray-500">
-                          ...
-                        </span>
-                      ) : (
-                        <button
-                          key={page}
-                          onClick={() => setCurrentPage(page as number)}
-                          className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
-                            currentPage === page
-                              ? 'bg-blue-600 text-white'
-                              : 'text-gray-700 hover:bg-gray-100'
-                          }`}
-                        >
-                          {page}
-                        </button>
-                      )
-                    )}
-                </div>
-
-                <button
-                  onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
-                  disabled={currentPage === totalPages}
-                  className="p-2 rounded-lg border border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  <ChevronRight className="w-5 h-5" />
-                </button>
-              </div>
-            </div>
-          )}
-        </>
-        )}
-      </div>
-
-      {/* Email Modal */}
-      {emailModalSale && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
-            <div className="px-6 py-4 border-b border-gray-200 bg-purple-50">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Mail className="w-5 h-5 text-purple-600" />
-                  <h2 className="text-lg font-semibold text-purple-800">
-                    Enviar Recibo por Email
-                  </h2>
-                </div>
-                <button
-                  onClick={() => {
-                    setEmailModalSale(null);
-                    setEmailInput('');
-                  }}
-                  className="text-gray-500 hover:text-gray-700"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-            </div>
-
-            <div className="p-6">
-              {/* Info de la venta */}
-              <div className="bg-gray-50 rounded-lg p-4 mb-4">
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-gray-600 text-sm">Orden:</span>
-                  <span className="font-mono font-medium">{emailModalSale.orderNumber}</span>
-                </div>
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-gray-600 text-sm">Fecha:</span>
-                  <span className="text-sm">
-                    {new Date(emailModalSale.createdAt).toLocaleString('es-CO')}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-600 text-sm">Total:</span>
-                  <span className="text-lg font-bold text-gray-900">
-                    ${Number(emailModalSale.total).toLocaleString()}
-                  </span>
-                </div>
-              </div>
-
-              {/* Email ya enviado */}
-              {emailModalSale.customerEmail && (
-                <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg">
-                  <div className="flex items-center gap-2 text-green-700">
-                    <CheckCircle className="w-4 h-4" />
-                    <span className="text-sm">
-                      Recibo enviado anteriormente a: <strong>{emailModalSale.customerEmail}</strong>
-                    </span>
-                  </div>
-                </div>
-              )}
-
-              {/* Input de email */}
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  {emailModalSale.customerEmail ? 'Reenviar a otro email:' : 'Email del cliente:'}
-                </label>
-                <input
-                  type="email"
-                  value={emailInput}
-                  onChange={(e) => setEmailInput(e.target.value)}
-                  placeholder="cliente@email.com"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                  onKeyDown={(e) => e.key === 'Enter' && handleSendInvoice()}
-                  autoFocus
-                />
-              </div>
-
-              {/* Botones */}
-              <div className="flex gap-3">
-                <button
-                  onClick={() => {
-                    setEmailModalSale(null);
-                    setEmailInput('');
-                  }}
-                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={handleSendInvoice}
-                  disabled={isSendingEmail || !emailInput.trim()}
-                  className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 flex items-center justify-center gap-2"
-                >
-                  {isSendingEmail ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Enviando...
-                    </>
-                  ) : (
-                    <>
-                      <Mail className="w-4 h-4" />
-                      Enviar Recibo
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+                    </Td>
+                    <Td align="center"><Badge tone={st.tone}>{st.label}</Badge></Td>
+                    <Td align="right" className="whitespace-nowrap font-semibold text-gray-900 tabular-nums">${sale.total.toLocaleString()}</Td>
+                    <Td align="right" className="whitespace-nowrap">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        icon={<Eye className="w-4 h-4" />}
+                        onClick={(e) => { e.stopPropagation(); setSummarySale(sale); }}
+                        title="Ver resumen y acciones"
+                      >
+                        Resumen
+                      </Button>
+                    </Td>
+                  </Tr>
+                );
+              })}
+            </TBody>
+          </Table>
+        </TableCard>
       )}
 
-      {/* Print Preview Modal */}
+      {/* Enviar recibo por email */}
+      <Dialog
+        open={!!emailModalSale}
+        onClose={closeEmailModal}
+        size="sm"
+        title="Enviar recibo por email"
+        description={emailModalSale ? `Orden ${emailModalSale.orderNumber}` : undefined}
+        footer={
+          <>
+            <Button variant="secondary" size="lg" onClick={closeEmailModal}>Cancelar</Button>
+            <Button size="lg" icon={<Mail className="w-4 h-4" />} onClick={handleSendInvoice} isLoading={isSendingEmail} disabled={!emailInput.trim()}>
+              {isSendingEmail ? 'Enviando…' : 'Enviar recibo'}
+            </Button>
+          </>
+        }
+      >
+        {emailModalSale && (
+          <div className="space-y-4">
+            <div className="rounded-lg border border-gray-200 px-4 py-3 text-sm space-y-1.5">
+              <div className="flex justify-between"><span className="text-gray-500">Fecha</span><span>{new Date(emailModalSale.createdAt).toLocaleString('es-CO')}</span></div>
+              <div className="flex justify-between items-center"><span className="text-gray-500">Total</span><span className="text-lg font-bold text-gray-900">${Number(emailModalSale.total).toLocaleString()}</span></div>
+            </div>
+            {emailModalSale.customerEmail && (
+              <Alert tone="success">Recibo enviado anteriormente a: <strong>{emailModalSale.customerEmail}</strong></Alert>
+            )}
+            <Field label={emailModalSale.customerEmail ? 'Reenviar a otro email' : 'Email del cliente'}>
+              <TextInput
+                type="email"
+                value={emailInput}
+                onChange={(e) => setEmailInput(e.target.value)}
+                placeholder="cliente@email.com"
+                onKeyDown={(e) => e.key === 'Enter' && handleSendInvoice()}
+                autoFocus
+              />
+            </Field>
+          </div>
+        )}
+      </Dialog>
+
+      {/* Vista previa de impresión */}
       <PrintPreviewModal
         isOpen={!!printPreviewSale}
         onClose={() => setPrintPreviewSale(null)}
@@ -944,464 +681,287 @@ export default function SalesHistoryPage() {
         orderNumber={printPreviewSale?.orderNumber}
       />
 
-      {/* Evidence Modal */}
-      {evidenceModalSale && (
-        <div
-          key={`evidence-modal-${evidenceModalSale.id}`}
-          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
-        >
-          <div className="bg-white rounded-lg shadow-xl max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto">
-            <div className="px-6 py-4 border-b border-gray-200 bg-amber-50">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Camera className="w-5 h-5 text-amber-600" />
-                  <h2 className="text-lg font-semibold text-amber-800">
-                    Evidencia de Pago
-                  </h2>
-                </div>
+      {/* Evidencia de pago (transferencias) */}
+      <Dialog
+        key={evidenceModalSale ? `evidence-modal-${evidenceModalSale.id}` : 'evidence-modal'}
+        open={!!evidenceModalSale}
+        onClose={handleCloseEvidenceModal}
+        title="Evidencia de pago"
+        description={evidenceModalSale ? `Orden ${evidenceModalSale.orderNumber} · Transferencia · $${Number(evidenceModalSale.total).toLocaleString()}` : undefined}
+        footer={
+          <>
+            <Button variant="secondary" size="lg" onClick={handleCloseEvidenceModal}>Cancelar</Button>
+            <Button
+              size="lg"
+              icon={<CheckCircle className="w-4 h-4" />}
+              onClick={handleUploadEvidence}
+              isLoading={isUploadingEvidence}
+              disabled={isLoadingEvidence || !evidencePreview}
+            >
+              {isUploadingEvidence ? 'Guardando…' : 'Guardar evidencia'}
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          {isLoadingEvidence ? (
+            <Spinner label="Cargando evidencia…" />
+          ) : isCameraActive ? (
+            <div className="space-y-3">
+              <div className="relative">
+                <video ref={videoRef} autoPlay playsInline muted className="w-full rounded-lg bg-black" style={{ maxHeight: '300px' }} />
                 <button
-                  onClick={handleCloseEvidenceModal}
-                  className="text-gray-500 hover:text-gray-700"
+                  onClick={capturePhoto}
+                  title="Tomar foto"
+                  aria-label="Tomar foto"
+                  className="absolute bottom-4 left-1/2 -translate-x-1/2 w-16 h-16 bg-white rounded-full border-4 border-app-600 flex items-center justify-center"
                 >
-                  <X className="w-5 h-5" />
+                  <span className="w-12 h-12 bg-app-600 rounded-full" />
                 </button>
               </div>
+              <Button variant="secondary" fullWidth onClick={() => { stopCamera(); setIsCameraActive(false); }}>Cancelar cámara</Button>
             </div>
-
-            <div className="p-6">
-              {/* Info de la venta */}
-              <div className="bg-gray-50 rounded-lg p-4 mb-4">
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-gray-600 text-sm">Orden:</span>
-                  <span className="font-mono font-medium">{evidenceModalSale.orderNumber}</span>
-                </div>
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-gray-600 text-sm">Método:</span>
-                  <span className="text-sm font-medium text-purple-600">Transferencia</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-600 text-sm">Total:</span>
-                  <span className="text-lg font-bold text-gray-900">
-                    ${Number(evidenceModalSale.total).toLocaleString()}
-                  </span>
-                </div>
-              </div>
-
-              {/* Vista previa de imagen o cámara */}
-              <div className="mb-4">
-                {isLoadingEvidence ? (
-                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center bg-gray-50">
-                    <Loader2 className="w-12 h-12 mx-auto mb-3 text-amber-500 animate-spin" />
-                    <p className="text-gray-600">Cargando evidencia...</p>
-                  </div>
-                ) : isCameraActive ? (
-                  <div className="relative">
-                    <video
-                      ref={videoRef}
-                      autoPlay
-                      playsInline
-                      muted
-                      className="w-full rounded-lg bg-black"
-                      style={{ maxHeight: '300px' }}
-                    />
-                    <button
-                      onClick={capturePhoto}
-                      className="absolute bottom-4 left-1/2 transform -translate-x-1/2 w-16 h-16 bg-white rounded-full border-4 border-amber-500 hover:border-amber-600 flex items-center justify-center shadow-lg"
-                    >
-                      <div className="w-12 h-12 bg-amber-500 rounded-full" />
-                    </button>
-                  </div>
-                ) : isUploadingEvidence ? (
-                  <div className="border-2 border-dashed border-amber-300 rounded-lg p-8 text-center bg-amber-50">
-                    <Loader2 className="w-12 h-12 mx-auto mb-3 text-amber-500 animate-spin" />
-                    <p className="text-amber-700 font-medium">Subiendo evidencia...</p>
-                    <p className="text-sm text-amber-600 mt-1">
-                      Por favor espera
-                    </p>
-                  </div>
-                ) : evidencePreview ? (
-                  <div className="relative">
-                    <img
-                      src={evidencePreview}
-                      alt="Evidencia de pago"
-                      className="w-full rounded-lg object-contain"
-                      style={{ maxHeight: '300px' }}
-                      onError={() => {
-                        showToast('Error al cargar la imagen', 'error');
-                        setEvidencePreview(null);
-                      }}
-                    />
-                    <button
-                      onClick={() => {
-                        imageDataRef.current = null;
-                        setEvidencePreview(null);
-                      }}
-                      className="absolute top-2 right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600"
-                      title="Eliminar imagen"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-                ) : (
-                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center bg-gray-50">
-                    <ImageIcon className="w-12 h-12 mx-auto mb-3 text-gray-400" />
-                    <p className="text-gray-600 mb-2">No hay imagen de evidencia</p>
-                    <p className="text-sm text-gray-500">
-                      Sube una imagen o usa la cámara para capturar
-                    </p>
-                  </div>
-                )}
-              </div>
-
-              {/* Botones de acción */}
-              {!isCameraActive && !isLoadingEvidence && !isUploadingEvidence && (
-                <div className="grid grid-cols-2 gap-3 mb-4">
-                  <label className="flex items-center justify-center gap-2 px-4 py-3 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors cursor-pointer">
-                    <Upload className="w-5 h-5" />
-                    <span className="font-medium">Subir imagen</span>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={handleFileSelect}
-                      className="hidden"
-                    />
-                  </label>
-                  <button
-                    onClick={startCamera}
-                    className="flex items-center justify-center gap-2 px-4 py-3 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition-colors"
-                  >
-                    <Camera className="w-5 h-5" />
-                    <span className="font-medium">Usar cámara</span>
-                  </button>
-                </div>
-              )}
-
-              {isCameraActive && (
-                <button
-                  onClick={() => {
-                    stopCamera();
-                    setIsCameraActive(false);
-                  }}
-                  className="w-full mb-4 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
-                >
-                  Cancelar cámara
-                </button>
-              )}
-
-              {/* Botones de guardar/cancelar */}
-              <div className="flex gap-3">
-                <button
-                  onClick={handleCloseEvidenceModal}
-                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={handleUploadEvidence}
-                  disabled={isUploadingEvidence || isLoadingEvidence || !evidencePreview}
-                  className="flex-1 px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50 flex items-center justify-center gap-2"
-                >
-                  {isUploadingEvidence ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Guardando...
-                    </>
-                  ) : (
-                    <>
-                      <CheckCircle className="w-4 h-4" />
-                      Guardar Evidencia
-                    </>
-                  )}
-                </button>
-              </div>
+          ) : isUploadingEvidence ? (
+            <Spinner label="Subiendo evidencia… Por favor espera" />
+          ) : evidencePreview ? (
+            <div className="relative rounded-lg border border-gray-200 bg-gray-50">
+              <img
+                src={evidencePreview}
+                alt="Evidencia de pago"
+                className="w-full rounded-lg object-contain"
+                style={{ maxHeight: '300px' }}
+                onError={() => {
+                  showToast('Error al cargar la imagen', 'error');
+                  setEvidencePreview(null);
+                }}
+              />
+              <button
+                onClick={() => { imageDataRef.current = null; setEvidencePreview(null); }}
+                className="absolute top-2 right-2 p-1.5 bg-white border border-gray-200 text-red-600 rounded-full hover:bg-red-50"
+                title="Quitar imagen"
+              >
+                <X className="w-4 h-4" />
+              </button>
             </div>
-          </div>
+          ) : (
+            <EmptyState icon={ImageIcon} title="No hay imagen de evidencia" description="Sube una imagen o usa la cámara para capturar" />
+          )}
+
+          {!isCameraActive && !isLoadingEvidence && !isUploadingEvidence && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <FileDrop compact accept="image/*" maxSizeMB={10} title="Subir imagen" onFiles={(files) => handleFileSelect(files[0])} />
+              <Button variant="outline" size="lg" className="h-full min-h-12" icon={<Camera className="w-5 h-5" />} onClick={startCamera}>
+                Usar cámara
+              </Button>
+            </div>
+          )}
         </div>
-      )}
+      </Dialog>
 
       {/* Resumen de la venta + acciones */}
       {summarySale && (() => {
-        const s = statusInfo(summarySale.status);
+        const st = statusInfo(summarySale.status);
         const isCancelled = summarySale.status === 'CANCELLED';
+        const pick = (fn: (sale: any) => void) => () => { const sale = summarySale; setSummarySale(null); fn(sale); };
         return (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-xl shadow-xl max-w-md w-full max-h-[90vh] flex flex-col overflow-hidden">
-              {/* Header */}
-              <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between">
-                <div>
-                  <h2 className="text-lg font-semibold text-gray-900 font-mono">{summarySale.orderNumber}</h2>
-                  <p className="text-xs text-gray-500">
-                    {new Date(summarySale.createdAt).toLocaleString('es-CO')}
-                  </p>
+          <Dialog
+            open
+            onClose={() => setSummarySale(null)}
+            title={<span className="font-mono">{summarySale.orderNumber}</span>}
+            description={new Date(summarySale.createdAt).toLocaleString('es-CO')}
+          >
+            <div className="space-y-4">
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-sm min-w-0">
+                  <span className="text-gray-900 font-medium">{summarySale.posCustomer?.name || summarySale.customerName || 'Cliente general'}</span>
+                  {summarySale.posCustomer?.cedula && <span className="text-gray-500"> · CC {summarySale.posCustomer.cedula}</span>}
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-medium ${s.cls}`}>{s.label}</span>
-                  <button onClick={() => setSummarySale(null)} className="text-gray-400 hover:text-gray-600">
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
+                <Badge tone={st.tone}>{st.label}</Badge>
               </div>
 
-              {/* Body */}
-              <div className="p-5 space-y-3 overflow-y-auto">
-                <div className="flex items-center gap-2 text-sm">
-                  <User className="w-4 h-4 text-gray-400" />
-                  <span className="text-gray-900 font-medium">
-                    {summarySale.posCustomer?.name || summarySale.customerName || 'Cliente general'}
-                  </span>
-                  {summarySale.posCustomer?.cedula && (
-                    <span className="text-gray-500">· CC {summarySale.posCustomer.cedula}</span>
-                  )}
-                </div>
+              {/* Productos */}
+              <div className="border border-gray-200 rounded-lg divide-y divide-gray-100">
+                {(summarySale.items || []).map((it: any, idx: number) => (
+                  <div key={idx} className="flex items-center justify-between gap-2 px-3 py-2 text-sm">
+                    <span className="text-gray-700 truncate">{it.quantity}× {it.productName || it.product?.name || 'Producto'}</span>
+                    <span className="text-gray-900 font-medium whitespace-nowrap">${(Number(it.unitPrice ?? it.price ?? 0) * (it.quantity || 1)).toLocaleString()}</span>
+                  </div>
+                ))}
+              </div>
 
-                {/* Items */}
-                <div className="border border-gray-100 rounded-lg divide-y divide-gray-100">
-                  {(summarySale.items || []).map((it: any, idx: number) => (
-                    <div key={idx} className="flex items-center justify-between gap-2 px-3 py-2 text-sm">
-                      <span className="text-gray-700 truncate">
-                        {it.quantity}× {it.productName || it.product?.name || 'Producto'}
-                      </span>
-                      <span className="text-gray-900 font-medium whitespace-nowrap">
-                        ${(Number(it.unitPrice ?? it.price ?? 0) * (it.quantity || 1)).toLocaleString()}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Totales */}
-                <div className="space-y-1 text-sm">
-                  <div className="flex justify-between text-gray-600">
-                    <span>Subtotal</span><span>${Number(summarySale.subtotal).toLocaleString()}</span>
-                  </div>
-                  {summarySale.discount > 0 && (
-                    <div className="flex justify-between text-red-600">
-                      <span>Descuento</span><span>-${Number(summarySale.discount).toLocaleString()}</span>
-                    </div>
-                  )}
-                  {summarySale.tax > 0 && (
-                    <div className="flex justify-between text-gray-600">
-                      <span>Impuesto</span><span>${Number(summarySale.tax).toLocaleString()}</span>
-                    </div>
-                  )}
-                  <div className="flex justify-between text-base font-bold text-gray-900 border-t border-gray-200 pt-1">
-                    <span>Total</span><span>${Number(summarySale.total).toLocaleString()}</span>
-                  </div>
-                  <div className="flex justify-between text-gray-500">
-                    <span>Pago</span>
-                    <span className="capitalize">
-                      {summarySale.paymentMethod === 'cash' ? 'Efectivo' :
-                       summarySale.paymentMethod === 'transfer' ? 'Transferencia' :
-                       summarySale.paymentMethod === 'mixed' ? 'Mixto' :
-                       summarySale.paymentMethod === 'debe' ? 'Fiado' : 'Tarjeta'}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Historial de cambios */}
-                {Array.isArray(summarySale.editHistory) && summarySale.editHistory.length > 0 && (
-                  <div>
-                    <div className="flex items-center gap-2 text-gray-700 mb-2">
-                      <History className="w-4 h-4" />
-                      <span className="text-sm font-semibold">Historial de cambios</span>
-                    </div>
-                    <ol className="relative border-l-2 border-gray-100 ml-1.5 space-y-3">
-                      {[...summarySale.editHistory].reverse().map((e: any, idx: number) => {
-                        const actionLabel = e.action === 'created' ? 'Venta creada'
-                          : e.action === 'payment' ? 'Abono recibido'
-                          : e.action === 'return' ? 'Devolución' : 'Venta editada';
-                        const dot = e.action === 'created' ? 'bg-green-500'
-                          : e.action === 'payment' ? 'bg-emerald-500'
-                          : e.action === 'return' ? 'bg-red-500' : 'bg-blue-500';
-                        return (
-                          <li key={idx} className="ml-4">
-                            <span className={`absolute -left-[7px] w-3 h-3 rounded-full ${dot} border-2 border-white`} />
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="text-xs font-medium text-gray-800">{actionLabel}</span>
-                              <span className="text-[11px] text-gray-400">
-                                {e.timestamp ? new Date(e.timestamp).toLocaleString('es-CO') : ''}
-                              </span>
-                            </div>
-                            {e.action === 'created' && e.snapshot && (
-                              <p className="text-xs text-gray-500 mt-0.5">
-                                Total ${Number(e.snapshot.total ?? 0).toLocaleString()}
-                              </p>
-                            )}
-                            {Array.isArray(e.changes) && e.changes.length > 0 && (
-                              <ul className="mt-1 space-y-0.5">
-                                {e.changes.map((c: any, ci: number) => (
-                                  <li key={ci} className="text-xs text-gray-600">
-                                    <span className="text-gray-500">{c.label}:</span>{' '}
-                                    <span className="line-through text-gray-400">{String(c.from)}</span>
-                                    {' → '}
-                                    <span className="font-medium text-gray-800">{String(c.to)}</span>
-                                  </li>
-                                ))}
-                              </ul>
-                            )}
-                          </li>
-                        );
-                      })}
-                    </ol>
-                  </div>
+              {/* Totales */}
+              <div className="space-y-1 text-sm">
+                <div className="flex justify-between text-gray-600"><span>Subtotal</span><span>${Number(summarySale.subtotal).toLocaleString()}</span></div>
+                {summarySale.discount > 0 && (
+                  <div className="flex justify-between text-red-600"><span>Descuento</span><span>-${Number(summarySale.discount).toLocaleString()}</span></div>
                 )}
+                {summarySale.tax > 0 && (
+                  <div className="flex justify-between text-gray-600"><span>Impuesto</span><span>${Number(summarySale.tax).toLocaleString()}</span></div>
+                )}
+                <div className="flex justify-between text-base font-bold text-gray-900 border-t border-gray-200 pt-1.5 mt-1.5">
+                  <span>Total</span><span>${Number(summarySale.total).toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between text-gray-500">
+                  <span>Pago</span>
+                  <span className="flex items-center gap-1.5"><MethodIcon method={summarySale.paymentMethod} />{METHOD_LABEL[summarySale.paymentMethod] ?? 'Tarjeta'}</span>
+                </div>
               </div>
 
               {/* Acciones */}
-              <div className="px-5 py-4 border-t border-gray-200 space-y-2">
-                {!isCancelled && (
-                  <Button
-                    variant="admin-primary"
-                    fullWidth
-                    onClick={() => { const id = summarySale.id; setSummarySale(null); navigate(`/pos/sale?edit=${id}`); }}
-                  >
-                    <Pencil className="w-4 h-4" />
+              <div className="space-y-2 pt-1">
+                {!isCancelled && canModifySales && (
+                  <Button size="lg" fullWidth icon={<Pencil className="w-4 h-4" />} onClick={() => { const id = summarySale.id; setSummarySale(null); navigate(`/pos/sale?edit=${id}`); }}>
                     Editar venta
                   </Button>
                 )}
-                {!isCancelled && (summarySale.items?.length > 0) && (
-                  <Button
-                    variant="admin-secondary"
-                    fullWidth
-                    onClick={() => { const sale = summarySale; setSummarySale(null); openReturnModal(sale); }}
-                  >
-                    <Undo2 className="w-4 h-4" />
+                {!isCancelled && canModifySales && (summarySale.items?.length > 0) && (
+                  <Button variant="secondary" size="lg" fullWidth icon={<Undo2 className="w-4 h-4" />} onClick={pick(openReturnModal)}>
                     Devolver productos
                   </Button>
                 )}
                 <div className="grid grid-cols-2 gap-2">
-                  <Button variant="admin-secondary" size="sm" onClick={() => { const sale = summarySale; setSummarySale(null); handlePrintTicket(sale); }}>
-                    <Printer className="w-4 h-4" />
-                    Imprimir
-                  </Button>
-                  <Button variant="admin-secondary" size="sm" onClick={() => { const sale = summarySale; setSummarySale(null); handleOpenEmailModal(sale); }}>
-                    {summarySale.customerEmail ? <CheckCircle className="w-4 h-4" /> : <Mail className="w-4 h-4" />}
-                    Email
-                  </Button>
+                  <Button variant="secondary" icon={<Printer className="w-4 h-4" />} onClick={pick(handlePrintTicket)}>Imprimir</Button>
+                  <Button variant="secondary" icon={summarySale.customerEmail ? <CheckCircle className="w-4 h-4 text-green-600" /> : <Mail className="w-4 h-4" />} onClick={pick(handleOpenEmailModal)}>Email</Button>
                   {summarySale.paymentMethod === 'transfer' && (
-                    <Button variant="admin-secondary" size="sm" onClick={() => { const sale = summarySale; setSummarySale(null); handleOpenEvidenceModal(sale); }}>
-                      {summarySale.paymentEvidence ? <ImageIcon className="w-4 h-4" /> : <Camera className="w-4 h-4" />}
-                      Evidencia
-                    </Button>
+                    <Button variant="secondary" icon={summarySale.paymentEvidence ? <ImageIcon className="w-4 h-4" /> : <Camera className="w-4 h-4" />} onClick={pick(handleOpenEvidenceModal)}>Evidencia</Button>
                   )}
-                  {!isCancelled && (
-                    <Button variant="admin-danger" size="sm" onClick={() => { const sale = summarySale; setSummarySale(null); handleCancelSale(sale); }}>
-                      <Trash2 className="w-4 h-4" />
-                      Anular
-                    </Button>
+                  {!isCancelled && canModifySales && (
+                    <Button variant="ghost" className="text-red-600 hover:text-red-700 hover:bg-red-50" icon={<Trash2 className="w-4 h-4" />} onClick={pick(handleCancelSale)}>Anular</Button>
                   )}
                 </div>
               </div>
+
+              {/* Historial de cambios */}
+              {Array.isArray(summarySale.editHistory) && summarySale.editHistory.length > 0 && (
+                <div className="pt-3 border-t border-gray-100">
+                  <p className="flex items-center gap-2 text-sm font-semibold text-gray-900 mb-3"><History className="w-4 h-4 text-app-600" /> Historial de cambios</p>
+                  <Timeline
+                    items={[...summarySale.editHistory].reverse().map((e: any) => ({
+                      title: e.action === 'created' ? 'Venta creada'
+                        : e.action === 'payment' ? 'Abono recibido'
+                        : e.action === 'return' ? 'Devolución' : 'Venta editada',
+                      tone: e.action === 'created' || e.action === 'payment' ? 'green' as const : e.action === 'return' ? 'red' as const : 'app' as const,
+                      meta: e.timestamp ? new Date(e.timestamp).toLocaleString('es-CO') : undefined,
+                      description: (
+                        <>
+                          {e.action === 'created' && e.snapshot && <span className="text-xs text-gray-500">Total ${Number(e.snapshot.total ?? 0).toLocaleString()}</span>}
+                          {Array.isArray(e.changes) && e.changes.length > 0 && (
+                            <ul className="space-y-0.5">
+                              {e.changes.map((c: any, ci: number) => (
+                                <li key={ci} className="text-xs text-gray-600">
+                                  <span className="text-gray-500">{c.label}:</span>{' '}
+                                  <span className="line-through text-gray-400">{String(c.from)}</span>
+                                  {' → '}
+                                  <span className="font-medium text-gray-800">{String(c.to)}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </>
+                      ),
+                    }))}
+                  />
+                </div>
+              )}
             </div>
-          </div>
+          </Dialog>
         );
       })()}
 
-      {/* Modal de devolución parcial */}
-      {returnModalSale && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl max-w-md w-full max-h-[90vh] flex flex-col overflow-hidden">
-            <div className="px-5 py-4 border-b border-gray-200 bg-red-50 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Undo2 className="w-5 h-5 text-red-600" />
-                <div>
-                  <h2 className="text-base font-semibold text-red-800">Devolver productos</h2>
-                  <p className="text-xs text-red-600 font-mono">{returnModalSale.orderNumber}</p>
-                </div>
-              </div>
-              <button onClick={() => setReturnModalSale(null)} className="text-gray-400 hover:text-gray-600">
-                <X className="w-5 h-5" />
-              </button>
+      {/* Anular venta: motivo */}
+      <Dialog
+        open={!!cancelSale}
+        onClose={() => !isCancelling && setCancelSale(null)}
+        size="sm"
+        title="¿Anular la venta?"
+        description={cancelSale ? `${cancelSale.orderNumber} · Se devolverá el stock y la venta queda como Cancelada.` : undefined}
+        footer={
+          <>
+            <Button variant="secondary" size="lg" onClick={() => setCancelSale(null)} disabled={isCancelling}>Cancelar</Button>
+            <Button variant="danger" size="lg" icon={<Ban className="w-4 h-4" />} onClick={confirmCancelSale} isLoading={isCancelling} disabled={!cancelReason.trim()}>
+              Anular venta
+            </Button>
+          </>
+        }
+      >
+        <Field label="Motivo de la anulación" required>
+          <TextInput
+            value={cancelReason}
+            onChange={(e) => setCancelReason(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && confirmCancelSale()}
+            placeholder="Ej: error en el cobro"
+            autoFocus
+          />
+        </Field>
+      </Dialog>
+
+      {/* Devolución parcial */}
+      <Dialog
+        open={!!returnModalSale}
+        onClose={() => !isReturning && setReturnModalSale(null)}
+        title="Devolver productos"
+        description={returnModalSale ? <span className="font-mono">{returnModalSale.orderNumber}</span> : undefined}
+        footer={
+          <>
+            <Button variant="secondary" size="lg" onClick={() => setReturnModalSale(null)} disabled={isReturning}>Cancelar</Button>
+            <Button
+              variant="danger"
+              size="lg"
+              icon={<Undo2 className="w-4 h-4" />}
+              onClick={handleReturn}
+              isLoading={isReturning}
+              disabled={!returnModalSale || returnRefundTotal(returnModalSale) <= 0}
+            >
+              Confirmar devolución
+            </Button>
+          </>
+        }
+      >
+        {returnModalSale && (
+          <div className="space-y-4">
+            <div className="rounded-lg border border-gray-200 divide-y divide-gray-100">
+              {(returnModalSale.items || []).map((it: any, idx: number) => {
+                const max = it.quantity || 0;
+                const qty = returnQtys[it.variantId] || 0;
+                return (
+                  <div key={idx} className="flex items-center justify-between gap-2 px-3 py-2.5">
+                    <div className="min-w-0">
+                      <p className="text-sm text-gray-900 truncate">{it.productName || it.product?.name || 'Producto'}</p>
+                      <p className="text-xs text-gray-500">Vendidos: {max} · ${Number(it.unitPrice ?? it.price ?? 0).toLocaleString()} c/u</p>
+                    </div>
+                    <div className="inline-flex items-center rounded-lg border border-gray-300 flex-shrink-0">
+                      <button onClick={() => setReturnQty(it.variantId, qty - 1, max)} disabled={qty <= 0} title="Restar" aria-label="Restar" className="w-9 h-9 inline-flex items-center justify-center text-gray-600 hover:bg-gray-50 rounded-l-lg disabled:opacity-40">
+                        <Minus className="w-4 h-4" />
+                      </button>
+                      <span className="w-8 text-center text-sm font-semibold tabular-nums">{qty}</span>
+                      <button onClick={() => setReturnQty(it.variantId, qty + 1, max)} disabled={qty >= max} title="Sumar" aria-label="Sumar" className="w-9 h-9 inline-flex items-center justify-center text-gray-600 hover:bg-gray-50 rounded-r-lg disabled:opacity-40">
+                        <Plus className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
 
-            <div className="p-5 space-y-4 overflow-y-auto">
-              {/* Items con cantidad a devolver */}
-              <div className="space-y-2">
-                {(returnModalSale.items || []).map((it: any, idx: number) => {
-                  const max = it.quantity || 0;
-                  const qty = returnQtys[it.variantId] || 0;
-                  return (
-                    <div key={idx} className="flex items-center justify-between gap-2 border border-gray-100 rounded-lg p-2.5">
-                      <div className="min-w-0">
-                        <p className="text-sm text-gray-800 truncate">{it.productName || it.product?.name || 'Producto'}</p>
-                        <p className="text-xs text-gray-500">
-                          Vendidos: {max} · ${Number(it.unitPrice ?? it.price ?? 0).toLocaleString()} c/u
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-1.5 flex-shrink-0">
-                        <button
-                          onClick={() => setReturnQty(it.variantId, qty - 1, max)}
-                          className="p-1 rounded border border-gray-300 hover:bg-gray-100 disabled:opacity-40"
-                          disabled={qty <= 0}
-                        >
-                          <Minus className="w-3.5 h-3.5" />
-                        </button>
-                        <span className="w-7 text-center text-sm font-medium">{qty}</span>
-                        <button
-                          onClick={() => setReturnQty(it.variantId, qty + 1, max)}
-                          className="p-1 rounded border border-gray-300 hover:bg-gray-100 disabled:opacity-40"
-                          disabled={qty >= max}
-                        >
-                          <Plus className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Motivo */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Motivo (opcional)</label>
-                <input
-                  type="text"
-                  value={returnReason}
-                  onChange={(e) => setReturnReason(e.target.value)}
-                  placeholder="Ej: producto en mal estado"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                />
-              </div>
-
-              {/* Método de reembolso */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Reembolso por</label>
-                <select
-                  value={returnRefundMethod}
-                  onChange={(e) => setReturnRefundMethod(e.target.value as 'cash' | 'transfer')}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white"
-                >
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <Field label="Motivo" hint="Opcional">
+                <TextInput value={returnReason} onChange={(e) => setReturnReason(e.target.value)} placeholder="Ej: producto en mal estado" />
+              </Field>
+              <Field label="Reembolso por">
+                <SelectInput value={returnRefundMethod} onChange={(e) => setReturnRefundMethod(e.target.value as 'cash' | 'transfer')}>
                   <option value="cash">Efectivo</option>
                   <option value="transfer">Transferencia</option>
-                </select>
-              </div>
-
-              {/* Total a reembolsar */}
-              <div className="flex justify-between items-center bg-red-50 border border-red-200 rounded-lg px-3 py-2">
-                <span className="text-sm font-medium text-red-800">Total a reembolsar</span>
-                <span className="text-lg font-bold text-red-700">
-                  ${returnRefundTotal(returnModalSale).toLocaleString()}
-                </span>
-              </div>
+                </SelectInput>
+              </Field>
             </div>
 
-            <div className="px-5 py-4 border-t border-gray-200 flex gap-3">
-              <Button variant="admin-secondary" fullWidth onClick={() => setReturnModalSale(null)} disabled={isReturning}>
-                Cancelar
-              </Button>
-              <Button
-                variant="admin-danger"
-                fullWidth
-                onClick={handleReturn}
-                isLoading={isReturning}
-                disabled={isReturning || returnRefundTotal(returnModalSale) <= 0}
-              >
-                <Undo2 className="w-4 h-4" />
-                Confirmar devolución
-              </Button>
+            <div className="flex justify-between items-center rounded-lg border border-gray-200 px-4 py-3">
+              <span className="text-sm font-medium text-gray-700">Total a reembolsar</span>
+              <span className="text-xl font-bold text-red-600">${returnRefundTotal(returnModalSale).toLocaleString()}</span>
             </div>
           </div>
-        </div>
-      )}
-
-    </div>
+        )}
+      </Dialog>
+    </Page>
   );
 }

@@ -1,4 +1,6 @@
+import { http } from '../lib/http';
 import api from './api.service';
+import type { InputTypeSize } from './input-types.service';
 
 export interface InputColor {
   id: number;
@@ -42,17 +44,6 @@ export interface InputVariant {
     name: string;
     abbreviation: string;
   } | null;
-}
-
-export interface InputTypeSize {
-  id: number;
-  sizeId: number;
-  size: {
-    id: number;
-    name: string;
-    abbreviation: string;
-    sortOrder: number;
-  };
 }
 
 export interface Input {
@@ -239,7 +230,6 @@ export const inputsService = {
 
   // Get all variants from all inputs
   async getAllVariants(): Promise<(InputVariant & { input: { id: number; code: string; name: string; unitOfMeasure: string; isActive: boolean } })[]> {
-    const response = await api.get('/inputs/all-variants');
-    return response.data.data || response.data || [];
+    return (await http.get<(InputVariant & { input: { id: number; code: string; name: string; unitOfMeasure: string; isActive: boolean } })[]>('/inputs/all-variants')) ?? [];
   },
 };

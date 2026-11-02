@@ -7,6 +7,7 @@ use App\Models\OrderItem;
 use App\Models\Product;
 use App\Models\Review;
 use App\Models\ReviewHelpfulVote;
+use App\Services\ReviewService;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
@@ -18,6 +19,14 @@ class ReviewController extends Controller
     private const PURCHASED_STATUSES = ['PAID', 'PROCESSING', 'SHIPPED', 'DELIVERED'];
 
     // ==================== RUTAS PÚBLICAS ====================
+
+    /** Reseñas destacadas para la portada (aprobadas, 4-5 estrellas, con comentario). */
+    public function featured(Request $request, ReviewService $reviews)
+    {
+        $data = $request->validate(['limit' => 'nullable|integer|min:1|max:'.ReviewService::FEATURED_MAX]);
+
+        return $this->success($reviews->featured((int) ($data['limit'] ?? 6)));
+    }
 
     public function productReviews(Request $request, int $productId)
     {

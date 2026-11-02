@@ -1,20 +1,4 @@
-import axios from 'axios';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
-
-const getAuthHeader = () => {
-  const authData = localStorage.getItem('marketplace_auth');
-  if (authData) {
-    try {
-      const parsed = JSON.parse(authData);
-      return parsed.token ? { Authorization: `Bearer ${parsed.token}` } : {};
-    } catch {
-      return {};
-    }
-  }
-  return {};
-};
-
+import { httpKeepUrls as client } from '../lib/http';
 // ==================== TIPOS ====================
 
 export interface BarcodeLabelData {
@@ -53,13 +37,10 @@ export async function getVariantBarcodeImage(
   if (options.includeText !== undefined)
     params.append('includeText', options.includeText.toString());
 
-  const response = await axios.get(`${API_URL}/barcodes/image/${variantId}?${params.toString()}`, {
-    headers: getAuthHeader(),
-    responseType: 'blob',
-  });
+  const blob = await client.blob(`/barcodes/image/${variantId}?${params.toString()}`);
 
   // Crear URL blob para la imagen
-  return URL.createObjectURL(response.data);
+  return URL.createObjectURL(blob);
 }
 
 /**
@@ -69,49 +50,30 @@ export async function generateBarcodeImage(
   barcode: string,
   options: BarcodeImageOptions = {}
 ): Promise<string> {
-  const response = await axios.post(
-    `${API_URL}/barcodes/image`,
-    {
-      barcode,
-      ...options,
-    },
-    {
-      headers: getAuthHeader(),
-      responseType: 'blob',
-    }
-  );
+  const blob = await client.blob('/barcodes/image', { method: 'POST', body: { barcode, ...options } });
 
-  return URL.createObjectURL(response.data);
+  return URL.createObjectURL(blob);
 }
 
 /**
  * Obtener datos completos de etiqueta para una variante
  */
 export async function getVariantBarcodeLabel(variantId: number): Promise<BarcodeLabelData> {
-  const response = await axios.get(`${API_URL}/barcodes/label/${variantId}`, {
-    headers: getAuthHeader(),
-  });
-  return response.data.data;
+  return client.get<BarcodeLabelData>(`/barcodes/label/${variantId}`);
 }
 
 /**
  * Generar etiquetas para múltiples variantes
  */
 export async function generateBatchLabels(variantIds: number[]): Promise<BarcodeLabelData[]> {
-  const response = await axios.post(`${API_URL}/barcodes/labels/batch`, { variantIds }, {
-    headers: getAuthHeader(),
-  });
-  return response.data.data;
+  return client.post<BarcodeLabelData[]>(`/barcodes/labels/batch`, { variantIds });
 }
 
 /**
  * Generar etiquetas para todas las variantes de un producto
  */
 export async function generateProductLabels(productId: number): Promise<BarcodeLabelData[]> {
-  const response = await axios.get(`${API_URL}/barcodes/labels/product/${productId}`, {
-    headers: getAuthHeader(),
-  });
-  return response.data.data;
+  return client.get<BarcodeLabelData[]>(`/barcodes/labels/product/${productId}`);
 }
 
 /**
@@ -121,10 +83,7 @@ export async function assignBarcode(
   variantId: number,
   barcode?: string
 ): Promise<{ variantId: number; barcode: string }> {
-  const response = await axios.post(`${API_URL}/barcodes/assign/${variantId}`, { barcode }, {
-    headers: getAuthHeader(),
-  });
-  return response.data.data;
+  return client.post<{ variantId: number; barcode: string }>(`/barcodes/assign/${variantId}`, { barcode });
 }
 
 /**
@@ -135,10 +94,11 @@ export async function assignAllBarcodes(): Promise<{
   failed: number;
   errors: { variantId: number; error: string }[];
 }> {
-  const response = await axios.post(`${API_URL}/barcodes/assign-all`, {}, {
-    headers: getAuthHeader(),
-  });
-  return response.data.data;
+  return client.post<{
+  success: number;
+  failed: number;
+  errors: { variantId: number; error: string }[];
+}>(`/barcodes/assign-all`, {});
 }
 
 /**
@@ -148,10 +108,7 @@ export async function validateBarcode(
   barcode: string,
   type: 'ean13' | 'code128' = 'ean13'
 ): Promise<{ barcode: string; type: string; isValid: boolean }> {
-  const response = await axios.post(`${API_URL}/barcodes/validate`, { barcode, type }, {
-    headers: getAuthHeader(),
-  });
-  return response.data.data;
+  return client.post<{ barcode: string; type: string; isValid: boolean }>(`/barcodes/validate`, { barcode, type });
 }
 
 /**
@@ -164,13 +121,5 @@ export async function generateBarcodeLabels(
   items: { variantId: number; quantity: number }[],
   templateId?: number
 ): Promise<Blob> {
-  const response = await axios.post(
-    `${API_URL}/barcodes/print`,
-    { items, templateId },
-    {
-      headers: getAuthHeader(),
-      responseType: 'blob',
-    }
-  );
-  return response.data;
+  return client.blob('/barcodes/print', { method: 'POST', body: { items, templateId } });
 }

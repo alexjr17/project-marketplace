@@ -7,7 +7,10 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:types": "tsc -p tsconfig.test.json --noEmit"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.7",
@@ -17,8 +20,8 @@
     "@tiptap/extension-underline": "^3.11.1",
     "@tiptap/react": "^3.11.1",
     "@tiptap/starter-kit": "^3.11.1",
-    "axios": "^1.6.7",
     "date-fns": "^3.6.0",
+    "dompurify": "^3.4.17",
     "html5-qrcode": "^2.3.8",
     "jszip": "^3.10.1",
     "lucide-react": "^0.554.0",
@@ -30,6 +33,10 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
+    "@testing-library/dom": "10.4.2",
+    "@testing-library/jest-dom": "6.9.1",
+    "@testing-library/react": "16.3.3",
+    "@testing-library/user-event": "14.6.8",
     "@types/jszip": "^3.4.0",
     "@types/node": "^24.10.1",
     "@types/react": "^19.2.5",
@@ -44,11 +51,14 @@
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.24",
     "globals": "^16.5.0",
+    "jsdom": "29.1.1",
+    "msw": "2.15.0",
     "postcss": "^8.5.6",
     "prettier": "^3.6.2",
     "tailwindcss": "^3.4.18",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.46.4",
-    "vite": "^7.2.4"
+    "vite": "^7.2.4",
+    "vitest": "4.1.12"
   }
 }

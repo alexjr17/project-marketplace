@@ -1,254 +1,149 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import type { ReactNode } from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import { ChevronDown, LogOut, Menu, PanelLeftClose, PanelLeftOpen, Shirt, User, X } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import {
-  Shirt,
-  Layers,
-  Settings,
-  Menu,
-  User,
-  LogOut,
-  ChevronDown,
-  ChevronRight,
-  Tag,
-  Palette,
-  Ruler,
-  Box,
-  Boxes,
-  CalendarRange,
-  Workflow,
-  Building2,
-  Warehouse,
-  FileText,
-  ClipboardList,
-  ShoppingCart,
-  Users,
-  Truck,
-  BadgeCheck,
-  DollarSign,
-  Store,
-} from 'lucide-react';
-import type { Permission } from '../../types/roles';
 import AppSwitcher from '../common/AppSwitcher';
+import { Avatar } from '../ui/Media';
+import { Breadcrumbs } from '../ui/Display';
+import { MFG_NAV, findMfgActive, type MfgNavItem } from './mfgNav';
 
-interface ManufacturingLayoutProps {
-  children: React.ReactNode;
-}
+const COLLAPSE_KEY = 'mfg_sidebar_collapsed';
+const readCollapsed = () => { try { return localStorage.getItem(COLLAPSE_KEY) === '1'; } catch { return false; } };
 
-// Módulos con submenús (misma estructura visual que el panel Admin).
-const menuWithSubmenus: {
-  id: string;
-  label: string;
-  icon: typeof Layers;
-  basePath: string;
-  submenu: { path: string; label: string; icon?: typeof Tag; permission?: Permission }[];
-}[] = [
-  {
-    id: 'production',
-    label: 'Producción',
-    icon: Shirt,
-    basePath: '/manufacturing/orders',
-    submenu: [
-      { path: '/manufacturing/purchase-orders', label: 'Pedidos', icon: ShoppingCart, permission: 'manufacturing.orders.view' },
-      { path: '/manufacturing/orders', label: 'Órdenes de producción', icon: ClipboardList, permission: 'manufacturing.orders.view' },
-      { path: '/manufacturing/dispatches', label: 'Despachos', icon: Truck, permission: 'manufacturing.orders.view' },
-      { path: '/manufacturing/references', label: 'Referencias', icon: FileText, permission: 'manufacturing.references.view' },
-      { path: '/manufacturing/inventory', label: 'Inventario', icon: Boxes, permission: 'manufacturing.orders.view' },
-    ],
-  },
-  {
-    id: 'catalogs',
-    label: 'Catálogos',
-    icon: Layers,
-    basePath: '/manufacturing/garment-types',
-    submenu: [
-      { path: '/manufacturing/clients', label: 'Clientes', icon: Users, permission: 'manufacturing.catalogs.view' },
-      { path: '/manufacturing/brands', label: 'Marcas', icon: BadgeCheck, permission: 'manufacturing.catalogs.view' },
-      { path: '/manufacturing/collections', label: 'Colecciones', icon: CalendarRange, permission: 'manufacturing.catalogs.view' },
-      { path: '/manufacturing/garment-types', label: 'Tipos de prenda', icon: Tag, permission: 'manufacturing.catalogs.view' },
-      { path: '/manufacturing/colors', label: 'Colores', icon: Palette, permission: 'manufacturing.catalogs.view' },
-      { path: '/manufacturing/sizes', label: 'Tallas', icon: Ruler, permission: 'manufacturing.catalogs.view' },
-      { path: '/manufacturing/input-types', label: 'Tipos de insumo', icon: Boxes, permission: 'manufacturing.catalogs.view' },
-      { path: '/manufacturing/inputs', label: 'Insumos', icon: Box, permission: 'manufacturing.catalogs.view' },
-      { path: '/manufacturing/exchange-rates', label: 'Tasa de cambio', icon: DollarSign, permission: 'manufacturing.catalogs.view' },
-    ],
-  },
-  {
-    id: 'config',
-    label: 'Configuración',
-    icon: Settings,
-    basePath: '/manufacturing/processes',
-    submenu: [
-      { path: '/manufacturing/processes', label: 'Procesos', icon: Workflow, permission: 'manufacturing.catalogs.view' },
-      { path: '/manufacturing/workshops', label: 'Talleres', icon: Building2, permission: 'manufacturing.catalogs.view' },
-      { path: '/manufacturing/warehouses', label: 'Bodegas', icon: Warehouse, permission: 'manufacturing.catalogs.view' },
-    ],
-  },
-];
-
-export default function ManufacturingLayout({ children }: ManufacturingLayoutProps) {
-  const location = useLocation();
+/**
+ * Armazón de la app Fábrica: menú lateral por secciones (sin acordeones, contraíble),
+ * barra superior con migas, cambio de app y menú de usuario. La navegación sale de mfgNav.ts.
+ * El <main> no tiene padding: cada pantalla va dentro de <Page>.
+ */
+export default function ManufacturingLayout({ children }: { children: ReactNode }) {
   const { user, role, logout, hasPermission } = useAuth();
+  const location = useLocation();
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(readCollapsed);
+  const [profileOpen, setProfileOpen] = useState(false);
 
-  const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth >= 1024);
-  const [isMobile, setIsMobile] = useState(() => window.innerWidth < 1024);
-  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const pathname = location.pathname.replace(/\/+$/, '') || '/';
+  const active = findMfgActive(pathname);
 
-  useEffect(() => {
-    const handleResize = () => {
-      const mobile = window.innerWidth < 1024;
-      setIsMobile(mobile);
-      setSidebarOpen(!mobile);
-    };
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
+  useEffect(() => { setMobileOpen(false); setProfileOpen(false); }, [location.pathname]);
 
-  useEffect(() => {
-    if (isMobile) setSidebarOpen(false);
-  }, [location.pathname, isMobile]);
+  const toggleCollapsed = () => setCollapsed((c) => {
+    try { localStorage.setItem(COLLAPSE_KEY, c ? '0' : '1'); } catch { /* sin almacenamiento */ }
+    return !c;
+  });
 
-  const visibleModules = menuWithSubmenus
-    .map((module) => ({ ...module, submenu: module.submenu.filter((s) => !s.permission || hasPermission(s.permission)) }))
-    .filter((module) => module.submenu.length > 0);
+  const NavLinkItem = ({ item, compact }: { item: MfgNavItem; compact: boolean }) => {
+    const Icon = item.icon;
+    const isActive = active?.item === item;
+    return (
+      <Link
+        to={item.path}
+        title={compact ? item.label : undefined}
+        aria-current={isActive ? 'page' : undefined}
+        className={`group relative flex items-center gap-3 rounded-lg h-9 text-sm transition-colors ${compact ? 'justify-center px-0' : 'px-3'} ${
+          isActive ? 'bg-app-50 text-app-700 font-medium' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+        }`}
+      >
+        {isActive && <span className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-full bg-app-600" />}
+        <Icon className={`w-[18px] h-[18px] flex-shrink-0 ${isActive ? 'text-app-600' : 'text-gray-400 group-hover:text-gray-600'}`} />
+        {!compact && <span className="truncate">{item.label}</span>}
+      </Link>
+    );
+  };
 
-  const [openSubmenus, setOpenSubmenus] = useState<Record<string, boolean>>({ production: true, catalogs: false, config: false });
-  const toggleSubmenu = (id: string) => setOpenSubmenus((prev) => ({ ...prev, [id]: !prev[id] }));
+  const sidebar = (compact: boolean) => (
+    <>
+      <div className={`flex h-16 items-center gap-3 border-b border-gray-100 flex-shrink-0 ${compact ? 'justify-center px-2' : 'px-4'}`}>
+        <Link to="/manufacturing" className="flex items-center gap-3 min-w-0">
+          <span className="w-9 h-9 rounded-lg bg-app-600 text-white flex items-center justify-center flex-shrink-0"><Shirt className="w-5 h-5" /></span>
+          {!compact && (
+            <span className="min-w-0">
+              <span className="block truncate text-sm font-semibold text-gray-900">Fábrica</span>
+              <span className="block text-xs text-gray-500">Producción textil</span>
+            </span>
+          )}
+        </Link>
+      </div>
 
-  const isActive = (path: string) => location.pathname.startsWith(path);
-  const isModuleActive = (module: typeof menuWithSubmenus[0]) => module.submenu.some((s) => isActive(s.path));
+      <nav className="flex-1 overflow-y-auto overflow-x-hidden px-3 py-3" aria-label="Menú de Fábrica">
+        {MFG_NAV.map((section, si) => {
+          const items = section.items.filter((i) => !i.permission || hasPermission(i.permission));
+          if (!items.length) return null;
+          return (
+            <div key={section.label} className={si ? 'mt-4' : ''}>
+              {compact
+                ? (si > 0 && <div className="mx-2 mb-2 border-t border-gray-100" />)
+                : <p className="px-3 mb-1 text-[11px] font-semibold uppercase tracking-wider text-gray-400">{section.label}</p>}
+              <div className="space-y-0.5">{items.map((i) => <NavLinkItem key={i.path} item={i} compact={compact} />)}</div>
+            </div>
+          );
+        })}
+      </nav>
+    </>
+  );
+
+  // Migas: Sección › Ítem › (Nuevo / Detalle)
+  const crumbs: { label: string; to?: string }[] = [];
+  if (active) {
+    crumbs.push({ label: active.section });
+    crumbs.push({ label: active.item.label, to: active.item.path });
+    if (active.extra) crumbs.push({ label: active.extra });
+  }
 
   return (
-    <div className="h-screen bg-gray-100 flex flex-col overflow-hidden">
-      {/* Header */}
-      <header className="bg-white border-b border-gray-200 flex-shrink-0 z-40">
-        <div className="flex items-center justify-between px-4 py-3">
-          <div className="flex items-center gap-4">
-            <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
-              <Menu className="w-6 h-6 text-gray-600" />
-            </button>
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-gradient-to-br from-orange-500 to-red-500 rounded-lg">
-                <Shirt className="w-6 h-6 text-white" />
-              </div>
-              <div className="hidden sm:block">
-                <h1 className="text-lg font-bold text-gray-900">Fábrica</h1>
-                <p className="text-xs text-gray-500">Producción</p>
-              </div>
-            </div>
-          </div>
+    <div className="flex h-screen overflow-hidden bg-gray-50">
+      {/* Menú lateral (escritorio) */}
+      <aside className={`hidden lg:flex flex-col flex-shrink-0 border-r border-gray-200 bg-white transition-[width] duration-200 ${collapsed ? 'w-[72px]' : 'w-64'}`}>
+        {sidebar(collapsed)}
+      </aside>
 
-          <div className="flex items-center gap-4">
-            <div className="hidden lg:block"><AppSwitcher /></div>
-            <div className="relative">
-              <button onClick={() => setProfileMenuOpen(!profileMenuOpen)} className="flex items-center gap-2 p-2 pr-3 hover:bg-gray-100 rounded-lg transition-colors">
-                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-orange-500 to-red-500 flex items-center justify-center">
-                  <span className="text-white text-sm font-bold">{user?.name.charAt(0).toUpperCase()}</span>
-                </div>
-                <ChevronDown className={`w-4 h-4 text-gray-600 transition-transform ${profileMenuOpen ? 'rotate-180' : ''}`} />
-              </button>
-              {profileMenuOpen && (
-                <>
-                  <div className="fixed inset-0 z-10" onClick={() => setProfileMenuOpen(false)} />
-                  <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-xl border border-gray-200 py-2 z-20">
-                    <div className="px-4 py-3 border-b border-gray-100">
-                      <p className="text-sm font-medium text-gray-900">{user?.name}</p>
-                      <p className="text-xs text-gray-500 mt-1">{user?.email}</p>
-                      <span className="inline-block mt-2 px-2 py-1 bg-orange-100 text-orange-700 text-xs font-medium rounded">{role?.name || 'Usuario'}</span>
-                    </div>
-                    <Link to="/profile" onClick={() => setProfileMenuOpen(false)} className="flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors">
-                      <User className="w-4 h-4" /> Mi Perfil
-                    </Link>
-                    <div className="my-2 border-t border-gray-100" />
-                    <button onClick={() => { logout(); setProfileMenuOpen(false); }} className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors">
-                      <LogOut className="w-4 h-4" /> Cerrar Sesión
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
+      {/* Menú lateral (celular) */}
+      {mobileOpen && (
+        <div className="fixed inset-0 z-50 lg:hidden">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setMobileOpen(false)} />
+          <aside className="absolute inset-y-0 left-0 flex w-72 max-w-[85vw] flex-col bg-white shadow-xl">
+            <button type="button" onClick={() => setMobileOpen(false)} title="Cerrar menú" className="absolute right-2 top-4 p-2 rounded-lg text-gray-500 hover:bg-gray-100"><X className="w-5 h-5" /></button>
+            {sidebar(false)}
+            <div className="border-t border-gray-100 p-3"><AppSwitcher /></div>
+          </aside>
         </div>
-      </header>
+      )}
 
-      <div className="flex flex-1 relative overflow-hidden">
-        {sidebarOpen && isMobile && (
-          <div className="fixed inset-0 bg-black/50 z-40 lg:hidden transition-opacity duration-300" onClick={() => setSidebarOpen(false)} />
-        )}
+      <div className="flex min-w-0 flex-1 flex-col">
+        {/* Barra superior */}
+        <header className="flex h-16 flex-shrink-0 items-center gap-3 border-b border-gray-200 bg-white px-4 md:px-6">
+          <button type="button" onClick={() => setMobileOpen(true)} title="Abrir menú" className="lg:hidden p-2 -ml-2 rounded-lg text-gray-600 hover:bg-gray-100"><Menu className="w-5 h-5" /></button>
+          <button type="button" onClick={toggleCollapsed} title={collapsed ? 'Expandir menú' : 'Contraer menú'} className="hidden lg:inline-flex p-2 -ml-2 rounded-lg text-gray-500 hover:bg-gray-100">
+            {collapsed ? <PanelLeftOpen className="w-5 h-5" /> : <PanelLeftClose className="w-5 h-5" />}
+          </button>
+          <div className="min-w-0 flex-1">{crumbs.length > 0 && <Breadcrumbs items={crumbs} />}</div>
 
-        <aside
-          className={`fixed lg:relative inset-y-0 left-0 z-50 lg:z-40 w-64 bg-white border-r border-gray-200 flex flex-col flex-shrink-0 transform transition-transform duration-300 ease-in-out ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'} ${isMobile ? 'h-full' : ''}`}
-        >
-          {isMobile && (
-            <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-white">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-gradient-to-br from-orange-500 to-red-500 rounded-lg"><Shirt className="w-5 h-5 text-white" /></div>
-                <span className="text-lg font-bold text-gray-900">Fábrica</span>
-              </div>
-              <button onClick={() => setSidebarOpen(false)} className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
-                <ChevronRight className="w-5 h-5 text-gray-600 rotate-180" />
-              </button>
-            </div>
-          )}
+          <div className="hidden lg:block"><AppSwitcher /></div>
 
-          {/* App Switcher - Mobile */}
-          {isMobile && (
-            <div className="p-4 border-b border-gray-200 bg-white">
-              <p className="px-2 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">Cambiar a</p>
-              <Link to="/" onClick={() => setSidebarOpen(false)} className="flex items-center gap-3 px-3 py-3 hover:bg-blue-50 rounded-xl transition-colors">
-                <div className="p-2 bg-blue-100 rounded-lg"><Store className="w-5 h-5 text-blue-600" /></div>
-                <div className="flex-1"><span className="font-bold text-gray-900">Tienda</span><p className="text-xs text-gray-500">Navegar tienda</p></div>
-              </Link>
-            </div>
-          )}
-
-          <nav className="flex-1 px-2 py-3 space-y-1 bg-white overflow-y-auto overflow-x-hidden">
-            {visibleModules.map((module) => {
-              const Icon = module.icon;
-              const moduleActive = isModuleActive(module);
-              return (
-                <div key={module.id}>
-                  <button
-                    onClick={() => toggleSubmenu(module.id)}
-                    className={`w-full flex items-center justify-between gap-3 px-3 py-3 rounded-lg font-medium text-sm transition-colors ${moduleActive ? 'bg-orange-50 text-orange-700' : 'text-gray-700 hover:bg-gray-50'}`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <Icon className={`w-5 h-5 flex-shrink-0 ${moduleActive ? 'text-orange-600' : 'text-gray-500'}`} />
-                      <span className="whitespace-nowrap">{module.label}</span>
-                    </div>
-                    <ChevronRight className={`w-4 h-4 transition-transform ${openSubmenus[module.id] ? 'rotate-90' : ''}`} />
-                  </button>
-                  {openSubmenus[module.id] && (
-                    <div className="ml-4 mt-1 space-y-1 border-l-2 border-gray-100 pl-2">
-                      {module.submenu.map((subItem) => {
-                        const subActive = isActive(subItem.path);
-                        const SubIcon = subItem.icon;
-                        return (
-                          <Link
-                            key={subItem.path}
-                            to={subItem.path}
-                            className={`flex items-center gap-3 px-3 py-2 rounded-lg font-medium text-sm transition-colors ${subActive ? 'bg-orange-50 text-orange-700' : 'text-gray-600 hover:bg-gray-50'}`}
-                          >
-                            {SubIcon ? (
-                              <SubIcon className={`w-4 h-4 ${subActive ? 'text-orange-600' : 'text-gray-400'}`} />
-                            ) : (
-                              <span className="w-4 h-4 flex items-center justify-center text-xs text-gray-400">•</span>
-                            )}
-                            {subItem.label}
-                          </Link>
-                        );
-                      })}
-                    </div>
-                  )}
+          <div className="relative">
+            <button type="button" onClick={() => setProfileOpen((o) => !o)} aria-expanded={profileOpen} title="Mi cuenta" className="flex items-center gap-1.5 rounded-lg p-1 hover:bg-gray-100">
+              <Avatar name={user?.name} size="sm" />
+              <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${profileOpen ? 'rotate-180' : ''}`} />
+            </button>
+            {profileOpen && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setProfileOpen(false)} />
+                <div className="absolute right-0 z-20 mt-2 w-60 rounded-xl border border-gray-200 bg-white py-1 shadow-xl">
+                  <div className="px-4 py-3 border-b border-gray-100">
+                    <p className="truncate text-sm font-medium text-gray-900">{user?.name}</p>
+                    <p className="truncate text-xs text-gray-500">{user?.email}</p>
+                    <span className="mt-2 inline-block rounded-full bg-app-100 px-2 py-0.5 text-xs font-medium text-app-700">{role?.name || 'Usuario'}</span>
+                  </div>
+                  <Link to="/profile" className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"><User className="w-4 h-4" /> Mi perfil</Link>
+                  <button type="button" onClick={() => { setProfileOpen(false); logout(); }} className="flex w-full items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50"><LogOut className="w-4 h-4" /> Cerrar sesión</button>
                 </div>
-              );
-            })}
-          </nav>
-        </aside>
+              </>
+            )}
+          </div>
+        </header>
 
-        <main className="flex-1 overflow-y-auto transition-all duration-300 w-full p-6">
-          {children}
-        </main>
+        <main className="flex-1 overflow-y-auto">{children}</main>
       </div>
     </div>
   );

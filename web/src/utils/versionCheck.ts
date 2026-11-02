@@ -18,7 +18,9 @@ async function checkForUpdate(): Promise<void> {
     const res = await fetch(`/build-id.txt?t=${Date.now()}`, { cache: 'no-store' });
     if (!res.ok) return;
     const remote = (await res.text()).trim();
-    if (!remote || remote === CURRENT_BUILD_ID) return;
+    // Sin build-id.txt el servidor de desarrollo responde el index.html (fallback SPA):
+    // eso no es una versión nueva.
+    if (!remote || remote === CURRENT_BUILD_ID || remote.startsWith('<') || remote.length > 64) return;
 
     // Hay una versión nueva. Recargar una sola vez por versión para evitar
     // bucles si algo quedara desincronizado.
@@ -33,7 +35,8 @@ async function checkForUpdate(): Promise<void> {
 }
 
 export function initVersionCheck(): void {
-  if (!CURRENT_BUILD_ID) return;
+  // En desarrollo no hay build-id.txt y Vite ya recarga solo (HMR).
+  if (!CURRENT_BUILD_ID || import.meta.env.DEV) return;
   // Al abrir (tras un pequeño margen) y cada vez que la pestaña vuelve a estar
   // visible/enfocada (típico al volver al POS en el celular).
   setTimeout(checkForUpdate, 3000);

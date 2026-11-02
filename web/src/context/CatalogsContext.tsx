@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import type { Size, Color, ProductType, Category } from '../types/catalog';
+import type { Size, Color, ProductType, Category, CatalogInput } from '../types/catalog';
 import { catalogsService } from '../services';
 
 interface CatalogsContextType {
@@ -12,26 +12,26 @@ interface CatalogsContextType {
   error: string | null;
 
   // Sizes
-  addSize: (size: Omit<Size, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
-  updateSize: (id: string, updates: Partial<Omit<Size, 'id' | 'createdAt'>>) => Promise<void>;
-  deleteSize: (id: string) => Promise<void>;
+  addSize: (size: CatalogInput<Size>) => Promise<void>;
+  updateSize: (id: number, updates: Partial<Omit<Size, 'id' | 'createdAt'>>) => Promise<void>;
+  deleteSize: (id: number) => Promise<void>;
 
   // Colors
-  addColor: (color: Omit<Color, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
-  updateColor: (id: string, updates: Partial<Omit<Color, 'id' | 'createdAt'>>) => Promise<void>;
-  deleteColor: (id: string) => Promise<void>;
+  addColor: (color: CatalogInput<Color>) => Promise<void>;
+  updateColor: (id: number, updates: Partial<Omit<Color, 'id' | 'createdAt'>>) => Promise<void>;
+  deleteColor: (id: number) => Promise<void>;
 
   // Product Types
-  addProductType: (type: Omit<ProductType, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
-  updateProductType: (id: string, updates: Partial<Omit<ProductType, 'id' | 'createdAt'>>) => Promise<void>;
-  deleteProductType: (id: string) => Promise<void>;
-  createProductType: (typeData: Omit<import('../services/catalogs.service').ProductType, 'id'>, sizeIds: number[]) => Promise<void>;
-  updateProductTypeWithSizes: (id: number, typeData: Omit<import('../services/catalogs.service').ProductType, 'id'>, sizeIds: number[]) => Promise<void>;
+  addProductType: (type: CatalogInput<ProductType>) => Promise<void>;
+  updateProductType: (id: number, updates: Partial<Omit<ProductType, 'id' | 'createdAt'>>) => Promise<void>;
+  deleteProductType: (id: number) => Promise<void>;
+  createProductType: (typeData: CatalogInput<ProductType>, sizeIds: number[]) => Promise<void>;
+  updateProductTypeWithSizes: (id: number, typeData: CatalogInput<ProductType>, sizeIds: number[]) => Promise<void>;
 
   // Categories
-  addCategory: (category: Omit<Category, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
-  updateCategory: (id: string, updates: Partial<Omit<Category, 'id' | 'createdAt'>>) => Promise<void>;
-  deleteCategory: (id: string) => Promise<void>;
+  addCategory: (category: CatalogInput<Category>) => Promise<void>;
+  updateCategory: (id: number, updates: Partial<Omit<Category, 'id' | 'createdAt'>>) => Promise<void>;
+  deleteCategory: (id: number) => Promise<void>;
 
   // Refresh
   refreshCatalogs: () => Promise<void>;
@@ -122,7 +122,7 @@ export const CatalogsProvider = ({ children }: { children: ReactNode }) => {
   }, [loadCatalogs]);
 
   // Size methods
-  const addSize = async (sizeData: Omit<Size, 'id' | 'createdAt' | 'updatedAt'>) => {
+  const addSize = async (sizeData: CatalogInput<Size>) => {
     const newSize = await catalogsService.createSize({
       name: sizeData.name,
       abbreviation: sizeData.abbreviation,
@@ -132,7 +132,7 @@ export const CatalogsProvider = ({ children }: { children: ReactNode }) => {
     setSizes((prev) => [...prev, mapApiSize(newSize)]);
   };
 
-  const updateSize = async (id: string, updates: Partial<Omit<Size, 'id' | 'createdAt'>>) => {
+  const updateSize = async (id: number, updates: Partial<Omit<Size, 'id' | 'createdAt'>>) => {
     const apiUpdates: any = {};
     if (updates.name !== undefined) apiUpdates.name = updates.name;
     if (updates.abbreviation !== undefined) apiUpdates.abbreviation = updates.abbreviation;
@@ -143,13 +143,13 @@ export const CatalogsProvider = ({ children }: { children: ReactNode }) => {
     setSizes((prev) => prev.map((s) => (s.id === id ? mapApiSize(updated) : s)));
   };
 
-  const deleteSize = async (id: string) => {
+  const deleteSize = async (id: number) => {
     await catalogsService.deleteSize(id);
     setSizes((prev) => prev.filter((s) => s.id !== id));
   };
 
   // Color methods
-  const addColor = async (colorData: Omit<Color, 'id' | 'createdAt' | 'updatedAt'>) => {
+  const addColor = async (colorData: CatalogInput<Color>) => {
     const newColor = await catalogsService.createColor({
       name: colorData.name,
       hexCode: colorData.hexCode,
@@ -158,7 +158,7 @@ export const CatalogsProvider = ({ children }: { children: ReactNode }) => {
     setColors((prev) => [...prev, mapApiColor(newColor)]);
   };
 
-  const updateColor = async (id: string, updates: Partial<Omit<Color, 'id' | 'createdAt'>>) => {
+  const updateColor = async (id: number, updates: Partial<Omit<Color, 'id' | 'createdAt'>>) => {
     const apiUpdates: any = {};
     if (updates.name !== undefined) apiUpdates.name = updates.name;
     if (updates.hexCode !== undefined) apiUpdates.hexCode = updates.hexCode;
@@ -168,13 +168,13 @@ export const CatalogsProvider = ({ children }: { children: ReactNode }) => {
     setColors((prev) => prev.map((c) => (c.id === id ? mapApiColor(updated) : c)));
   };
 
-  const deleteColor = async (id: string) => {
+  const deleteColor = async (id: number) => {
     await catalogsService.deleteColor(id);
     setColors((prev) => prev.filter((c) => c.id !== id));
   };
 
   // ProductType methods
-  const addProductType = async (typeData: Omit<ProductType, 'id' | 'createdAt' | 'updatedAt'>) => {
+  const addProductType = async (typeData: CatalogInput<ProductType>) => {
     const newType = await catalogsService.createProductType({
       name: typeData.name,
       description: typeData.description,
@@ -184,7 +184,7 @@ export const CatalogsProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const updateProductType = async (
-    id: string,
+    id: number,
     updates: Partial<Omit<ProductType, 'id' | 'createdAt'>>
   ) => {
     const apiUpdates: any = {};
@@ -196,14 +196,14 @@ export const CatalogsProvider = ({ children }: { children: ReactNode }) => {
     setProductTypes((prev) => prev.map((t) => (t.id === id ? mapApiProductType(updated) : t)));
   };
 
-  const deleteProductType = async (id: string | number) => {
-    await catalogsService.deleteProductType(typeof id === 'string' ? parseInt(id) : id);
-    setProductTypes((prev) => prev.filter((t) => t.id !== (typeof id === 'string' ? id : String(id))));
+  const deleteProductType = async (id: number) => {
+    await catalogsService.deleteProductType(id);
+    setProductTypes((prev) => prev.filter((t) => t.id !== id));
   };
 
   // Crear tipo de producto con tallas asignadas
   const createProductType = async (
-    typeData: Omit<import('../services/catalogs.service').ProductType, 'id'>,
+    typeData: CatalogInput<ProductType>,
     sizeIds: number[]
   ) => {
     const newType = await catalogsService.createProductType(typeData);
@@ -214,7 +214,7 @@ export const CatalogsProvider = ({ children }: { children: ReactNode }) => {
   // Actualizar tipo de producto con tallas asignadas
   const updateProductTypeWithSizes = async (
     id: number,
-    typeData: Omit<import('../services/catalogs.service').ProductType, 'id'>,
+    typeData: CatalogInput<ProductType>,
     sizeIds: number[]
   ) => {
     await catalogsService.updateProductType(id, typeData);
@@ -223,7 +223,7 @@ export const CatalogsProvider = ({ children }: { children: ReactNode }) => {
   };
 
   // Category methods
-  const addCategory = async (categoryData: Omit<Category, 'id' | 'createdAt' | 'updatedAt'>) => {
+  const addCategory = async (categoryData: CatalogInput<Category>) => {
     const newCategory = await catalogsService.createCategory({
       name: categoryData.name,
       description: categoryData.description,
@@ -233,7 +233,7 @@ export const CatalogsProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const updateCategory = async (
-    id: string,
+    id: number,
     updates: Partial<Omit<Category, 'id' | 'createdAt'>>
   ) => {
     const apiUpdates: any = {};
@@ -245,7 +245,7 @@ export const CatalogsProvider = ({ children }: { children: ReactNode }) => {
     setCategories((prev) => prev.map((c) => (c.id === id ? mapApiCategory(updated) : c)));
   };
 
-  const deleteCategory = async (id: string) => {
+  const deleteCategory = async (id: number) => {
     await catalogsService.deleteCategory(id);
     setCategories((prev) => prev.filter((c) => c.id !== id));
   };

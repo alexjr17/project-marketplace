@@ -115,7 +115,8 @@ export const usersService = {
 
   // Cambiar estado del usuario
   async changeStatus(id: number, status: 'ACTIVE' | 'INACTIVE' | 'SUSPENDED'): Promise<ApiUser> {
-    const response = await api.patch<ApiUser>(`/users/${id}/status`, { status });
+    // No existe PATCH /users/{id}/status en la API: el estado se cambia con PUT /users/{id}.
+    const response = await api.put<ApiUser>(`/users/${id}`, { status });
     if (!response.data) throw new Error('Error cambiando estado');
     return response.data;
   },

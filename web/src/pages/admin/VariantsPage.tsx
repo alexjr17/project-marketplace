@@ -1,42 +1,21 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
-  useReactTable,
-  getCoreRowModel,
-  getSortedRowModel,
-  flexRender,
-  createColumnHelper,
-  type SortingState,
-} from '@tanstack/react-table';
-import { useToast } from '../../context/ToastContext';
-import { Modal } from '../../components/shared/Modal';
-import { Button } from '../../components/shared/Button';
-import { Input } from '../../components/shared/Input';
-import type { ProductVariant, PaginatedResult } from '../../services/variants.service';
+  AlertTriangle, ArrowDown, ArrowUp, ArrowUpDown, Barcode, Eye, LayoutGrid, Layers, Package, Palette, Printer, RefreshCw,
+  ShoppingBag, Trash2, TrendingDown,
+} from 'lucide-react';
+import type { ProductVariant } from '../../services/variants.service';
 import * as variantsService from '../../services/variants.service';
 import * as barcodeService from '../../services/barcode.service';
 import {
-  Search,
-  ChevronLeft,
-  ChevronRight,
-  ArrowUpDown,
-  Barcode,
-  Trash2,
-  Printer,
-  AlertTriangle,
-  RefreshCw,
-  Package,
-  Layers,
-  TrendingDown,
-  Settings,
-  ShoppingBag,
-  Palette,
-} from 'lucide-react';
-
-const columnHelper = createColumnHelper<ProductVariant>();
+  Badge, Button, Checkbox, DescriptionList, Dialog, Drawer, EmptyState, FilterBar, IconButton, Page, PageHeader, Pager,
+  SearchInput, StatCard, Table, TableCard, TableMessage, Tabs, TBody, Td, Th, THead, Thumb, Tr, toast, useConfirm,
+} from '../../components/ui';
 
 type TabType = 'products' | 'templates';
+type SortKey = 'sku' | 'stock' | 'finalPrice';
 
 const PAGE_SIZE = 10;
+const money = (n: number) => '$' + Number(n || 0).toLocaleString('es-CO');
 
 // Debounce hook para busqueda
 function useDebounce<T>(value: T, delay: number): T {
@@ -48,8 +27,20 @@ function useDebounce<T>(value: T, delay: number): T {
   return debouncedValue;
 }
 
+/** Estado del stock de una variante. */
+function StockBadge({ v }: { v: ProductVariant }) {
+  const isOut = v.stock === 0;
+  const isLow = v.stock <= v.minStock;
+  return (
+    <Badge tone={isOut ? 'red' : isLow ? 'yellow' : 'green'}>
+      <span className="tabular-nums">{v.stock}</span>
+      {isLow && !isOut && <AlertTriangle className="w-3 h-3" />}
+    </Badge>
+  );
+}
+
 export default function VariantsPage() {
-  const { showToast } = useToast();
+  const confirm = useConfirm();
   const [activeTab, setActiveTab] = useState<TabType>('products');
 
   // Estado de datos
@@ -65,14 +56,14 @@ export default function VariantsPage() {
   const [loadingTemplates, setLoadingTemplates] = useState(false);
   const [templatesLoaded, setTemplatesLoaded] = useState(false);
 
-  // Modales
-  const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
+  // Ventanas
   const [showBarcodeModal, setShowBarcodeModal] = useState<ProductVariant | null>(null);
   const [showDetailModal, setShowDetailModal] = useState<ProductVariant | null>(null);
   const [barcodeImageUrl, setBarcodeImageUrl] = useState<string | null>(null);
 
-  // Tabla
-  const [sorting, setSorting] = useState<SortingState>([]);
+  // Orden (de la página actual)
+  const [sortKey, setSortKey] = useState<SortKey | null>(null);
+  const [desc, setDesc] = useState(false);
 
   // Filtros
   const [searchInput, setSearchInput] = useState('');
@@ -96,11 +87,11 @@ export default function VariantsPage() {
         totalPages: result.pagination.totalPages,
       });
     } catch (error: any) {
-      showToast('Error al cargar variantes de productos: ' + (error.response?.data?.message || error.message), 'error');
+      toast.error('Error al cargar variantes de productos: ' + (error?.message));
     } finally {
       setLoadingProducts(false);
     }
-  }, [filterLowStock, showToast]);
+  }, [filterLowStock]);
 
   // Cargar variantes de templates
   const loadTemplateVariants = useCallback(async (page = 1, search = '') => {
@@ -120,15 +111,16 @@ export default function VariantsPage() {
       });
       setTemplatesLoaded(true);
     } catch (error: any) {
-      showToast('Error al cargar variantes de plantillas: ' + (error.response?.data?.message || error.message), 'error');
+      toast.error('Error al cargar variantes de plantillas: ' + (error?.message));
     } finally {
       setLoadingTemplates(false);
     }
-  }, [filterLowStock, showToast]);
+  }, [filterLowStock]);
 
   // Cargar al iniciar
   useEffect(() => {
     loadProductVariants(1, debouncedSearch);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterLowStock, debouncedSearch]);
 
   // Cargar templates cuando se cambia a ese tab
@@ -136,61 +128,62 @@ export default function VariantsPage() {
     if (activeTab === 'templates') {
       loadTemplateVariants(1, debouncedSearch);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, filterLowStock, debouncedSearch]);
 
   // Cambio de página
   const handlePageChange = (newPage: number) => {
-    if (activeTab === 'products') {
-      loadProductVariants(newPage, debouncedSearch);
-    } else {
-      loadTemplateVariants(newPage, debouncedSearch);
-    }
+    if (activeTab === 'products') loadProductVariants(newPage, debouncedSearch);
+    else loadTemplateVariants(newPage, debouncedSearch);
   };
 
   const handleRefresh = () => {
-    if (activeTab === 'products') {
-      loadProductVariants(productPagination.page, debouncedSearch);
-    } else {
-      loadTemplateVariants(templatePagination.page, debouncedSearch);
-    }
+    if (activeTab === 'products') loadProductVariants(productPagination.page, debouncedSearch);
+    else loadTemplateVariants(templatePagination.page, debouncedSearch);
   };
 
   // Generar codigo de barras para visualizacion
   const handleShowBarcode = async (variant: ProductVariant) => {
     if (!variant.barcode) {
-      showToast('Esta variante no tiene codigo de barras asignado', 'error');
+      toast.error('Esta variante no tiene código de barras asignado');
       return;
     }
-
     try {
       const imageUrl = await barcodeService.getVariantBarcodeImage(variant.id);
       setBarcodeImageUrl(imageUrl);
       setShowBarcodeModal(variant);
     } catch (error: any) {
-      showToast('Error al generar codigo de barras', 'error');
+      toast.error('Error al generar código de barras');
     }
+  };
+
+  const closeBarcode = () => {
+    setShowBarcodeModal(null);
+    if (barcodeImageUrl) URL.revokeObjectURL(barcodeImageUrl);
+    setBarcodeImageUrl(null);
   };
 
   // Asignar codigo de barras
   const handleAssignBarcode = async (variantId: number) => {
     try {
       await barcodeService.assignBarcode(variantId);
-      showToast('Codigo de barras asignado exitosamente', 'success');
+      toast.success('Código de barras asignado exitosamente');
       handleRefresh();
     } catch (error: any) {
-      showToast('Error al asignar codigo de barras: ' + (error.response?.data?.message || error.message), 'error');
+      toast.error('Error al asignar código de barras: ' + (error?.message));
     }
   };
 
   // Eliminar variante
-  const handleDelete = async (id: number) => {
+  const handleDelete = async (variant: ProductVariant) => {
+    if (!(await confirm({ title: '¿Eliminar esta variante?', message: `${variant.product.name} · ${variant.sku}. Esta acción no se puede deshacer.`, tone: 'danger' }))) return;
     try {
-      await variantsService.deleteVariant(id);
-      showToast('Variante eliminada exitosamente', 'success');
-      setDeleteConfirmId(null);
+      await variantsService.deleteVariant(variant.id);
+      toast.success('Variante eliminada exitosamente');
+      setShowDetailModal(null);
       handleRefresh();
     } catch (error: any) {
-      showToast('Error al eliminar variante: ' + (error.response?.data?.message || error.message), 'error');
+      toast.error('Error al eliminar variante: ' + (error?.message));
     }
   };
 
@@ -199,671 +192,237 @@ export default function VariantsPage() {
   const currentPagination = activeTab === 'products' ? productPagination : templatePagination;
   const isLoading = activeTab === 'products' ? loadingProducts : loadingTemplates;
 
-  // Stats - usar totales de paginación del servidor
-  const stats = useMemo(() => {
-    const total = currentPagination.total;
-    // Estos se calculan de la página actual (aproximación visual)
-    const lowStock = currentVariants.filter(v => v.stock <= v.minStock).length;
-    const outOfStock = currentVariants.filter(v => v.stock === 0).length;
-    return { total, lowStock, outOfStock };
-  }, [currentVariants, currentPagination.total]);
+  // Indicadores: total del servidor; stock bajo y sin stock de la página actual
+  const stats = useMemo(() => ({
+    total: currentPagination.total,
+    lowStock: currentVariants.filter(v => v.stock <= v.minStock).length,
+    outOfStock: currentVariants.filter(v => v.stock === 0).length,
+  }), [currentVariants, currentPagination.total]);
 
-  // Definir columnas
-  const columns = useMemo(
-    () => [
-      columnHelper.accessor('sku', {
-        header: ({ column }) => (
-          <button
-            onClick={() => column.toggleSorting()}
-            className="flex items-center gap-1 hover:text-gray-900"
-          >
-            SKU
-            <ArrowUpDown className="w-4 h-4" />
-          </button>
-        ),
-        cell: (info) => (
-          <div className="font-mono text-sm text-gray-900">{info.getValue()}</div>
-        ),
-      }),
-      columnHelper.accessor('product.name', {
-        header: activeTab === 'products' ? 'Producto' : 'Plantilla',
-        cell: (info) => {
-          const product = info.row.original.product;
-          const image = product.images?.[0] || '/placeholder.png';
-          return (
-            <div className="flex items-center">
-              <img
-                src={image}
-                alt={product.name}
-                className="w-10 h-10 rounded-lg object-cover"
-              />
-              <div className="ml-3">
-                <div className="text-sm font-medium text-gray-900">{product.name}</div>
-              </div>
-            </div>
-          );
-        },
-      }),
-      columnHelper.accessor('color.name', {
-        header: 'Color',
-        cell: (info) => {
-          const color = info.row.original.color;
-          if (!color) {
-            return <span className="text-sm text-gray-400">N/A</span>;
-          }
-          return (
-            <div className="flex items-center gap-2">
-              <div
-                className="w-6 h-6 rounded-full border border-gray-200 shadow-sm"
-                style={{ backgroundColor: color.hexCode }}
-              />
-              <span className="text-sm text-gray-900">{color.name}</span>
-            </div>
-          );
-        },
-      }),
-      columnHelper.accessor('size.name', {
-        header: 'Talla',
-        cell: (info) => {
-          const size = info.row.original.size;
-          if (!size) {
-            return <span className="text-sm text-gray-400">N/A</span>;
-          }
-          return (
-            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-              {size.abbreviation}
-            </span>
-          );
-        },
-      }),
-      columnHelper.accessor('barcode', {
-        header: 'Codigo de Barras',
-        cell: (info) => {
-          const barcode = info.getValue();
-          return barcode ? (
-            <button
-              onClick={() => handleShowBarcode(info.row.original)}
-              className="font-mono text-sm text-indigo-600 hover:text-indigo-800 hover:underline"
-            >
-              {barcode}
-            </button>
-          ) : (
-            <button
-              onClick={() => handleAssignBarcode(info.row.original.id)}
-              className="text-xs px-2 py-1 bg-gray-100 hover:bg-indigo-100 text-gray-600 hover:text-indigo-600 rounded transition-colors"
-            >
-              Generar
-            </button>
-          );
-        },
-      }),
-      columnHelper.accessor('stock', {
-        header: ({ column }) => (
-          <button
-            onClick={() => column.toggleSorting()}
-            className="flex items-center gap-1 hover:text-gray-900"
-          >
-            Stock
-            <ArrowUpDown className="w-4 h-4" />
-          </button>
-        ),
-        cell: (info) => {
-          const stock = info.getValue();
-          const minStock = info.row.original.minStock;
-          const isTemplate = info.row.original.product.isTemplate;
-          const isLow = stock <= minStock;
-          const isOut = stock === 0;
+  const rows = useMemo(() => {
+    if (!sortKey) return currentVariants;
+    return [...currentVariants].sort((a, b) => {
+      const r = sortKey === 'sku' ? a.sku.localeCompare(b.sku) : (a[sortKey] as number) - (b[sortKey] as number);
+      return desc ? -r : r;
+    });
+  }, [currentVariants, sortKey, desc]);
 
-          return (
-            <div className="flex items-center gap-1">
-              <span
-                className={`inline-flex items-center gap-1 px-2 py-1 rounded font-medium text-sm ${
-                  isOut
-                    ? 'bg-red-100 text-red-700'
-                    : isLow
-                    ? 'bg-amber-100 text-amber-700'
-                    : 'bg-green-100 text-green-700'
-                }`}
-              >
-                {stock}
-                {isLow && !isOut && <AlertTriangle className="w-3 h-3" />}
-              </span>
-              {isTemplate && (
-                <span
-                  className="text-xs text-indigo-600"
-                  title="Stock calculado desde insumo"
-                >
-                  📦
-                </span>
-              )}
-            </div>
-          );
-        },
-      }),
-      columnHelper.accessor('finalPrice', {
-        header: ({ column }) => (
-          <button
-            onClick={() => column.toggleSorting()}
-            className="flex items-center gap-1 hover:text-gray-900"
-          >
-            Precio
-            <ArrowUpDown className="w-4 h-4" />
-          </button>
-        ),
-        cell: (info) => (
-          <span className="text-sm font-medium text-gray-900">
-            ${info.getValue().toLocaleString('es-CO')}
-          </span>
-        ),
-      }),
-      columnHelper.display({
-        id: 'actions',
-        header: () => <div className="text-right">Acciones</div>,
-        cell: ({ row }) => (
-          <div className="flex items-center justify-end">
-            <button
-              onClick={() => setShowDetailModal(row.original)}
-              className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-              title="Ver detalles"
-            >
-              <Settings className="w-4 h-4" />
-            </button>
-          </div>
-        ),
-      }),
-    ],
-    [activeTab]
+  const toggleSort = (k: SortKey) => { if (sortKey === k) setDesc(d => !d); else { setSortKey(k); setDesc(false); } };
+  const SortBtn = ({ k, children }: { k: SortKey; children: string }) => (
+    <button type="button" onClick={() => toggleSort(k)} className={`inline-flex items-center gap-1 uppercase hover:text-gray-900 ${sortKey === k ? 'text-gray-900' : ''}`}>
+      {children}
+      {sortKey === k ? (desc ? <ArrowDown className="w-3.5 h-3.5" /> : <ArrowUp className="w-3.5 h-3.5" />) : <ArrowUpDown className="w-3.5 h-3.5 opacity-50" />}
+    </button>
   );
 
-  const table = useReactTable({
-    data: currentVariants,
-    columns,
-    state: {
-      sorting,
-    },
-    onSortingChange: setSorting,
-    getCoreRowModel: getCoreRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    manualPagination: true, // Paginación del servidor
-    pageCount: currentPagination.totalPages,
-  });
+  const d = showDetailModal;
 
   return (
-    <div className="p-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Variantes de Inventario</h1>
-          <p className="text-gray-600 mt-1 text-sm">Gestiona variantes, codigos de barras y stock</p>
-        </div>
-        <Button variant="admin-orange" size="sm" onClick={handleRefresh}>
-          <RefreshCw className="w-4 h-4" />
-          Actualizar
-        </Button>
+    <Page>
+      <PageHeader
+        icon={LayoutGrid}
+        title="Variantes"
+        subtitle="Combinaciones de color y talla con su código de barras y stock"
+        actions={<Button variant="secondary" icon={<RefreshCw className="w-4 h-4" />} onClick={handleRefresh}>Actualizar</Button>}
+      />
+
+      <Tabs<TabType>
+        value={activeTab}
+        onChange={setActiveTab}
+        tabs={[
+          { value: 'products', label: <span className="inline-flex items-center gap-1.5"><ShoppingBag className="w-4 h-4" />Productos</span>, count: productPagination.total },
+          { value: 'templates', label: <span className="inline-flex items-center gap-1.5"><Palette className="w-4 h-4" />Plantillas</span>, count: templatesLoaded ? templatePagination.total : undefined },
+        ]}
+      />
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <StatCard icon={Layers} label="Total variantes" value={stats.total} />
+        <StatCard icon={AlertTriangle} tone="yellow" label="Stock bajo" value={stats.lowStock} hint="En esta página" />
+        <StatCard icon={TrendingDown} tone="red" label="Sin stock" value={stats.outOfStock} hint="En esta página" />
       </div>
 
-      {/* Tabs */}
-      <div className="border-b border-gray-200 mb-4">
-        <nav className="-mb-px flex space-x-8">
-          <button
-            onClick={() => setActiveTab('products')}
-            className={`py-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2 ${
-              activeTab === 'products'
-                ? 'border-orange-500 text-orange-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-            }`}
-          >
-            <ShoppingBag className="w-4 h-4" />
-            Productos ({productPagination.total})
-          </button>
-          <button
-            onClick={() => setActiveTab('templates')}
-            className={`py-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2 ${
-              activeTab === 'templates'
-                ? 'border-orange-500 text-orange-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-            }`}
-          >
-            <Palette className="w-4 h-4" />
-            Plantillas ({templatesLoaded ? templatePagination.total : '...'})
-          </button>
-        </nav>
-      </div>
-
-      {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-        <div className="bg-white rounded-lg shadow-sm p-4 border border-gray-100">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-500">Total Variantes</p>
-              <p className="text-2xl font-bold text-gray-900 mt-1">{stats.total}</p>
-            </div>
-            <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-              <Layers className="w-5 h-5 text-blue-600" />
-            </div>
-          </div>
+      <FilterBar>
+        <div className="sm:col-span-2 lg:col-span-3"><SearchInput value={searchInput} onChange={setSearchInput} placeholder="Buscar por SKU, producto, color…" /></div>
+        <div className="flex items-center h-10">
+          <Checkbox label="Solo stock bajo" checked={filterLowStock} onChange={(e) => setFilterLowStock(e.target.checked)} />
         </div>
-        <div className="bg-white rounded-lg shadow-sm p-4 border border-gray-100">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-500">Stock Bajo</p>
-              <p className="text-2xl font-bold text-amber-600 mt-1">{stats.lowStock}</p>
-            </div>
-            <div className="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center">
-              <AlertTriangle className="w-5 h-5 text-amber-600" />
-            </div>
-          </div>
-        </div>
-        <div className="bg-white rounded-lg shadow-sm p-4 border border-gray-100">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-500">Sin Stock</p>
-              <p className="text-2xl font-bold text-red-600 mt-1">{stats.outOfStock}</p>
-            </div>
-            <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
-              <TrendingDown className="w-5 h-5 text-red-600" />
-            </div>
-          </div>
-        </div>
-      </div>
+      </FilterBar>
 
-      {/* Search Bar */}
-      <div className="bg-white rounded-lg shadow-sm p-4 mb-4">
-        <div className="flex flex-col sm:flex-row gap-4">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-            <Input
-              placeholder="Buscar por SKU, producto, color..."
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-              className="pl-10"
-            />
-          </div>
-          <label className="flex items-center gap-2 px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-100 transition-colors">
-            <input
-              type="checkbox"
-              checked={filterLowStock}
-              onChange={(e) => setFilterLowStock(e.target.checked)}
-              className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-            />
-            <AlertTriangle className="w-4 h-4 text-amber-500" />
-            <span className="text-sm text-gray-700">Solo Stock Bajo</span>
-          </label>
-        </div>
-      </div>
+      <TableCard footer={currentPagination.total > 0 && (
+        <Pager page={currentPagination.page} pageSize={PAGE_SIZE} total={currentPagination.total} onPage={handlePageChange} />
+      )}>
+        <Table>
+          <THead>
+            <tr>
+              <Th><SortBtn k="sku">SKU</SortBtn></Th>
+              <Th>{activeTab === 'products' ? 'Producto' : 'Plantilla'}</Th>
+              <Th>Color</Th>
+              <Th>Talla</Th>
+              <Th>Código de barras</Th>
+              <Th align="right"><SortBtn k="stock">Stock</SortBtn></Th>
+              <Th align="right"><SortBtn k="finalPrice">Precio</SortBtn></Th>
+              <Th align="right">Acciones</Th>
+            </tr>
+          </THead>
+          <TBody>
+            {isLoading ? <TableMessage colSpan={8}>Cargando {activeTab === 'products' ? 'productos' : 'plantillas'}…</TableMessage>
+              : rows.length === 0 ? (
+                <tr><td colSpan={8}>
+                  <EmptyState
+                    icon={Package}
+                    title={searchInput ? 'No se encontraron variantes' : 'No hay variantes'}
+                    description={searchInput
+                      ? 'Intenta con otra búsqueda'
+                      : filterLowStock
+                        ? 'Desactiva el filtro de stock bajo para ver todas'
+                        : activeTab === 'products'
+                          ? 'Genera variantes desde el módulo de Productos (menú ⋮ de cada producto).'
+                          : 'Crea plantillas, asocia insumos y genera sus variantes.'}
+                  />
+                </td></tr>
+              ) : rows.map((v) => (
+                <Tr key={v.id} onClick={() => setShowDetailModal(v)}>
+                  <Td className="font-mono text-xs text-gray-900 whitespace-nowrap">{v.sku}</Td>
+                  <Td>
+                    <div className="flex items-center gap-3 min-w-[12rem]">
+                      <Thumb src={v.product.images?.[0]} alt={v.product.name} />
+                      <span className="font-medium text-gray-900 truncate">{v.product.name}</span>
+                    </div>
+                  </Td>
+                  <Td>
+                    {v.color ? (
+                      <span className="flex items-center gap-2 whitespace-nowrap">
+                        <span className="w-4 h-4 rounded-full border border-gray-200" style={{ backgroundColor: v.color.hexCode }} />
+                        {v.color.name}
+                      </span>
+                    ) : <span className="text-gray-400">—</span>}
+                  </Td>
+                  <Td>{v.size ? <Badge>{v.size.abbreviation}</Badge> : <span className="text-gray-400">—</span>}</Td>
+                  <Td onClick={(e) => e.stopPropagation()}>
+                    {v.barcode ? (
+                      <button type="button" onClick={() => handleShowBarcode(v)} className="font-mono text-xs text-app-700 hover:underline">{v.barcode}</button>
+                    ) : (
+                      <Button size="sm" variant="ghost" icon={<Barcode className="w-4 h-4" />} onClick={() => handleAssignBarcode(v.id)}>Generar</Button>
+                    )}
+                  </Td>
+                  <Td align="right">
+                    <span className="inline-flex items-center gap-1">
+                      <StockBadge v={v} />
+                      {v.product.isTemplate && <span title="Stock calculado desde el insumo"><Package className="w-3.5 h-3.5 text-gray-400" /></span>}
+                    </span>
+                  </Td>
+                  <Td align="right" className="tabular-nums font-medium text-gray-900 whitespace-nowrap">{money(v.finalPrice)}</Td>
+                  <Td align="right" className="whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                    <IconButton title="Ver detalles" tone="app" onClick={() => setShowDetailModal(v)}><Eye className="w-4 h-4" /></IconButton>
+                    <IconButton title="Eliminar" tone="danger" onClick={() => handleDelete(v)}><Trash2 className="w-4 h-4" /></IconButton>
+                  </Td>
+                </Tr>
+              ))}
+          </TBody>
+        </Table>
+      </TableCard>
 
-      {/* Table */}
-      {isLoading ? (
-        <div className="flex items-center justify-center h-64 bg-white rounded-lg shadow-sm">
-          <div className="flex flex-col items-center gap-4">
-            <div className="w-12 h-12 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin" />
-            <p className="text-gray-500">
-              Cargando {activeTab === 'products' ? 'productos' : 'plantillas'}...
-            </p>
-          </div>
-        </div>
-      ) : (
-        <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50 border-b border-gray-200">
-                {table.getHeaderGroups().map((headerGroup) => (
-                  <tr key={headerGroup.id}>
-                    {headerGroup.headers.map((header) => (
-                      <th
-                        key={header.id}
-                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                      >
-                        {header.isPlaceholder
-                          ? null
-                          : flexRender(header.column.columnDef.header, header.getContext())}
-                      </th>
-                    ))}
-                  </tr>
-                ))}
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {table.getRowModel().rows.length === 0 ? (
-                  <tr>
-                    <td colSpan={columns.length} className="text-center py-12">
-                      <Package className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                      <h3 className="text-lg font-medium text-gray-900 mb-2">
-                        {searchInput ? 'No se encontraron variantes' : 'No hay variantes'}
-                      </h3>
-                      <p className="text-gray-500 mb-4">
-                        {searchInput
-                          ? 'Intenta con otra busqueda'
-                          : filterLowStock
-                          ? 'Desactiva el filtro de stock bajo para ver todas'
-                          : activeTab === 'products'
-                          ? 'Genera variantes desde el modulo de productos'
-                          : 'Crea plantillas y asocia insumos'}
-                      </p>
-                    </td>
-                  </tr>
-                ) : (
-                  table.getRowModel().rows.map((row) => (
-                    <tr key={row.id} className="hover:bg-gray-50">
-                      {row.getVisibleCells().map((cell) => (
-                        <td key={cell.id} className="px-6 py-4 text-sm">
-                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                        </td>
-                      ))}
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Pagination - Server Side */}
-          {currentPagination.total > 0 && (
-            <div className="px-6 py-4 border-t border-gray-200 flex flex-col sm:flex-row items-center justify-between gap-4">
-              <div className="text-sm text-gray-700">
-                Mostrando{' '}
-                <span className="font-medium">
-                  {(currentPagination.page - 1) * PAGE_SIZE + 1}
-                </span>{' '}
-                a{' '}
-                <span className="font-medium">
-                  {Math.min(currentPagination.page * PAGE_SIZE, currentPagination.total)}
-                </span>{' '}
-                de <span className="font-medium">{currentPagination.total}</span> variantes
-              </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => handlePageChange(currentPagination.page - 1)}
-                  disabled={currentPagination.page <= 1}
-                  className="p-2 rounded-lg border border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  <ChevronLeft className="w-5 h-5" />
-                </button>
-
-                <div className="flex gap-1">
-                  {(() => {
-                    const totalPages = currentPagination.totalPages;
-                    const current = currentPagination.page;
-                    let pages: number[] = [];
-
-                    if (totalPages <= 5) {
-                      pages = Array.from({ length: totalPages }, (_, i) => i + 1);
-                    } else {
-                      if (current <= 3) {
-                        pages = [1, 2, 3, 4, 5];
-                      } else if (current >= totalPages - 2) {
-                        pages = [totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
-                      } else {
-                        pages = [current - 2, current - 1, current, current + 1, current + 2];
-                      }
-                    }
-
-                    return pages.map((page) => (
-                      <button
-                        key={page}
-                        onClick={() => handlePageChange(page)}
-                        className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
-                          currentPagination.page === page
-                            ? 'bg-orange-500 text-white'
-                            : 'text-gray-700 hover:bg-gray-100'
-                        }`}
-                      >
-                        {page}
-                      </button>
-                    ));
-                  })()}
-                </div>
-
-                <button
-                  onClick={() => handlePageChange(currentPagination.page + 1)}
-                  disabled={currentPagination.page >= currentPagination.totalPages}
-                  className="p-2 rounded-lg border border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  <ChevronRight className="w-5 h-5" />
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Modal - Ver Codigo de Barras */}
-      <Modal
-        isOpen={!!showBarcodeModal}
-        onClose={() => {
-          setShowBarcodeModal(null);
-          if (barcodeImageUrl) URL.revokeObjectURL(barcodeImageUrl);
-          setBarcodeImageUrl(null);
-        }}
-        title="Codigo de Barras"
+      {/* Ver código de barras */}
+      <Dialog
+        open={!!showBarcodeModal}
+        onClose={closeBarcode}
+        title="Código de barras"
         size="sm"
+        footer={(
+          <>
+            <Button variant="secondary" onClick={closeBarcode}>Cerrar</Button>
+            <Button icon={<Printer className="w-4 h-4" />} onClick={() => window.print()}>Imprimir</Button>
+          </>
+        )}
       >
         {showBarcodeModal && (
-          <div className="space-y-4">
-            <div className="text-center p-4 bg-gray-50 rounded-lg">
-              <p className="text-sm text-gray-600 mb-2">
-                {showBarcodeModal.product.name}
-              </p>
-              <div className="flex items-center justify-center gap-2 text-sm text-gray-500">
+          <div className="space-y-4 text-center">
+            <div>
+              <p className="text-sm font-medium text-gray-900">{showBarcodeModal.product.name}</p>
+              <p className="text-sm text-gray-500 flex items-center justify-center gap-2 mt-1">
                 {showBarcodeModal.color && (
-                  <>
-                    <div
-                      className="w-4 h-4 rounded-full border"
-                      style={{ backgroundColor: showBarcodeModal.color.hexCode }}
-                    />
-                    <span>{showBarcodeModal.color.name}</span>
-                  </>
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="w-3.5 h-3.5 rounded-full border border-gray-200" style={{ backgroundColor: showBarcodeModal.color.hexCode }} />
+                    {showBarcodeModal.color.name}
+                  </span>
                 )}
-                {showBarcodeModal.size && (
-                  <>
-                    <span className="text-gray-300">|</span>
-                    <span>{showBarcodeModal.size.name}</span>
-                  </>
-                )}
-              </div>
-              <p className="font-mono text-xl font-bold mt-3">{showBarcodeModal.barcode}</p>
+                {showBarcodeModal.color && showBarcodeModal.size && <span className="text-gray-300">·</span>}
+                {showBarcodeModal.size && <span>{showBarcodeModal.size.name}</span>}
+              </p>
             </div>
             {barcodeImageUrl && (
-              <div className="p-4 bg-white border rounded-lg flex justify-center">
-                <img src={barcodeImageUrl} alt="Barcode" />
+              <div className="p-4 border border-gray-200 rounded-lg flex justify-center">
+                <img src={barcodeImageUrl} alt="Código de barras" />
               </div>
             )}
-            <div className="flex gap-3">
-              <Button
-                variant="admin-secondary"
-                onClick={() => {
-                  setShowBarcodeModal(null);
-                  if (barcodeImageUrl) URL.revokeObjectURL(barcodeImageUrl);
-                  setBarcodeImageUrl(null);
-                }}
-                className="flex-1"
-              >
-                Cerrar
-              </Button>
-              <Button variant="admin-primary" onClick={() => window.print()} className="flex-1">
-                <Printer className="w-4 h-4 mr-2" />
-                Imprimir
-              </Button>
-            </div>
+            <p className="font-mono text-lg font-semibold text-gray-900">{showBarcodeModal.barcode}</p>
           </div>
         )}
-      </Modal>
+      </Dialog>
 
-      {/* Modal - Confirmar Eliminacion */}
-      <Modal
-        isOpen={!!deleteConfirmId}
-        onClose={() => setDeleteConfirmId(null)}
-        title="Eliminar Variante"
-        size="sm"
-      >
-        <div className="space-y-4">
-          <div className="flex items-center gap-4 p-4 bg-red-50 rounded-lg">
-            <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center flex-shrink-0">
-              <Trash2 className="w-6 h-6 text-red-600" />
-            </div>
-            <p className="text-sm text-gray-700">
-              Estas a punto de eliminar esta variante. Esta accion no se puede deshacer.
-            </p>
-          </div>
-          <div className="flex gap-3">
-            <Button variant="admin-secondary" onClick={() => setDeleteConfirmId(null)} className="flex-1">
-              Cancelar
-            </Button>
-            <Button
-              variant="admin-danger"
-              onClick={() => deleteConfirmId && handleDelete(deleteConfirmId)}
-              className="flex-1"
-            >
-              Eliminar
-            </Button>
-          </div>
-        </div>
-      </Modal>
-
-      {/* Modal - Detalles de Variante */}
-      <Modal
-        isOpen={!!showDetailModal}
+      {/* Detalle de la variante */}
+      <Drawer
+        open={!!d}
         onClose={() => setShowDetailModal(null)}
-        title="Detalles de Variante"
-        size="md"
+        title="Detalle de la variante"
+        description={d?.sku}
+        footer={d && (
+          <>
+            <Button variant="danger" className="sm:mr-auto" icon={<Trash2 className="w-4 h-4" />} onClick={() => handleDelete(d)}>Eliminar</Button>
+            <Button variant="secondary" onClick={() => setShowDetailModal(null)}>Cerrar</Button>
+          </>
+        )}
       >
-        {showDetailModal && (
+        {d && (
           <div className="space-y-6">
-            {/* Producto */}
-            <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg">
-              <img
-                src={showDetailModal.product.images?.[0] || '/placeholder.png'}
-                alt={showDetailModal.product.name}
-                className="w-16 h-16 rounded-lg object-cover"
-              />
-              <div>
-                <h3 className="font-medium text-gray-900">{showDetailModal.product.name}</h3>
-                <p className="text-sm text-gray-500">SKU: {showDetailModal.sku}</p>
-                {showDetailModal.product.isTemplate && (
-                  <span className="inline-flex items-center gap-1 text-xs text-indigo-600 mt-1">
-                    <Palette className="w-3 h-3" />
-                    Plantilla
+            <div className="flex items-center gap-4">
+              <Thumb src={d.product.images?.[0]} alt={d.product.name} size="lg" />
+              <div className="min-w-0">
+                <p className="font-medium text-gray-900">{d.product.name}</p>
+                {d.product.isTemplate && <Badge tone="blue" className="mt-1"><Palette className="w-3 h-3" />Plantilla</Badge>}
+              </div>
+            </div>
+
+            <DescriptionList items={[
+              {
+                label: 'Color',
+                value: d.color ? (
+                  <span className="inline-flex items-center gap-2">
+                    <span className="w-4 h-4 rounded-full border border-gray-200" style={{ backgroundColor: d.color.hexCode }} />{d.color.name}
                   </span>
-                )}
-              </div>
-            </div>
-
-            {/* Atributos */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="p-4 bg-gray-50 rounded-lg">
-                <p className="text-xs text-gray-500 mb-1">Color</p>
-                {showDetailModal.color ? (
-                  <div className="flex items-center gap-2">
-                    <div
-                      className="w-5 h-5 rounded-full border border-gray-200"
-                      style={{ backgroundColor: showDetailModal.color.hexCode }}
-                    />
-                    <span className="text-sm font-medium">{showDetailModal.color.name}</span>
-                  </div>
-                ) : (
-                  <span className="text-sm text-gray-400">N/A</span>
-                )}
-              </div>
-              <div className="p-4 bg-gray-50 rounded-lg">
-                <p className="text-xs text-gray-500 mb-1">Talla</p>
-                {showDetailModal.size ? (
-                  <span className="text-sm font-medium">{showDetailModal.size.name} ({showDetailModal.size.abbreviation})</span>
-                ) : (
-                  <span className="text-sm text-gray-400">N/A</span>
-                )}
-              </div>
-            </div>
-
-            {/* Stock y Precio */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="p-4 bg-gray-50 rounded-lg">
-                <p className="text-xs text-gray-500 mb-1">
-                  Stock
-                  {showDetailModal.product.isTemplate && (
-                    <span className="ml-1 text-indigo-600" title="Calculado desde insumo">
-                      📦
-                    </span>
-                  )}
-                </p>
-                <div className="flex items-center gap-2">
-                  <span className={`text-lg font-bold ${
-                    showDetailModal.stock === 0
-                      ? 'text-red-600'
-                      : showDetailModal.stock <= showDetailModal.minStock
-                      ? 'text-amber-600'
-                      : 'text-green-600'
-                  }`}>
-                    {showDetailModal.stock}
+                ) : null,
+              },
+              { label: 'Talla', value: d.size ? `${d.size.name} (${d.size.abbreviation})` : null },
+              {
+                label: 'Stock',
+                value: (
+                  <span className="inline-flex items-center gap-2">
+                    <StockBadge v={d} /><span className="text-xs text-gray-500">mín. {d.minStock}</span>
                   </span>
-                  <span className="text-xs text-gray-400">/ min: {showDetailModal.minStock}</span>
-                </div>
-                {showDetailModal.product.isTemplate && (
-                  <p className="text-xs text-indigo-600 mt-1">
-                    Stock calculado desde insumo
-                  </p>
-                )}
-              </div>
-              <div className="p-4 bg-gray-50 rounded-lg">
-                <p className="text-xs text-gray-500 mb-1">Precio</p>
-                <span className="text-lg font-bold text-gray-900">
-                  ${showDetailModal.finalPrice.toLocaleString('es-CO')}
-                </span>
-              </div>
-            </div>
+                ),
+              },
+              { label: 'Precio', value: <span className="font-semibold">{money(d.finalPrice)}</span> },
+              ...(d.product.isTemplate ? [{ label: 'Origen del stock', value: 'Calculado desde el insumo', full: true }] : []),
+            ]} />
 
-            {/* Codigo de Barras */}
-            <div className="p-4 bg-gray-50 rounded-lg">
-              <p className="text-xs text-gray-500 mb-1">Codigo de Barras</p>
-              {showDetailModal.barcode ? (
-                <div className="flex items-center justify-between">
-                  <span className="font-mono text-sm">{showDetailModal.barcode}</span>
-                  <button
-                    onClick={() => {
-                      handleShowBarcode(showDetailModal);
-                      setShowDetailModal(null);
-                    }}
-                    className="text-indigo-600 hover:text-indigo-800 text-sm"
-                  >
-                    Ver imagen
-                  </button>
+            <div className="rounded-lg border border-gray-200 p-4">
+              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Código de barras</p>
+              {d.barcode ? (
+                <div className="flex items-center justify-between gap-3">
+                  <span className="font-mono text-sm text-gray-900">{d.barcode}</span>
+                  <Button size="sm" variant="outline" icon={<Barcode className="w-4 h-4" />} onClick={() => { handleShowBarcode(d); setShowDetailModal(null); }}>Ver imagen</Button>
                 </div>
               ) : (
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-400">Sin codigo asignado</span>
-                  <button
-                    onClick={() => {
-                      handleAssignBarcode(showDetailModal.id);
-                      setShowDetailModal(null);
-                    }}
-                    className="text-indigo-600 hover:text-indigo-800 text-sm"
-                  >
-                    Generar
-                  </button>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-sm text-gray-400">Sin código asignado</span>
+                  <Button size="sm" variant="outline" icon={<Barcode className="w-4 h-4" />} onClick={() => { handleAssignBarcode(d.id); setShowDetailModal(null); }}>Generar</Button>
                 </div>
               )}
             </div>
-
-            {/* Acciones */}
-            <div className="flex gap-3 pt-4 border-t">
-              <Button
-                variant="admin-danger"
-                onClick={() => {
-                  setShowDetailModal(null);
-                  setDeleteConfirmId(showDetailModal.id);
-                }}
-                className="flex-1"
-              >
-                <Trash2 className="w-4 h-4 mr-2" />
-                Eliminar
-              </Button>
-              <Button variant="admin-primary" onClick={() => setShowDetailModal(null)} className="flex-1">
-                Cerrar
-              </Button>
-            </div>
           </div>
         )}
-      </Modal>
-    </div>
+      </Drawer>
+    </Page>
   );
 }
 

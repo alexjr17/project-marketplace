@@ -2,8 +2,9 @@
 
 namespace App\Services;
 
+use App\Models\Payment;
+use App\Models\Discount;
 use App\Models\InputVariant;
-use App\Models\InputVariantMovement;
 use App\Models\Notification;
 use App\Models\Order;
 use App\Models\OrderItem;
@@ -12,7 +13,7 @@ use App\Models\ProductInput;
 use App\Models\ProductVariant;
 use App\Models\Setting;
 use App\Models\TemplateRecipe;
-use App\Models\VariantMovement;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
@@ -33,7 +34,8 @@ class OrderService
 
     private const VALID_TRANSITIONS = [
         'PENDING' => ['PAID', 'CANCELLED'],
-        'PAID' => ['PROCESSING', 'CANCELLED'],
+        // Despachos envía directamente los pedidos pagados (sin pasar por "En proceso").
+        'PAID' => ['PROCESSING', 'SHIPPED', 'CANCELLED'],
         'PROCESSING' => ['SHIPPED', 'CANCELLED'],
         'SHIPPED' => ['DELIVERED'],
         'DELIVERED' => [],
@@ -43,6 +45,9 @@ class OrderService
     public function __construct(
         private TemplateStockService $templateStock,
         private DiscountService $discounts,
+        private ShippingQuoteService $shippingQuotes,
+        private NumberSequenceService $numbers,
+        private StockService $stock,
     ) {}
 
     /** Primera imagen utilizable de un producto ({front,...} u array). */
@@ -121,18 +126,6 @@ class OrderService
         ];
     }
 
-    private function generateOrderNumber(): string
-    {
-        $now = now();
-        $prefix = 'ORD-'.$now->format('ymd').'-';
-        $count = Order::whereBetween('createdAt', [
-            $now->copy()->startOfDay(),
-            $now->copy()->endOfDay(),
-        ])->count();
-
-        return $prefix.str_pad((string) ($count + 1), 4, '0', STR_PAD_LEFT);
-    }
-
     private function getSettings(): array
     {
         $order = Setting::where('key', 'order_settings')->value('value') ?? [];
@@ -161,6 +154,7 @@ class OrderService
         $orderItems = [];
         $stockUpdates = [];
         $couponItems = []; // contexto para validar cupones (producto/categoría)
+        $requested = []; // variantId => cantidad total pedida (suma líneas repetidas)
 
         foreach ($data['items'] as $item) {
             $product = Product::with('variants.color', 'variants.size')->find($item['productId']);
@@ -188,14 +182,15 @@ class OrderService
                 );
             }
 
+            $requested[$variant->id] = ($requested[$variant->id] ?? 0) + $item['quantity'];
             if ($product->isTemplate) {
                 $available = $this->templateStock->getAvailableStockForTemplate($variant->id);
-                if ($available < $item['quantity']) {
+                if ($available < $requested[$variant->id]) {
                     throw new RuntimeException(
                         "Stock insuficiente para \"{$product->name}\" ({$item['size']}, {$item['color']}). Disponible: {$available}"
                     );
                 }
-            } elseif ($variant->stock < $item['quantity']) {
+            } elseif ($variant->stock < $requested[$variant->id]) {
                 throw new RuntimeException(
                     "Stock insuficiente para \"{$product->name}\" ({$item['size']}, {$item['color']}). Disponible: {$variant->stock}"
                 );
@@ -236,7 +231,18 @@ class OrderService
             ];
         }
 
-        $shippingCost = $subtotal >= $settings['freeShippingThreshold'] ? 0 : $settings['shippingCost'];
+        // Envío por zona y transportadora (igual que el checkout); si no se puede cotizar,
+        // la tarifa fija de respaldo. Antes siempre se cobraba la fija y no coincidía con lo
+        // que el cliente veía.
+        $shippingSettings = $this->shippingQuotes->settings();
+        $totalItems = (int) array_sum(array_column($data['items'], 'quantity'));
+        $quoted = $this->shippingQuotes->quote(
+            $shippingSettings,
+            (string) ($data['shipping']['city'] ?? ''),
+            $this->shippingQuotes->packageWeight($shippingSettings, $totalItems),
+            $subtotal,
+        );
+        $shippingCost = $quoted ?? ($subtotal >= $settings['freeShippingThreshold'] ? 0 : $settings['shippingCost']);
         $tax = ($settings['taxEnabled'] && ! $settings['taxIncluded'])
             ? round($subtotal * $settings['taxRate'])
             : 0;
@@ -258,12 +264,12 @@ class OrderService
         }
 
         $total = max(0, $subtotal + $shippingCost + $tax - $discount);
-        $orderNumber = $this->generateOrderNumber();
 
         return DB::transaction(function () use (
-            $userId, $data, $orderNumber, $subtotal, $shippingCost, $tax, $total,
+            $userId, $data, $subtotal, $shippingCost, $tax, $total,
             $discount, $discountModel, $couponCode, $orderItems, $stockUpdates
         ) {
+            $orderNumber = $this->numbers->next(NumberSequenceService::ORDER);
             $order = Order::create([
                 'orderNumber' => $orderNumber,
                 'userId' => $userId,
@@ -300,20 +306,9 @@ class OrderService
                 if ($su['isTemplate']) {
                     continue;
                 }
-                $variant = ProductVariant::find($su['variantId']);
-                if (! $variant) {
-                    continue;
-                }
-                $previousStock = $variant->stock;
-                $variant->stock = $previousStock - $su['quantity'];
-                $variant->save();
-
-                VariantMovement::create([
-                    'variantId' => $variant->id,
-                    'movementType' => 'SALE',
-                    'quantity' => -$su['quantity'],
-                    'previousStock' => $previousStock,
-                    'newStock' => $variant->stock,
+                // Con bloqueo de fila: si otro pedido se llevó el stock entre la validación y
+                // aquí, falla (400) en vez de dejar la variante en negativo.
+                $this->stock->variantOut($su['variantId'], $su['quantity'], 'SALE', [
                     'referenceType' => 'order',
                     'referenceId' => $order->id,
                     'reason' => "Venta online - Orden {$orderNumber}",
@@ -328,7 +323,8 @@ class OrderService
     public function listOrders(array $query): array
     {
         $page = max(1, (int) ($query['page'] ?? 1));
-        $limit = max(1, (int) ($query['limit'] ?? 10));
+        // Tope de página: sin él se podía descargar toda la tabla en una petición.
+        $limit = min(100, max(1, (int) ($query['limit'] ?? 10)));
 
         $builder = Order::with(['items.product:id,images', 'user']);
 
@@ -435,12 +431,60 @@ class OrderService
                 }
             } elseif ($newStatus === 'CANCELLED') {
                 $this->restoreStock($order);
+                $this->releaseOrderResources($order);
             }
 
             $order->save();
         });
 
         return $order->load(['items.product:id,images', 'user']);
+    }
+
+    /**
+     * Al cancelar: devuelve el uso del cupón y cancela los pagos aún pendientes del pedido
+     * (antes el cupón quedaba gastado y el pago seguía "pendiente" en el módulo Pagos).
+     */
+    private function releaseOrderResources(Order $order): void
+    {
+        if ($order->discountId && ($discount = Discount::find($order->discountId))) {
+            $this->discounts->release($discount);
+        }
+        Payment::where('orderId', $order->id)
+            ->whereIn('status', ['PENDING', 'PROCESSING'])
+            ->update(['status' => 'CANCELLED', 'cancelledAt' => now()]);
+    }
+
+    /**
+     * Pago aprobado por la pasarela sobre un pedido YA CANCELADO (p. ej. un PSE que se aprobó
+     * después de que el cliente cambió de dirección y el checkout canceló el pedido). No se
+     * reabre el pedido (su stock ya se devolvió): se registra el pago como aprobado con nota
+     * de reembolso y queda en el historial, para que el admin lo vea en Pagos y lo devuelva.
+     */
+    public function recordPaymentOnCancelledOrder(Order $order, string $method, string $transactionId, float $amount): void
+    {
+        Payment::updateOrCreate(
+            ['transactionId' => $transactionId],
+            [
+                'orderId' => $order->id,
+                'paymentMethod' => $method,
+                'amount' => $amount,
+                'currency' => 'COP',
+                'status' => 'APPROVED',
+                'paidAt' => now(),
+                'payerName' => $order->customerName ?? $order->user?->name,
+                'payerEmail' => $order->customerEmail ?? $order->user?->email,
+                'notes' => 'Pago aprobado sobre un pedido cancelado: requiere reembolso.',
+            ],
+        );
+        $history = is_array($order->statusHistory) ? $order->statusHistory : [];
+        $history[] = [
+            'status' => 'CANCELLED',
+            'timestamp' => now()->toIso8601String(),
+            'note' => "Pago {$method} aprobado ({$transactionId}) con el pedido cancelado: requiere reembolso.",
+        ];
+        $order->statusHistory = $history;
+        $order->save();
+        Log::warning("Pago {$method} aprobado sobre el pedido cancelado {$order->orderNumber}: requiere reembolso.");
     }
 
     public function cancelOrder(int $id, int $userId): Order
@@ -568,16 +612,7 @@ class OrderService
                     }
                 }
             } else {
-                $previousStock = $variant->stock;
-                $variant->stock = $previousStock + $item->quantity;
-                $variant->save();
-
-                VariantMovement::create([
-                    'variantId' => $variant->id,
-                    'movementType' => 'RETURN',
-                    'quantity' => $item->quantity,
-                    'previousStock' => $previousStock,
-                    'newStock' => $variant->stock,
+                $this->stock->variantIn($variant->id, $item->quantity, 'RETURN', [
                     'referenceType' => 'order_cancel',
                     'referenceId' => $order->id,
                     'reason' => "Cancelación orden {$order->orderNumber}",
@@ -603,26 +638,15 @@ class OrderService
 
     private function moveInputStock(int $inputVariantId, float $delta, string $type, string $refType, int $refId, string $reason): void
     {
-        $inputVariant = InputVariant::find($inputVariantId);
-        if (! $inputVariant) {
+        if (! InputVariant::whereKey($inputVariantId)->exists()) {
             return;
         }
-        $previousStock = (float) $inputVariant->currentStock;
-        $newStock = $previousStock + $delta;
+        $attrs = ['referenceType' => $refType, 'referenceId' => $refId, 'reason' => $reason];
 
-        $inputVariant->currentStock = $newStock;
-        $inputVariant->save();
-
-        InputVariantMovement::create([
-            'inputVariantId' => $inputVariantId,
-            'movementType' => $type,
-            'quantity' => $delta,
-            'previousStock' => $previousStock,
-            'newStock' => $newStock,
-            'referenceType' => $refType,
-            'referenceId' => $refId,
-            'reason' => $reason,
-        ]);
+        // El consumo de plantillas ocurre al confirmarse el pago: no puede fallar por stock.
+        $delta < 0
+            ? $this->stock->inputVariantOut($inputVariantId, -$delta, $type, $attrs, allowNegative: true)
+            : $this->stock->inputVariantIn($inputVariantId, $delta, $type, $attrs);
     }
 
     /** Crea notificaciones de reseña para los productos de un pedido entregado. */

@@ -12,7 +12,7 @@ class MfgExchangeRate extends BaseModel
     protected $casts = [
         'rate' => 'decimal:4',
         'isActive' => 'boolean',
-        'effectiveDate' => 'date',
+        'effectiveDate' => 'date:Y-m-d',
     ];
 
     /** Tasa activa (la más reciente marcada activa), o null. */

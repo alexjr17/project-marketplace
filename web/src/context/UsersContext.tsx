@@ -19,24 +19,24 @@ interface UsersContextType {
 
   // Users (Clientes)
   addUser: (user: Omit<UserWithPassword, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
-  updateUser: (id: string, updates: Partial<Omit<User, 'id' | 'createdAt'>>) => Promise<void>;
-  deleteUser: (id: string) => Promise<void>;
-  toggleUserStatus: (id: string) => Promise<void>;
+  updateUser: (id: number, updates: Partial<Omit<User, 'id' | 'createdAt'>>) => Promise<void>;
+  deleteUser: (id: number) => Promise<void>;
+  toggleUserStatus: (id: number) => Promise<void>;
 
   // Admins
   addAdmin: (
     admin: Omit<UserWithPassword, 'id' | 'createdAt' | 'updatedAt'> & { roleId?: number }
   ) => Promise<void>;
   updateAdmin: (
-    id: string,
+    id: number,
     updates: Partial<Omit<User, 'id' | 'createdAt'>> & { roleId?: number }
   ) => Promise<void>;
-  deleteAdmin: (id: string) => Promise<void>;
-  toggleAdminStatus: (id: string) => Promise<void>;
+  deleteAdmin: (id: number) => Promise<void>;
+  toggleAdminStatus: (id: number) => Promise<void>;
 
   // Helpers
-  getUserById: (id: string) => Promise<User | undefined>;
-  getAdminById: (id: string) => Promise<User | undefined>;
+  getUserById: (id: number) => Promise<User | undefined>;
+  getAdminById: (id: number) => Promise<User | undefined>;
   refreshUsers: () => Promise<void>;
   setPage: (page: number) => void;
 }
@@ -97,7 +97,6 @@ const mapApiUserToUser = (apiUser: ApiUser): User => {
     status: mapApiStatus(apiUser.status),
     phone: apiUser.phone,
     cedula: apiUser.cedula,
-    avatar: apiUser.avatar,
     address: apiUser.addresses?.[0]
       ? {
           address: apiUser.addresses[0].address,
@@ -186,7 +185,7 @@ export const UsersProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const updateUser = async (
-    id: string,
+    id: number,
     updates: Partial<Omit<User, 'id' | 'createdAt'>>
   ): Promise<void> => {
     const input: UpdateUserInput = {
@@ -200,14 +199,16 @@ export const UsersProvider = ({ children }: { children: ReactNode }) => {
     setAllUsers((prev) => prev.map((u) => (u.id === id ? mapApiUserToUser(updated) : u)));
   };
 
-  const deleteUser = async (id: string): Promise<void> => {
+  const deleteUser = async (id: number): Promise<void> => {
     await usersService.delete(id);
     setAllUsers((prev) => prev.filter((u) => u.id !== id));
   };
 
-  const toggleUserStatus = async (id: string): Promise<void> => {
-    const user = allUsers.find((u) => u.id === id);
-    if (!user) return;
+  const toggleUserStatus = async (id: number): Promise<void> => {
+    // Si no está en la página cargada, se consulta al API (antes se salía sin hacer nada).
+    const user = allUsers.find((u) => u.id === id)
+      ?? await usersService.getById(id).then((u) => (u ? mapApiUserToUser(u) : undefined));
+    if (!user) throw new Error('Usuario no encontrado');
 
     const newStatus = user.status === 'active' ? 'INACTIVE' : 'ACTIVE';
     const updated = await usersService.changeStatus(id, newStatus as 'ACTIVE' | 'INACTIVE');
@@ -232,7 +233,7 @@ export const UsersProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const updateAdmin = async (
-    id: string,
+    id: number,
     updates: Partial<Omit<User, 'id' | 'createdAt'>> & { roleId?: number }
   ): Promise<void> => {
     const input: UpdateUserInput = {
@@ -247,7 +248,7 @@ export const UsersProvider = ({ children }: { children: ReactNode }) => {
     setAllUsers((prev) => prev.map((u) => (u.id === id ? mapApiUserToUser(updated) : u)));
   };
 
-  const deleteAdmin = async (id: string): Promise<void> => {
+  const deleteAdmin = async (id: number): Promise<void> => {
     // No permitir eliminar superadmin
     const admin = allUsers.find((u) => u.id === id);
     if (admin?.role === 'superadmin') {
@@ -258,9 +259,10 @@ export const UsersProvider = ({ children }: { children: ReactNode }) => {
     setAllUsers((prev) => prev.filter((u) => u.id !== id));
   };
 
-  const toggleAdminStatus = async (id: string): Promise<void> => {
-    const admin = allUsers.find((u) => u.id === id);
-    if (!admin) return;
+  const toggleAdminStatus = async (id: number): Promise<void> => {
+    const admin = allUsers.find((u) => u.id === id)
+      ?? await usersService.getById(id).then((u) => (u ? mapApiUserToUser(u) : undefined));
+    if (!admin) throw new Error('Administrador no encontrado');
 
     // No permitir desactivar superadmin
     if (admin.role === 'superadmin') {
@@ -273,7 +275,7 @@ export const UsersProvider = ({ children }: { children: ReactNode }) => {
   };
 
   // Helpers
-  const getUserById = async (id: string): Promise<User | undefined> => {
+  const getUserById = async (id: number): Promise<User | undefined> => {
     // Primero buscar en cache local
     const cached = allUsers.find((u) => u.id === id && u.role === 'user');
     if (cached) return cached;
@@ -290,7 +292,7 @@ export const UsersProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const getAdminById = async (id: string): Promise<User | undefined> => {
+  const getAdminById = async (id: number): Promise<User | undefined> => {
     // Primero buscar en cache local
     const cached = allUsers.find(
       (u) => u.id === id && (u.role === 'admin' || u.role === 'superadmin')

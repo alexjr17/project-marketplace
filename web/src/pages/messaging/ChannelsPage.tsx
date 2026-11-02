@@ -2,19 +2,22 @@ import { useEffect, useState } from 'react';
 import {
   CheckCircle2,
   ChevronDown,
-  ChevronUp,
+  Copy,
+  ExternalLink,
   Eye,
   EyeOff,
   Facebook,
   Globe,
   Instagram,
-  Loader2,
   MessageCircle,
   Phone,
+  Plug,
   Save,
   TestTube2,
 } from 'lucide-react';
+import { Alert, Badge, Button, EmptyState, Field, Page, PageHeader, Spinner, Switch, TextInput } from '../../components/ui';
 import messagingService from '../../services/messaging.service';
+import { API_ORIGIN } from '../../lib/config';
 import type { Channel, ChannelConfig, ChannelType } from '../../types/messaging';
 
 // ============================================================
@@ -37,8 +40,6 @@ interface ChannelMeta {
   title: string;
   subtitle: string;
   icon: React.ComponentType<{ className?: string }>;
-  accent: string; // gradient o color principal del card header
-  badgeBg: string; // tag de "API: …"
   apiBadge: string; // texto del tag
   docsUrl?: string;
   webhookPath?: string; // URL pública que Meta/twilio debe llamar
@@ -51,8 +52,6 @@ const CHANNEL_META: Record<ChannelType, ChannelMeta> = {
     title: 'Chat web',
     subtitle: 'Burbuja flotante en tu tienda',
     icon: Globe,
-    accent: 'from-violet-500 to-fuchsia-500',
-    badgeBg: 'bg-violet-100 text-violet-700',
     apiBadge: 'Propio',
     intro: 'No requiere credenciales externas. Personaliza el saludo y los datos pedidos al visitante.',
     fields: [
@@ -63,8 +62,6 @@ const CHANNEL_META: Record<ChannelType, ChannelMeta> = {
     title: 'Facebook Messenger',
     subtitle: 'Mensajes a la página de Facebook',
     icon: Facebook,
-    accent: 'from-blue-600 to-sky-500',
-    badgeBg: 'bg-blue-100 text-blue-700',
     apiBadge: 'Meta · Graph API',
     docsUrl: 'https://developers.facebook.com/docs/messenger-platform',
     webhookPath: '/api/webhooks/messenger',
@@ -92,8 +89,6 @@ const CHANNEL_META: Record<ChannelType, ChannelMeta> = {
     title: 'Instagram Direct',
     subtitle: 'Mensajes directos de Instagram',
     icon: Instagram,
-    accent: 'from-pink-500 via-rose-500 to-orange-500',
-    badgeBg: 'bg-pink-100 text-pink-700',
     apiBadge: 'Meta · Instagram Graph',
     docsUrl: 'https://developers.facebook.com/docs/messenger-platform/instagram',
     webhookPath: '/api/webhooks/messenger',
@@ -112,8 +107,6 @@ const CHANNEL_META: Record<ChannelType, ChannelMeta> = {
     title: 'WhatsApp Business',
     subtitle: 'Cloud API de Meta',
     icon: MessageCircle,
-    accent: 'from-emerald-500 to-green-600',
-    badgeBg: 'bg-green-100 text-green-700',
     apiBadge: 'Meta · WhatsApp Cloud',
     docsUrl: 'https://developers.facebook.com/docs/whatsapp/cloud-api',
     webhookPath: '/api/webhooks/whatsapp',
@@ -138,8 +131,6 @@ const CHANNEL_META: Record<ChannelType, ChannelMeta> = {
     title: 'SMS',
     subtitle: 'Provider externo (no Meta)',
     icon: Phone,
-    accent: 'from-gray-600 to-gray-800',
-    badgeBg: 'bg-gray-200 text-gray-700',
     apiBadge: 'Twilio / Hablame / etc.',
     intro: 'Provider de SMS para mensajes salientes y entrantes (cuando lo soporte).',
     fields: [
@@ -153,8 +144,6 @@ const CHANNEL_META: Record<ChannelType, ChannelMeta> = {
     title: 'Email',
     subtitle: 'Correo entrante',
     icon: Globe,
-    accent: 'from-amber-500 to-orange-500',
-    badgeBg: 'bg-amber-100 text-amber-700',
     apiBadge: 'IMAP / SMTP',
     intro: 'Próximamente — recepción y envío de correos asociados a contactos.',
     fields: [],
@@ -191,27 +180,27 @@ export const ChannelsPage = () => {
   };
 
   return (
-    <div className="h-[calc(100vh-3.5rem)] overflow-y-auto bg-gray-50">
-      <div className="max-w-4xl mx-auto p-6 space-y-4">
-        <header className="mb-2">
-          <h1 className="text-2xl font-bold text-gray-900">Conexiones de canales</h1>
-          <p className="text-sm text-gray-500 mt-1">
-            Configura las credenciales de cada API por separado. Cada canal funciona de forma
-            independiente; activa solo los que tengas listos.
-          </p>
-        </header>
+    <Page className="max-w-4xl mx-auto">
+      <PageHeader
+        icon={Plug}
+        title="Canales"
+        subtitle="Configura las credenciales de cada API por separado. Activa solo los canales que tengas listos."
+      />
 
-        {loading ? (
-          <div className="flex justify-center py-16">
-            <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
-          </div>
-        ) : (
-          channels.map((channel) => (
+      {loading ? (
+        <Spinner label="Cargando canales…" />
+      ) : channels.length === 0 ? (
+        <div className="bg-white rounded-xl border border-gray-200">
+          <EmptyState icon={Plug} title="No hay canales configurados" description="Los canales (chat web, Messenger, Instagram, WhatsApp…) aparecen aquí cuando el sistema los crea." />
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {channels.map((channel) => (
             <ChannelCard key={channel.id} channel={channel} onSaved={handleSaved} />
-          ))
-        )}
-      </div>
-    </div>
+          ))}
+        </div>
+      )}
+    </Page>
   );
 };
 
@@ -236,10 +225,7 @@ const ChannelCard = ({ channel, onSaved }: ChannelCardProps) => {
   const [feedback, setFeedback] = useState<{ ok: boolean; msg: string } | null>(null);
 
   const Icon = meta.icon;
-  const apiBaseUrl =
-    (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/api\/?$/, '') ||
-    'http://localhost:8000';
-  const webhookUrl = meta.webhookPath ? `${apiBaseUrl}${meta.webhookPath}` : null;
+  const webhookUrl = meta.webhookPath ? `${API_ORIGIN}${meta.webhookPath}` : null;
 
   const handleFieldChange = (key: string, value: string) => {
     setConfig((prev) => ({ ...prev, [key]: value }));
@@ -287,195 +273,115 @@ const ChannelCard = ({ channel, onSaved }: ChannelCardProps) => {
     setFeedback({ ok: true, msg: 'Copiado al portapapeles.' });
   };
 
+  const wide = (k: string) => ['verifyToken', 'pageAccessToken', 'permanentAccessToken', 'appSecret', 'authToken'].includes(k);
+
   return (
-    <section className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-      {/* Header */}
+    <section className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      {/* Encabezado (abre / cierra) */}
       <button
         onClick={() => setExpanded(!expanded)}
-        className={`w-full flex items-center gap-4 px-5 py-4 text-left bg-gradient-to-r ${meta.accent} text-white`}
+        aria-expanded={expanded}
+        className="w-full flex items-center gap-4 px-4 md:px-5 py-4 text-left hover:bg-gray-50 transition-colors"
       >
-        <div className="w-11 h-11 rounded-lg bg-white/20 flex items-center justify-center flex-shrink-0">
-          <Icon className="w-6 h-6" />
+        <div className="w-11 h-11 rounded-lg bg-app-100 flex items-center justify-center flex-shrink-0">
+          <Icon className="w-6 h-6 text-app-600" />
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <h2 className="font-semibold text-base">{meta.title}</h2>
-            <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${meta.badgeBg}`}>
-              {meta.apiBadge}
-            </span>
-            {channel.isActive ? (
-              <span className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded bg-white/25">
-                <CheckCircle2 className="w-3 h-3" /> Activo
-              </span>
-            ) : (
-              <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-black/20">Inactivo</span>
-            )}
+            <h2 className="font-semibold text-base text-gray-900">{meta.title}</h2>
+            <Badge tone="gray">{meta.apiBadge}</Badge>
+            {channel.isActive
+              ? <Badge tone="green"><CheckCircle2 className="w-3 h-3" /> Activo</Badge>
+              : <Badge tone="gray">Inactivo</Badge>}
           </div>
-          <p className="text-xs opacity-90 mt-0.5">{meta.subtitle}</p>
+          <p className="text-sm text-gray-500 mt-0.5">{meta.subtitle}</p>
         </div>
-        {expanded ? <ChevronUp className="w-5 h-5 flex-shrink-0" /> : <ChevronDown className="w-5 h-5 flex-shrink-0" />}
+        <ChevronDown className={`w-5 h-5 text-gray-400 flex-shrink-0 transition-transform ${expanded ? 'rotate-180' : ''}`} />
       </button>
 
       {/* Cuerpo */}
       {expanded && (
-        <div className="p-5 space-y-4">
-          <p className="text-sm text-gray-600">{meta.intro}</p>
-
-          {meta.docsUrl && (
-            <a
-              href={meta.docsUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-block text-xs text-blue-600 hover:underline"
-            >
-              Ver documentación oficial →
-            </a>
-          )}
-
-          {/* Toggles */}
-          <div className="flex flex-wrap items-center gap-4 pt-2">
-            <ToggleSwitch
-              label="Canal activo"
-              checked={isActive}
-              onChange={setIsActive}
-              hint="Si está apagado, el canal no recibe ni envía mensajes."
-            />
-            <ToggleSwitch
-              label="Auto-respuesta con IA"
-              checked={aiAutoReply}
-              onChange={setAiAutoReply}
-              hint="Cuando se activa, las nuevas conversaciones nacen con el bot encendido."
-            />
+        <div className="px-4 md:px-5 pb-5 pt-1 space-y-5 border-t border-gray-100">
+          <div className="pt-4">
+            <p className="text-sm text-gray-600">{meta.intro}</p>
+            {meta.docsUrl && (
+              <a href={meta.docsUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 mt-1 text-sm font-medium text-app-700 hover:underline">
+                Ver documentación oficial <ExternalLink className="w-3.5 h-3.5" />
+              </a>
+            )}
           </div>
 
-          {/* Webhook URL (solo Meta / Twilio) */}
-          {webhookUrl && (
-            <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
-              <label className="block text-xs font-medium text-gray-700 mb-1">
-                URL de webhook (pega esto en {meta.title})
-              </label>
-              <div className="flex items-center gap-2">
-                <code className="flex-1 text-xs bg-white border border-gray-200 px-2 py-1.5 rounded font-mono break-all">
-                  {webhookUrl}
-                </code>
-                <button
-                  type="button"
-                  onClick={() => handleCopy(webhookUrl)}
-                  className="text-xs px-2 py-1.5 rounded border border-gray-200 hover:bg-white"
-                >
-                  Copiar
-                </button>
-              </div>
+          {/* Interruptores */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="rounded-lg border border-gray-200 p-3">
+              <Switch label="Canal activo" description="Si está apagado, el canal no recibe ni envía mensajes." checked={isActive} onChange={setIsActive} />
             </div>
+            <div className="rounded-lg border border-gray-200 p-3">
+              <Switch label="Auto-respuesta con IA" description="Las nuevas conversaciones nacen con el bot encendido." checked={aiAutoReply} onChange={setAiAutoReply} />
+            </div>
+          </div>
+
+          {/* URL del webhook (Meta / Twilio) */}
+          {webhookUrl && (
+            <Field label={`URL de webhook (pégala en ${meta.title})`}>
+              <div className="flex items-center gap-2">
+                <code className="flex-1 min-w-0 text-xs bg-gray-50 border border-gray-200 px-3 py-2.5 rounded-lg font-mono break-all text-gray-800">{webhookUrl}</code>
+                <Button variant="secondary" icon={<Copy className="w-4 h-4" />} onClick={() => handleCopy(webhookUrl)}>Copiar</Button>
+              </div>
+            </Field>
           )}
 
           {/* Campos de configuración */}
           {meta.fields.length > 0 && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {meta.fields.map((field) => {
                 const value = (config[field.key] as string | undefined) ?? '';
                 const isSecret = !!field.secret;
                 const visible = !isSecret || shownSecrets[field.key];
                 return (
-                  <div key={field.key} className={field.key === 'verifyToken' || field.key === 'pageAccessToken' || field.key === 'permanentAccessToken' || field.key === 'appSecret' || field.key === 'authToken' ? 'md:col-span-2' : ''}>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">{field.label}</label>
+                  <Field key={field.key} label={field.label} hint={field.hint} className={wide(field.key) ? 'md:col-span-2' : ''}>
                     <div className="relative">
-                      <input
+                      <TextInput
                         type={isSecret && !visible ? 'password' : 'text'}
                         value={value}
                         onChange={(e) => handleFieldChange(field.key, e.target.value)}
                         placeholder={field.placeholder}
-                        className="w-full pr-10 px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-200 font-mono"
+                        className={`font-mono ${isSecret ? 'pr-10' : ''}`}
                       />
                       {isSecret && (
                         <button
                           type="button"
                           onClick={() => handleToggleSecret(field.key)}
-                          className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                          className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded text-gray-400 hover:text-gray-700"
                           title={visible ? 'Ocultar' : 'Mostrar'}
                         >
                           {visible ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                         </button>
                       )}
                     </div>
-                    {field.hint && <p className="text-[11px] text-gray-500 mt-1">{field.hint}</p>}
-                  </div>
+                  </Field>
                 );
               })}
             </div>
           )}
 
-          {/* Feedback */}
-          {feedback && (
-            <div
-              className={`text-sm rounded-lg px-3 py-2 ${
-                feedback.ok ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'
-              }`}
-            >
-              {feedback.msg}
-            </div>
-          )}
+          {feedback && <Alert tone={feedback.ok ? 'success' : 'error'}>{feedback.msg}</Alert>}
 
           {/* Acciones */}
-          <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-100">
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              className="inline-flex items-center gap-2 bg-violet-600 hover:bg-violet-700 text-white text-sm font-medium px-4 py-2 rounded-lg disabled:opacity-50"
-            >
-              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-              Guardar
-            </button>
+          <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 pt-4 border-t border-gray-100">
             {meta.fields.length > 0 && (
-              <button
-                onClick={handleTest}
-                disabled={testing}
-                className="inline-flex items-center gap-2 border border-gray-200 hover:bg-gray-50 text-gray-700 text-sm font-medium px-4 py-2 rounded-lg disabled:opacity-50"
-              >
-                {testing ? <Loader2 className="w-4 h-4 animate-spin" /> : <TestTube2 className="w-4 h-4" />}
+              <Button variant="secondary" onClick={handleTest} isLoading={testing} icon={!testing ? <TestTube2 className="w-4 h-4" /> : undefined}>
                 Probar conexión
-              </button>
+              </Button>
             )}
+            <Button onClick={handleSave} isLoading={saving} icon={!saving ? <Save className="w-4 h-4" /> : undefined}>
+              Guardar
+            </Button>
           </div>
         </div>
       )}
     </section>
   );
 };
-
-// ============================================================
-// Switch reutilizable
-// ============================================================
-
-interface ToggleProps {
-  label: string;
-  checked: boolean;
-  onChange: (v: boolean) => void;
-  hint?: string;
-}
-
-const ToggleSwitch = ({ label, checked, onChange, hint }: ToggleProps) => (
-  <label className="inline-flex items-start gap-2 cursor-pointer">
-    <button
-      type="button"
-      onClick={() => onChange(!checked)}
-      className={`relative w-10 h-5 rounded-full transition-colors flex-shrink-0 ${
-        checked ? 'bg-violet-600' : 'bg-gray-300'
-      }`}
-      role="switch"
-      aria-checked={checked}
-    >
-      <span
-        className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${
-          checked ? 'translate-x-5' : ''
-        }`}
-      />
-    </button>
-    <span className="text-sm">
-      <span className="font-medium text-gray-700">{label}</span>
-      {hint && <span className="block text-[11px] text-gray-500">{hint}</span>}
-    </span>
-  </label>
-);
 
 export default ChannelsPage;

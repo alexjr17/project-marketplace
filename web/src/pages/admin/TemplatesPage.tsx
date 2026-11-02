@@ -1,63 +1,61 @@
 import { useState, useEffect, useMemo } from 'react';
-import {
-  useReactTable,
-  getCoreRowModel,
-  getFilteredRowModel,
-  getPaginationRowModel,
-  getSortedRowModel,
-  flexRender,
-  createColumnHelper,
-  type SortingState,
-  type ColumnFiltersState,
-} from '@tanstack/react-table';
 import { useNavigate } from 'react-router-dom';
+import {
+  ArrowDown, ArrowLeft, ArrowUp, ArrowUpDown, CheckCircle, Grid3x3, LayoutTemplate, Palette, Pencil, Plus, Printer, Trash2,
+} from 'lucide-react';
 import { templatesService, type Template } from '../../services/templates.service';
 import { TemplateForm, type TemplateFormData } from '../../components/admin/TemplateForm';
-import { TemplateZonesManager } from '../../components/admin/TemplateZonesManager';
 import { VisualZoneEditor } from '../../components/admin/VisualZoneEditor';
 import { TemplateRecipesSection } from '../../components/admin/TemplateRecipesSection';
 import { templateRecipesService } from '../../services/template-recipes.service';
-import { useToast } from '../../context/ToastContext';
 import { useCatalogs } from '../../context/CatalogsContext';
-import { Modal } from '../../components/shared/Modal';
-import { Button } from '../../components/shared/Button';
-import { Input } from '../../components/shared/Input';
 import {
-  Settings,
-  Plus,
-  Layers,
-  ArrowLeft,
-  Search,
-  ChevronLeft,
-  ChevronRight,
-  ArrowUpDown,
-  Palette,
-  Printer,
-  Grid3x3
-} from 'lucide-react';
+  ActionMenu, Alert, Badge, Button, Card, Dialog, EmptyState, FilterBar, IconButton, Page, PageHeader, Pager, SearchInput,
+  SelectInput, Spinner, StatCard, Table, TableCard, TableMessage, Tabs, TBody, Td, Th, THead, Thumb, Tr, toast, useConfirm,
+} from '../../components/ui';
 import * as variantsService from '../../services/variants.service';
 
 type ViewMode = 'list' | 'add' | 'edit';
+type EditTab = 'data' | 'inputs' | 'zones';
+type SortKey = 'name' | 'basePrice';
 
-const columnHelper = createColumnHelper<Template>();
+// Primera imagen del modelo (las imágenes pueden venir como lista o como objeto front/back/side)
+const firstImage = (images: unknown): string => {
+  if (!images) return '';
+  if (Array.isArray(images)) return images[0] || '';
+  const o = images as { front?: string; back?: string; side?: string };
+  return o.front || o.back || o.side || '';
+};
+const backImage = (images: unknown): string | undefined => {
+  if (!images) return undefined;
+  if (Array.isArray(images)) return images[1];
+  return (images as { back?: string }).back;
+};
+const money = (n: number) => '$' + Number(n || 0).toLocaleString('es-CO');
 
 export const TemplatesPage = () => {
-  const { showToast } = useToast();
   const { categories, productTypes } = useCatalogs();
+  const confirm = useConfirm();
   const navigate = useNavigate();
 
   const [templates, setTemplates] = useState<Template[]>([]);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<ViewMode>('list');
+  const [editTab, setEditTab] = useState<EditTab>('data');
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
-  const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
-  const [sorting, setSorting] = useState<SortingState>([]);
-  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
-  const [globalFilter, setGlobalFilter] = useState('');
   const [generatingVariantsFor, setGeneratingVariantsFor] = useState<Template | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [templatesWithVariants, setTemplatesWithVariants] = useState<Set<number>>(new Set());
   const [selectedInputIds, setSelectedInputIds] = useState<number[]>([]);
+
+  // Filtros del listado
+  const [q, setQ] = useState('');
+  const [typeFilter, setTypeFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
+  const [sortKey, setSortKey] = useState<SortKey | null>(null);
+  const [desc, setDesc] = useState(false);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   useEffect(() => {
     loadTemplates();
@@ -70,7 +68,7 @@ export const TemplatesPage = () => {
       setTemplates(data);
     } catch (error) {
       console.error('Error al cargar modelos:', error);
-      showToast('Error al cargar modelos', 'error');
+      toast.error('Error al cargar modelos');
     } finally {
       setLoading(false);
     }
@@ -86,17 +84,18 @@ export const TemplatesPage = () => {
         categoryId: data.categoryId || undefined,
         typeId: data.typeId || undefined,
         basePrice: data.basePrice,
-        images: data.images,
+        // El backend recibe la lista plana de imágenes (la primera es la frontal).
+        images: data.images as unknown as Template['images'],
         tags: data.tags,
         colorIds: data.colorIds,
         sizeIds: data.sizeIds,
       });
 
-      showToast('Modelo creado exitosamente', 'success');
+      toast.success('Modelo creado exitosamente');
       await loadTemplates();
       setViewMode('list');
     } catch (error: any) {
-      showToast(error.response?.data?.message || 'Error al crear modelo', 'error');
+      toast.error(error?.message || 'Error al crear modelo');
     }
   };
 
@@ -104,10 +103,6 @@ export const TemplatesPage = () => {
     if (!selectedTemplate) return;
 
     try {
-      console.log('=== GUARDANDO TEMPLATE ===');
-      console.log('Template ID:', selectedTemplate.id);
-      console.log('Selected Input IDs:', selectedInputIds);
-
       // Actualizar datos del template
       await templatesService.updateTemplate(selectedTemplate.id, {
         name: data.name,
@@ -115,7 +110,7 @@ export const TemplatesPage = () => {
         categoryId: data.categoryId,
         typeId: data.typeId,
         basePrice: data.basePrice,
-        images: data.images,
+        images: data.images as unknown as Template['images'],
         tags: data.tags,
         isActive: data.isActive,
         colorIds: data.colorIds,
@@ -123,44 +118,40 @@ export const TemplatesPage = () => {
       });
 
       // Guardar insumos asociados
-      console.log('Llamando a associateInputs...');
-      const result = await templateRecipesService.associateInputs(selectedTemplate.id, selectedInputIds);
-      console.log('Resultado de associateInputs:', result);
+      await templateRecipesService.associateInputs(selectedTemplate.id, selectedInputIds);
 
-      showToast('Modelo y recetas actualizados exitosamente', 'success');
+      toast.success('Modelo y recetas actualizados exitosamente');
       await loadTemplates();
       setViewMode('list');
       setSelectedTemplate(null);
       setSelectedInputIds([]);
     } catch (error: any) {
       console.error('Error al guardar:', error);
-      showToast(error.response?.data?.message || 'Error al actualizar modelo', 'error');
+      toast.error(error?.message || 'Error al actualizar modelo');
     }
   };
 
-  const handleDeleteTemplate = async (id: number) => {
+  const handleDeleteTemplate = async (template: Template) => {
+    if (!(await confirm({ title: `¿Eliminar el modelo "${template.name}"?`, message: 'Esta acción no se puede deshacer.', tone: 'danger' }))) return;
     try {
-      await templatesService.deleteTemplate(id);
-      showToast('Modelo eliminado exitosamente', 'success');
+      await templatesService.deleteTemplate(template.id);
+      toast.success('Modelo eliminado exitosamente');
       await loadTemplates();
-      setDeleteConfirmId(null);
       setViewMode('list');
       setSelectedTemplate(null);
     } catch (error: any) {
-      showToast(error.response?.data?.message || 'Error al eliminar modelo', 'error');
+      toast.error(error?.message || 'Error al eliminar modelo');
     }
   };
 
   const startEdit = async (template: Template) => {
     setSelectedTemplate(template);
+    setEditTab('data');
     setViewMode('edit');
 
     // Cargar insumos asociados a este template
     try {
-      console.log('=== CARGANDO INPUTS ASOCIADOS ===');
-      console.log('Template ID:', template.id);
       const inputIds = await templateRecipesService.getAssociatedInputIds(template.id);
-      console.log('Input IDs cargados:', inputIds);
       setSelectedInputIds(inputIds);
     } catch (error) {
       console.error('Error loading associated inputs:', error);
@@ -195,10 +186,11 @@ export const TemplatesPage = () => {
   };
 
   // Cargar información de variantes al montar o cuando cambian los templates
-  useMemo(() => {
+  useEffect(() => {
     if (templates.length > 0 && viewMode === 'list') {
       checkTemplateVariants();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [templates, viewMode]);
 
   const handleGenerateVariants = async () => {
@@ -211,531 +203,270 @@ export const TemplatesPage = () => {
         0 // Stock inicial
       );
 
-      if (result.created > 0) {
-        showToast(`${result.created} variantes creadas exitosamente`, 'success');
-        // Actualizar lista de templates con variantes
+      // La API devuelve la lista de variantes creadas.
+      const created = Array.isArray(result.created) ? result.created.length : Number(result.created) || 0;
+      if (created > 0) {
+        toast.success(`${created} variantes creadas exitosamente`);
         setTemplatesWithVariants(prev => new Set(prev).add(generatingVariantsFor.id));
+      } else if (!result.errors?.length) {
+        toast.info('No había variantes nuevas para crear');
       }
 
       if (result.errors && result.errors.length > 0) {
-        showToast(`${result.errors.length} errores al crear variantes`, 'error');
+        toast.error(`${result.errors.length} errores al crear variantes`);
       }
 
       setGeneratingVariantsFor(null);
     } catch (error: any) {
-      showToast('Error al generar variantes: ' + (error.response?.data?.message || error.message), 'error');
+      toast.error('Error al generar variantes: ' + (error?.message));
     } finally {
       setIsGenerating(false);
     }
   };
 
-  // Definir columnas
-  const columns = useMemo(
-    () => [
-      columnHelper.accessor('name', {
-        header: ({ column }) => (
-          <button
-            onClick={() => column.toggleSorting()}
-            className="flex items-center gap-1 hover:text-gray-900"
-          >
-            Modelo
-            <ArrowUpDown className="w-4 h-4" />
-          </button>
-        ),
-        cell: (info) => (
-          <div className="flex items-center">
-            {info.row.original.images?.front && (
-              <img
-                src={info.row.original.images.front}
-                alt={info.getValue()}
-                className="w-12 h-12 rounded-lg object-cover"
-              />
-            )}
-            <div className="ml-4">
-              <div className="text-sm font-medium text-gray-900">{info.getValue()}</div>
-              <div className="text-sm text-gray-500">{info.row.original.sku}</div>
-            </div>
-          </div>
-        ),
-      }),
-      columnHelper.accessor('typeName', {
-        header: 'Tipo',
-        cell: (info) => (
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
-            <Layers className="w-3 h-3" />
-            {info.getValue() || 'Sin tipo'}
-          </span>
-        ),
-      }),
-      columnHelper.accessor('categoryName', {
-        header: 'Categoría',
-        cell: (info) => info.getValue() || <span className="text-gray-400">Sin categoría</span>,
-      }),
-      columnHelper.accessor('colors', {
-        header: 'Colores',
-        cell: (info) => {
-          const colors = info.getValue() || [];
-          return (
-            <div className="flex items-center gap-1">
-              <Palette className="w-4 h-4 text-gray-400" />
-              <span className="text-sm text-gray-600">{colors.length}</span>
-            </div>
-          );
-        },
-        enableSorting: false,
-      }),
-      columnHelper.accessor('sizes', {
-        header: 'Tallas',
-        cell: (info) => {
-          const sizes = info.getValue() || [];
-          return (
-            <div className="flex flex-wrap gap-1">
-              {sizes.slice(0, 3).map(size => (
-                <span
-                  key={size.id}
-                  className="px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded text-xs font-medium"
-                >
-                  {size.abbreviation}
-                </span>
-              ))}
-              {sizes.length > 3 && (
-                <span className="text-xs text-gray-400">
-                  +{sizes.length - 3}
-                </span>
-              )}
-            </div>
-          );
-        },
-        enableSorting: false,
-      }),
-      columnHelper.accessor('basePrice', {
-        header: ({ column }) => (
-          <button
-            onClick={() => column.toggleSorting()}
-            className="flex items-center gap-1 hover:text-gray-900"
-          >
-            Precio Base
-            <ArrowUpDown className="w-4 h-4" />
-          </button>
-        ),
-        cell: (info) => `$${info.getValue().toLocaleString('es-CO')}`,
-      }),
-      columnHelper.display({
-        id: 'status',
-        header: 'Estado',
-        cell: (info) => (
-          <span
-            className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${
-              info.row.original.isActive
-                ? 'bg-green-100 text-green-800'
-                : 'bg-gray-100 text-gray-500'
-            }`}
-          >
-            {info.row.original.isActive ? 'Activo' : 'Inactivo'}
-          </span>
-        ),
-      }),
-      columnHelper.display({
-        id: 'actions',
-        header: () => <div className="text-right">Acciones</div>,
-        cell: (info) => {
-          const template = info.row.original;
-          const hasVariants = templatesWithVariants.has(template.id);
-
-          return (
-            <div className="flex justify-end gap-2">
-              {hasVariants ? (
-                <button
-                  onClick={() => handlePrintBarcodes(template)}
-                  className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
-                  title="Imprimir Códigos de Barras"
-                >
-                  <Printer className="w-4 h-4" />
-                </button>
-              ) : (
-                <button
-                  onClick={() => setGeneratingVariantsFor(template)}
-                  className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
-                  title="Generar Variantes"
-                >
-                  <Grid3x3 className="w-4 h-4" />
-                </button>
-              )}
-              <button
-                onClick={() => startEdit(template)}
-                className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                title="Editar"
-              >
-                <Settings className="w-4 h-4" />
-              </button>
-            </div>
-          );
-        },
-      }),
-    ],
-    [templatesWithVariants]
+  const types = useMemo(
+    () => Array.from(new Set(templates.map(t => t.typeName).filter((n): n is string => !!n))).sort(),
+    [templates],
   );
 
-  const table = useReactTable({
-    data: templates,
-    columns,
-    state: {
-      sorting,
-      columnFilters,
-      globalFilter,
-    },
-    onSortingChange: setSorting,
-    onColumnFiltersChange: setColumnFilters,
-    onGlobalFilterChange: setGlobalFilter,
-    getCoreRowModel: getCoreRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
-    initialState: {
-      pagination: {
-        pageSize: 10,
-      },
-    },
-  });
+  const filtered = useMemo(() => {
+    const t = q.trim().toLowerCase();
+    let list = templates.filter((tpl) => {
+      if (typeFilter && tpl.typeName !== typeFilter) return false;
+      if (statusFilter === 'active' && !tpl.isActive) return false;
+      if (statusFilter === 'inactive' && tpl.isActive) return false;
+      if (!t) return true;
+      return `${tpl.name} ${tpl.sku} ${tpl.typeName ?? ''} ${tpl.categoryName ?? ''}`.toLowerCase().includes(t);
+    });
+    if (sortKey) {
+      list = [...list].sort((a, b) => {
+        const r = sortKey === 'name' ? a.name.localeCompare(b.name, 'es') : a.basePrice - b.basePrice;
+        return desc ? -r : r;
+      });
+    }
+    return list;
+  }, [templates, q, typeFilter, statusFilter, sortKey, desc]);
+
+  const pageRows = filtered.slice((page - 1) * pageSize, page * pageSize);
+  const toggleSort = (k: SortKey) => { if (sortKey === k) setDesc(d => !d); else { setSortKey(k); setDesc(false); } };
+  const sortIcon = (k: SortKey) => sortKey === k ? (desc ? <ArrowDown className="w-3.5 h-3.5" /> : <ArrowUp className="w-3.5 h-3.5" />) : <ArrowUpDown className="w-3.5 h-3.5 opacity-50" />;
 
   // Si no están cargados los catálogos, mostrar loading
   if (!categories || !productTypes) {
-    return (
-      <div className="p-4 md:p-8">
-        <div className="bg-white rounded-lg shadow-sm p-8 text-center text-gray-500">
-          Cargando catálogos...
-        </div>
-      </div>
-    );
+    return <Page><Spinner label="Cargando catálogos…" /></Page>;
   }
+
+  const backButton = (
+    <Button variant="secondary" icon={<ArrowLeft className="w-4 h-4" />} onClick={cancelEdit}>Volver a modelos</Button>
+  );
 
   // Vista de formulario (agregar)
   if (viewMode === 'add') {
     return (
-      <div className="p-6">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Agregar Nuevo Modelo</h1>
-            <p className="text-gray-600 mt-1 text-sm">Completa la información del modelo base</p>
-          </div>
-          <button
-            onClick={cancelEdit}
-            className="inline-flex items-center gap-2 px-4 py-2 text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 rounded-lg transition-colors"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Volver a Modelos
-          </button>
-        </div>
-
-        <div className="bg-white rounded-lg shadow-sm p-6 md:p-8">
-          <TemplateForm onSubmit={handleAddTemplate} onCancel={cancelEdit} />
-        </div>
-      </div>
+      <Page>
+        <PageHeader icon={LayoutTemplate} title="Nuevo modelo" subtitle="Completa la información del modelo base" actions={backButton} />
+        <Alert tone="info">Después de crear el modelo podrás asignarle insumos y dibujar sus zonas de diseño.</Alert>
+        <TemplateForm onSubmit={handleAddTemplate} onCancel={cancelEdit} />
+      </Page>
     );
   }
 
-  // Vista de formulario (editar)
+  // Vista de formulario (editar): pestañas Datos · Insumos · Zonas.
+  // Las tres quedan montadas para no perder lo editado al cambiar de pestaña.
   if (viewMode === 'edit' && selectedTemplate) {
     return (
-      <div className="p-6">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Editar Modelo</h1>
-            <p className="text-gray-600 mt-1 text-sm">Actualiza la información del modelo</p>
-          </div>
-          <button
-            onClick={cancelEdit}
-            className="inline-flex items-center gap-2 px-4 py-2 text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 rounded-lg transition-colors"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Volver a Modelos
-          </button>
-        </div>
+      <Page>
+        <PageHeader icon={LayoutTemplate} title={selectedTemplate.name} subtitle={`Modelo ${selectedTemplate.sku}`} actions={backButton} />
 
-        <div className="bg-white rounded-lg shadow-sm p-6 md:p-8 mb-6">
+        <Tabs<EditTab>
+          value={editTab}
+          onChange={setEditTab}
+          tabs={[
+            { value: 'data', label: 'Datos del modelo' },
+            { value: 'inputs', label: 'Insumos', count: selectedInputIds.length },
+            { value: 'zones', label: 'Zonas de diseño' },
+          ]}
+        />
+
+        <div className={editTab === 'data' ? '' : 'hidden'}>
           <TemplateForm
+            key={selectedTemplate.id}
             template={selectedTemplate}
             onSubmit={handleEditTemplate}
             onCancel={cancelEdit}
-            onDelete={() => setDeleteConfirmId(selectedTemplate.id)}
+            onDelete={() => handleDeleteTemplate(selectedTemplate)}
           />
         </div>
 
-        {/* Template Recipes Section */}
-        <div className="bg-white rounded-lg shadow-sm p-6 md:p-8 mb-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Insumos / Recetas</h2>
-          <TemplateRecipesSection
-            templateId={selectedTemplate.id}
-            selectedInputIds={selectedInputIds}
-            onInputsChange={setSelectedInputIds}
-          />
+        <div className={editTab === 'inputs' ? 'space-y-4' : 'hidden'}>
+          <Alert tone="warning" action={<Button size="sm" variant="secondary" onClick={() => setEditTab('data')}>Ir a Datos</Button>}>
+            Los insumos se guardan junto con el modelo: usa «Guardar cambios» en la pestaña Datos del modelo.
+          </Alert>
+          <Card>
+            <TemplateRecipesSection
+              templateId={selectedTemplate.id}
+              selectedInputIds={selectedInputIds}
+              onInputsChange={setSelectedInputIds}
+            />
+          </Card>
         </div>
 
-        {/* Template Zones Section - Editor Visual */}
-        <div className="bg-white rounded-lg shadow-sm p-6 md:p-8">
-          {!selectedTemplate.images?.front && (
-            <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 px-4 py-3 rounded-lg mb-4">
-              <p className="text-sm">
-                <strong>Nota:</strong> Agrega una imagen frontal al modelo para visualizar las zonas sobre la imagen.
-              </p>
-            </div>
+        <div className={editTab === 'zones' ? 'space-y-4' : 'hidden'}>
+          {!firstImage(selectedTemplate.images) && (
+            <Alert tone="warning">Agrega una imagen frontal al modelo para visualizar las zonas sobre la imagen.</Alert>
           )}
-          <VisualZoneEditor
-            templateId={selectedTemplate.id}
-            templateImage={selectedTemplate.images?.front || ''}
-            templateImageBack={selectedTemplate.images?.back}
-            zoneTypeImages={selectedTemplate.zoneTypeImages || undefined}
-            onZoneTypeImagesChange={async (images) => {
-              try {
-                await templatesService.updateTemplate(selectedTemplate.id, {
-                  zoneTypeImages: images,
-                });
-                // Actualizar el template seleccionado localmente
-                setSelectedTemplate(prev => prev ? { ...prev, zoneTypeImages: images } : null);
-                showToast('Imágenes guardadas', 'success');
-              } catch (error) {
-                console.error('Error al guardar imágenes:', error);
-                showToast('Error al guardar las imágenes', 'error');
-              }
-            }}
-          />
+          <Card>
+            <VisualZoneEditor
+              templateId={selectedTemplate.id}
+              templateImage={firstImage(selectedTemplate.images)}
+              templateImageBack={backImage(selectedTemplate.images)}
+              zoneTypeImages={selectedTemplate.zoneTypeImages || undefined}
+              onZoneTypeImagesChange={async (images) => {
+                try {
+                  await templatesService.updateTemplate(selectedTemplate.id, {
+                    zoneTypeImages: images,
+                  });
+                  // Actualizar el template seleccionado localmente
+                  setSelectedTemplate(prev => prev ? { ...prev, zoneTypeImages: images } : null);
+                  toast.success('Imágenes guardadas');
+                } catch (error) {
+                  console.error('Error al guardar imágenes:', error);
+                  toast.error('Error al guardar las imágenes');
+                }
+              }}
+            />
+          </Card>
         </div>
-
-        {/* Delete Confirmation Modal */}
-        {deleteConfirmId && (
-          <Modal
-            isOpen={true}
-            onClose={() => setDeleteConfirmId(null)}
-            title="Confirmar Eliminación"
-          >
-            <div className="space-y-4">
-              <p className="text-gray-600">
-                ¿Estás seguro de que deseas eliminar este modelo? Esta acción no se puede deshacer.
-              </p>
-              <div className="flex justify-end gap-3">
-                <Button
-                  variant="admin-secondary"
-                  onClick={() => setDeleteConfirmId(null)}
-                >
-                  Cancelar
-                </Button>
-                <Button
-                  variant="admin-danger"
-                  onClick={() => handleDeleteTemplate(deleteConfirmId)}
-                >
-                  Eliminar
-                </Button>
-              </div>
-            </div>
-          </Modal>
-        )}
-      </div>
+      </Page>
     );
   }
 
+  const activeCount = templates.filter(t => t.isActive).length;
+  const hasFilters = !!(q || typeFilter || statusFilter !== 'all');
+
   // Vista de lista
   return (
-    <div className="p-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Modelos / Templates</h1>
-          <p className="text-gray-600 mt-1 text-sm">Gestiona los modelos base para personalización</p>
-        </div>
-        <Button onClick={() => setViewMode('add')} variant="admin-orange" size="sm">
-          <Plus className="w-4 h-4" />
-          Agregar Modelo
-        </Button>
-      </div>
-
-      {/* Search Bar */}
-      <div className="bg-white rounded-lg shadow-sm p-4 mb-4">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-          <Input
-            type="text"
-            placeholder="Buscar modelos..."
-            value={globalFilter ?? ''}
-            onChange={(e) => setGlobalFilter(e.target.value)}
-            className="pl-10"
-          />
-        </div>
-      </div>
-
-      {/* Templates Table */}
-      <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50 border-b border-gray-200">
-              {table.getHeaderGroups().map((headerGroup) => (
-                <tr key={headerGroup.id}>
-                  {headerGroup.headers.map((header) => (
-                    <th
-                      key={header.id}
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                    >
-                      {header.isPlaceholder
-                        ? null
-                        : flexRender(header.column.columnDef.header, header.getContext())}
-                    </th>
-                  ))}
-                </tr>
-              ))}
-            </thead>
-            <tbody className="divide-y divide-gray-200">
-              {loading ? (
-                <tr>
-                  <td colSpan={columns.length} className="text-center py-12">
-                    <div className="text-gray-500">Cargando modelos...</div>
-                  </td>
-                </tr>
-              ) : table.getRowModel().rows.length > 0 ? (
-                table.getRowModel().rows.map((row) => (
-                  <tr key={row.id} className="hover:bg-gray-50">
-                    {row.getVisibleCells().map((cell) => (
-                      <td key={cell.id} className="px-6 py-4 text-sm">
-                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                      </td>
-                    ))}
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={columns.length} className="text-center py-12">
-                    <Layers className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                    <h3 className="text-lg font-medium text-gray-900 mb-2">
-                      {globalFilter ? 'No se encontraron modelos' : 'No hay modelos'}
-                    </h3>
-                    <p className="text-gray-500 mb-4">
-                      {globalFilter
-                        ? 'Intenta con otra búsqueda'
-                        : 'Comienza agregando tu primer modelo al catálogo'}
-                    </p>
-                    {!globalFilter && (
-                      <Button onClick={() => setViewMode('add')} variant="admin-orange" size="sm">
-                        <Plus className="w-4 h-4" />
-                        Agregar Modelo
-                      </Button>
-                    )}
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Pagination Controls */}
-        {table.getRowModel().rows.length > 0 && (
-          <div className="px-6 py-4 border-t border-gray-200 flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="text-sm text-gray-700">
-              Mostrando{' '}
-              <span className="font-medium">
-                {table.getState().pagination.pageIndex * table.getState().pagination.pageSize + 1}
-              </span>{' '}
-              a{' '}
-              <span className="font-medium">
-                {Math.min(
-                  (table.getState().pagination.pageIndex + 1) * table.getState().pagination.pageSize,
-                  table.getFilteredRowModel().rows.length
-                )}
-              </span>{' '}
-              de <span className="font-medium">{table.getFilteredRowModel().rows.length}</span> modelos
-            </div>
-
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => table.previousPage()}
-                disabled={!table.getCanPreviousPage()}
-                className="p-2 rounded-lg border border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                <ChevronLeft className="w-5 h-5" />
-              </button>
-
-              <div className="flex gap-1">
-                {Array.from({ length: table.getPageCount() }, (_, i) => i + 1).map((page) => (
-                  <button
-                    key={page}
-                    onClick={() => table.setPageIndex(page - 1)}
-                    className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
-                      table.getState().pagination.pageIndex === page - 1
-                        ? 'bg-orange-500 text-white'
-                        : 'text-gray-700 hover:bg-gray-100'
-                    }`}
-                  >
-                    {page}
-                  </button>
-                ))}
-              </div>
-
-              <button
-                onClick={() => table.nextPage()}
-                disabled={!table.getCanNextPage()}
-                className="p-2 rounded-lg border border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                <ChevronRight className="w-5 h-5" />
-              </button>
-            </div>
-          </div>
+    <Page>
+      <PageHeader
+        icon={LayoutTemplate}
+        title="Plantillas personalizables"
+        subtitle="Modelos base que el cliente personaliza (zonas, insumos y variantes)"
+        actions={(
+          <>
+            <Button variant="secondary" onClick={() => navigate('/admin-panel/template-recipes')}>Recetas de insumos</Button>
+            <Button icon={<Plus className="w-4 h-4" />} onClick={() => setViewMode('add')}>Nuevo modelo</Button>
+          </>
         )}
+      />
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <StatCard icon={LayoutTemplate} label="Modelos" value={templates.length} />
+        <StatCard icon={CheckCircle} tone="green" label="Activos" value={activeCount} />
+        <StatCard icon={Grid3x3} tone="blue" label="Con variantes" value={templatesWithVariants.size} />
       </div>
 
-      {/* Generate Variants Modal */}
-      {generatingVariantsFor && (
-        <Modal
-          isOpen={true}
-          onClose={() => !isGenerating && setGeneratingVariantsFor(null)}
-          title="Generar Variantes"
-        >
-          <div className="space-y-4">
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <div className="flex items-start gap-3">
-                <Grid3x3 className="w-5 h-5 text-blue-600 mt-0.5" />
-                <div className="flex-1">
-                  <h4 className="font-medium text-blue-900 mb-1">
-                    {generatingVariantsFor.name}
-                  </h4>
-                  <p className="text-sm text-blue-700">
-                    Se generarán todas las combinaciones de colores y tallas configuradas para este template con códigos de barras únicos.
-                  </p>
-                </div>
-              </div>
-            </div>
+      <FilterBar>
+        <div className="sm:col-span-2"><SearchInput value={q} onChange={(v) => { setQ(v); setPage(1); }} placeholder="Buscar por nombre, SKU, tipo o categoría…" /></div>
+        <SelectInput value={typeFilter} onChange={(e) => { setTypeFilter(e.target.value); setPage(1); }} aria-label="Tipo">
+          <option value="">Todos los tipos</option>
+          {types.map(t => <option key={t} value={t}>{t}</option>)}
+        </SelectInput>
+        <SelectInput value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value as typeof statusFilter); setPage(1); }} aria-label="Estado">
+          <option value="all">Todos los estados</option>
+          <option value="active">Activos</option>
+          <option value="inactive">Inactivos</option>
+        </SelectInput>
+      </FilterBar>
 
-            <div className="space-y-2 text-sm text-gray-600">
-              <p className="flex items-center gap-2">
-                <span className="font-medium">•</span>
-                Cada variante tendrá un código de barras EAN-13 único
-              </p>
-              <p className="flex items-center gap-2">
-                <span className="font-medium">•</span>
-                El stock inicial será 0 (puedes ajustarlo después)
-              </p>
-              <p className="flex items-center gap-2">
-                <span className="font-medium">•</span>
-                Las variantes existentes no se duplicarán
-              </p>
-            </div>
+      <TableCard footer={filtered.length > 0 && (
+        <Pager page={page} pageSize={pageSize} total={filtered.length} onPage={setPage} onPageSize={(s) => { setPageSize(s); setPage(1); }} />
+      )}>
+        <Table>
+          <THead>
+            <tr>
+              <Th><button type="button" onClick={() => toggleSort('name')} className="inline-flex items-center gap-1 uppercase hover:text-gray-900">Modelo {sortIcon('name')}</button></Th>
+              <Th>Tipo</Th>
+              <Th>Categoría</Th>
+              <Th align="right">Colores</Th>
+              <Th>Tallas</Th>
+              <Th align="right"><button type="button" onClick={() => toggleSort('basePrice')} className="inline-flex items-center gap-1 uppercase hover:text-gray-900">Precio base {sortIcon('basePrice')}</button></Th>
+              <Th align="center">Estado</Th>
+              <Th align="right">Acciones</Th>
+            </tr>
+          </THead>
+          <TBody>
+            {loading ? <TableMessage colSpan={8}>Cargando modelos…</TableMessage>
+              : filtered.length === 0 ? (
+                <tr><td colSpan={8}>
+                  {hasFilters
+                    ? <EmptyState icon={LayoutTemplate} title="No se encontraron modelos" description="Prueba con otra búsqueda o quita los filtros." />
+                    : <EmptyState icon={LayoutTemplate} title="No hay modelos" description="Comienza agregando tu primer modelo personalizable."
+                        action={<Button size="sm" icon={<Plus className="w-4 h-4" />} onClick={() => setViewMode('add')}>Nuevo modelo</Button>} />}
+                </td></tr>
+              ) : pageRows.map((template) => {
+                const hasVariants = templatesWithVariants.has(template.id);
+                const sizes = template.sizes || [];
+                return (
+                  <Tr key={template.id} onClick={() => startEdit(template)}>
+                    <Td>
+                      <div className="flex items-center gap-3 min-w-[13rem]">
+                        <Thumb src={firstImage(template.images)} alt={template.name} size="lg" />
+                        <div className="min-w-0">
+                          <p className="font-medium text-gray-900 truncate">{template.name}</p>
+                          <p className="text-xs text-gray-500 font-mono truncate">{template.sku}</p>
+                        </div>
+                      </div>
+                    </Td>
+                    <Td className="whitespace-nowrap">{template.typeName || <span className="text-gray-400">Sin tipo</span>}</Td>
+                    <Td className="whitespace-nowrap">{template.categoryName || <span className="text-gray-400">Sin categoría</span>}</Td>
+                    <Td align="right">
+                      <span className="inline-flex items-center gap-1 tabular-nums"><Palette className="w-4 h-4 text-gray-400" />{(template.colors || []).length}</span>
+                    </Td>
+                    <Td>
+                      <div className="flex flex-wrap gap-1">
+                        {sizes.slice(0, 3).map(size => <Badge key={size.id}>{size.abbreviation}</Badge>)}
+                        {sizes.length > 3 && <span className="text-xs text-gray-400">+{sizes.length - 3}</span>}
+                        {sizes.length === 0 && <span className="text-gray-400">—</span>}
+                      </div>
+                    </Td>
+                    <Td align="right" className="tabular-nums whitespace-nowrap font-medium text-gray-900">{money(template.basePrice)}</Td>
+                    <Td align="center"><Badge tone={template.isActive ? 'green' : 'gray'}>{template.isActive ? 'Activo' : 'Inactivo'}</Badge></Td>
+                    <Td align="right" className="whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                      <IconButton title="Editar" tone="app" onClick={() => startEdit(template)}><Pencil className="w-4 h-4" /></IconButton>
+                      <ActionMenu items={[
+                        { label: 'Imprimir códigos de barras', icon: <Printer className="w-4 h-4" />, onClick: () => handlePrintBarcodes(template), hidden: !hasVariants },
+                        { label: 'Generar variantes', icon: <Grid3x3 className="w-4 h-4" />, onClick: () => setGeneratingVariantsFor(template), hidden: hasVariants },
+                        { label: 'Eliminar', icon: <Trash2 className="w-4 h-4" />, onClick: () => handleDeleteTemplate(template), danger: true },
+                      ]} />
+                    </Td>
+                  </Tr>
+                );
+              })}
+          </TBody>
+        </Table>
+      </TableCard>
 
-            <div className="flex justify-end gap-3">
-              <Button
-                variant="admin-secondary"
-                onClick={() => setGeneratingVariantsFor(null)}
-                disabled={isGenerating}
-              >
-                Cancelar
-              </Button>
-              <Button
-                variant="admin-primary"
-                onClick={handleGenerateVariants}
-                disabled={isGenerating}
-              >
-                {isGenerating ? 'Generando...' : 'Generar Variantes'}
-              </Button>
-            </div>
-          </div>
-        </Modal>
-      )}
-
-    </div>
+      <Dialog
+        open={!!generatingVariantsFor}
+        onClose={() => !isGenerating && setGeneratingVariantsFor(null)}
+        title="Generar variantes"
+        description={generatingVariantsFor?.name}
+        footer={(
+          <>
+            <Button variant="secondary" onClick={() => setGeneratingVariantsFor(null)} disabled={isGenerating}>Cancelar</Button>
+            <Button onClick={handleGenerateVariants} isLoading={isGenerating} icon={<Grid3x3 className="w-4 h-4" />}>Generar variantes</Button>
+          </>
+        )}
+      >
+        <div className="space-y-3 text-sm text-gray-600">
+          <p>Se generarán todas las combinaciones de colores y tallas configuradas para este modelo, con códigos de barras únicos.</p>
+          <ul className="list-disc pl-5 space-y-1">
+            <li>Cada variante tendrá un código de barras EAN-13 único.</li>
+            <li>El stock inicial será 0 (puedes ajustarlo después).</li>
+            <li>Las variantes existentes no se duplicarán.</li>
+          </ul>
+        </div>
+      </Dialog>
+    </Page>
   );
 };

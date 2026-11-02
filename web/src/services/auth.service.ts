@@ -1,4 +1,6 @@
 import api from './api.service';
+import type { AuthUser } from '../types/user';
+import { AUTH_STORAGE_KEY } from '../lib/config';
 
 export interface LoginCredentials {
   email: string;
@@ -12,34 +14,10 @@ export interface RegisterData {
   phone?: string;
 }
 
-export interface UserProfile {
-  cedula?: string;
-  phone?: string;
-  address?: string;
-  city?: string;
-  postalCode?: string;
-  country?: string;
-}
-
-export interface User {
-  id: number;
-  email: string;
-  name: string;
-  phone?: string;
-  avatar?: string;
-  roleId: number;
-  role: string;
-  permissions: string[];
-  status: string;
-  profile?: UserProfile;
-}
-
 export interface AuthResponse {
-  user: User;
+  user: AuthUser;
   token: string;
 }
-
-const AUTH_STORAGE_KEY = 'marketplace_auth';
 
 export const authService = {
   // Login
@@ -65,15 +43,27 @@ export const authService = {
   },
 
   // Obtener perfil
-  async getProfile(): Promise<User> {
-    const response = await api.get<User>('/auth/me');
-    if (!response.data) throw new Error('No autenticado');
-    return response.data;
+  async getProfile(): Promise<AuthUser> {
+    // /auth/me responde { user: {...} } dentro de data.
+    const response = await api.get<{ user: AuthUser }>('/auth/me');
+    if (!response.data?.user) throw new Error('No autenticado');
+    return response.data.user;
+  },
+
+  // Actualiza el usuario guardado (permisos frescos) sin tocar el token.
+  updateStoredUser(user: AuthUser): void {
+    const stored = localStorage.getItem(AUTH_STORAGE_KEY);
+    if (!stored) return;
+    try {
+      localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify({ ...JSON.parse(stored), user }));
+    } catch {
+      /* almacenamiento no disponible */
+    }
   },
 
   // Actualizar perfil
-  async updateProfile(data: Partial<User>): Promise<User> {
-    const response = await api.put<User>('/auth/me', data);
+  async updateProfile(data: Partial<AuthUser>): Promise<AuthUser> {
+    const response = await api.put<AuthUser>('/auth/me', data);
     if (!response.data) throw new Error('Error actualizando perfil');
 
     // Actualizar en localStorage
@@ -114,8 +104,13 @@ export const authService = {
     await api.post('/auth/reset-password', { token, password: newPassword });
   },
 
-  // Logout
+  // Logout: revoca el token en el servidor y borra la sesión local. Antes solo se borraba
+  // el localStorage y el token seguía válido. La petición toma el token al iniciarse, así
+  // que se puede borrar el almacenamiento enseguida sin esperar la respuesta.
   logout(): void {
+    if (localStorage.getItem(AUTH_STORAGE_KEY)) {
+      void api.post('/auth/logout').catch(() => { /* sin red: el token igual vence */ });
+    }
     localStorage.removeItem(AUTH_STORAGE_KEY);
   },
 

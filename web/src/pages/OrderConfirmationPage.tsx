@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import {
   CheckCircle2,
   Package,
@@ -19,7 +19,7 @@ import { useOrders } from '../context/OrdersContext';
 import { usePayments } from '../context/PaymentsContext';
 import { useSettings } from '../context/SettingsContext';
 import { useToast } from '../context/ToastContext';
-import { Button } from '../components/shared/Button';
+import { Alert, Button, Spinner } from '../components/ui';
 import type { Order } from '../types/order';
 import paymentsService, { type Payment } from '../services/payments.service';
 
@@ -144,7 +144,7 @@ export const OrderConfirmationPage = () => {
   if (!order) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
+        <Spinner label="Cargando pedido…" />
       </div>
     );
   }
@@ -152,41 +152,41 @@ export const OrderConfirmationPage = () => {
   const paymentMethod = getPaymentMethodDetails();
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
+    <div className="min-h-screen bg-gray-50 py-8 md:py-12">
       <div className="max-w-3xl mx-auto px-4">
         {/* Success Header */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-20 h-20 bg-green-100 rounded-full mb-4">
-            <CheckCircle2 className="w-10 h-10 text-green-600" />
+          <div className="inline-flex items-center justify-center w-14 h-14 bg-green-100 rounded-full mb-4">
+            <CheckCircle2 className="w-8 h-8 text-green-600" />
           </div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">¡Pedido Confirmado!</h1>
-          <p className="text-gray-600">
+          <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2">¡Pedido confirmado!</h1>
+          <p className="text-sm md:text-base text-gray-500">
             Hemos recibido tu pedido y te enviaremos actualizaciones por correo
           </p>
         </div>
 
         {/* Aviso de retorno de Mercado Pago (pendiente/rechazado) */}
         {mpReturn === 'pending' && (
-          <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 mb-6 text-sm text-yellow-800">
-            Tu pago con Mercado Pago quedó <strong>pendiente</strong>. Te confirmaremos en cuanto se acredite.
+          <div className="mb-6">
+            <Alert tone="warning">Tu pago con Mercado Pago quedó <strong>pendiente</strong>. Te confirmaremos en cuanto se acredite.</Alert>
           </div>
         )}
         {mpReturn === 'failure' && (
-          <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6 text-sm text-red-700">
-            El pago con Mercado Pago no se completó. Puedes reintentar desde <strong>Mis pedidos</strong>.
+          <div className="mb-6">
+            <Alert tone="error">El pago con Mercado Pago no se completó. Puedes reintentar desde <strong>Mis pedidos</strong>.</Alert>
           </div>
         )}
 
         {/* Order Number */}
-        <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
+        <div className="bg-white rounded-xl border border-gray-200 p-4 md:p-5 mb-6">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-500">Número de Pedido</p>
-              <p className="text-2xl font-bold text-purple-600">{order.orderNumber}</p>
+              <p className="text-2xl font-bold text-app-600">{order.orderNumber}</p>
             </div>
             <button
               onClick={copyOrderNumber}
-              className="p-2 text-gray-400 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
+              className="p-2 text-gray-400 hover:text-app-600 hover:bg-app-50 rounded-lg transition-colors"
               title="Copiar número de pedido"
             >
               <Copy className="w-5 h-5" />
@@ -210,9 +210,9 @@ export const OrderConfirmationPage = () => {
 
         {/* Payment Information */}
         {payments.length > 0 && (
-          <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
-            <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-              <CreditCard className="w-5 h-5 text-purple-600" />
+          <div className="bg-white rounded-xl border border-gray-200 p-4 md:p-5 mb-6">
+            <h2 className="text-base font-semibold text-gray-900 mb-4 flex items-center gap-2">
+              <CreditCard className="w-5 h-5 text-app-600" />
               Información de Pago
             </h2>
 
@@ -221,7 +221,7 @@ export const OrderConfirmationPage = () => {
                 <div className="flex items-center justify-between mb-3">
                   <div>
                     <p className="text-sm text-gray-500">Referencia de Pago</p>
-                    <p className="text-lg font-bold text-purple-600">
+                    <p className="text-lg font-bold text-app-600">
                       {payment.transactionId || `PAY-${payment.id}`}
                     </p>
                   </div>
@@ -282,7 +282,7 @@ export const OrderConfirmationPage = () => {
                                 }
                               }}
                             />
-                            <div className="inline-flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors">
+                            <div className="inline-flex items-center gap-2 px-4 py-2 bg-app-600 text-white rounded-lg hover:bg-app-700 transition-colors">
                               {uploadingReceipt ? (
                                 <>
                                   <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
@@ -344,7 +344,7 @@ export const OrderConfirmationPage = () => {
               </div>
               <div className="flex justify-between pt-2 border-t mt-2">
                 <span className="text-gray-600">Valor a transferir:</span>
-                <span className="font-bold text-purple-600">{formatCurrency(order.total)}</span>
+                <span className="font-bold text-gray-900">{formatCurrency(order.total)}</span>
               </div>
             </div>
             <p className="text-sm text-yellow-700 mt-4">
@@ -370,11 +370,11 @@ export const OrderConfirmationPage = () => {
         )}
 
         {/* Order Details */}
-        <div className="bg-white rounded-xl shadow-sm overflow-hidden mb-6">
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden mb-6">
           {/* Products */}
           <div className="p-6 border-b">
-            <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-              <Package className="w-5 h-5 text-purple-600" />
+            <h2 className="text-base font-semibold text-gray-900 mb-4 flex items-center gap-2">
+              <Package className="w-5 h-5 text-app-600" />
               Productos ({order.items.length})
             </h2>
             <div className="space-y-4">
@@ -391,7 +391,7 @@ export const OrderConfirmationPage = () => {
                       {[item.size, item.color].filter(Boolean).join(' / ')}{(item.size || item.color) ? ' • ' : ''}x{item.quantity}
                     </p>
                     {item.customization && (
-                      <span className="inline-block mt-1 px-2 py-0.5 bg-purple-100 text-purple-700 text-xs rounded-full">
+                      <span className="inline-block mt-1 px-2 py-0.5 bg-app-100 text-app-700 text-xs rounded-full">
                         Personalizado
                       </span>
                     )}
@@ -425,7 +425,7 @@ export const OrderConfirmationPage = () => {
               )}
               <div className="flex justify-between pt-2 border-t font-bold text-lg">
                 <span>Total</span>
-                <span className="text-purple-600">{formatCurrency(order.total)}</span>
+                <span className="text-gray-900">{formatCurrency(order.total)}</span>
               </div>
             </div>
           </div>
@@ -434,13 +434,13 @@ export const OrderConfirmationPage = () => {
         {/* Shipping & Contact Info */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
           {/* Shipping Address */}
-          <div className="bg-white rounded-xl shadow-sm p-6">
-            <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-              <MapPin className="w-5 h-5 text-purple-600" />
+          <div className="bg-white rounded-xl border border-gray-200 p-4 md:p-5">
+            <h2 className="text-base font-semibold text-gray-900 mb-4 flex items-center gap-2">
+              <MapPin className="w-5 h-5 text-app-600" />
               Dirección de Envío
             </h2>
             <div className="text-sm text-gray-600 space-y-1">
-              <p className="font-medium text-gray-900">{order.shipping.recipientName}</p>
+              <p className="font-medium text-gray-900">{order.shipping.name || order.shipping.recipientName}</p>
               <p>{order.shipping.address}</p>
               <p>
                 {order.shipping.city}
@@ -454,9 +454,9 @@ export const OrderConfirmationPage = () => {
           </div>
 
           {/* Contact Info */}
-          <div className="bg-white rounded-xl shadow-sm p-6">
-            <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-              <Mail className="w-5 h-5 text-purple-600" />
+          <div className="bg-white rounded-xl border border-gray-200 p-4 md:p-5">
+            <h2 className="text-base font-semibold text-gray-900 mb-4 flex items-center gap-2">
+              <Mail className="w-5 h-5 text-app-600" />
               Contacto
             </h2>
             <div className="text-sm space-y-3">
@@ -477,11 +477,11 @@ export const OrderConfirmationPage = () => {
         </div>
 
         {/* Next Steps */}
-        <div className="bg-purple-50 rounded-xl p-6 mb-8">
-          <h2 className="text-lg font-bold text-purple-900 mb-4">¿Qué sigue?</h2>
-          <ol className="space-y-3 text-sm text-purple-800">
+        <div className="bg-white rounded-xl border border-gray-200 p-4 md:p-5 mb-8">
+          <h2 className="text-base font-semibold text-gray-900 mb-4">¿Qué sigue?</h2>
+          <ol className="space-y-3 text-sm text-gray-700">
             <li className="flex items-start gap-3">
-              <span className="w-6 h-6 bg-purple-200 rounded-full flex items-center justify-center flex-shrink-0 font-medium">
+              <span className="w-6 h-6 bg-app-100 text-app-700 rounded-full flex items-center justify-center flex-shrink-0 font-medium">
                 1
               </span>
               <span>
@@ -490,7 +490,7 @@ export const OrderConfirmationPage = () => {
             </li>
             {order.paymentMethod === 'transfer' && (
               <li className="flex items-start gap-3">
-                <span className="w-6 h-6 bg-purple-200 rounded-full flex items-center justify-center flex-shrink-0 font-medium">
+                <span className="w-6 h-6 bg-app-100 text-app-700 rounded-full flex items-center justify-center flex-shrink-0 font-medium">
                   2
                 </span>
                 <span>
@@ -500,13 +500,13 @@ export const OrderConfirmationPage = () => {
               </li>
             )}
             <li className="flex items-start gap-3">
-              <span className="w-6 h-6 bg-purple-200 rounded-full flex items-center justify-center flex-shrink-0 font-medium">
+              <span className="w-6 h-6 bg-app-100 text-app-700 rounded-full flex items-center justify-center flex-shrink-0 font-medium">
                 {order.paymentMethod === 'transfer' ? '3' : '2'}
               </span>
               <span>Una vez confirmado el pago, comenzaremos a preparar tu pedido</span>
             </li>
             <li className="flex items-start gap-3">
-              <span className="w-6 h-6 bg-purple-200 rounded-full flex items-center justify-center flex-shrink-0 font-medium">
+              <span className="w-6 h-6 bg-app-100 text-app-700 rounded-full flex items-center justify-center flex-shrink-0 font-medium">
                 {order.paymentMethod === 'transfer' ? '4' : '3'}
               </span>
               <span>Te notificaremos cuando tu pedido sea enviado con número de seguimiento</span>
@@ -515,19 +515,13 @@ export const OrderConfirmationPage = () => {
         </div>
 
         {/* Actions */}
-        <div className="flex flex-col sm:flex-row gap-4 justify-center">
-          <Link to="/">
-            <Button variant="outline" size="lg">
-              <Home className="w-5 h-5 mr-2" />
-              Volver al Inicio
-            </Button>
-          </Link>
-          <Link to="/catalog">
-            <Button size="lg">
-              <ShoppingBag className="w-5 h-5 mr-2" />
-              Seguir Comprando
-            </Button>
-          </Link>
+        <div className="flex flex-col sm:flex-row gap-3 justify-center">
+          <Button variant="secondary" size="lg" icon={<Home className="w-5 h-5" />} onClick={() => navigate('/')}>
+            Volver al inicio
+          </Button>
+          <Button size="lg" icon={<ShoppingBag className="w-5 h-5" />} onClick={() => navigate('/catalog')}>
+            Seguir comprando
+          </Button>
         </div>
 
         {/* Contact Support */}
@@ -536,14 +530,14 @@ export const OrderConfirmationPage = () => {
             ¿Tienes preguntas? Contáctanos a{' '}
             <a
               href={`mailto:${settings.general.contactEmail}`}
-              className="text-purple-600 hover:underline"
+              className="text-app-600 hover:underline"
             >
               {settings.general.contactEmail}
             </a>{' '}
             o al{' '}
             <a
               href={`tel:${settings.general.contactPhone}`}
-              className="text-purple-600 hover:underline"
+              className="text-app-600 hover:underline"
             >
               {settings.general.contactPhone}
             </a>

@@ -92,7 +92,7 @@ export const ImageCarousel = ({ onImageSelect, isLoading }: ImageCarouselProps) 
   if (loadingImages) {
     return (
       <div className="flex items-center justify-center py-6">
-        <Loader2 className="w-6 h-6 animate-spin text-purple-600" />
+        <Loader2 className="w-6 h-6 animate-spin text-app-600" />
         <span className="ml-2 text-sm text-gray-500">Cargando diseños...</span>
       </div>
     );
@@ -143,10 +143,10 @@ export const ImageCarousel = ({ onImageSelect, isLoading }: ImageCarouselProps) 
               <button
                 onClick={() => handleImageClick(image)}
                 disabled={isLoading}
-                className={`w-16 h-16 rounded-lg border-2 overflow-hidden transition-all hover:scale-105 focus:outline-none focus:ring-2 focus:ring-purple-400 ${
+                className={`w-16 h-16 rounded-lg border-2 overflow-hidden transition-all focus:outline-none focus:ring-2 focus:ring-app-400 ${
                   selectedId === image.id
-                    ? 'border-purple-600 ring-2 ring-purple-200'
-                    : 'border-gray-200 hover:border-purple-300'
+                    ? 'border-app-600 ring-2 ring-app-200'
+                    : 'border-gray-200 hover:border-app-300'
                 } ${isLoading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
                 title={`Usar ${image.name}`}
               >
@@ -173,8 +173,8 @@ export const ImageCarousel = ({ onImageSelect, isLoading }: ImageCarouselProps) 
 
         {/* Indicador de scroll en móvil */}
         <div className="flex justify-center gap-1 mt-2 md:hidden">
-          <div className={`h-1 rounded-full transition-all ${canScrollLeft ? 'w-4 bg-purple-400' : 'w-2 bg-gray-300'}`} />
-          <div className={`h-1 rounded-full transition-all ${canScrollRight ? 'w-4 bg-purple-400' : 'w-2 bg-gray-300'}`} />
+          <div className={`h-1 rounded-full transition-all ${canScrollLeft ? 'w-4 bg-app-400' : 'w-2 bg-gray-300'}`} />
+          <div className={`h-1 rounded-full transition-all ${canScrollRight ? 'w-4 bg-app-400' : 'w-2 bg-gray-300'}`} />
         </div>
       </div>
 

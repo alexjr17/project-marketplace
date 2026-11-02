@@ -1,19 +1,23 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Filter, X } from 'lucide-react';
+import { SlidersHorizontal, X } from 'lucide-react';
+import { Button, Checkbox, Field, NumberInput } from '../ui';
 import { useSettings } from '../../context/SettingsContext';
-import { PRODUCT_CATEGORIES, PRODUCT_TYPES } from '../../types/settings';
 import { productsService } from '../../services/products.service';
-import type { ProductCategory, ProductType } from '../../types/product';
+import type { ProductCategory, ProductTypeSlug } from '../../types/product';
 
 export interface FilterValues {
   category?: ProductCategory;
-  type?: ProductType;
+  type?: ProductTypeSlug;
   minPrice?: number;
   maxPrice?: number;
   inStock?: boolean;
   featured?: boolean;
   bestsellers?: boolean;
   newArrivals?: boolean;
+  /** Texto del buscador (?search=). Lo maneja CatalogPage, no el panel de filtros. */
+  search?: string;
+  /** Solo ofertas (?onSale=1). Lo maneja CatalogPage. */
+  onSale?: boolean;
 }
 
 interface ProductFiltersProps {
@@ -113,175 +117,133 @@ export const ProductFilters = ({ onFilterChange, initialFilters = {} }: ProductF
     return null;
   }
 
+  const optionClass = (active: boolean) =>
+    `flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-sm cursor-pointer transition-colors ${
+      active ? 'bg-app-50 text-app-700 font-medium' : 'text-gray-700 hover:bg-gray-50'
+    }`;
+
   return (
-    <div className="bg-white rounded-xl shadow-md overflow-hidden">
-      {/* Header - Mobile Toggle */}
+    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden lg:sticky lg:top-24">
+      {/* Encabezado (en celular abre y cierra los filtros) */}
       <button
+        type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full md:hidden flex items-center justify-between p-4 font-semibold text-gray-900 hover:bg-gray-50 transition-colors"
+        className="w-full lg:cursor-default flex items-center justify-between px-4 py-3 border-b border-gray-100"
+        aria-expanded={isOpen}
       >
-        <div className="flex items-center gap-2">
-          <Filter className="w-5 h-5" />
+        <span className="flex items-center gap-2 text-sm font-semibold text-gray-900">
+          <SlidersHorizontal className="w-4 h-4 text-gray-500" />
           Filtros
           {activeFiltersCount > 0 && (
-            <span className="bg-purple-600 text-white text-xs font-bold px-2 py-1 rounded-full">
+            <span className="bg-app-600 text-white text-xs font-semibold min-w-[1.25rem] h-5 px-1.5 inline-flex items-center justify-center rounded-full">
               {activeFiltersCount}
             </span>
           )}
-        </div>
-        <span className="text-sm text-gray-500">
-          {isOpen ? 'Ocultar' : 'Mostrar'}
         </span>
+        <span className="text-xs text-gray-500 lg:hidden">{isOpen ? 'Ocultar' : 'Mostrar'}</span>
       </button>
 
-      {/* Filters Content */}
-      <div className={`p-4 space-y-6 ${isOpen ? 'block' : 'hidden'} md:block`}>
-        {/* Category Filter */}
+      <div className={`p-4 space-y-5 ${isOpen ? 'block' : 'hidden'} lg:block`}>
+        {/* Categoría */}
         {catalogConfig?.showCategoryFilter && enabledCategories.length > 0 && (
           <div>
-            <label className="block text-sm font-semibold text-gray-900 mb-3">
-              Categoría
-            </label>
-            <div className="space-y-2">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Categoría</p>
+              {filters.category && (
+                <button type="button" onClick={() => clearFilter('category')} className="text-xs text-app-700 hover:underline">
+                  Limpiar
+                </button>
+              )}
+            </div>
+            <div className="space-y-0.5">
               {enabledCategories.map((category) => (
-                <label
-                  key={category.id}
-                  className="flex items-center gap-2 cursor-pointer group"
-                >
+                <label key={category.id} className={optionClass(filters.category === category.id)}>
                   <input
                     type="radio"
                     name="category"
                     value={category.id}
                     checked={filters.category === category.id}
                     onChange={(e) => handleFilterChange('category', e.target.value as ProductCategory)}
-                    className="w-4 h-4 text-purple-600 focus:ring-purple-500"
+                    className="w-4 h-4 border-gray-300 text-app-600 focus:ring-app-500"
                   />
-                  <span className="text-gray-700 group-hover:text-purple-600 transition-colors">
-                    {category.label}
-                  </span>
+                  {category.label}
                 </label>
               ))}
             </div>
-            {filters.category && (
-              <button
-                onClick={() => clearFilter('category')}
-                className="mt-2 text-sm text-purple-600 hover:text-purple-700 font-medium"
-              >
-                Limpiar
-              </button>
+          </div>
+        )}
+
+        {/* Tipo de producto */}
+        {catalogConfig?.showTypeFilter && enabledTypes.length > 0 && (
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Tipo de producto</p>
+            <div className="space-y-0.5">
+              {enabledTypes.map((type) => (
+                <label key={type.id} className={optionClass(filters.type === type.id)}>
+                  <input
+                    type="checkbox"
+                    checked={filters.type === type.id}
+                    onChange={(e) => handleFilterChange('type', e.target.checked ? (type.id as ProductTypeSlug) : undefined)}
+                    className="w-4 h-4 rounded border-gray-300 text-app-600 focus:ring-app-500"
+                  />
+                  {type.label}
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Rango de precio */}
+        {catalogConfig?.showPriceFilter && (
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Precio</p>
+            <div className="grid grid-cols-2 gap-2">
+              <Field label={<span className="text-xs text-gray-500 font-normal">Mínimo</span>}>
+                <NumberInput
+                  min="0"
+                  placeholder="0"
+                  value={filters.minPrice || ''}
+                  onChange={(e) => handleFilterChange('minPrice', e.target.value ? Number(e.target.value) : undefined)}
+                />
+              </Field>
+              <Field label={<span className="text-xs text-gray-500 font-normal">Máximo</span>}>
+                <NumberInput
+                  min="0"
+                  placeholder="Sin límite"
+                  value={filters.maxPrice || ''}
+                  onChange={(e) => handleFilterChange('maxPrice', e.target.value ? Number(e.target.value) : undefined)}
+                />
+              </Field>
+            </div>
+          </div>
+        )}
+
+        {/* Disponibilidad y destacados */}
+        {(catalogConfig?.showStockFilter || catalogConfig?.showFeaturedFilter) && (
+          <div className="space-y-2">
+            {catalogConfig?.showStockFilter && (
+              <Checkbox
+                label="Solo productos en stock"
+                checked={filters.inStock || false}
+                onChange={(e) => handleFilterChange('inStock', e.target.checked || undefined)}
+              />
+            )}
+            {catalogConfig?.showFeaturedFilter && (
+              <div>
+                <Checkbox
+                  label="Solo destacados"
+                  checked={filters.featured || false}
+                  onChange={(e) => handleFilterChange('featured', e.target.checked || undefined)}
+                />
+              </div>
             )}
           </div>
         )}
 
-        {/* Type Filter */}
-        {catalogConfig?.showTypeFilter && enabledTypes.length > 0 && (
-          <div>
-            <label className="block text-sm font-semibold text-gray-900 mb-3">
-              Tipo de Producto
-            </label>
-            <div className="space-y-2">
-              {enabledTypes.map((type) => (
-                <label
-                  key={type.id}
-                  className="flex items-center gap-2 cursor-pointer group"
-                >
-                  <input
-                    type="checkbox"
-                    checked={filters.type === type.id}
-                    onChange={(e) =>
-                      handleFilterChange('type', e.target.checked ? type.id as ProductType : undefined)
-                    }
-                    className="w-4 h-4 text-purple-600 focus:ring-purple-500 rounded"
-                  />
-                  <span className="text-gray-700 group-hover:text-purple-600 transition-colors">
-                    {type.label}
-                  </span>
-                </label>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Price Range */}
-        {catalogConfig?.showPriceFilter && (
-          <div>
-            <label className="block text-sm font-semibold text-gray-900 mb-3">
-              Rango de Precio
-            </label>
-            <div className="space-y-3">
-              <div>
-                <label className="text-xs text-gray-600 mb-1 block">Mínimo</label>
-                <input
-                  type="number"
-                  min="0"
-                  placeholder="$0"
-                  value={filters.minPrice || ''}
-                  onChange={(e) =>
-                    handleFilterChange('minPrice', e.target.value ? Number(e.target.value) : undefined)
-                  }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-gray-600 mb-1 block">Máximo</label>
-                <input
-                  type="number"
-                  min="0"
-                  placeholder="$100"
-                  value={filters.maxPrice || ''}
-                  onChange={(e) =>
-                    handleFilterChange('maxPrice', e.target.value ? Number(e.target.value) : undefined)
-                  }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                />
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Stock Filter */}
-        {catalogConfig?.showStockFilter && (
-          <div>
-            <label className="flex items-center gap-2 cursor-pointer group">
-              <input
-                type="checkbox"
-                checked={filters.inStock || false}
-                onChange={(e) => handleFilterChange('inStock', e.target.checked || undefined)}
-                className="w-4 h-4 text-purple-600 focus:ring-purple-500 rounded"
-              />
-              <span className="text-sm font-semibold text-gray-900 group-hover:text-purple-600 transition-colors">
-                Solo productos en stock
-              </span>
-            </label>
-          </div>
-        )}
-
-        {/* Featured Filter */}
-        {catalogConfig?.showFeaturedFilter && (
-          <div>
-            <label className="flex items-center gap-2 cursor-pointer group">
-              <input
-                type="checkbox"
-                checked={filters.featured || false}
-                onChange={(e) => handleFilterChange('featured', e.target.checked || undefined)}
-                className="w-4 h-4 text-purple-600 focus:ring-purple-500 rounded"
-              />
-              <span className="text-sm font-semibold text-gray-900 group-hover:text-purple-600 transition-colors">
-                Solo destacados
-              </span>
-            </label>
-          </div>
-        )}
-
-        {/* Clear All Button */}
         {activeFiltersCount > 0 && (
-          <button
-            onClick={clearAllFilters}
-            className="w-full flex items-center justify-center gap-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-2 px-4 rounded-lg transition-colors"
-          >
-            <X className="w-4 h-4" />
-            Limpiar todos los filtros
-          </button>
+          <Button variant="secondary" fullWidth icon={<X className="w-4 h-4" />} onClick={clearAllFilters}>
+            Limpiar filtros
+          </Button>
         )}
       </div>
     </div>

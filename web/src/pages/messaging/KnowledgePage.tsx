@@ -1,36 +1,26 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  AlertCircle,
   ChevronDown,
-  ChevronRight,
   Edit3,
   FolderPlus,
-  Loader2,
   Plus,
   Save,
   Send,
   Settings,
   Sparkles,
   Trash2,
-  X,
 } from 'lucide-react';
+import { Alert, Badge, Button, Card, CardTitle, Checkbox, Dialog, EmptyState, Field, IconButton, Page, PageHeader, Spinner, TextArea, TextInput, toast, useConfirm } from '../../components/ui';
 import botKnowledgeService, {
   type CategoryInput,
   type KnowledgeInput,
 } from '../../services/botKnowledge.service';
 import type { BotKnowledgeEntry, KnowledgeCategory } from '../../types/messaging';
-import { useSettings } from '../../context/SettingsContext';
 
 // =====================================================================
 
 export const KnowledgePage = () => {
-  const { settings } = useSettings();
-  const brandColors = settings.appearance?.brandColors || settings.general.brandColors || {
-    primary: '#7c3aed',
-    secondary: '#ec4899',
-    accent: '#f59e0b',
-  };
-  const gradient = `linear-gradient(135deg, ${brandColors.primary}, ${brandColors.secondary})`;
+  const confirm = useConfirm();
 
   const [categories, setCategories] = useState<KnowledgeCategory[]>([]);
   const [entries, setEntries] = useState<BotKnowledgeEntry[]>([]);
@@ -105,7 +95,7 @@ export const KnowledgePage = () => {
   };
 
   const handleDeleteEntry = async (entry: BotKnowledgeEntry) => {
-    if (!confirm(`¿Eliminar "${entry.title}"?`)) return;
+    if (!(await confirm({ title: `¿Eliminar "${entry.title}"?`, message: 'El bot dejará de usar esta entrada. No se puede deshacer.', tone: 'danger' }))) return;
     await botKnowledgeService.remove(entry.id);
     setEntries((prev) => prev.filter((e) => e.id !== entry.id));
     // refrescar conteo de categorías
@@ -136,15 +126,15 @@ export const KnowledgePage = () => {
 
   const handleDeleteCategory = async (cat: KnowledgeCategory) => {
     if (cat.entriesCount > 0) {
-      alert(`No puedes eliminar "${cat.label}" porque tiene ${cat.entriesCount} entradas. Muévelas o elimínalas primero.`);
+      toast.warning(`No puedes eliminar "${cat.label}" porque tiene ${cat.entriesCount} entradas. Muévelas o elimínalas primero.`);
       return;
     }
-    if (!confirm(`¿Eliminar la categoría "${cat.label}"?`)) return;
+    if (!(await confirm({ title: `¿Eliminar la categoría "${cat.label}"?`, message: 'No se puede deshacer.', tone: 'danger' }))) return;
     try {
       await botKnowledgeService.removeCategory(cat.id);
       setCategories((prev) => prev.filter((c) => c.id !== cat.id));
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'No se pudo eliminar');
+      toast.error(err instanceof Error ? err.message : 'No se pudo eliminar');
     }
   };
 
@@ -168,172 +158,113 @@ export const KnowledgePage = () => {
   const visibleCategories = categories.filter((c) => c.isActive);
 
   return (
-    <div className="h-[calc(100vh-3.5rem)] overflow-y-auto bg-gray-50">
-      <div className="max-w-5xl mx-auto p-6 space-y-5">
-        <header className="flex items-start justify-between gap-4 flex-wrap">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-              <Sparkles className="w-6 h-6" style={{ color: brandColors.primary }} />
-              Entrenar al bot
-            </h1>
-            <p className="text-sm text-gray-500 mt-1 max-w-2xl">
-              Todo lo que escribas acá se inyecta en el prompt del modelo cuando responde un cliente.
-              Mientras más específico y honesto, mejor responde. {activeCount} de {entries.length} entradas activas, {categories.length} categorías.
-            </p>
-          </div>
-          <button
-            onClick={openNewCategory}
-            className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg border border-gray-200 hover:bg-gray-50"
-          >
-            <FolderPlus className="w-4 h-4" /> Nueva categoría
-          </button>
-        </header>
+    <Page className="max-w-6xl mx-auto">
+      <PageHeader
+        icon={Sparkles}
+        title="Entrenar al bot"
+        subtitle={`Lo que escribas aquí se inyecta en el prompt del modelo cuando responde a un cliente. ${activeCount} de ${entries.length} entradas activas · ${categories.length} categorías.`}
+        actions={<Button icon={<FolderPlus className="w-4 h-4" />} onClick={openNewCategory}>Nueva categoría</Button>}
+      />
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-          {/* ===== Lista de categorías ===== */}
-          <div className="lg:col-span-2 space-y-3">
-            {loading ? (
-              <div className="flex justify-center py-16">
-                <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
-              </div>
-            ) : visibleCategories.length === 0 ? (
-              <div className="bg-white border border-dashed border-gray-300 rounded-xl p-10 text-center text-sm text-gray-400">
-                No hay categorías. Crea la primera con el botón "Nueva categoría".
-              </div>
-            ) : (
-              visibleCategories.map((cat) => {
-                const items = byCategory[cat.slug] ?? [];
-                const open = expanded[cat.slug];
-                return (
-                  <section key={cat.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                    <div className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50">
-                      <button
-                        onClick={() => toggleCategory(cat.slug)}
-                        className="flex items-center gap-3 flex-1 text-left min-w-0"
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
+        {/* ===== Categorías ===== */}
+        <div className="lg:col-span-2 space-y-3">
+          {loading ? (
+            <Spinner label="Cargando conocimiento…" />
+          ) : visibleCategories.length === 0 ? (
+            <Card>
+              <EmptyState
+                icon={FolderPlus}
+                title="No hay categorías"
+                description="Crea la primera para empezar a entrenar al bot."
+                action={<Button icon={<FolderPlus className="w-4 h-4" />} onClick={openNewCategory}>Nueva categoría</Button>}
+              />
+            </Card>
+          ) : (
+            visibleCategories.map((cat) => {
+              const items = byCategory[cat.slug] ?? [];
+              const open = expanded[cat.slug];
+              return (
+                <section key={cat.id} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                  <div className="flex items-center gap-2 px-3 md:px-4 py-3">
+                    <button onClick={() => toggleCategory(cat.slug)} aria-expanded={!!open} className="flex items-center gap-3 flex-1 text-left min-w-0">
+                      <span className="w-9 h-9 rounded-lg bg-gray-100 flex items-center justify-center text-lg flex-shrink-0">{cat.emoji || '📁'}</span>
+                      <div className="flex-1 min-w-0">
+                        <h2 className="font-semibold text-gray-900 text-sm truncate">{cat.label}</h2>
+                        {cat.description && <p className="text-xs text-gray-500 truncate">{cat.description}</p>}
+                      </div>
+                      <Badge tone="gray">{items.filter((i) => i.isActive).length}/{items.length}</Badge>
+                      <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${open ? 'rotate-180' : ''}`} />
+                    </button>
+                    <div className="flex items-center flex-shrink-0">
+                      <IconButton title="Editar categoría" tone="app" onClick={() => openEditCategory(cat)}><Settings className="w-4 h-4" /></IconButton>
+                      <IconButton
+                        tone="danger"
+                        onClick={() => handleDeleteCategory(cat)}
+                        disabled={cat.entriesCount > 0}
+                        title={cat.entriesCount > 0 ? `Tiene ${cat.entriesCount} entradas — muévelas antes` : 'Eliminar categoría'}
                       >
-                        <span className="text-xl">{cat.emoji || '📁'}</span>
-                        <div className="flex-1 min-w-0">
-                          <h2 className="font-semibold text-gray-900 text-sm truncate">{cat.label}</h2>
-                          {cat.description && (
-                            <p className="text-[11px] text-gray-500 truncate">{cat.description}</p>
-                          )}
-                        </div>
-                        <span className="text-xs text-gray-400 flex-shrink-0">
-                          {items.filter((i) => i.isActive).length}/{items.length}
-                        </span>
-                        {open ? (
-                          <ChevronDown className="w-4 h-4 text-gray-400" />
-                        ) : (
-                          <ChevronRight className="w-4 h-4 text-gray-400" />
-                        )}
-                      </button>
-                      <div className="flex items-center gap-0.5 flex-shrink-0">
-                        <button
-                          onClick={() => openEditCategory(cat)}
-                          className="p-1.5 text-gray-400 hover:text-violet-600 hover:bg-violet-50 rounded"
-                          title="Editar categoría"
-                        >
-                          <Settings className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteCategory(cat)}
-                          className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded disabled:opacity-40 disabled:cursor-not-allowed"
-                          disabled={cat.entriesCount > 0}
-                          title={
-                            cat.entriesCount > 0
-                              ? `Tiene ${cat.entriesCount} entradas — muévelas antes`
-                              : 'Eliminar categoría'
-                          }
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
+                        <Trash2 className="w-4 h-4" />
+                      </IconButton>
                     </div>
+                  </div>
 
-                    {open && (
-                      <div className="border-t border-gray-100 p-3 space-y-2">
-                        {items.length === 0 ? (
-                          <p className="text-xs text-gray-400 italic px-2">Aún no hay entradas en esta categoría.</p>
-                        ) : (
-                          items.map((entry) => (
-                            <EntryRow
-                              key={entry.id}
-                              entry={entry}
-                              onEdit={() => openEditEntry(entry)}
-                              onToggle={() => handleToggleEntry(entry)}
-                              onDelete={() => handleDeleteEntry(entry)}
-                            />
-                          ))
-                        )}
-                        <button
-                          onClick={() => openNewEntry(cat.slug)}
-                          className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg border-2 border-dashed border-gray-200 hover:border-violet-300 hover:bg-violet-50/30 text-gray-500 transition-colors"
-                        >
-                          <Plus className="w-3.5 h-3.5" /> Agregar entrada
-                        </button>
-                      </div>
-                    )}
-                  </section>
-                );
-              })
-            )}
-          </div>
+                  {open && (
+                    <div className="border-t border-gray-100 p-3 space-y-2">
+                      {items.length === 0 ? (
+                        <p className="text-sm text-gray-400 px-1 py-1">Aún no hay entradas en esta categoría.</p>
+                      ) : (
+                        items.map((entry) => (
+                          <EntryRow
+                            key={entry.id}
+                            entry={entry}
+                            onEdit={() => openEditEntry(entry)}
+                            onToggle={() => handleToggleEntry(entry)}
+                            onDelete={() => handleDeleteEntry(entry)}
+                          />
+                        ))
+                      )}
+                      <button
+                        onClick={() => openNewEntry(cat.slug)}
+                        className="w-full flex items-center justify-center gap-1.5 h-10 text-sm font-medium rounded-lg border border-dashed border-gray-300 hover:border-app-400 hover:bg-app-50 text-gray-600 hover:text-app-700 transition-colors"
+                      >
+                        <Plus className="w-4 h-4" /> Agregar entrada
+                      </button>
+                    </div>
+                  )}
+                </section>
+              );
+            })
+          )}
+        </div>
 
-          {/* ===== Panel de prueba en vivo (sticky) ===== */}
-          <aside className="lg:col-span-1">
-            <div className="sticky top-4 bg-white rounded-xl shadow-sm border border-gray-200 p-4 space-y-3">
-              <h3 className="font-semibold text-gray-900 text-sm flex items-center gap-1.5">
-                <Send className="w-4 h-4" style={{ color: brandColors.primary }} />
-                Probar al bot
-              </h3>
-              <p className="text-[11px] text-gray-500">
-                Escribe lo que escribiría un cliente. El bot usa el conocimiento activo actual.
-              </p>
-
-              <div>
-                <label className="block text-[11px] font-medium text-gray-700 mb-1">Nombre del cliente</label>
-                <input
-                  value={testContactName}
-                  onChange={(e) => setTestContactName(e.target.value)}
-                  placeholder="Camila"
-                  className="w-full rounded-lg border border-gray-200 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-200"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-medium text-gray-700 mb-1">Mensaje del cliente</label>
-                <textarea
-                  value={testText}
-                  onChange={(e) => setTestText(e.target.value)}
-                  rows={3}
-                  placeholder="Ej. Tienen talla XL en sueter oversize?"
-                  className="w-full rounded-lg border border-gray-200 px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-200 resize-none"
-                />
-              </div>
-
-              <button
-                onClick={handleTest}
-                disabled={testBusy || !testText.trim()}
-                className="w-full inline-flex items-center justify-center gap-2 text-white text-sm font-medium px-4 py-2 rounded-lg disabled:opacity-50"
-                style={{ background: gradient }}
-              >
-                {testBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+        {/* ===== Prueba en vivo ===== */}
+        <aside className="lg:sticky lg:top-4">
+          <Card>
+            <CardTitle icon={Send}>Probar al bot</CardTitle>
+            <p className="text-sm text-gray-500 -mt-2 mb-4">Escribe lo que escribiría un cliente. El bot usa el conocimiento activo.</p>
+            <div className="space-y-3">
+              <Field label="Nombre del cliente">
+                <TextInput value={testContactName} onChange={(e) => setTestContactName(e.target.value)} placeholder="Camila" />
+              </Field>
+              <Field label="Mensaje del cliente">
+                <TextArea value={testText} onChange={(e) => setTestText(e.target.value)} rows={3} placeholder="Ej. ¿Tienen talla XL en suéter oversize?" className="resize-none" />
+              </Field>
+              <Button fullWidth onClick={handleTest} isLoading={testBusy} disabled={!testText.trim()} icon={!testBusy ? <Send className="w-4 h-4" /> : undefined}>
                 Probar respuesta
-              </button>
+              </Button>
 
               {testResult && (
                 <div className="space-y-1.5 pt-3 border-t border-gray-100">
-                  <p className="text-[10px] uppercase tracking-wide text-gray-400 font-semibold">
-                    Respuesta del bot ({testResult.provider})
-                  </p>
-                  <div className="text-sm bg-violet-50 border border-violet-100 text-gray-800 rounded-lg p-3 whitespace-pre-wrap">
+                  <p className="text-xs uppercase tracking-wide text-gray-500 font-medium">Respuesta del bot ({testResult.provider})</p>
+                  <div className={`text-sm rounded-lg p-3 whitespace-pre-wrap border ${testResult.provider === 'error' ? 'bg-red-50 border-red-200 text-red-800' : 'bg-app-50 border-app-200 text-gray-800'}`}>
                     {testResult.reply}
                   </div>
                 </div>
               )}
             </div>
-          </aside>
-        </div>
+          </Card>
+        </aside>
       </div>
 
       {entryEditor && (
@@ -341,7 +272,6 @@ export const KnowledgePage = () => {
           initial={entryEditor.entry}
           categorySlug={entryEditor.categorySlug}
           categoryLabel={categories.find((c) => c.slug === entryEditor.categorySlug)?.label ?? entryEditor.categorySlug}
-          gradient={gradient}
           onClose={closeEntryEditor}
           onSave={handleSaveEntry}
         />
@@ -350,12 +280,11 @@ export const KnowledgePage = () => {
       {categoryEditor && (
         <CategoryEditor
           initial={categoryEditor === 'new' ? null : categoryEditor}
-          gradient={gradient}
           onClose={closeCategoryEditor}
           onSave={handleSaveCategory}
         />
       )}
-    </div>
+    </Page>
   );
 };
 
@@ -371,36 +300,23 @@ interface EntryRowProps {
 }
 
 const EntryRow = ({ entry, onEdit, onToggle, onDelete }: EntryRowProps) => (
-  <div
-    className={`p-2.5 rounded-lg border ${
-      entry.isActive ? 'border-gray-200 bg-white' : 'border-gray-200 bg-gray-50 opacity-60'
-    }`}
-  >
-    <div className="flex items-start gap-2">
+  <div className={`px-3 py-2.5 rounded-lg border border-gray-200 ${entry.isActive ? 'bg-white' : 'bg-gray-50'}`}>
+    <div className="flex items-start gap-3">
       <button
         onClick={onToggle}
-        title={entry.isActive ? 'Activa — click para desactivar' : 'Inactiva — click para activar'}
-        className={`mt-0.5 w-3 h-3 rounded-full flex-shrink-0 ${entry.isActive ? 'bg-green-500' : 'bg-gray-300'}`}
-      />
-      <div className="flex-1 min-w-0">
+        title={entry.isActive ? 'Activa — clic para desactivar' : 'Inactiva — clic para activar'}
+        aria-label={entry.isActive ? 'Desactivar entrada' : 'Activar entrada'}
+        className="mt-0.5 flex-shrink-0"
+      >
+        <Badge tone={entry.isActive ? 'green' : 'gray'}>{entry.isActive ? 'Activa' : 'Inactiva'}</Badge>
+      </button>
+      <div className={`flex-1 min-w-0 ${entry.isActive ? '' : 'opacity-60'}`}>
         <p className="text-sm font-medium text-gray-900">{entry.title}</p>
-        <p className="text-xs text-gray-600 mt-0.5 leading-snug">{entry.content}</p>
+        <p className="text-sm text-gray-600 mt-0.5 leading-snug">{entry.content}</p>
       </div>
-      <div className="flex items-center gap-1 flex-shrink-0">
-        <button
-          onClick={onEdit}
-          className="p-1.5 text-gray-400 hover:text-violet-600 hover:bg-violet-50 rounded"
-          title="Editar"
-        >
-          <Edit3 className="w-3.5 h-3.5" />
-        </button>
-        <button
-          onClick={onDelete}
-          className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"
-          title="Eliminar"
-        >
-          <Trash2 className="w-3.5 h-3.5" />
-        </button>
+      <div className="flex items-center flex-shrink-0">
+        <IconButton title="Editar" tone="app" onClick={onEdit}><Edit3 className="w-4 h-4" /></IconButton>
+        <IconButton title="Eliminar" tone="danger" onClick={onDelete}><Trash2 className="w-4 h-4" /></IconButton>
       </div>
     </div>
   </div>
@@ -414,12 +330,11 @@ interface EntryEditorProps {
   initial: BotKnowledgeEntry | null;
   categorySlug: string;
   categoryLabel: string;
-  gradient: string;
   onClose: () => void;
   onSave: (input: KnowledgeInput, id?: number) => Promise<void>;
 }
 
-const EntryEditor = ({ initial, categorySlug, categoryLabel, gradient, onClose, onSave }: EntryEditorProps) => {
+const EntryEditor = ({ initial, categorySlug, categoryLabel, onClose, onSave }: EntryEditorProps) => {
   const [title, setTitle] = useState(initial?.title ?? '');
   const [content, setContent] = useState(initial?.content ?? '');
   const [isActive, setIsActive] = useState(initial?.isActive ?? true);
@@ -451,38 +366,18 @@ const EntryEditor = ({ initial, categorySlug, categoryLabel, gradient, onClose, 
   };
 
   return (
-    <ModalShell title={`${initial ? 'Editar' : 'Nueva'} entrada · ${categoryLabel}`} onClose={onClose}>
-      <div className="space-y-3">
-        <Field label="Título corto">
-          <input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="Ej. Política de envíos"
-            className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-200"
-          />
+    <Dialog open onClose={onClose} title={`${initial ? 'Editar' : 'Nueva'} entrada`} description={categoryLabel} footer={<ModalFooter onClose={onClose} onSubmit={submit} saving={saving} />}>
+      <div className="space-y-4">
+        <Field label="Título corto" required>
+          <TextInput value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Ej. Política de envíos" autoFocus />
         </Field>
-        <Field label="Contenido (lo que el bot leerá)">
-          <textarea
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            rows={6}
-            placeholder="Sé específico y honesto. Una idea por entrada."
-            className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-200 resize-none"
-          />
+        <Field label="Contenido (lo que el bot leerá)" required hint="Sé específico y honesto. Una idea por entrada.">
+          <TextArea value={content} onChange={(e) => setContent(e.target.value)} rows={6} className="resize-none" />
         </Field>
-        <label className="inline-flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={isActive}
-            onChange={(e) => setIsActive(e.target.checked)}
-            className="rounded"
-          />
-          <span className="text-sm text-gray-700">Activa (el bot la usa)</span>
-        </label>
-        {error && <ErrorBox msg={error} />}
+        <Checkbox label="Activa (el bot la usa)" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} />
+        {error && <Alert tone="error">{error}</Alert>}
       </div>
-      <ModalFooter onClose={onClose} onSubmit={submit} saving={saving} gradient={gradient} />
-    </ModalShell>
+    </Dialog>
   );
 };
 
@@ -492,14 +387,13 @@ const EntryEditor = ({ initial, categorySlug, categoryLabel, gradient, onClose, 
 
 interface CategoryEditorProps {
   initial: KnowledgeCategory | null;
-  gradient: string;
   onClose: () => void;
   onSave: (input: CategoryInput, id?: number) => Promise<void>;
 }
 
 const EMOJI_PRESETS = ['📁', '🏢', '🎭', '🧵', '📏', '🎨', '🚚', '↩️', '💳', '💰', '❓', '📝', '🛒', '⭐', '🔥', '🎁'];
 
-const CategoryEditor = ({ initial, gradient, onClose, onSave }: CategoryEditorProps) => {
+const CategoryEditor = ({ initial, onClose, onSave }: CategoryEditorProps) => {
   const [label, setLabel] = useState(initial?.label ?? '');
   const [slug, setSlug] = useState(initial?.slug ?? '');
   const [description, setDescription] = useState(initial?.description ?? '');
@@ -532,60 +426,35 @@ const CategoryEditor = ({ initial, gradient, onClose, onSave }: CategoryEditorPr
   };
 
   return (
-    <ModalShell title={initial ? `Editar categoría · ${initial.label}` : 'Nueva categoría'} onClose={onClose}>
-      <div className="space-y-3">
-        <Field label="Nombre de la categoría">
-          <input
-            value={label}
-            onChange={(e) => setLabel(e.target.value)}
-            placeholder="Ej. Promociones del mes"
-            className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-200"
-          />
+    <Dialog open onClose={onClose} title={initial ? 'Editar categoría' : 'Nueva categoría'} description={initial?.label} footer={<ModalFooter onClose={onClose} onSubmit={submit} saving={saving} />}>
+      <div className="space-y-4">
+        <Field label="Nombre de la categoría" required>
+          <TextInput value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Ej. Promociones del mes" autoFocus />
         </Field>
 
-        <Field
-          label={
-            <>
-              Identificador (slug)
-              <span className="text-[10px] font-normal text-gray-400 ml-1">opcional, se genera solo</span>
-            </>
-          }
-        >
-          <input
+        <Field label="Identificador (slug)" hint="Opcional. Solo minúsculas, números y guiones; si lo dejas vacío se arma del nombre.">
+          <TextInput
             value={slug}
             onChange={(e) => setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, ''))}
             placeholder="se_genera_solo"
-            className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-violet-200"
+            className="font-mono"
           />
-          <p className="text-[10px] text-gray-400 mt-1">
-            Solo letras minúsculas, números y guiones. Si lo dejas vacío, lo armamos del nombre.
-          </p>
         </Field>
 
         <Field label="Descripción corta">
-          <input
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="Para qué sirve esta categoría"
-            className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-200"
-          />
+          <TextInput value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Para qué sirve esta categoría" />
         </Field>
 
         <Field label="Emoji">
-          <div className="flex items-center gap-2 flex-wrap">
-            <input
-              value={emoji}
-              onChange={(e) => setEmoji(e.target.value)}
-              maxLength={4}
-              className="w-16 rounded-lg border border-gray-200 px-2 py-2 text-center text-lg focus:outline-none focus:ring-2 focus:ring-violet-200"
-            />
+          <div className="flex items-start gap-3">
+            <TextInput value={emoji} onChange={(e) => setEmoji(e.target.value)} maxLength={4} className="!w-16 text-center text-lg" aria-label="Emoji" />
             <div className="flex flex-wrap gap-1">
               {EMOJI_PRESETS.map((e) => (
                 <button
                   key={e}
                   type="button"
                   onClick={() => setEmoji(e)}
-                  className={`w-7 h-7 rounded text-base hover:bg-gray-100 ${emoji === e ? 'bg-violet-100' : ''}`}
+                  className={`w-9 h-9 rounded-lg text-base border transition-colors ${emoji === e ? 'border-app-500 bg-app-50' : 'border-transparent hover:bg-gray-100'}`}
                 >
                   {e}
                 </button>
@@ -594,94 +463,23 @@ const CategoryEditor = ({ initial, gradient, onClose, onSave }: CategoryEditorPr
           </div>
         </Field>
 
-        <label className="inline-flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={isActive}
-            onChange={(e) => setIsActive(e.target.checked)}
-            className="rounded"
-          />
-          <span className="text-sm text-gray-700">Activa (visible en la lista)</span>
-        </label>
+        <Checkbox label="Activa (visible en la lista)" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} />
 
-        {error && <ErrorBox msg={error} />}
+        {error && <Alert tone="error">{error}</Alert>}
       </div>
-      <ModalFooter onClose={onClose} onSubmit={submit} saving={saving} gradient={gradient} />
-    </ModalShell>
+    </Dialog>
   );
 };
 
 // =====================================================================
-// Helpers compartidos para los modales
+// Pie de los modales
 // =====================================================================
 
-const ModalShell = ({
-  title,
-  onClose,
-  children,
-}: {
-  title: string;
-  onClose: () => void;
-  children: React.ReactNode;
-}) => (
-  <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={onClose}>
-    <div
-      className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col"
-      onClick={(e) => e.stopPropagation()}
-    >
-      <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
-        <h3 className="font-semibold text-gray-900 text-sm">{title}</h3>
-        <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600">
-          <X className="w-5 h-5" />
-        </button>
-      </div>
-      <div className="flex-1 overflow-y-auto p-5">{children}</div>
-    </div>
-  </div>
-);
-
-const Field = ({ label, children }: { label: React.ReactNode; children: React.ReactNode }) => (
-  <div>
-    <label className="block text-xs font-medium text-gray-700 mb-1">{label}</label>
-    {children}
-  </div>
-);
-
-const ErrorBox = ({ msg }: { msg: string }) => (
-  <div className="text-xs bg-red-50 text-red-700 border border-red-200 rounded p-2 flex items-start gap-1.5">
-    <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
-    <span>{msg}</span>
-  </div>
-);
-
-const ModalFooter = ({
-  onClose,
-  onSubmit,
-  saving,
-  gradient,
-}: {
-  onClose: () => void;
-  onSubmit: () => void;
-  saving: boolean;
-  gradient: string;
-}) => (
-  <div className="px-5 py-3 border-t border-gray-100 flex items-center justify-end gap-2">
-    <button
-      onClick={onClose}
-      className="px-3 py-1.5 text-sm rounded-lg border border-gray-200 hover:bg-gray-50"
-    >
-      Cancelar
-    </button>
-    <button
-      onClick={onSubmit}
-      disabled={saving}
-      className="inline-flex items-center gap-1.5 px-4 py-1.5 text-white text-sm font-medium rounded-lg disabled:opacity-50"
-      style={{ background: gradient }}
-    >
-      {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-      Guardar
-    </button>
-  </div>
+const ModalFooter = ({ onClose, onSubmit, saving }: { onClose: () => void; onSubmit: () => void; saving: boolean }) => (
+  <>
+    <Button variant="secondary" onClick={onClose}>Cancelar</Button>
+    <Button onClick={onSubmit} isLoading={saving} icon={!saving ? <Save className="w-4 h-4" /> : undefined}>Guardar</Button>
+  </>
 );
 
 export default KnowledgePage;

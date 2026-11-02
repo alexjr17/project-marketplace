@@ -24,5 +24,7 @@
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": true
   },
-  "include": ["src"]
+  "include": ["src"],
+  // Las pruebas se revisan aparte con tsconfig.test.json (npm run test:types).
+  "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx", "src/test"]
 }

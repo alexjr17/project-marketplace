@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Minus, Plus, Trash2, AlertTriangle } from 'lucide-react';
+import { Trash2 } from 'lucide-react';
+import { Alert, Badge, IconButton } from '../ui';
+import { QuantityStepper } from './QuantityStepper';
 import { useCurrency } from '../../hooks/useCurrency';
 import { getVariantByProductColorSize } from '../../services/variants.service';
 import type { CartItem as CartItemType } from '../../types/cart';
@@ -89,178 +91,83 @@ export const CartItem = ({ item, onUpdateQuantity, onRemove, onStockChange }: Ca
     }
   };
 
+  const canIncrease = !isOutOfStock && !(availableStock !== null && item.quantity >= availableStock);
+
   return (
-    <div className={`bg-white rounded-xl border-2 transition-colors overflow-hidden ${
-      isOutOfStock ? 'border-red-300 bg-red-50' : hasInsufficientStock ? 'border-yellow-300 bg-yellow-50' : 'border-gray-200 hover:border-gray-300'
-    }`}>
-      {/* Layout móvil: vertical / Desktop: horizontal */}
-      <div className="p-3 lg:p-4">
-        {/* Alerta de stock */}
-        {(isOutOfStock || hasInsufficientStock) && (
-          <div className={`flex items-center gap-2 p-2 rounded-lg mb-3 ${
-            isOutOfStock ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'
-          }`}>
-            <AlertTriangle className="w-4 h-4 flex-shrink-0" />
-            <span className="text-xs font-medium">
-              {isOutOfStock
-                ? 'Este producto no tiene stock disponible. Por favor elimínalo del carrito.'
-                : `Solo hay ${availableStock} unidades disponibles. Ajusta la cantidad.`
-              }
-            </span>
-          </div>
-        )}
+    <div className={`bg-white rounded-xl border p-3 sm:p-4 ${isOutOfStock ? 'border-red-200' : hasInsufficientStock ? 'border-amber-200' : 'border-gray-200'}`}>
+      {(isOutOfStock || hasInsufficientStock) && (
+        <div className="mb-3">
+          <Alert tone={isOutOfStock ? 'error' : 'warning'}>
+            {isOutOfStock
+              ? 'Este producto no tiene stock disponible. Por favor elimínalo del carrito.'
+              : `Solo hay ${availableStock} unidades disponibles. Ajusta la cantidad.`}
+          </Alert>
+        </div>
+      )}
 
-        <div className="flex gap-3 lg:gap-4">
-          {/* Imagen del producto */}
-          <div className={`w-20 h-20 lg:w-24 lg:h-24 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0 ${
-            isOutOfStock ? 'opacity-50' : ''
-          }`}>
-            <img
-              src={item.product.colors?.find((c) => c.hexCode === item.selectedColor)?.image || item.product.images.front}
-              alt={item.product.name}
-              loading="lazy"
-              decoding="async"
-              className="w-full h-full object-cover"
-            />
-          </div>
-
-          {/* Información del producto */}
-          <div className="flex-1 min-w-0">
-            <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0 flex-1">
-                <h3 className={`font-semibold text-sm lg:text-base truncate ${isOutOfStock ? 'text-gray-500' : 'text-gray-900'}`}>
-                  {item.product.name}
-                </h3>
-                <p className="text-xs lg:text-sm text-gray-500 line-clamp-1 hidden lg:block">{item.product.description}</p>
-              </div>
-              {/* Botón eliminar - Desktop */}
-              <button
-                onClick={() => onRemove(item.id)}
-                className="hidden lg:flex text-gray-400 hover:text-red-500 transition-colors p-1"
-                aria-label="Eliminar producto"
-              >
-                <Trash2 className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Variantes */}
-            <div className="flex flex-wrap items-center gap-2 mt-1 lg:mt-2 text-xs lg:text-sm">
-              {(item.selectedColor || item.selectedSize) && (
-                <div className="flex items-center gap-1">
-                  {item.selectedColor && (
-                    <div
-                      className="w-4 h-4 rounded border border-gray-300"
-                      style={{ backgroundColor: item.selectedColor }}
-                    />
-                  )}
-                  {item.selectedSize && <span className="text-gray-600">{item.selectedSize}</span>}
-                </div>
-              )}
-              {/* Precio unitario - móvil */}
-              <span className="lg:hidden text-gray-500">
-                {onSale ? (
-                  <>• <span className="line-through">{format(original)}</span> <span className="text-emerald-600 font-semibold">{format(item.price)}</span> c/u</>
-                ) : (
-                  <>• {format(item.price)} c/u</>
-                )}
-              </span>
-              {/* Indicador de stock */}
-              {!loadingStock && availableStock !== null && (
-                <span className={`text-xs font-medium ${
-                  isOutOfStock ? 'text-red-600' : hasInsufficientStock ? 'text-yellow-600' : 'text-green-600'
-                }`}>
-                  ({availableStock} disponibles)
-                </span>
-              )}
-            </div>
-
-            {/* Desktop: Precio y cantidad en línea */}
-            <div className="hidden lg:flex items-center justify-between mt-3">
-              <div className="text-sm text-gray-500">
-                {onSale ? (
-                  <span className="flex items-center gap-2">
-                    <span className="line-through">{format(original)}</span>
-                    <span className="text-emerald-600 font-bold">{format(item.price)}</span>
-                    <span className="text-[11px] font-bold bg-emerald-600 text-white px-1.5 py-0.5 rounded">-{offPct}%</span>
-                    <span className="text-xs text-gray-500">c/u</span>
-                  </span>
-                ) : (
-                  <>{format(item.price)} c/u</>
-                )}
-              </div>
-
-              {/* Control de cantidad - Desktop */}
-              <div className={`flex items-center gap-1 border rounded-lg overflow-hidden ${
-                isOutOfStock ? 'border-red-300 opacity-50' : 'border-gray-300'
-              }`}>
-                <button
-                  onClick={handleDecrease}
-                  disabled={item.quantity <= 1 || isOutOfStock}
-                  className="px-2 py-1 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  aria-label="Disminuir cantidad"
-                >
-                  <Minus className="w-4 h-4" />
-                </button>
-                <span className="px-3 py-1 font-semibold text-gray-900 min-w-[2rem] text-center text-sm">
-                  {item.quantity}
-                </span>
-                <button
-                  onClick={handleIncrease}
-                  disabled={isOutOfStock || (availableStock !== null && item.quantity >= availableStock)}
-                  className="px-2 py-1 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  aria-label="Aumentar cantidad"
-                >
-                  <Plus className="w-4 h-4" />
-                </button>
-              </div>
-
-              <div className={`text-lg font-bold ${isOutOfStock ? 'text-gray-400' : 'text-gray-900'}`}>
-                {format(item.subtotal)}
-              </div>
-            </div>
-          </div>
+      <div className="flex gap-3 sm:gap-4">
+        {/* Imagen */}
+        <div className={`w-20 h-20 sm:w-24 sm:h-24 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0 ${isOutOfStock ? 'opacity-50' : ''}`}>
+          <img
+            src={item.product.colors?.find((c) => c.hexCode === item.selectedColor)?.image || item.product.images.front}
+            alt={item.product.name}
+            loading="lazy"
+            decoding="async"
+            className="w-full h-full object-cover"
+          />
         </div>
 
-        {/* Móvil: Fila de acciones */}
-        <div className="lg:hidden flex items-center justify-between mt-3 pt-3 border-t border-gray-100">
-          {/* Control de cantidad */}
-          <div className={`flex items-center gap-1 border rounded-lg overflow-hidden ${
-            isOutOfStock ? 'border-red-300 opacity-50' : 'border-gray-300'
-          }`}>
-            <button
-              onClick={handleDecrease}
-              disabled={item.quantity <= 1 || isOutOfStock}
-              className="px-2.5 py-1.5 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              aria-label="Disminuir cantidad"
-            >
-              <Minus className="w-4 h-4" />
-            </button>
-            <span className="px-3 py-1.5 font-semibold text-gray-900 min-w-[2rem] text-center text-sm">
-              {item.quantity}
-            </span>
-            <button
-              onClick={handleIncrease}
-              disabled={isOutOfStock || (availableStock !== null && item.quantity >= availableStock)}
-              className="px-2.5 py-1.5 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              aria-label="Aumentar cantidad"
-            >
-              <Plus className="w-4 h-4" />
-            </button>
+        <div className="flex-1 min-w-0 flex flex-col">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <h3 className={`font-medium text-sm sm:text-base truncate ${isOutOfStock ? 'text-gray-500' : 'text-gray-900'}`}>
+                {item.product.name}
+              </h3>
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1 text-xs text-gray-500">
+                {item.selectedColor && (
+                  <span className="inline-flex items-center gap-1">
+                    <span className="w-3.5 h-3.5 rounded-full ring-1 ring-gray-300" style={{ backgroundColor: item.selectedColor }} />
+                    Color
+                  </span>
+                )}
+                {item.selectedSize && <span>Talla {item.selectedSize}</span>}
+                {!loadingStock && availableStock !== null && (
+                  <span className={isOutOfStock ? 'text-red-600' : hasInsufficientStock ? 'text-amber-700' : 'text-green-700'}>
+                    {availableStock} disponibles
+                  </span>
+                )}
+              </div>
+            </div>
+            <IconButton title="Eliminar producto" tone="danger" onClick={() => onRemove(item.id)} className="-mr-1 -mt-1">
+              <Trash2 className="w-4 h-4" />
+            </IconButton>
           </div>
 
-          {/* Subtotal */}
-          <div className={`font-bold ${isOutOfStock ? 'text-gray-400' : 'text-gray-900'}`}>
-            {format(item.subtotal)}
+          <div className="mt-1 text-xs text-gray-500 flex flex-wrap items-center gap-1.5">
+            {onSale ? (
+              <>
+                <span className="line-through">{format(original)}</span>
+                <span className="font-medium text-gray-900">{format(item.price)}</span>
+                <Badge tone="green">-{offPct}%</Badge>
+                <span>c/u</span>
+              </>
+            ) : (
+              <span>{format(item.price)} c/u</span>
+            )}
           </div>
 
-          {/* Botón eliminar - Móvil */}
-          <button
-            onClick={() => onRemove(item.id)}
-            className="text-gray-400 hover:text-red-500 transition-colors p-2 -mr-2"
-            aria-label="Eliminar producto"
-          >
-            <Trash2 className="w-5 h-5" />
-          </button>
+          <div className="mt-auto pt-3 flex items-center justify-between gap-3">
+            <QuantityStepper
+              size="sm"
+              value={item.quantity}
+              onDecrease={handleDecrease}
+              onIncrease={handleIncrease}
+              canDecrease={item.quantity > 1}
+              canIncrease={canIncrease}
+              disabled={isOutOfStock}
+            />
+            <span className={`text-base font-semibold ${isOutOfStock ? 'text-gray-400' : 'text-gray-900'}`}>{format(item.subtotal)}</span>
+          </div>
         </div>
       </div>
     </div>

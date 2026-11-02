@@ -54,6 +54,11 @@ return [
 
     'url' => env('APP_URL', 'http://localhost'),
 
+    // URL pública del front (retornos de pasarelas, enlaces en correos).
+    'frontend_url' => env('FRONTEND_URL', env('APP_ENV') === 'production'
+        ? 'https://project-marketplace-web.onrender.com'
+        : 'http://localhost:5173'),
+
     /*
     |--------------------------------------------------------------------------
     | Application Timezone

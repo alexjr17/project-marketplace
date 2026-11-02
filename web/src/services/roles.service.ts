@@ -1,10 +1,12 @@
 import api from './api.service';
+import type { Permission } from '../types/roles';
 
 export interface ApiRole {
   id: number;
   name: string;
   description: string;
-  permissions: string[];
+  /** Claves de permiso (el catálogo del API es el mismo que types/roles.ts). */
+  permissions: Permission[];
   isSystem: boolean;
   isActive: boolean;
   _count?: {

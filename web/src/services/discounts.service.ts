@@ -1,19 +1,4 @@
-import axios from 'axios';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
-
-const authHeader = () => {
-  const raw = localStorage.getItem('marketplace_auth');
-  let token: string | null = null;
-  if (raw) {
-    try {
-      token = JSON.parse(raw).token || null;
-    } catch {
-      token = null;
-    }
-  }
-  return token ? { Authorization: `Bearer ${token}` } : {};
-};
+import { httpKeepUrls as client, isApiError } from '../lib/http';
 
 export type DiscountType = 'percent' | 'fixed';
 export type DiscountAppliesTo = 'all' | 'product' | 'category' | 'user';
@@ -56,22 +41,19 @@ export interface CouponResult {
 }
 
 export async function listDiscounts(): Promise<Discount[]> {
-  const res = await axios.get(`${API_URL}/discounts`, { headers: authHeader() });
-  return res.data.data || [];
+  return (await client.get<Discount[]>('/discounts')) || [];
 }
 
 export async function createDiscount(data: DiscountInput): Promise<Discount> {
-  const res = await axios.post(`${API_URL}/discounts`, data, { headers: authHeader() });
-  return res.data.data;
+  return client.post<Discount>('/discounts', data);
 }
 
 export async function updateDiscount(id: number, data: DiscountInput): Promise<Discount> {
-  const res = await axios.put(`${API_URL}/discounts/${id}`, data, { headers: authHeader() });
-  return res.data.data;
+  return client.put<Discount>(`/discounts/${id}`, data);
 }
 
 export async function deleteDiscount(id: number): Promise<void> {
-  await axios.delete(`${API_URL}/discounts/${id}`, { headers: authHeader() });
+  await client.delete(`/discounts/${id}`);
 }
 
 /**
@@ -84,16 +66,9 @@ export async function validateCoupon(
   channel: 'online' | 'pos' = 'online'
 ): Promise<CouponResult> {
   try {
-    const res = await axios.post(
-      `${API_URL}/discounts/validate`,
-      { code, items, channel },
-      { headers: authHeader() }
-    );
-    return res.data.data as CouponResult;
+    return await client.post<CouponResult>('/discounts/validate', { code, items, channel });
   } catch (err: unknown) {
-    const msg =
-      (axios.isAxiosError(err) && (err.response?.data as { message?: string })?.message) ||
-      'No se pudo validar el cupón';
+    const msg = (isApiError(err) && err.status > 0 && err.message) || 'No se pudo validar el cupón';
     throw new Error(msg);
   }
 }

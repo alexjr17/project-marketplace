@@ -13,7 +13,8 @@ import type {
   CanReviewResponse,
 } from '../../types/review';
 import { useAuth } from '../../context/AuthContext';
-import { toast } from 'react-hot-toast';
+import toast from '../../lib/toast';
+import { useConfirm } from '../ui';
 
 interface ProductReviewSectionProps {
   productId: number;
@@ -21,6 +22,7 @@ interface ProductReviewSectionProps {
 
 export const ProductReviewSection = ({ productId }: ProductReviewSectionProps) => {
   const { user, isAuthenticated } = useAuth();
+  const confirm = useConfirm();
   const [reviews, setReviews] = useState<Review[]>([]);
   const [summary, setSummary] = useState<ReviewSummaryType | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -118,7 +120,7 @@ export const ProductReviewSection = ({ productId }: ProductReviewSectionProps) =
       loadReviews();
       checkCanReview();
     } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Error al guardar la reseña');
+      toast.error(err?.message || 'Error al guardar la reseña');
     } finally {
       setIsSubmitting(false);
     }
@@ -130,7 +132,7 @@ export const ProductReviewSection = ({ productId }: ProductReviewSectionProps) =
   };
 
   const handleDeleteReview = async (reviewId: number) => {
-    if (!window.confirm('¿Estás seguro de eliminar esta reseña?')) return;
+    if (!(await confirm({ title: '¿Eliminar esta reseña?', message: 'No se puede deshacer.', tone: 'danger' }))) return;
 
     try {
       await reviewsService.deleteReview(reviewId);
@@ -138,7 +140,7 @@ export const ProductReviewSection = ({ productId }: ProductReviewSectionProps) =
       loadReviews();
       checkCanReview();
     } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Error al eliminar la reseña');
+      toast.error(err?.message || 'Error al eliminar la reseña');
     }
   };
 
@@ -161,7 +163,7 @@ export const ProductReviewSection = ({ productId }: ProductReviewSectionProps) =
         )
       );
     } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Error al votar');
+      toast.error(err?.message || 'Error al votar');
     } finally {
       setIsVoting(false);
     }
@@ -180,7 +182,7 @@ export const ProductReviewSection = ({ productId }: ProductReviewSectionProps) =
         )
       );
     } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Error al remover voto');
+      toast.error(err?.message || 'Error al remover voto');
     } finally {
       setIsVoting(false);
     }
@@ -197,7 +199,7 @@ export const ProductReviewSection = ({ productId }: ProductReviewSectionProps) =
   if (isLoading && reviews.length === 0) {
     return (
       <div className="flex justify-center items-center py-12">
-        <Loader2 className="w-8 h-8 animate-spin text-violet-500" />
+        <Loader2 className="w-8 h-8 animate-spin text-app-500" />
       </div>
     );
   }
@@ -228,7 +230,7 @@ export const ProductReviewSection = ({ productId }: ProductReviewSectionProps) =
         {canReviewData?.canReview && !showForm && (
           <button
             onClick={() => setShowForm(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-violet-600 text-white text-sm font-medium rounded-lg hover:bg-violet-700 transition-colors"
+            className="flex items-center gap-2 px-4 py-2 bg-app-600 text-white text-sm font-medium rounded-lg hover:bg-app-700 transition-colors"
           >
             <MessageSquarePlus className="w-4 h-4" />
             Escribir reseña
@@ -243,12 +245,12 @@ export const ProductReviewSection = ({ productId }: ProductReviewSectionProps) =
 
       {/* Mensaje si ya dejó review */}
       {userExistingReview && !showForm && (
-        <div className="bg-violet-50 rounded-xl p-4 border border-violet-100">
-          <p className="text-sm text-violet-700">
+        <div className="bg-app-50 rounded-xl p-4 border border-app-100">
+          <p className="text-sm text-app-700">
             Ya dejaste una reseña para este producto.{' '}
             <button
               onClick={() => handleEditReview(userExistingReview)}
-              className="font-medium underline hover:text-violet-800"
+              className="font-medium underline hover:text-app-800"
             >
               Editar reseña
             </button>

@@ -5,6 +5,7 @@ import type { ScanProductResponse, Sale, SaleItem, CreateSaleRequest, TemplateZo
 import type { CashSession } from '../services/cash-register.service';
 import { useToast } from './ToastContext';
 import { useSettings } from './SettingsContext';
+import { useAuth } from './AuthContext';
 
 // ==================== TYPES ====================
 
@@ -32,7 +33,7 @@ export interface TemplateCartItem {
 }
 
 // Union type for cart items
-export type CartItem = ProductCartItem | TemplateCartItem;
+export type PosCartItem = ProductCartItem | TemplateCartItem;
 
 interface POSContextType {
   // Session
@@ -41,7 +42,7 @@ interface POSContextType {
   loadSession: () => Promise<void>;
 
   // Cart
-  cart: CartItem[];
+  cart: PosCartItem[];
   addToCart: (product: ScanProductResponse, quantity?: number) => void;
   addTemplateToCart: (templateId: number, templateName: string, templateImage: string, basePrice: number, selectedZones: TemplateZoneInfo[], totalPrice: number, quantity?: number) => void;
   removeFromCart: (itemId: string) => void;
@@ -76,13 +77,17 @@ const POSContext = createContext<POSContextType | undefined>(undefined);
 export function POSProvider({ children }: { children: React.ReactNode }) {
   const { showToast } = useToast();
   const { settings } = useSettings();
+  const { user, hasPermission, isLoading: authLoading } = useAuth();
+  // La sesión de caja solo existe para quien entra al POS: antes se pedía en cada página de
+  // la tienda, también para invitados (401 en cada visita).
+  const canUsePOS = !!user && hasPermission('pos.access');
 
   // Session state
   const [currentSession, setCurrentSession] = useState<CashSession | null>(null);
   const [isLoadingSession, setIsLoadingSession] = useState(true);
 
   // Cart state
-  const [cart, setCart] = useState<CartItem[]>([]);
+  const [cart, setCart] = useState<PosCartItem[]>([]);
   const [discount, setDiscount] = useState(0);
   // Si se está editando una venta existente, su id (si no, null = venta nueva).
   const [editingSaleId, setEditingSaleId] = useState<number | null>(null);
@@ -109,6 +114,11 @@ export function POSProvider({ children }: { children: React.ReactNode }) {
    * Load current session
    */
   const loadSession = useCallback(async () => {
+    if (!canUsePOS) {
+      setCurrentSession(null);
+      setIsLoadingSession(false);
+      return;
+    }
     try {
       setIsLoadingSession(true);
       const session = await cashRegisterService.getMySession();
@@ -119,7 +129,7 @@ export function POSProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setIsLoadingSession(false);
     }
-  }, []);
+  }, [canUsePOS]);
 
   /**
    * Add product to cart
@@ -270,7 +280,7 @@ export function POSProvider({ children }: { children: React.ReactNode }) {
    * Usa stock alto para no bloquear el ajuste de cantidades durante la edición.
    */
   const loadSaleForEditing = useCallback((sale: Sale) => {
-    const items: CartItem[] = (sale.items || []).map((it: any) => {
+    const items: PosCartItem[] = (sale.items || []).map((it: any) => {
       const price = Number(it.unitPrice ?? it.price) || 0;
       const quantity = Number(it.quantity) || 1;
       return {
@@ -318,7 +328,7 @@ export function POSProvider({ children }: { children: React.ReactNode }) {
       } catch (error: any) {
         console.error('Error scanning product:', error);
         showToast(
-          error.response?.data?.message || 'Producto no encontrado',
+          error?.message || 'Producto no encontrado',
           'error'
         );
       } finally {
@@ -345,11 +355,14 @@ export function POSProvider({ children }: { children: React.ReactNode }) {
         setIsProcessingSale(true);
 
         // Prepare sale items
-        const items: SaleItem[] = cart.map((item) => ({
-          variantId: item.variantId,
-          quantity: item.quantity,
-          price: item.price,
-        }));
+        const items: SaleItem[] = cart.map((item) => {
+          // El API exige variantId en cada ítem; los ítems de plantilla no lo tienen y antes
+          // se mandaban sin él (el API respondía 422). Se avisa con un mensaje claro.
+          if (item.itemType !== 'product') {
+            throw new Error(`"${item.product.name}" es un producto personalizable y no se puede cobrar desde el POS: el API exige una variante por ítem.`);
+          }
+          return { variantId: item.variantId, quantity: item.quantity, price: item.price };
+        });
 
         let sale: Sale;
         if (editingSaleId) {
@@ -393,7 +406,7 @@ export function POSProvider({ children }: { children: React.ReactNode }) {
       } catch (error: any) {
         console.error('Error processing sale:', error);
         showToast(
-          error.response?.data?.message || 'Error al procesar la venta',
+          error?.message || 'Error al procesar la venta',
           'error'
         );
         throw error;
@@ -404,10 +417,11 @@ export function POSProvider({ children }: { children: React.ReactNode }) {
     [currentSession, cart, discount, editingSaleId, clearCart, loadSession, showToast]
   );
 
-  // Load session on mount
+  // Carga la sesión cuando hay usuario con pos.access (y la limpia al cerrar sesión).
   useEffect(() => {
+    if (authLoading) return;
     loadSession();
-  }, [loadSession]);
+  }, [authLoading, loadSession, user?.id]);
 
   const value: POSContextType = {
     // Session

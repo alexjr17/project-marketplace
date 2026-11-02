@@ -1,12 +1,19 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { Check, Save, Tags, Trash2 } from 'lucide-react';
 import { inputTypesService, type CreateInputTypeDto, type UpdateInputTypeDto } from '../../services/input-types.service';
-import { catalogsService, type Size } from '../../services/catalogs.service';
-import { Button } from '../../components/shared/Button';
-import { ArrowLeft, Save, Trash2 } from 'lucide-react';
+import { catalogsService } from '../../services/catalogs.service';
+import type { Size } from '../../types/catalog';
+import {
+  Page, PageHeader, Button, Card, CardTitle, Field, TextInput, TextArea, NumberInput, FormGrid, FormActions,
+  Alert, Spinner, EmptyState, useConfirm, toast,
+} from '../../components/ui';
+
+const LIST = '/admin-panel/input-types';
 
 export default function InputTypeDetailPage() {
   const navigate = useNavigate();
+  const confirm = useConfirm();
   const { id } = useParams<{ id: string }>();
   const isEditing = id !== 'new';
 
@@ -20,6 +27,7 @@ export default function InputTypeDetailPage() {
   const [availableSizes, setAvailableSizes] = useState<Size[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [nameError, setNameError] = useState<string | null>(null);
 
   useEffect(() => {
     loadSizes();
@@ -55,13 +63,15 @@ export default function InputTypeDetailPage() {
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (e?: React.FormEvent) => {
+    e?.preventDefault();
 
     if (!formData.name.trim()) {
-      alert('El nombre es requerido');
+      setNameError('El nombre es requerido');
+      toast.error('El nombre es requerido');
       return;
     }
+    setNameError(null);
 
     try {
       setLoading(true);
@@ -79,17 +89,20 @@ export default function InputTypeDetailPage() {
           sizeIds: formData.sizeIds || [],
         };
         await inputTypesService.update(parseInt(id!), updateData);
+        toast.success('Tipo de insumo actualizado');
       } else {
         await inputTypesService.create({
           ...formData,
           hasVariants,
           sizeIds: formData.sizeIds || [],
         });
+        toast.success('Tipo de insumo creado');
       }
 
-      navigate('/admin-panel/input-types');
+      navigate(LIST);
     } catch (err) {
       setError('Error al guardar el tipo de insumo');
+      toast.error('No se pudo guardar el tipo de insumo');
       console.error(err);
     } finally {
       setLoading(false);
@@ -97,209 +110,128 @@ export default function InputTypeDetailPage() {
   };
 
   const handleDelete = async () => {
-    if (!confirm('¿Estás seguro de eliminar este tipo de insumo?')) return;
+    const ok = await confirm({
+      title: '¿Eliminar este tipo de insumo?',
+      message: 'No se puede deshacer.',
+      tone: 'danger',
+    });
+    if (!ok) return;
 
     try {
       setLoading(true);
       await inputTypesService.delete(parseInt(id!));
-      navigate('/admin-panel/input-types');
+      toast.success('Tipo de insumo eliminado');
+      navigate(LIST);
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Error al eliminar el tipo de insumo');
+      const msg = err?.message || 'Error al eliminar el tipo de insumo';
+      setError(msg);
+      toast.error(msg);
       console.error(err);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: name === 'sortOrder' ? parseInt(value) || 0 : value,
-    }));
-  };
-
   const toggleSize = (sizeId: number) => {
     setFormData((prev) => ({
       ...prev,
       sizeIds: prev.sizeIds?.includes(sizeId)
-        ? prev.sizeIds.filter((id) => id !== sizeId)
+        ? prev.sizeIds.filter((sid) => sid !== sizeId)
         : [...(prev.sizeIds || []), sizeId],
     }));
   };
 
-  if (loading && isEditing) {
-    return (
-      <div className="flex justify-center items-center min-h-[400px]">
-        <div className="text-lg text-gray-600">Cargando...</div>
-      </div>
-    );
+  const selectedCount = formData.sizeIds?.length || 0;
+
+  if (loading && isEditing && !formData.name) {
+    return <Page><Spinner label="Cargando…" /></Page>;
   }
 
   return (
-    <div className="p-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">
-            {isEditing ? 'Editar Tipo de Insumo' : 'Nuevo Tipo de Insumo'}
-          </h1>
-          <p className="text-gray-600 mt-1 text-sm">
-            {isEditing
-              ? 'Modifica la información del tipo de insumo'
-              : 'Crea un nuevo tipo de insumo para el inventario'}
-          </p>
-        </div>
-        <button
-          onClick={() => navigate('/admin-panel/input-types')}
-          className="inline-flex items-center gap-2 px-4 py-2 text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 rounded-lg transition-colors"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          Volver a Tipos de Insumo
-        </button>
-      </div>
+    <Page>
+      <PageHeader
+        icon={Tags}
+        backTo={LIST}
+        title={isEditing ? 'Editar tipo de insumo' : 'Nuevo tipo de insumo'}
+        subtitle={isEditing ? formData.name : 'Crea una categoría para agrupar insumos'}
+      />
 
-      {/* Error message */}
-      {error && (
-        <div className="mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
-          {error}
-        </div>
-      )}
+      {error && <Alert tone="error">{error}</Alert>}
 
-      {/* Form */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-        <form onSubmit={handleSubmit} className="p-6">
-          <div className="space-y-6">
-            {/* Nombre */}
-            <div>
-              <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">
-                Nombre <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                id="name"
-                name="name"
+      <form onSubmit={handleSubmit} className="space-y-5">
+        <Card>
+          <CardTitle>Datos</CardTitle>
+          <FormGrid cols={3}>
+            <Field label="Nombre" required error={nameError} className="md:col-span-2">
+              <TextInput
                 value={formData.name}
-                onChange={handleChange}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-colors"
-                placeholder="Ej: Camisetas Base, Sublimación, DTF"
-                required
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                placeholder="Ej: Camisetas base, Sublimación, DTF"
               />
-            </div>
-
-            {/* Descripción */}
-            <div>
-              <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-2">
-                Descripción
-              </label>
-              <textarea
-                id="description"
-                name="description"
-                value={formData.description}
-                onChange={handleChange}
-                rows={3}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-colors resize-none"
-                placeholder="Describe el tipo de insumo..."
-              />
-            </div>
-
-            {/* Orden */}
-            <div>
-              <label htmlFor="sortOrder" className="block text-sm font-medium text-gray-700 mb-2">
-                Orden de Clasificación
-              </label>
-              <input
-                type="number"
-                id="sortOrder"
-                name="sortOrder"
-                value={formData.sortOrder}
-                onChange={handleChange}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-colors"
-                placeholder="0"
+            </Field>
+            <Field label="Orden" hint="Los números menores aparecen primero.">
+              <NumberInput
                 min="0"
+                value={formData.sortOrder}
+                onChange={(e) => setFormData({ ...formData, sortOrder: parseInt(e.target.value) || 0 })}
               />
-              <p className="text-xs text-gray-500 mt-1">
-                Los números menores aparecen primero en el listado
-              </p>
+            </Field>
+            <Field label="Descripción" className="md:col-span-3">
+              <TextArea
+                rows={3}
+                value={formData.description}
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                placeholder="Describe el tipo de insumo…"
+              />
+            </Field>
+          </FormGrid>
+        </Card>
+
+        <Card>
+          <CardTitle actions={<span className="text-sm text-gray-500">{selectedCount} seleccionada{selectedCount !== 1 ? 's' : ''}</span>}>
+            Tallas
+          </CardTitle>
+          <p className="text-sm text-gray-500 -mt-2 mb-4">
+            Marca las tallas que aplican (camisetas, gorras…): los insumos de este tipo tendrán variantes talla × color.
+            Sin tallas, se manejan por unidad simple (tintas, papel…).
+          </p>
+          {availableSizes.length === 0 ? (
+            <EmptyState title="No hay tallas disponibles" description="Crea tallas en Catálogo → Atributos → Tallas." />
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {availableSizes.map((size) => {
+                const on = formData.sizeIds?.includes(size.id) || false;
+                return (
+                  <button
+                    key={size.id}
+                    type="button"
+                    aria-pressed={on}
+                    title={size.name}
+                    onClick={() => toggleSize(size.id)}
+                    className={`inline-flex items-center gap-1.5 h-9 px-3 rounded-lg border text-sm transition-colors ${
+                      on ? 'border-app-500 bg-app-50 text-app-700 font-medium' : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400'
+                    }`}
+                  >
+                    {on && <Check className="w-3.5 h-3.5" />}
+                    {size.abbreviation}
+                    <span className={`text-xs ${on ? 'text-app-600' : 'text-gray-400'}`}>{size.name}</span>
+                  </button>
+                );
+              })}
             </div>
+          )}
+        </Card>
 
-            {/* Separador */}
-            <hr className="border-gray-200" />
-
-            {/* Tallas Disponibles */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Tallas Disponibles
-              </label>
-              <p className="text-sm text-gray-500 mb-3">
-                Selecciona las tallas que aplican a este tipo de insumo (ej: camisetas, gorras).
-                Si no se seleccionan tallas, los insumos de este tipo se manejarán por unidad simple (ej: tintas, papel).
-              </p>
-              <div className="border border-gray-300 rounded-lg p-4 bg-gray-50 max-h-96 overflow-y-auto">
-                {availableSizes.length === 0 ? (
-                  <p className="text-sm text-gray-500">No hay tallas disponibles</p>
-                ) : (
-                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                    {availableSizes.map((size) => (
-                      <label
-                        key={size.id}
-                        className={`flex items-center gap-2 p-3 rounded-lg cursor-pointer transition-colors ${
-                          formData.sizeIds?.includes(size.id)
-                            ? 'bg-orange-50 border-2 border-orange-500'
-                            : 'bg-white border-2 border-gray-200 hover:border-gray-300'
-                        }`}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={formData.sizeIds?.includes(size.id) || false}
-                          onChange={() => toggleSize(size.id)}
-                          className="w-4 h-4 text-orange-500 border-gray-300 rounded focus:ring-orange-500"
-                        />
-                        <div className="flex-1">
-                          <div className="text-sm font-medium text-gray-900">
-                            {size.abbreviation}
-                          </div>
-                          <div className="text-xs text-gray-500">{size.name}</div>
-                        </div>
-                      </label>
-                    ))}
-                  </div>
-                )}
-              </div>
-              {formData.sizeIds && formData.sizeIds.length > 0 && (
-                <p className="text-xs text-gray-500 mt-2">
-                  {formData.sizeIds.length} talla{formData.sizeIds.length !== 1 ? 's' : ''} seleccionada{formData.sizeIds.length !== 1 ? 's' : ''} - Los insumos generarán variantes (talla × color)
-                </p>
-              )}
-            </div>
-          </div>
-
-          {/* Action Buttons */}
-          <div className="mt-8 flex gap-3">
-            {isEditing && (
-              <Button
-                type="button"
-                variant="admin-danger"
-                onClick={handleDelete}
-                disabled={loading}
-                className="flex-1"
-              >
-                <Trash2 className="w-4 h-4 mr-2" />
-                Eliminar
-              </Button>
-            )}
-            <Button
-              type="submit"
-              variant="admin-primary"
-              disabled={loading}
-              className="flex-1"
-            >
-              <Save className="w-4 h-4 mr-2" />
-              {loading ? 'Guardando...' : 'Guardar'}
+        <FormActions sticky>
+          {isEditing && (
+            <Button variant="ghost" className="sm:mr-auto text-red-600 hover:bg-red-50 hover:text-red-700" icon={<Trash2 className="w-4 h-4" />} onClick={handleDelete} disabled={loading}>
+              Eliminar
             </Button>
-          </div>
-        </form>
-      </div>
-    </div>
+          )}
+          <Button variant="secondary" onClick={() => navigate(LIST)}>Cancelar</Button>
+          <Button type="submit" icon={<Save className="w-4 h-4" />} isLoading={loading}>Guardar</Button>
+        </FormActions>
+      </form>
+    </Page>
   );
 }

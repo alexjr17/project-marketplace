@@ -8,12 +8,15 @@ use App\Models\InputBatch;
 use App\Models\InputBatchMovement;
 use App\Models\InventoryCount;
 use App\Models\InventoryCountItem;
+use App\Services\NumberSequenceService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class InventoryCountController extends Controller
 {
     use ApiResponse;
+
+    public function __construct(private NumberSequenceService $numbers) {}
 
     /** Da formato a un conteo, normalizando los numéricos. */
     private function formatCount(InventoryCount $count): array
@@ -55,15 +58,6 @@ class InventoryCountController extends Controller
             'isCounted' => (bool) $item->isCounted,
             'notes' => $item->notes,
         ];
-    }
-
-    /** Genera el siguiente número de conteo (INV-AAAA-NNNN). */
-    private function generateCountNumber(): string
-    {
-        $year = date('Y');
-        $count = InventoryCount::where('countNumber', 'like', "INV-{$year}%")->count();
-
-        return sprintf('INV-%s-%04d', $year, $count + 1);
     }
 
     /** GET /api/inventory-counts */
@@ -142,7 +136,7 @@ class InventoryCountController extends Controller
         $user = $request->user();
         $count = DB::transaction(function () use ($data, $inputs, $user) {
             $count = InventoryCount::create([
-                'countNumber' => $this->generateCountNumber(),
+                'countNumber' => $this->numbers->next(NumberSequenceService::INVENTORY_COUNT),
                 'countType' => $data['countType'],
                 'status' => 'DRAFT',
                 'countDate' => $data['countDate'] ?? now(),

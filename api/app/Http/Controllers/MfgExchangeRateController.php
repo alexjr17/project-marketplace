@@ -4,12 +4,15 @@ namespace App\Http\Controllers;
 
 use App\Http\Concerns\ApiResponse;
 use App\Models\MfgExchangeRate;
+use App\Services\MfgExchangeRateService;
 use Illuminate\Http\Request;
 
 /** Tasa de cambio COP→USD (para precios de exportación en dólares). */
 class MfgExchangeRateController extends Controller
 {
     use ApiResponse;
+
+    public function __construct(private MfgExchangeRateService $service) {}
 
     public function index()
     {
@@ -25,20 +28,13 @@ class MfgExchangeRateController extends Controller
     public function store(Request $request)
     {
         $data = $request->validate([
-            'rate' => 'required|numeric|min:0.0001',
-            'currency' => 'nullable|string|max:10',
+            // decimal(12,4): el máximo que cabe en la columna.
+            'rate' => 'required|numeric|min:0.0001|max:99999999.9999',
+            'currency' => 'nullable|string|size:3|alpha',
             'effectiveDate' => 'nullable|date',
         ]);
-        // La nueva tasa queda como la activa; se desactivan las anteriores.
-        MfgExchangeRate::query()->update(['isActive' => false]);
-        $r = MfgExchangeRate::create([
-            'rate' => $data['rate'],
-            'currency' => $data['currency'] ?? 'USD',
-            'effectiveDate' => $data['effectiveDate'] ?? now()->toDateString(),
-            'isActive' => true,
-        ]);
 
-        return $this->created($r, 'Tasa de cambio registrada');
+        return $this->created($this->service->store($data), 'Tasa de cambio registrada');
     }
 
     public function destroy(int $id)
@@ -47,7 +43,7 @@ class MfgExchangeRateController extends Controller
         if (! $r) {
             return $this->error('Tasa no encontrada', 404);
         }
-        $r->delete();
+        $this->service->destroy($r);
 
         return $this->success(null, 'Tasa eliminada');
     }

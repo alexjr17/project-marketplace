@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Concerns\ApiResponse;
 use App\Models\Setting;
+use App\Services\PaymentGatewayConfig;
 use Illuminate\Http\Request;
 
 class SettingController extends Controller
@@ -24,6 +25,35 @@ class SettingController extends Controller
         'legal' => 'legal_settings',
         'printing' => 'printing_settings',
     ];
+
+    /**
+     * Permiso que exige cada tipo (antes todo era solo SuperAdmin). Quien tenga cualquiera
+     * de los permisos listados puede leer y guardar ese tipo; el SuperAdmin, todos.
+     */
+    private const TYPE_PERMISSIONS = [
+        'store' => ['settings.general'],
+        'orders' => ['settings.general'],
+        'notifications' => ['settings.general'],
+        'general' => ['settings.general'],
+        'payments' => ['settings.payment'],
+        'appearance' => ['settings.appearance'],
+        'shipping' => ['shipping.config', 'shipping.zones', 'shipping.carriers', 'shipping.connections'],
+        'home' => ['settings.home'],
+        'catalog' => ['settings.catalog'],
+        'legal' => ['settings.legal'],
+        'printing' => ['settings.printing'],
+    ];
+
+    private function canAccessType(Request $request, string $type): bool
+    {
+        $user = $request->user();
+        if ((int) $user->roleId === 1) {
+            return true;
+        }
+        $perms = is_array($user->role?->permissions) ? $user->role->permissions : [];
+
+        return (bool) array_intersect(self::TYPE_PERMISSIONS[$type] ?? [], $perms);
+    }
 
     private function readSetting(string $key): array
     {
@@ -48,18 +78,22 @@ class SettingController extends Controller
             'home' => $this->readSetting('home_settings'),
             'catalog' => $this->readSetting('catalog_settings'),
             'shipping' => $this->readSetting('shipping_settings'),
-            'payment' => $this->readSetting('payment_settings'),
+            // Sin claves secretas de las pasarelas (antes salían privateKey, integrityKey y accessToken).
+            'payment' => PaymentGatewayConfig::publicView($this->readSetting('payment_settings')),
             'legal' => $this->readSetting('legal_settings'),
         ]);
     }
 
     // ==================== CONFIG POR TIPO ====================
 
-    public function getConfig(string $type)
+    public function getConfig(Request $request, string $type)
     {
         $key = self::TYPE_KEYS[$type] ?? null;
         if (! $key) {
             return $this->error('Tipo de configuración no válido', 404);
+        }
+        if (! $this->canAccessType($request, $type)) {
+            return $this->error('No tienes permiso para esta configuración', 403);
         }
 
         return $this->success($this->readSetting($key));
@@ -70,6 +104,9 @@ class SettingController extends Controller
         $key = self::TYPE_KEYS[$type] ?? null;
         if (! $key) {
             return $this->error('Tipo de configuración no válido', 404);
+        }
+        if (! $this->canAccessType($request, $type)) {
+            return $this->error('No tienes permiso para esta configuración', 403);
         }
 
         $setting = $this->writeSetting($key, $request->all());

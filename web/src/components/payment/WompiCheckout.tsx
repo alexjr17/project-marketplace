@@ -1,28 +1,27 @@
 import { useEffect, useRef, useState } from 'react';
-import { Shield, CreditCard, Loader2, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
-import {
-  generateIntegritySignature,
-  WOMPI_WIDGET_URL,
-  validateWompiCredentials,
-} from '../../services/wompi.service';
+import { AlertCircle, CreditCard, Loader2, Shield } from 'lucide-react';
+import { Alert, Button } from '../ui';
+import { WOMPI_WIDGET_URL, type WompiCheckoutData } from '../../services/wompi.service';
 
 interface WompiCheckoutProps {
+  /** Llave pública configurada (solo para saber si Wompi está disponible). */
   publicKey: string;
+  /** Total estimado a mostrar; el que se cobra lo calcula el servidor. */
   amountInCents: number;
-  reference: string;
-  currency?: string;
-  integrityKey?: string;
-  redirectUrl?: string;
   customerEmail?: string;
   customerFullName?: string;
   customerPhone?: string;
-  onPaymentSuccess?: (transactionId: string) => void;
+  /**
+   * Crea (o reutiliza) el pedido pendiente y pide al servidor los datos firmados.
+   * La firma de integridad se calcula en el backend: la clave nunca llega al navegador.
+   */
+  prepare: () => Promise<WompiCheckoutData>;
+  /** El widget terminó con una transacción (APPROVED o PENDING): confirmar en el backend. */
+  onPaymentResult: (transactionId: string, reference: string) => void;
   onPaymentError?: (error: string) => void;
   onClose?: () => void;
-  isTestMode?: boolean;
 }
 
-// Declaración para el objeto window con Wompi
 declare global {
   interface Window {
     WidgetCheckout?: new (config: WompiWidgetConfig) => WompiWidgetInstance;
@@ -35,13 +34,7 @@ interface WompiWidgetConfig {
   reference: string;
   publicKey: string;
   signature?: { integrity: string };
-  redirectUrl?: string;
-  customerData?: {
-    email?: string;
-    fullName?: string;
-    phoneNumber?: string;
-    phoneNumberPrefix?: string;
-  };
+  customerData?: { email?: string; fullName?: string; phoneNumber?: string; phoneNumberPrefix?: string };
 }
 
 interface WompiWidgetInstance {
@@ -49,321 +42,127 @@ interface WompiWidgetInstance {
 }
 
 interface WompiResult {
-  transaction?: {
-    id: string;
-    status: 'APPROVED' | 'DECLINED' | 'VOIDED' | 'ERROR' | 'PENDING';
-    reference: string;
-    amountInCents: number;
-  };
+  transaction?: { id: string; status: 'APPROVED' | 'DECLINED' | 'VOIDED' | 'ERROR' | 'PENDING'; reference: string };
 }
 
-// Verificar si las credenciales son válidas
-const hasValidCredentials = (publicKey: string): boolean => {
-  return Boolean(publicKey) &&
-         publicKey !== 'pub_test_SIMULATION' &&
-         (publicKey.startsWith('pub_test_') || publicKey.startsWith('pub_prod_'));
-};
+const isValidPublicKey = (key: string) =>
+  Boolean(key) && key !== 'pub_test_SIMULATION' && (key.startsWith('pub_test_') || key.startsWith('pub_prod_'));
+
+const money = (cents: number) =>
+  new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0 }).format(cents / 100);
 
 export const WompiCheckout = ({
   publicKey,
   amountInCents,
-  reference,
-  currency = 'COP',
-  integrityKey,
-  redirectUrl,
   customerEmail,
   customerFullName,
   customerPhone,
-  onPaymentSuccess,
+  prepare,
+  onPaymentResult,
   onPaymentError,
   onClose,
-  isTestMode = true,
 }: WompiCheckoutProps) => {
-  const [isLoading, setIsLoading] = useState(true);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [signature, setSignature] = useState<string | null>(null);
-  const scriptLoaded = useRef(false);
-  const widgetRef = useRef<WompiWidgetInstance | null>(null);
+  const available = isValidPublicKey(publicKey);
+  const [scriptReady, setScriptReady] = useState(() => Boolean(window.WidgetCheckout));
+  const [processing, setProcessing] = useState(false);
+  // El callback de error va por ref: si cambia en cada render del checkout, no debe
+  // reiniciar la carga del script.
+  const onErrorRef = useRef(onPaymentError);
+  onErrorRef.current = onPaymentError;
 
-  // Verificar credenciales
-  const credentialsValid = hasValidCredentials(publicKey);
-
-  // Validar credenciales
+  // Carga el script del widget (una sola etiqueta <script> para toda la app). El efecto
+  // puede correr dos veces (StrictMode): cada corrida instala y quita su propio listener.
   useEffect(() => {
-    if (!credentialsValid) {
-      setIsLoading(false);
-      return;
-    }
+    if (!available) return;
+    if (window.WidgetCheckout) { setScriptReady(true); return; }
 
-    const validation = validateWompiCredentials({
-      publicKey,
-      isTestMode,
-    });
-
-    if (!validation.isValid) {
-      setIsLoading(false);
-      return;
-    }
-
-    setIsLoading(false);
-  }, [publicKey, isTestMode, credentialsValid]);
-
-  // Generar firma de integridad si está disponible la clave
-  useEffect(() => {
-    if (!credentialsValid) return;
-
-    const generateSignatureAsync = async () => {
-      if (integrityKey) {
-        try {
-          const sig = await generateIntegritySignature({
-            reference,
-            amountInCents,
-            currency,
-            integrityKey,
-          });
-          setSignature(sig);
-        } catch (error) {
-          console.error('Error generating signature:', error);
-        }
-      }
-    };
-
-    generateSignatureAsync();
-  }, [reference, amountInCents, currency, integrityKey, credentialsValid]);
-
-  // Cargar script de Wompi solo si hay credenciales válidas
-  useEffect(() => {
-    if (!credentialsValid) {
-      setIsLoading(false);
-      return;
-    }
-
-    const loadScript = () => {
-      const existingScript = document.querySelector(`script[src="${WOMPI_WIDGET_URL}"]`);
-
-      if (existingScript) {
-        if (window.WidgetCheckout) {
-          scriptLoaded.current = true;
-          setIsLoading(false);
-        } else {
-          existingScript.addEventListener('load', () => {
-            scriptLoaded.current = true;
-            setIsLoading(false);
-          });
-        }
-        return;
-      }
-
-      const script = document.createElement('script');
+    let script = document.querySelector<HTMLScriptElement>(`script[src="${WOMPI_WIDGET_URL}"]`);
+    if (!script) {
+      script = document.createElement('script');
       script.src = WOMPI_WIDGET_URL;
       script.async = true;
-
-      script.onload = () => {
-        scriptLoaded.current = true;
-        setIsLoading(false);
-      };
-
-      script.onerror = () => {
-        setIsLoading(false);
-        onPaymentError?.('Error al cargar el widget de Wompi.');
-      };
-
       document.body.appendChild(script);
-    };
+    }
+    const onLoad = () => setScriptReady(true);
+    const onError = () => onErrorRef.current?.('No se pudo cargar la pasarela de Wompi. Recarga la página.');
+    script.addEventListener('load', onLoad);
+    script.addEventListener('error', onError);
+    // Por si terminó de cargar entre la consulta y el listener.
+    if (window.WidgetCheckout) setScriptReady(true);
+    return () => { script!.removeEventListener('load', onLoad); script!.removeEventListener('error', onError); };
+  }, [available]);
 
-    loadScript();
-  }, [credentialsValid, onPaymentError]);
-
-  const handlePayment = () => {
+  const handlePay = async () => {
     if (!window.WidgetCheckout) {
-      onPaymentError?.('Widget de Wompi no disponible. Recarga la página.');
+      onPaymentError?.('Wompi no está disponible. Recarga la página.');
       return;
     }
-
-    setIsProcessing(true);
-
-    const config: WompiWidgetConfig = {
-      currency,
-      amountInCents,
-      reference,
-      publicKey,
-      redirectUrl,
-      customerData: {
-        email: customerEmail,
-        fullName: customerFullName,
-        phoneNumber: customerPhone,
-        phoneNumberPrefix: '+57',
-      },
-    };
-
-    if (signature) {
-      config.signature = { integrity: signature };
+    setProcessing(true);
+    let data: WompiCheckoutData;
+    try {
+      data = await prepare();
+    } catch (e) {
+      setProcessing(false);
+      onPaymentError?.(e instanceof Error ? e.message : 'No se pudo preparar el pago.');
+      return;
     }
 
     try {
-      const checkout = new window.WidgetCheckout(config);
-      widgetRef.current = checkout;
-
-      checkout.open((result: WompiResult) => {
-        setIsProcessing(false);
-
-        if (result.transaction) {
-          const { status, id } = result.transaction;
-
-          switch (status) {
-            case 'APPROVED':
-              onPaymentSuccess?.(id);
-              break;
-            case 'PENDING':
-              onPaymentSuccess?.(id);
-              break;
-            case 'DECLINED':
-              onPaymentError?.('El pago fue rechazado. Por favor intenta con otro método de pago.');
-              break;
-            case 'ERROR':
-              onPaymentError?.('Ocurrió un error al procesar el pago. Por favor intenta de nuevo.');
-              break;
-            case 'VOIDED':
-              onClose?.();
-              break;
-            default:
-              onClose?.();
-          }
-        } else {
-          onClose?.();
-        }
+      const widget = new window.WidgetCheckout({
+        currency: data.currency,
+        amountInCents: data.amountInCents,
+        reference: data.reference,
+        publicKey: data.publicKey,
+        ...(data.signature ? { signature: { integrity: data.signature } } : {}),
+        customerData: { email: customerEmail, fullName: customerFullName, phoneNumber: customerPhone, phoneNumberPrefix: '+57' },
       });
-    } catch (error) {
-      setIsProcessing(false);
-      console.error('Error opening Wompi widget:', error);
-      onPaymentError?.('Error al abrir el widget de pago.');
+      widget.open((result) => {
+        setProcessing(false);
+        const tx = result.transaction;
+        if (!tx) { onClose?.(); return; }
+        if (tx.status === 'APPROVED' || tx.status === 'PENDING') onPaymentResult(tx.id, tx.reference);
+        else if (tx.status === 'DECLINED') onPaymentError?.('El pago fue rechazado. Intenta con otro medio de pago.');
+        else if (tx.status === 'ERROR') onPaymentError?.('Ocurrió un error al procesar el pago. Intenta de nuevo.');
+        else onClose?.();
+      });
+    } catch {
+      setProcessing(false);
+      onPaymentError?.('No se pudo abrir la pasarela de pago.');
     }
   };
 
-  const formatCurrency = (cents: number) => {
-    return new Intl.NumberFormat('es-CO', {
-      style: 'currency',
-      currency: 'COP',
-      minimumFractionDigits: 0,
-    }).format(cents / 100);
-  };
-
-  // Si no hay credenciales válidas, mostrar alerta
-  if (!credentialsValid) {
+  if (!available) {
     return (
-      <div className="bg-orange-50 border border-orange-200 rounded-xl p-6">
-        <div className="flex items-start gap-3">
-          <AlertCircle className="w-6 h-6 text-orange-500 flex-shrink-0 mt-0.5" />
-          <div>
-            <h3 className="text-lg font-semibold text-orange-800">
-              Método de pago no configurado
-            </h3>
-            <p className="text-sm text-orange-700 mt-2">
-              El pago con Wompi no está disponible en este momento. Por favor selecciona otro método de pago o contacta al administrador.
-            </p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (isLoading) {
-    return (
-      <div className="flex flex-col items-center justify-center py-8">
-        <Loader2 className="w-8 h-8 text-purple-600 animate-spin mb-4" />
-        <p className="text-gray-600">Cargando pasarela de pagos...</p>
-      </div>
+      <Alert tone="warning" title="Wompi no está configurado">
+        El pago con Wompi no está disponible en este momento. Elige otro método de pago o contacta a la tienda.
+      </Alert>
     );
   }
 
   return (
-    <div className="space-y-6">
-      {/* Resumen del pago */}
-      <div className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-xl p-6">
-        <div className="flex items-center justify-between mb-4">
-          <span className="text-gray-600">Total a pagar:</span>
-          <span className="text-2xl font-bold text-purple-600">
-            {formatCurrency(amountInCents)}
-          </span>
-        </div>
-        <div className="text-sm text-gray-500">
-          Referencia: {reference}
-        </div>
+    <div className="space-y-4">
+      <div className="flex items-center justify-between rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+        <span className="text-sm text-gray-600">Total a pagar</span>
+        <span className="text-xl font-semibold text-gray-900 tabular-nums">{money(amountInCents)}</span>
       </div>
 
-      {/* Métodos de pago disponibles */}
-      <div className="bg-white border border-gray-200 rounded-xl p-4">
-        <p className="text-sm text-gray-600 mb-3">Métodos de pago disponibles:</p>
-        <div className="flex flex-wrap gap-2">
-          <span className="px-3 py-1.5 bg-gray-100 rounded-full text-sm text-gray-700 flex items-center gap-1">
-            <CreditCard className="w-4 h-4" />
-            Tarjeta crédito
-          </span>
-          <span className="px-3 py-1.5 bg-gray-100 rounded-full text-sm text-gray-700 flex items-center gap-1">
-            <CreditCard className="w-4 h-4" />
-            Tarjeta débito
-          </span>
-          <span className="px-3 py-1.5 bg-gray-100 rounded-full text-sm text-gray-700">
-            🏦 PSE
-          </span>
-          <span className="px-3 py-1.5 bg-gray-100 rounded-full text-sm text-gray-700">
-            📱 Nequi
-          </span>
-        </div>
+      <div className="flex flex-wrap gap-2 text-xs text-gray-600">
+        {['Tarjeta crédito', 'Tarjeta débito', 'PSE', 'Nequi'].map((m) => (
+          <span key={m} className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2.5 py-1"><CreditCard className="w-3.5 h-3.5" />{m}</span>
+        ))}
       </div>
 
-      {/* Botón de pago */}
-      <button
-        onClick={handlePayment}
-        disabled={isProcessing}
-        className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white font-semibold py-4 px-6 rounded-xl hover:from-purple-700 hover:to-pink-700 transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-      >
-        {isProcessing ? (
-          <>
-            <Loader2 className="w-5 h-5 animate-spin" />
-            Procesando...
-          </>
-        ) : (
-          <>
-            <CreditCard className="w-5 h-5" />
-            Pagar con Wompi {formatCurrency(amountInCents)}
-          </>
-        )}
-      </button>
+      <Button size="lg" fullWidth onClick={handlePay} isLoading={processing} disabled={!scriptReady}
+        icon={!scriptReady ? <Loader2 className="w-4 h-4 animate-spin" /> : <CreditCard className="w-4 h-4" />}>
+        {!scriptReady ? 'Cargando Wompi…' : processing ? 'Procesando…' : `Pagar con Wompi ${money(amountInCents)}`}
+      </Button>
 
-      {/* Badge de seguridad */}
-      <div className="flex items-center justify-center gap-2 text-sm text-gray-500">
-        <Shield className="w-4 h-4 text-green-500" />
-        <span>Pago seguro procesado por</span>
-        <span className="font-semibold text-purple-600">Wompi</span>
-      </div>
-
-      {/* Nota de modo prueba */}
-      {isTestMode && (
-        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-          <div className="flex items-start gap-2">
-            <AlertCircle className="w-4 h-4 text-yellow-600 mt-0.5 flex-shrink-0" />
-            <div>
-              <p className="text-sm font-medium text-yellow-800">Modo de Prueba</p>
-              <p className="text-xs text-yellow-700 mt-1">
-                Tarjetas de prueba:
-              </p>
-              <div className="mt-2 space-y-1 text-xs">
-                <div className="flex items-center gap-2">
-                  <CheckCircle className="w-3 h-3 text-green-500" />
-                  <code className="bg-yellow-100 px-1.5 py-0.5 rounded">4242 4242 4242 4242</code>
-                  <span className="text-yellow-600">= Aprobado</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <XCircle className="w-3 h-3 text-red-500" />
-                  <code className="bg-yellow-100 px-1.5 py-0.5 rounded">4111 1111 1111 1111</code>
-                  <span className="text-yellow-600">= Rechazado</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <p className="flex items-center justify-center gap-1.5 text-xs text-gray-500">
+        <Shield className="w-4 h-4 text-green-600" /> Pago seguro procesado por Wompi
+      </p>
+      <p className="flex items-start gap-1.5 text-xs text-gray-400">
+        <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 mt-px" /> El pedido se crea como pendiente al pagar y se confirma cuando Wompi aprueba la transacción.
+      </p>
     </div>
   );
 };

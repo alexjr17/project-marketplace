@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Loader2, ChevronLeft, ChevronRight, ArrowRight } from 'lucide-react';
-import { useSettings } from '../../context/SettingsContext';
 import { ProductCard } from './ProductCard';
 import productsService from '../../services/products.service';
 import type { Product } from '../../types/product';
@@ -13,7 +12,6 @@ interface RelatedProductsProps {
 
 export function RelatedProducts({ product, limit = 12 }: RelatedProductsProps) {
   const navigate = useNavigate();
-  const { settings } = useSettings();
   const [relatedProducts, setRelatedProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -22,12 +20,6 @@ export function RelatedProducts({ product, limit = 12 }: RelatedProductsProps) {
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
 
-  // Colores de marca
-  const brandColors = settings.appearance?.brandColors || settings.general.brandColors || {
-    primary: '#7c3aed',
-    secondary: '#ec4899',
-    accent: '#f59e0b',
-  };
 
   const updateScrollButtons = useCallback(() => {
     const container = scrollContainerRef.current;
@@ -107,17 +99,16 @@ export function RelatedProducts({ product, limit = 12 }: RelatedProductsProps) {
     : '/catalog';
 
   return (
-    <div className="bg-white rounded-2xl p-4 md:p-6 shadow-sm mt-4">
+    <section>
       {/* Header */}
       <div className="mb-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-xl md:text-2xl font-bold text-gray-900">
+          <h2 className="text-lg md:text-xl font-bold text-gray-900">
             Productos relacionados
           </h2>
           <button
             onClick={() => navigate(viewAllLink)}
-            className="flex items-center gap-1 text-sm font-semibold transition-colors group"
-            style={{ color: brandColors.primary }}
+            className="flex items-center gap-1 text-sm font-medium text-app-700 hover:text-app-800 group"
           >
             Ver todo
             <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
@@ -136,17 +127,16 @@ export function RelatedProducts({ product, limit = 12 }: RelatedProductsProps) {
           {canScrollLeft && (
             <button
               onClick={() => scroll('left')}
-              className="absolute left-0 top-1/2 -translate-y-1/2 z-10 w-10 h-10 bg-white rounded-full shadow-lg flex items-center justify-center hover:bg-gray-50 transition-all opacity-0 group-hover/carousel:opacity-100 -translate-x-1/2"
-              style={{ color: brandColors.primary }}
+              className="absolute left-0 top-1/2 -translate-y-1/2 z-10 w-9 h-9 bg-white rounded-full border border-gray-200 shadow-sm flex items-center justify-center text-gray-700 hover:text-app-700 transition-colors opacity-0 group-hover/carousel:opacity-100 -translate-x-1/2"
             >
-              <ChevronLeft className="w-6 h-6" />
+              <ChevronLeft className="w-5 h-5" />
             </button>
           )}
 
           {/* Contenedor Scroll */}
           <div
             ref={scrollContainerRef}
-            className="flex gap-3 overflow-x-auto scrollbar-hide scroll-smooth"
+            className="flex gap-3 sm:gap-4 overflow-x-auto scrollbar-hide scroll-smooth pb-1"
           >
             {relatedProducts.map((relatedProduct) => (
               <div key={relatedProduct.id} className="flex-shrink-0 w-[160px] sm:w-[180px] md:w-[200px]">
@@ -159,14 +149,13 @@ export function RelatedProducts({ product, limit = 12 }: RelatedProductsProps) {
           {canScrollRight && (
             <button
               onClick={() => scroll('right')}
-              className="absolute right-0 top-1/2 -translate-y-1/2 z-10 w-10 h-10 bg-white rounded-full shadow-lg flex items-center justify-center hover:bg-gray-50 transition-all opacity-0 group-hover/carousel:opacity-100 translate-x-1/2"
-              style={{ color: brandColors.primary }}
+              className="absolute right-0 top-1/2 -translate-y-1/2 z-10 w-9 h-9 bg-white rounded-full border border-gray-200 shadow-sm flex items-center justify-center text-gray-700 hover:text-app-700 transition-colors opacity-0 group-hover/carousel:opacity-100 translate-x-1/2"
             >
-              <ChevronRight className="w-6 h-6" />
+              <ChevronRight className="w-5 h-5" />
             </button>
           )}
         </div>
       )}
-    </div>
+    </section>
   );
 }

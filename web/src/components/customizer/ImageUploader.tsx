@@ -1,6 +1,7 @@
 import { Upload, Image as ImageIcon } from 'lucide-react';
 import { useRef, type ChangeEvent } from 'react';
 import { useSettings } from '../../context/SettingsContext';
+import toast from '../../lib/toast';
 
 // Datos de imagen con original y comprimida
 export interface ImageUploadData {
@@ -264,14 +265,14 @@ export const ImageUploader = ({ onImageUpload, isUploading = false }: ImageUploa
 
     // Validar tipo de archivo
     if (!file.type.startsWith('image/')) {
-      alert('Por favor selecciona una imagen válida');
+      toast.error('Selecciona una imagen válida');
       return;
     }
 
     // Tope de seguridad para no agotar la memoria del navegador con archivos
     // absurdamente grandes. Lo que esté por debajo se comprime a 10MB o menos.
     if (file.size > 40 * 1024 * 1024) {
-      alert('La imagen es demasiado grande. Máximo 40MB');
+      toast.error('La imagen es demasiado grande. Máximo 40 MB');
       return;
     }
 

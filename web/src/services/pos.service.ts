@@ -1,21 +1,4 @@
-import axios from 'axios';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
-
-// Helper para obtener token desde marketplace_auth
-const getAuthToken = (): string | null => {
-  const authData = localStorage.getItem('marketplace_auth');
-  if (authData) {
-    try {
-      const parsed = JSON.parse(authData);
-      return parsed.token || null;
-    } catch {
-      return null;
-    }
-  }
-  return null;
-};
-
+import { apiUrl, httpKeepUrls as client } from '../lib/http';
 // ==================== TYPES ====================
 
 export interface ScanProductResponse {
@@ -216,32 +199,14 @@ export interface SearchResponse {
  * Scan product by barcode
  */
 export async function scanProduct(barcode: string): Promise<ScanProductResponse> {
-  const response = await axios.post(
-    `${API_URL}/pos/scan`,
-    { barcode },
-    {
-      headers: {
-        Authorization: `Bearer ${getAuthToken()}`,
-      },
-    }
-  );
-  return response.data.data;
+  return client.post<ScanProductResponse>(`/pos/scan`, { barcode });
 }
 
 /**
  * Search products and templates by barcode or name
  */
 export async function searchProductsAndTemplates(query: string): Promise<SearchResponse> {
-  const response = await axios.post(
-    `${API_URL}/pos/search`,
-    { query },
-    {
-      headers: {
-        Authorization: `Bearer ${getAuthToken()}`,
-      },
-    }
-  );
-  return response.data.data;
+  return client.post<SearchResponse>(`/pos/search`, { query });
 }
 
 export interface BrowseProductsResponse {
@@ -262,21 +227,12 @@ export async function browseProducts(
   categoryId: number | null = null,
   type: 'product' | 'template' | null = null
 ): Promise<BrowseProductsResponse> {
-  const response = await axios.get(`${API_URL}/pos/products`, {
-    params: { page, perPage, search: search || undefined, categoryId: categoryId || undefined, type: type || undefined },
-    headers: {
-      Authorization: `Bearer ${getAuthToken()}`,
-    },
-  });
-  return response.data.data;
+  return client.get<BrowseProductsResponse>(`/pos/products`, { page, perPage, search: search || undefined, categoryId: categoryId || undefined, type: type || undefined });
 }
 
 /** Variantes (color/talla) de un producto, para elegir en el POS. */
 export async function getProductVariants(productId: number): Promise<PosVariant[]> {
-  const response = await axios.get(`${API_URL}/pos/product/${productId}/variants`, {
-    headers: { Authorization: `Bearer ${getAuthToken()}` },
-  });
-  return response.data.data || [];
+  return (await client.get<PosVariant[]>(`/pos/product/${productId}/variants`)) || [];
 }
 
 /**
@@ -286,44 +242,21 @@ export async function calculateSale(
   items: SaleItem[],
   discount: number = 0
 ): Promise<CalculateSaleResponse> {
-  const response = await axios.post(
-    `${API_URL}/pos/calculate`,
-    { items, discount },
-    {
-      headers: {
-        Authorization: `Bearer ${getAuthToken()}`,
-      },
-    }
-  );
-  return response.data.data;
+  return client.post<CalculateSaleResponse>(`/pos/calculate`, { items, discount });
 }
 
 /**
  * Create a POS sale
  */
 export async function createSale(data: CreateSaleRequest): Promise<Sale> {
-  const response = await axios.post(`${API_URL}/pos/sale`, data, {
-    headers: {
-      Authorization: `Bearer ${getAuthToken()}`,
-    },
-  });
-  return response.data.data;
+  return client.post<Sale>(`/pos/sale`, data);
 }
 
 /**
  * Cancel a POS sale
  */
 export async function cancelSale(saleId: number, reason: string): Promise<Sale> {
-  const response = await axios.post(
-    `${API_URL}/pos/sale/${saleId}/cancel`,
-    { reason },
-    {
-      headers: {
-        Authorization: `Bearer ${getAuthToken()}`,
-      },
-    }
-  );
-  return response.data.data;
+  return client.post<Sale>(`/pos/sale/${saleId}/cancel`, { reason });
 }
 
 export interface PosStats {
@@ -337,11 +270,7 @@ export interface PosStats {
 
 /** Estadísticas/reportes del POS (today | 7d | 30d). */
 export async function getPosStats(range: 'today' | '7d' | '30d' = 'today'): Promise<PosStats> {
-  const response = await axios.get(`${API_URL}/pos/stats`, {
-    params: { range },
-    headers: { Authorization: `Bearer ${getAuthToken()}` },
-  });
-  return response.data.data;
+  return client.get<PosStats>(`/pos/stats`, { range });
 }
 
 export interface ReturnSalePayload {
@@ -352,12 +281,7 @@ export interface ReturnSalePayload {
 
 /** Devolución parcial de una venta (reintegra stock y reembolsa). */
 export async function returnSale(saleId: number, payload: ReturnSalePayload): Promise<Sale> {
-  const response = await axios.post(
-    `${API_URL}/pos/sale/${saleId}/return`,
-    payload,
-    { headers: { Authorization: `Bearer ${getAuthToken()}` } }
-  );
-  return response.data.data;
+  return client.post<Sale>(`/pos/sale/${saleId}/return`, payload);
 }
 
 /**
@@ -370,24 +294,14 @@ export async function getSalesHistory(filter?: SalesHistoryFilter): Promise<Sale
   if (filter?.dateTo) params.append('dateTo', filter.dateTo);
   if (filter?.status) params.append('status', filter.status);
 
-  const response = await axios.get(`${API_URL}/pos/sales?${params.toString()}`, {
-    headers: {
-      Authorization: `Bearer ${getAuthToken()}`,
-    },
-  });
-  return response.data.data;
+  return client.get<Sale[]>(`/pos/sales?${params.toString()}`);
 }
 
 /**
  * Get sale detail
  */
 export async function getSaleDetail(saleId: number): Promise<Sale> {
-  const response = await axios.get(`${API_URL}/pos/sale/${saleId}`, {
-    headers: {
-      Authorization: `Bearer ${getAuthToken()}`,
-    },
-  });
-  return response.data.data;
+  return client.get<Sale>(`/pos/sale/${saleId}`);
 }
 
 // ==================== CUSTOMER & INVOICE ====================
@@ -406,26 +320,14 @@ export interface CustomerSearchResult {
  * Search customer by cédula
  */
 export async function searchCustomerByCedula(cedula: string): Promise<CustomerSearchResult | null> {
-  const response = await axios.get(`${API_URL}/pos/customer/search`, {
-    params: { cedula },
-    headers: {
-      Authorization: `Bearer ${getAuthToken()}`,
-    },
-  });
-  return response.data.data;
+  return client.get<CustomerSearchResult | null>(`/pos/customer/search`, { cedula });
 }
 
 /**
  * Search customers by name / cédula / phone (autocomplete). Returns a list.
  */
 export async function searchCustomers(q: string): Promise<CustomerSearchResult[]> {
-  const response = await axios.get(`${API_URL}/pos/customer/search`, {
-    params: { q },
-    headers: {
-      Authorization: `Bearer ${getAuthToken()}`,
-    },
-  });
-  return response.data.data ?? [];
+  return (await client.get<CustomerSearchResult[]>(`/pos/customer/search`, { q })) ?? [];
 }
 
 export interface PendingDebt {
@@ -469,19 +371,12 @@ export interface POSCustomerDetail extends POSCustomerListItem {
 
 /** Lista de clientes POS (con deuda). */
 export async function listCustomers(q?: string): Promise<POSCustomerListItem[]> {
-  const response = await axios.get(`${API_URL}/pos/customers`, {
-    params: q ? { q } : {},
-    headers: { Authorization: `Bearer ${getAuthToken()}` },
-  });
-  return response.data.data ?? [];
+  return (await client.get<POSCustomerListItem[]>(`/pos/customers`, q ? { q } : {})) ?? [];
 }
 
 /** Detalle de un cliente POS con su historial de compras. */
 export async function getCustomerDetail(id: number): Promise<POSCustomerDetail> {
-  const response = await axios.get(`${API_URL}/pos/customers/${id}`, {
-    headers: { Authorization: `Bearer ${getAuthToken()}` },
-  });
-  return response.data.data;
+  return client.get<POSCustomerDetail>(`/pos/customers/${id}`);
 }
 
 export interface UpdateSalePayload {
@@ -504,22 +399,14 @@ export interface UpdateSalePayload {
 
 /** Edita una venta POS (ítems, cliente, método de pago, notas). */
 export async function updateSale(saleId: number, data: UpdateSalePayload): Promise<Sale> {
-  const response = await axios.put(`${API_URL}/pos/sale/${saleId}`, data, {
-    headers: { Authorization: `Bearer ${getAuthToken()}` },
-  });
-  return response.data.data;
+  return client.put<Sale>(`/pos/sale/${saleId}`, data);
 }
 
 /**
  * List pending POS debts (fiados).
  */
 export async function getDebts(): Promise<PendingDebt[]> {
-  const response = await axios.get(`${API_URL}/pos/debts`, {
-    headers: {
-      Authorization: `Bearer ${getAuthToken()}`,
-    },
-  });
-  return response.data.data ?? [];
+  return (await client.get<PendingDebt[]>(`/pos/debts`)) ?? [];
 }
 
 /**
@@ -530,56 +417,30 @@ export async function collectDebt(
   paymentMethod: 'cash' | 'card' | 'transfer',
   amount?: number
 ): Promise<Sale> {
-  const response = await axios.post(
-    `${API_URL}/pos/sale/${saleId}/collect`,
-    { paymentMethod, amount },
-    {
-      headers: {
-        Authorization: `Bearer ${getAuthToken()}`,
-      },
-    }
-  );
-  return response.data.data;
+  return client.post<Sale>(`/pos/sale/${saleId}/collect`, { paymentMethod, amount });
 }
 
 /**
  * Send invoice by email
  */
 export async function sendInvoiceEmail(saleId: number, email: string): Promise<{ message: string }> {
-  const response = await axios.post(
-    `${API_URL}/pos/sale/${saleId}/send-invoice`,
-    { email },
-    {
-      headers: {
-        Authorization: `Bearer ${getAuthToken()}`,
-      },
-    }
-  );
-  return { message: response.data.message };
+  const response = await client.envelope('POST', `/pos/sale/${saleId}/send-invoice`, { body: { email } });
+  return { message: response.message ?? '' };
 }
 
 /**
  * Get invoice PDF URL for printing
  */
 export function getInvoicePDFUrl(saleId: number): string {
-  return `${API_URL}/pos/sale/${saleId}/invoice-pdf`;
+  return apiUrl(`/pos/sale/${saleId}/invoice-pdf`);
 }
 
 /**
  * Get invoice PDF as Blob (for preview modal)
  */
 export async function getInvoicePDFBlob(saleId: number): Promise<Blob> {
-  const token = getAuthToken();
-  const url = `${API_URL}/pos/sale/${saleId}/invoice-pdf`;
-
-  const response = await axios.get(url, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-    responseType: 'blob',
-  });
-
-  return new Blob([response.data], { type: 'application/pdf' });
+  const blob = await client.blob(`/pos/sale/${saleId}/invoice-pdf`);
+  return new Blob([blob], { type: 'application/pdf' });
 }
 
 /**
@@ -633,26 +494,13 @@ export async function printInvoicePDF(saleId: number): Promise<void> {
  * Upload payment evidence for a transfer sale
  */
 export async function uploadPaymentEvidence(saleId: number, evidence: string): Promise<Sale> {
-  const response = await axios.post(
-    `${API_URL}/pos/sale/${saleId}/payment-evidence`,
-    { evidence },
-    {
-      headers: {
-        Authorization: `Bearer ${getAuthToken()}`,
-      },
-    }
-  );
-  return response.data.data;
+  return client.post<Sale>(`/pos/sale/${saleId}/payment-evidence`, { evidence });
 }
 
 /**
  * Get payment evidence for a sale
  */
 export async function getPaymentEvidence(saleId: number): Promise<string | null> {
-  const response = await axios.get(`${API_URL}/pos/sale/${saleId}/payment-evidence`, {
-    headers: {
-      Authorization: `Bearer ${getAuthToken()}`,
-    },
-  });
-  return response.data.data?.evidence || null;
+  const data = await client.get<{ evidence?: string | null } | null>(`/pos/sale/${saleId}/payment-evidence`);
+  return data?.evidence || null;
 }

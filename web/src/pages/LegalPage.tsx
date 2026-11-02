@@ -1,7 +1,11 @@
-import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, FileText, Shield, RefreshCw, Calendar } from 'lucide-react';
+import { useParams, Link, useNavigate } from 'react-router-dom';
+import { sanitizeHtml } from '../lib/sanitize';
+import { FileText, Shield, RefreshCw, Calendar } from 'lucide-react';
 import { useSettings } from '../context/SettingsContext';
 import type { LegalSettings } from '../types/settings';
+import { PageHeader } from '../components/shared/PageHeader';
+import { Seo } from '../components/seo/Seo';
+import { Button, Card, EmptyState } from '../components/ui';
 
 // Mapeo de slugs a keys del objeto legal
 const slugToKey: Record<string, keyof LegalSettings> = {
@@ -17,9 +21,25 @@ const pageIcons: Record<keyof LegalSettings, typeof FileText> = {
   returnsPolicy: RefreshCw,
 };
 
+const LEGAL_LINKS: { slug: string; label: string }[] = [
+  { slug: 'terms', label: 'Términos y condiciones' },
+  { slug: 'privacy', label: 'Política de privacidad' },
+  { slug: 'returns', label: 'Política de devoluciones' },
+];
+
+// Estilos del contenido HTML (no hay plugin de tipografía en Tailwind).
+const RICH_TEXT =
+  'text-sm md:text-base text-gray-700 leading-relaxed ' +
+  '[&_h1]:text-xl [&_h1]:font-bold [&_h1]:text-gray-900 [&_h1]:mt-8 [&_h1]:mb-3 ' +
+  '[&_h2]:text-lg [&_h2]:font-semibold [&_h2]:text-gray-900 [&_h2]:mt-8 [&_h2]:mb-3 ' +
+  '[&_h3]:text-base [&_h3]:font-semibold [&_h3]:text-gray-900 [&_h3]:mt-6 [&_h3]:mb-2 ' +
+  '[&_p]:mb-4 [&_ul]:list-disc [&_ul]:pl-5 [&_ul]:mb-4 [&_ol]:list-decimal [&_ol]:pl-5 [&_ol]:mb-4 [&_li]:my-1 ' +
+  '[&_strong]:text-gray-900 [&_a]:text-app-700 [&_a]:underline [&>*:first-child]:mt-0';
+
 export const LegalPage = () => {
   const { slug } = useParams<{ slug: string }>();
   const { settings } = useSettings();
+  const navigate = useNavigate();
 
   // Obtener la página legal correspondiente
   const pageKey = slug ? slugToKey[slug] : undefined;
@@ -27,20 +47,17 @@ export const LegalPage = () => {
 
   if (!legalPage || !legalPage.isActive) {
     return (
-      <div className="min-h-screen bg-gray-50 py-12">
-        <div className="max-w-3xl mx-auto px-4">
-          <div className="bg-white rounded-xl shadow-sm p-8 text-center">
-            <FileText className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-            <h1 className="text-2xl font-bold text-gray-900 mb-2">Página no encontrada</h1>
-            <p className="text-gray-600 mb-6">La página legal que buscas no existe o no está disponible.</p>
-            <Link
-              to="/"
-              className="inline-flex items-center gap-2 text-orange-600 hover:text-orange-700 font-medium"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              Volver al inicio
-            </Link>
-          </div>
+      <div className="min-h-screen bg-gray-50">
+        <PageHeader title="Información legal" backLabel="Inicio" backTo="/" />
+        <div className="max-w-3xl mx-auto px-4 py-8">
+          <Card padded={false}>
+            <EmptyState
+              icon={FileText}
+              title="Página no encontrada"
+              description="La página legal que buscas no existe o no está disponible."
+              action={<Button variant="secondary" onClick={() => navigate('/')}>Volver al inicio</Button>}
+            />
+          </Card>
         </div>
       </div>
     );
@@ -54,75 +71,44 @@ export const LegalPage = () => {
   });
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8 md:py-12">
-      <div className="max-w-3xl mx-auto px-4">
-        {/* Navegación */}
-        <div className="mb-6">
-          <Link
-            to="/"
-            className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Volver al inicio
-          </Link>
-        </div>
+    <div className="min-h-screen bg-gray-50">
+      <Seo title={legalPage.title} />
+      <PageHeader title={legalPage.title} subtitle={`Última actualización: ${formattedDate}`} backLabel="Inicio" backTo="/" />
 
-        {/* Contenido */}
-        <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-          {/* Header */}
-          <div className="bg-gradient-to-r from-orange-500 to-red-500 px-6 py-8 text-white">
-            <div className="flex items-center gap-4">
-              <div className="w-14 h-14 bg-white/20 rounded-xl flex items-center justify-center">
-                <Icon className="w-7 h-7" />
-              </div>
-              <div>
-                <h1 className="text-2xl md:text-3xl font-bold">{legalPage.title}</h1>
-                <div className="flex items-center gap-2 mt-2 text-orange-100 text-sm">
-                  <Calendar className="w-4 h-4" />
-                  <span>Última actualización: {formattedDate}</span>
-                </div>
-              </div>
+      <div className="max-w-5xl mx-auto px-4 py-6 lg:py-8 grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">
+        {/* Otras páginas legales */}
+        <nav className="lg:col-span-1 bg-white rounded-xl border border-gray-200 p-2 lg:sticky lg:top-24" aria-label="Páginas legales">
+          {LEGAL_LINKS.filter((l) => settings.legal[slugToKey[l.slug]]?.isActive).map((l) => {
+            const active = l.slug === slug;
+            const LinkIcon = pageIcons[slugToKey[l.slug]];
+            return (
+              <Link
+                key={l.slug}
+                to={`/legal/${l.slug}`}
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${active ? 'bg-app-50 text-app-700 font-medium' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
+              >
+                <LinkIcon className="w-4 h-4" />
+                {l.label}
+              </Link>
+            );
+          })}
+        </nav>
+
+        <article className="lg:col-span-3 bg-white rounded-xl border border-gray-200">
+          <header className="flex items-center gap-3 px-5 md:px-8 py-5 border-b border-gray-100">
+            <div className="w-10 h-10 rounded-lg bg-app-100 text-app-600 flex items-center justify-center flex-shrink-0">
+              <Icon className="w-5 h-5" />
             </div>
-          </div>
-
-          {/* Contenido de la página */}
-          <div className="p-6 md:p-8">
-            <div
-              className="prose prose-gray max-w-none
-                prose-headings:text-gray-900 prose-headings:font-bold
-                prose-h2:text-xl prose-h2:mt-8 prose-h2:mb-4
-                prose-p:text-gray-600 prose-p:leading-relaxed
-                prose-ul:text-gray-600 prose-ol:text-gray-600
-                prose-li:my-1
-                prose-strong:text-gray-900"
-              dangerouslySetInnerHTML={{ __html: legalPage.content }}
-            />
-          </div>
-
-          {/* Footer de la página */}
-          <div className="border-t border-gray-100 px-6 py-4 bg-gray-50">
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-gray-500">
-              <p>{settings.general.siteName} - Todos los derechos reservados</p>
-              <div className="flex items-center gap-4">
-                {slug !== 'terms' && (
-                  <Link to="/legal/terms" className="hover:text-orange-600 transition-colors">
-                    Términos
-                  </Link>
-                )}
-                {slug !== 'privacy' && (
-                  <Link to="/legal/privacy" className="hover:text-orange-600 transition-colors">
-                    Privacidad
-                  </Link>
-                )}
-                {slug !== 'returns' && (
-                  <Link to="/legal/returns" className="hover:text-orange-600 transition-colors">
-                    Devoluciones
-                  </Link>
-                )}
-              </div>
+            <div className="min-w-0">
+              <h2 className="text-lg font-semibold text-gray-900">{legalPage.title}</h2>
+              <p className="text-xs text-gray-500 flex items-center gap-1"><Calendar className="w-3 h-3" />Última actualización: {formattedDate}</p>
             </div>
-          </div>
-        </div>
+          </header>
+          <div className={`px-5 md:px-8 py-6 ${RICH_TEXT}`} dangerouslySetInnerHTML={{ __html: sanitizeHtml(legalPage.content) }} />
+          <footer className="border-t border-gray-100 px-5 md:px-8 py-4 text-xs text-gray-500">
+            {settings.general.siteName} · Todos los derechos reservados
+          </footer>
+        </article>
       </div>
     </div>
   );

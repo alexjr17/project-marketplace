@@ -1,3 +1,4 @@
+import type { AppColors } from '../theme/appTheme';
 // Colores de marca para gradientes
 export interface BrandColors {
   primary: string;   // Color principal (ej: #7c3aed - violet-600)
@@ -78,6 +79,8 @@ export interface AppearanceSettings {
   heroBgColor?: string;
   // Usar gradiente en hero
   useGradientHero: boolean;
+  // Color de acento de cada app del panel (ver theme/appTheme.ts). La Tienda usa brandColors.primary.
+  appColors?: Partial<AppColors>;
 }
 
 // Presets de temas completos
@@ -481,7 +484,53 @@ export interface HeroCard {
   background: HeroCardBackground;
   // Estado
   isActive: boolean;
+  // Diapositivas del slider (solo carta principal). Opcional: si NO existe el campo (ajustes
+  // viejos), el contenido de la carta (título, fondo, botones) es la primera diapositiva.
+  slides?: HeroSlide[];
+  // Imagen de la tarjeta lateral (a la derecha del texto). Vacía = foto de un producto.
+  imageUrl?: string;
 }
+
+/**
+ * Tipo de fondo de una diapositiva del hero: claro (app-50 → blanco), gradiente suave de marca,
+ * gradiente con colores propios, imagen, video o carrusel de imágenes.
+ */
+export type HeroSlideBackground = 'light' | 'brand' | 'gradient' | 'image' | 'video' | 'carousel';
+
+/** Fondo de una diapositiva: los mismos campos que el fondo de una carta, con más tipos. */
+export type HeroSlideBackgroundConfig = Omit<HeroCardBackground, 'type'> & { type: HeroSlideBackground };
+
+/** Visual de la derecha de una diapositiva (arriba en celular). */
+export type HeroSlideMediaType = 'none' | 'image' | 'video' | 'carousel';
+export type HeroSlideMedia = { type: HeroSlideMediaType } & Pick<
+  HeroCardBackground,
+  'videoUrl' | 'videoPoster' | 'videoMuted' | 'videoLoop' | 'carouselImages' | 'carouselInterval' | 'carouselTransition'
+>;
+
+/** Diapositiva de la carta principal del hero ("vitrina"). */
+export interface HeroSlide {
+  id: string;
+  badge?: string;
+  title: string;
+  titleLine2?: string;
+  subtitle?: string;
+  /** Imagen de la derecha (producto, colección…), cuando el visual es "imagen". */
+  imageUrl?: string;
+  /** Visual de la derecha. Sin el campo (diapositivas viejas): imagen si hay `imageUrl`. */
+  media?: HeroSlideMedia;
+  /** Fondo. Sin el campo (diapositivas viejas) se lee `backgroundStyle` / `backgroundImageUrl`. */
+  background?: HeroSlideBackgroundConfig;
+  /** @deprecated usar `background`; se lee solo por compatibilidad. */
+  backgroundStyle?: 'light' | 'brand' | 'image';
+  /** @deprecated usar `background.imageUrl`. */
+  backgroundImageUrl?: string;
+  /** Máximo 2 botones. */
+  buttons: HeroCardButton[];
+  isActive: boolean;
+}
+
+/** Intervalo de autoavance del slider del hero por defecto (ms). */
+export const HERO_SLIDE_INTERVAL_MS = 6000;
 
 // Hero Section - Estructura con cartas configurables
 export interface HeroSettings {
@@ -490,12 +539,16 @@ export interface HeroSettings {
   // Configuración general del hero
   showSideCards: boolean; // Mostrar cartas laterales en desktop
   sideCardsVisibleOnMobile: boolean; // Mostrar laterales en mobile (como stack)
+  // Si la principal no tiene diapositivas, se arman con los productos destacados (por defecto sí).
+  autoSlidesFromFeatured?: boolean;
+  // Autoavance del slider en ms (por defecto HERO_SLIDE_INTERVAL_MS).
+  slideIntervalMs?: number;
 }
 
 // Característica/Feature Card
 export interface FeatureCard {
   id: string;
-  icon: 'palette' | 'sparkles' | 'package' | 'truck' | 'shield' | 'heart' | 'star' | 'zap' | 'gift' | 'percent';
+  icon: 'palette' | 'sparkles' | 'package' | 'truck' | 'shield' | 'heart' | 'star' | 'zap' | 'gift' | 'percent' | 'refresh' | 'card';
   title: string;
   description: string;
   isActive: boolean;
@@ -628,6 +681,36 @@ export interface HomeSettings {
   cta: CTASettings;
   // Botón flotante de WhatsApp
   whatsappButton: WhatsAppButtonSettings;
+  // Bloques fijos de la portada (categorías, vitrina, cómo funciona, reseñas). Opcional:
+  // lo que no esté guardado usa DEFAULT_HOME_BLOCKS, así no hay que migrar datos.
+  blocks?: Partial<Record<HomeBlockKey, Partial<HomeBlockSettings>>>;
+}
+
+/** Bloques fijos de la portada que se pueden mostrar/ocultar y titular desde Ajustes. */
+export type HomeBlockKey = 'categories' | 'showcase' | 'howItWorks' | 'reviews';
+
+export interface HomeBlockSettings {
+  isActive: boolean;
+  title: string;
+  subtitle: string;
+}
+
+export const DEFAULT_HOME_BLOCKS: Record<HomeBlockKey, HomeBlockSettings> = {
+  categories: { isActive: true, title: 'Compra por categoría', subtitle: 'Encuentra rápido lo que buscas' },
+  showcase: { isActive: true, title: 'Para ti', subtitle: 'Lo nuevo, lo mejor calificado y las ofertas del momento' },
+  howItWorks: { isActive: true, title: 'Personaliza en 3 pasos', subtitle: 'Tu diseño, en tu prenda, en la puerta de tu casa' },
+  reviews: { isActive: true, title: 'Lo que dicen nuestros clientes', subtitle: 'Opiniones reales de compras verificadas' },
+};
+
+/** Configuración efectiva de un bloque: lo guardado encima de los valores por defecto. */
+export function homeBlock(home: Partial<HomeSettings> | undefined, key: HomeBlockKey): HomeBlockSettings {
+  const saved = home?.blocks?.[key] ?? {};
+  const def = DEFAULT_HOME_BLOCKS[key];
+  return {
+    isActive: saved.isActive ?? def.isActive,
+    title: saved.title?.trim() || def.title,
+    subtitle: saved.subtitle ?? def.subtitle,
+  };
 }
 
 // Iconos disponibles para las feature cards
@@ -643,6 +726,8 @@ export const FEATURE_ICONS = [
   { id: 'zap', label: 'Rayo (Rápido)' },
   { id: 'gift', label: 'Regalo (Promoción)' },
   { id: 'percent', label: 'Porcentaje (Descuento)' },
+  { id: 'refresh', label: 'Flechas (Cambios)' },
+  { id: 'card', label: 'Tarjeta (Pago seguro)' },
 ] as const;
 
 // Tipos de secciones de productos

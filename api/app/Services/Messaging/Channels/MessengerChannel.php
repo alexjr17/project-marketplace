@@ -2,6 +2,7 @@
 
 namespace App\Services\Messaging\Channels;
 
+use App\Support\WebhookGuard;
 use App\Models\Channel;
 use App\Models\Contact;
 use App\Models\Conversation;
@@ -70,7 +71,8 @@ class MessengerChannel implements ChannelDriver
     {
         $secret = (string) ($this->config()['appSecret'] ?? '');
         if ($secret === '') {
-            return true; // Modo desarrollo
+            // Sin appSecret se rechaza (antes se aceptaba cualquier mensaje y disparaba la IA).
+            return WebhookGuard::allowUnsigned('messenger');
         }
 
         if (! $signatureHeader || ! str_starts_with($signatureHeader, 'sha256=')) {

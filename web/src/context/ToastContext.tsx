@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
-import { createContext, useContext, useState, useCallback } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import { registerToastHandlers } from '../lib/toast';
 import { ToastContainer, type ToastType } from '../components/shared/Toast';
 
 interface Toast {
@@ -17,6 +18,7 @@ interface ToastContextType {
 }
 
 const ToastContext = createContext<ToastContextType | undefined>(undefined);
+let seq = 0;
 
 export const ToastProvider = ({ children }: { children: ReactNode }) => {
   const [toasts, setToasts] = useState<Toast[]>([]);
@@ -26,7 +28,8 @@ export const ToastProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const showToast = useCallback((message: string, type: ToastType = 'info') => {
-    const id = Date.now().toString();
+    // Contador: dos avisos en el mismo milisegundo tendrían el mismo id.
+    const id = `${Date.now()}-${++seq}`;
     setToasts((prev) => [...prev, { id, message, type }]);
   }, []);
 
@@ -34,6 +37,12 @@ export const ToastProvider = ({ children }: { children: ReactNode }) => {
   const error = useCallback((message: string) => showToast(message, 'error'), [showToast]);
   const info = useCallback((message: string) => showToast(message, 'info'), [showToast]);
   const warning = useCallback((message: string) => showToast(message, 'warning'), [showToast]);
+
+  // Publica los avisos para `lib/toast` (avisos fuera de componentes y en las pantallas que lo importan).
+  useEffect(() => {
+    registerToastHandlers({ success, error, info, warning });
+    return () => registerToastHandlers(null);
+  }, [success, error, info, warning]);
 
   return (
     <ToastContext.Provider value={{ showToast, success, error, info, warning }}>

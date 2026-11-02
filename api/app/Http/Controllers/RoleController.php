@@ -29,12 +29,13 @@ class RoleController extends Controller
         'orders.view', 'reviews.view', 'payments.view',
         'shipping.carriers', 'shipping.zones', 'shipping.connections', 'shipping.config', 'shipping.dispatch',
         'variants.view',
-        'products.view', 'templates.view', 'categories.view', 'product_types.view', 'sizes.view', 'colors.view',
+        'products.view', 'products.manage', 'templates.view', 'categories.view', 'product_types.view', 'sizes.view', 'colors.view',
         'zone_types.view', 'design_images.view',
         'inputs.view', 'input_types.view',
         'suppliers.view', 'purchase_orders.view', 'purchase_returns.view',
         'conversions.view', 'inventory_counts.view', 'inventory_movements.view',
-        'users.view', 'admins.view', 'roles.view',
+        'users.view',
+        'discounts.view', 'announcements.view',
         'settings.general', 'settings.appearance', 'settings.home', 'settings.catalog',
         'settings.payment', 'settings.legal', 'settings.printing', 'settings.label_templates',
     ];
@@ -47,11 +48,13 @@ class RoleController extends Controller
         'dashboard' => ['dashboard.view'],
         'sales' => ['orders.view', 'reviews.view', 'payments.view'],
         'shipping' => ['shipping.carriers', 'shipping.zones', 'shipping.connections', 'shipping.config', 'shipping.dispatch'],
-        'catalog' => ['products.view', 'variants.view', 'templates.view', 'categories.view', 'product_types.view', 'sizes.view', 'colors.view'],
+        'catalog' => ['products.view', 'products.manage', 'variants.view', 'templates.view', 'categories.view', 'product_types.view', 'sizes.view', 'colors.view'],
         'production' => ['zone_types.view', 'design_images.view'],
         'supplies' => ['inputs.view', 'input_types.view'],
         'purchases' => ['suppliers.view', 'purchase_orders.view', 'purchase_returns.view', 'conversions.view', 'inventory_counts.view', 'inventory_movements.view'],
-        'users' => ['users.view', 'admins.view', 'roles.view'],
+        // Administradores y Roles: solo SuperAdmin (no se asignan a otros roles).
+        'users' => ['users.view'],
+        'marketing' => ['discounts.view', 'announcements.view'],
         'settings' => ['settings.general', 'settings.appearance', 'settings.home', 'settings.catalog', 'settings.payment', 'settings.legal', 'settings.printing', 'settings.label_templates'],
     ];
 

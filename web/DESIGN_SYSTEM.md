@@ -1,467 +1,246 @@
-# 🎨 Sistema de Diseño - Tienda Personalizada
+# Estándar de diseño: Vexa Marketplace
 
-## Concepto y Personalidad
+Rige **todas** las vistas de las 5 apps: la Tienda pública y el panel (Administración, Punto de Venta, Social Media y Fábrica). Toda vista nueva o modificada lo cumple. Si tocas una vista vieja que no lo cumple, lo que agregues o cambies se hace con el estándar.
 
-**Identidad:** Creativo, Juvenil, Moderno, Divertido, Accesible
-**Valores:** Expresión Personal, Creatividad, Calidad, Innovación
-**Tono:** Cercano, Inspirador, Energético
+Stack: React 19 + TypeScript + Tailwind 3 + lucide-react. Las piezas están en `src/components/ui/` y se importan desde `components/ui`.
 
 ---
 
-## 🌈 Paleta de Colores
+## 1. Color por aplicación
 
-### Colores Principales
+Cada app tiene **un** color de acento. Se configura en **Ajustes → Apariencia → Colores por aplicación** y se guarda en `appearance.appColors`.
 
-```css
-/* Violeta Creativo - Color Principal */
---primary: #8B5CF6       /* violet-500 */
---primary-dark: #7C3AED  /* violet-600 */
---primary-light: #A78BFA /* violet-400 */
+| App | Ruta | Layout | Color por defecto |
+|---|---|---|---|
+| Tienda | `/` | `Layout` | color de marca primario (`appearance.brandColors.primary`, `#7c3aed` violeta) |
+| Administración | `/admin-panel` | `AdminLayout` | `#4f46e5` índigo |
+| Punto de Venta | `/pos` | `POSLayout` | `#059669` esmeralda |
+| Social Media | `/messaging` | `MessagingLayout` | `#db2777` rosa |
+| Fábrica | `/manufacturing` | `ManufacturingLayout` | `#ea580c` naranja |
 
-/* Rosa Vibrante - Color Secundario */
---secondary: #EC4899     /* pink-500 */
---secondary-dark: #DB2777 /* pink-600 */
---secondary-light: #F472B6 /* pink-400 */
+Cómo funciona:
+- Cada layout se envuelve en `<AppTheme app="…">`, que publica la paleta como variables CSS `--app-50 … --app-900`. El color configurado es el tono **600**; los demás se calculan (`src/theme/appTheme.ts`).
+- En las vistas el acento se escribe **siempre** con las clases `app-*`: `bg-app-600`, `hover:bg-app-700`, `text-app-700`, `bg-app-50`, `border-app-300`, `ring-app-200`…
+- **Prohibido** escribir el acento con un color fijo (`bg-orange-600`, `text-blue-600`, `focus:ring-orange-500`…). Si la app cambia de color, la vista tiene que cambiar sola.
 
-/* Naranja Energético - Acento */
---accent: #F59E0B        /* amber-500 */
---accent-dark: #D97706   /* amber-600 */
---accent-light: #FBBF24  /* amber-400 */
-```
+Los colores fijos solo se usan con **significado**, igual en todas las apps:
 
-### Colores de Estado
+| Significado | Color | Ejemplos |
+|---|---|---|
+| Éxito, activo, pagado | `green` / `emerald` | badge "Activo", botón `success` |
+| Advertencia, pendiente | `amber` | badge "Pendiente", stock bajo |
+| Error, peligro, eliminar | `red` | botón `danger`, mensaje de error |
+| Información neutra | `blue` | badge informativo |
+| Inactivo, borrador, histórico | `gray` | badge "Inactivo" |
 
-```css
-/* Éxito */
---success: #10B981       /* emerald-500 */
-
-/* Error */
---error: #EF4444         /* red-500 */
-
-/* Advertencia */
---warning: #F59E0B       /* amber-500 */
-
-/* Info */
---info: #3B82F6          /* blue-500 */
-```
-
-### Colores Neutrales
-
-```css
-/* Grises */
---gray-50: #F9FAFB
---gray-100: #F3F4F6
---gray-200: #E5E7EB
---gray-300: #D1D5DB
---gray-400: #9CA3AF
---gray-500: #6B7280
---gray-600: #4B5563
---gray-700: #374151
---gray-800: #1F2937
---gray-900: #111827
-
-/* Blanco y Negro */
---white: #FFFFFF
---black: #000000
-```
-
-### Fondos
-
-```css
---bg-primary: #FFFFFF
---bg-secondary: #F9FAFB    /* gray-50 */
---bg-tertiary: #F3F4F6     /* gray-100 */
---bg-dark: #1F2937         /* gray-800 */
-```
+Texto y superficies: fondo de página `gray-100` (panel) o `gray-50` (tienda), tarjetas `white` con borde `gray-200`, texto `gray-900` (títulos), `gray-700` (cuerpo), `gray-500` (secundario) y `gray-400` (ayuda o vacío).
 
 ---
 
-## 🎭 Gradientes Característicos
+## 2. Armazón del panel de Administración
 
-### Gradiente Principal (Violeta → Rosa)
-```css
-background: linear-gradient(135deg, #8B5CF6 0%, #EC4899 100%);
-```
-**Uso:** CTAs principales, headers importantes, elementos destacados
+- **La navegación sale de un solo archivo:** `src/components/admin/adminNav.ts`. De ahí salen el menú lateral, las migas, las pestañas de área, el buscador de módulos (Ctrl+K) y el centro de Configuración. Para agregar un módulo se agrega una línea en su sección. No se escriben menús a mano.
+- **Menú por áreas de trabajo**, sin acordeones: Resumen · Ventas · Catálogo · Inventario · Compras · Clientes y marketing, y abajo **Configuración**. Se puede contraer a iconos.
+- **Pestañas de área:** cuando un ítem tiene `tabs` (por ejemplo Atributos = Categorías · Tipos de producto · Tallas · Colores), el layout dibuja las pestañas arriba del contenido. Cada pestaña es su propia ruta y la página **no** dibuja esas pestañas.
+- **Configuración** (`/admin-panel/settings`) es un centro con una tarjeta por grupo: Tienda, Pagos, Envíos, Punto de venta, Equipo y permisos, Componentes. Sus pantallas usan `SettingsSection`.
+- **Las migas** (Sección › Ítem › Pestaña) las pone la barra superior. La página no repite la sección en su título.
+- **El `<main>` no tiene padding:** cada pantalla va dentro de `<Page>`.
+- **Referencia viva:** Configuración → Componentes (`/admin-panel/settings/design-system`) muestra cada componente funcionando.
 
-### Gradiente Energético (Rosa → Naranja)
-```css
-background: linear-gradient(135deg, #EC4899 0%, #F59E0B 100%);
-```
-**Uso:** Promociones, ofertas especiales, elementos de atención
+## 3. Anatomía de una pantalla del panel
 
-### Gradiente Suave (Violeta claro → Rosa claro)
-```css
-background: linear-gradient(135deg, #A78BFA 0%, #F472B6 100%);
-```
-**Uso:** Fondos de secciones, cards destacadas
+```tsx
+import { Page, PageHeader, Button, StatCard, FilterBar, SearchInput, TableCard, Table, THead, TBody, Th, Tr, Td, TableMessage, Badge, IconButton, useConfirm } from '../../components/ui';
+import toast from '../../lib/toast';
 
-### Gradiente Creativo (Multi-color)
-```css
-background: linear-gradient(135deg, #8B5CF6 0%, #EC4899 50%, #F59E0B 100%);
+<Page>
+  <PageHeader
+    icon={Truck}
+    title="Proveedores"
+    subtitle="Gestión de proveedores"
+    actions={<Button icon={<Plus className="w-4 h-4" />} onClick={create}>Nuevo proveedor</Button>}
+  />
+
+  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">        {/* indicadores (opcional) */}
+    <StatCard icon={Building2} label="Total" value={stats.total} />
+    <StatCard icon={CheckCircle} tone="green" label="Activos" value={stats.active} />
+  </div>
+
+  <FilterBar>                                                     {/* filtros (opcional) */}
+    <SearchInput value={q} onChange={setQ} placeholder="Buscar por nombre, NIT…" />
+  </FilterBar>
+
+  <TableCard footer={<Pagination … />}>
+    <Table>
+      <THead><tr><Th>Nombre</Th><Th align="right">Total</Th><Th align="center">Estado</Th><Th align="right">Acciones</Th></tr></THead>
+      <TBody>
+        {loading ? <TableMessage colSpan={4}>Cargando…</TableMessage>
+          : rows.length === 0 ? <TableMessage colSpan={4}>Sin proveedores.</TableMessage>
+          : rows.map((r) => (
+            <Tr key={r.id}>
+              <Td className="font-medium text-gray-900">{r.name}</Td>
+              <Td align="right">{money(r.total)}</Td>
+              <Td align="center"><Badge tone={r.isActive ? 'green' : 'gray'}>{r.isActive ? 'Activo' : 'Inactivo'}</Badge></Td>
+              <Td align="right">
+                <IconButton title="Editar" tone="app" onClick={() => edit(r)}><Pencil className="w-4 h-4" /></IconButton>
+                <IconButton title="Eliminar" tone="danger" onClick={() => remove(r)}><Trash2 className="w-4 h-4" /></IconButton>
+              </Td>
+            </Tr>
+          ))}
+      </TBody>
+    </Table>
+  </TableCard>
+</Page>
 ```
-**Uso:** Elementos premium, banners especiales
+
+Reglas:
+1. **`<Page>`** es el contenedor de toda pantalla del panel: da el padding (`p-4 md:p-6`) y la separación (`space-y-5`). Los layouts no agregan padding propio.
+2. **`<PageHeader>`** siempre: icono de la app, título `h1`, subtítulo corto y acciones a la derecha, con la principal al final. Las pantallas de detalle o formulario llevan `backTo` (flecha Volver). No se escriben `h1` a mano.
+3. **Un solo botón `primary` por zona visible** (el "Nuevo…" del encabezado o el "Guardar" del formulario). Lo demás es `secondary`, `outline` o `ghost`.
+4. Orden de bloques: encabezado → indicadores → filtros → contenido (tabla o tarjetas).
 
 ---
 
-## ✍️ Tipografía
+## 4. Botones (`Button`, `IconButton`)
 
-### Fuentes
+| Variante | Uso |
+|---|---|
+| `primary` | acción principal: Nuevo, Guardar, Confirmar (color de la app) |
+| `secondary` | Cancelar, Volver, acciones secundarias (blanco con borde) |
+| `outline` | acción secundaria destacada (borde del color de la app) |
+| `ghost` | acciones terciarias dentro de tarjetas o barras |
+| `danger` | Eliminar, Anular, acciones irreversibles |
+| `success` | aprobar o cerrar positivo (Aprobar pedido, Cerrar caja) |
 
-```css
-/* Primaria - Sans Serif moderna */
-font-family: 'Inter', system-ui, -apple-system, sans-serif;
-
-/* Secundaria - Para títulos */
-font-family: 'Poppins', 'Inter', sans-serif;
-
-/* Monospace - Para código/precios */
-font-family: 'JetBrains Mono', 'Courier New', monospace;
-```
-
-### Escala Tipográfica
-
-```css
-/* Display (Títulos muy grandes) */
---text-display: 4rem / 64px      /* text-6xl */
---text-display-sm: 3.75rem / 60px /* text-5xl */
-
-/* Títulos */
---text-h1: 3rem / 48px           /* text-5xl */
---text-h2: 2.25rem / 36px        /* text-4xl */
---text-h3: 1.875rem / 30px       /* text-3xl */
---text-h4: 1.5rem / 24px         /* text-2xl */
---text-h5: 1.25rem / 20px        /* text-xl */
-
-/* Cuerpo */
---text-lg: 1.125rem / 18px       /* text-lg */
---text-base: 1rem / 16px         /* text-base */
---text-sm: 0.875rem / 14px       /* text-sm */
---text-xs: 0.75rem / 12px        /* text-xs */
-```
-
-### Pesos
-
-```css
---font-light: 300
---font-normal: 400
---font-medium: 500
---font-semibold: 600
---font-bold: 700
---font-extrabold: 800
-```
+- Tamaños: `sm` (h-8, en tarjetas y barras), `md` (h-10, por defecto) y `lg` (h-12, solo en tienda y POS táctil).
+- Icono con `icon={<Plus className="w-4 h-4" />}`. Mientras guarda: `isLoading`, que deshabilita el botón y muestra el spinner.
+- Acciones de fila de tabla: `IconButton` con `title` (obligatorio) y `tone` (`app` editar o ver, `danger` eliminar).
+- Texto en infinitivo o sustantivo corto, con mayúscula inicial: "Nuevo proveedor", "Guardar", "Eliminar".
+- Pie de formulario: `<FormActions>` con Cancelar (`secondary`) y luego la acción principal, alineados a la derecha. En celular quedan apilados con la acción principal arriba.
 
 ---
 
-## 📏 Espaciado
+## 5. Formularios
 
-### Sistema de Espaciado (basado en 4px)
-
-```css
---space-1: 0.25rem / 4px
---space-2: 0.5rem / 8px
---space-3: 0.75rem / 12px
---space-4: 1rem / 16px
---space-5: 1.25rem / 20px
---space-6: 1.5rem / 24px
---space-8: 2rem / 32px
---space-10: 2.5rem / 40px
---space-12: 3rem / 48px
---space-16: 4rem / 64px
---space-20: 5rem / 80px
---space-24: 6rem / 96px
+```tsx
+<Card>
+  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <Field label="Nombre" required error={errors.name}><TextInput value={name} onChange={…} /></Field>
+    <Field label="Estado"><SelectInput value={status} onChange={…}>…</SelectInput></Field>
+    <Field label="Notas" hint="Visible solo para el equipo." className="md:col-span-2"><TextArea rows={3} … /></Field>
+  </div>
+  <FormActions>
+    <Button variant="secondary" onClick={cancel}>Cancelar</Button>
+    <Button isLoading={saving} onClick={save}>Guardar</Button>
+  </FormActions>
+</Card>
 ```
 
-### Layout
-
-```css
-/* Contenedores */
---container-sm: 640px
---container-md: 768px
---container-lg: 1024px
---container-xl: 1280px
---container-2xl: 1536px
-
-/* Padding de secciones */
---section-padding-sm: 2rem / 32px
---section-padding-md: 4rem / 64px
---section-padding-lg: 6rem / 96px
-```
+- Campos con `Field` + `TextInput`, `SelectInput`, `TextArea` o `Checkbox` (o `fieldClass()` si hace falta un input especial). Así todos comparten borde, radio, tamaño y foco del color de la app.
+- Etiqueta arriba; los obligatorios con `required` (asterisco). La ayuda va con `hint` y el error con `error`, debajo del campo.
+- Rejilla `grid grid-cols-1 md:grid-cols-2 gap-4` (o `md:grid-cols-3`). Los campos largos ocupan la fila (`md:col-span-2`).
+- Formulario corto (≤ 6 campos): en un `Modal`. Formulario largo: pantalla propia con `PageHeader backTo` y una o varias `Card` con `CardTitle` por bloque.
+- Validar antes de enviar y avisar con `toast.error`. El backend vuelve a validar.
 
 ---
 
-## 🎪 Bordes y Sombras
+## 6. Tablas y listados
 
-### Radios de Borde
-
-```css
---radius-sm: 0.375rem / 6px      /* rounded-md */
---radius-md: 0.5rem / 8px        /* rounded-lg */
---radius-lg: 0.75rem / 12px      /* rounded-xl */
---radius-xl: 1rem / 16px         /* rounded-2xl */
---radius-full: 9999px            /* rounded-full */
-```
-
-### Sombras
-
-```css
-/* Sombra Suave */
---shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05)
-
-/* Sombra Normal */
---shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1),
-             0 2px 4px -1px rgba(0, 0, 0, 0.06)
-
-/* Sombra Grande */
---shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1),
-             0 4px 6px -2px rgba(0, 0, 0, 0.05)
-
-/* Sombra Extra Grande */
---shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1),
-             0 10px 10px -5px rgba(0, 0, 0, 0.04)
-
-/* Sombra Colorida (para elementos creativos) */
---shadow-violet: 0 10px 25px -5px rgba(139, 92, 246, 0.3)
---shadow-pink: 0 10px 25px -5px rgba(236, 72, 153, 0.3)
---shadow-gradient: 0 10px 25px -5px rgba(139, 92, 246, 0.2),
-                   0 10px 25px -5px rgba(236, 72, 153, 0.2)
-```
+- Siempre `TableCard` + `Table` / `THead` / `TBody` / `Th` / `Tr` / `Td`. Sirven tal cual con `@tanstack/react-table` (se pintan las celdas con `flexRender` dentro de `Th`/`Td`).
+- Alineación: texto a la izquierda; números y dinero `align="right"`; estados `align="center"`; acciones `align="right"`.
+- Cargando y vacío: `TableMessage`. Una lista vacía en tarjetas usa `EmptyState`.
+- Estados con `Badge` y los tonos de la sección 1. No inventar colores de estado por pantalla.
+- Paginación con `components/common/Pagination` en el `footer` del `TableCard`.
+- En celular la tabla hace scroll horizontal dentro de la tarjeta (`TableCard` ya lo hace). La página nunca hace scroll horizontal.
 
 ---
 
-## 🎨 Componentes Base
+## 7. Modales, confirmaciones y avisos
 
-### Botones
-
-#### Variantes
-
-**Primary (Violeta con gradiente)**
-```css
-bg-gradient-to-r from-violet-500 to-pink-500
-text-white font-semibold
-rounded-lg px-6 py-3
-hover:from-violet-600 hover:to-pink-600
-shadow-lg shadow-violet-500/50
-```
-
-**Secondary (Rosa)**
-```css
-bg-pink-500 text-white font-semibold
-rounded-lg px-6 py-3
-hover:bg-pink-600
-shadow-md
-```
-
-**Outline (Borde violeta)**
-```css
-border-2 border-violet-500 text-violet-700
-bg-white font-semibold
-rounded-lg px-6 py-3
-hover:bg-violet-50
-```
-
-**Ghost (Transparente)**
-```css
-text-violet-700 font-semibold
-rounded-lg px-6 py-3
-hover:bg-violet-50
-```
-
-#### Tamaños
-
-```css
-sm: px-4 py-2 text-sm
-md: px-6 py-3 text-base
-lg: px-8 py-4 text-lg
-xl: px-10 py-5 text-xl
-```
-
-### Cards
-
-**Card Estándar**
-```css
-bg-white rounded-xl shadow-md
-border border-gray-100
-p-6
-hover:shadow-lg transition-shadow
-```
-
-**Card Destacada (con gradiente sutil)**
-```css
-bg-gradient-to-br from-violet-50 to-pink-50
-rounded-xl shadow-md
-border border-violet-100
-p-6
-hover:shadow-xl hover:shadow-violet-500/20
-```
-
-**Card Producto**
-```css
-bg-white rounded-2xl shadow-md
-overflow-hidden
-transition-all duration-300
-hover:shadow-xl hover:scale-105
-```
-
-### Inputs
-
-```css
-border-2 border-gray-300
-rounded-lg px-4 py-2
-focus:border-violet-500 focus:ring-2 focus:ring-violet-200
-transition-all
-```
-
-### Badges
-
-```css
-/* Badge Violeta */
-bg-violet-100 text-violet-700
-px-3 py-1 rounded-full text-sm font-medium
-
-/* Badge Rosa */
-bg-pink-100 text-pink-700
-px-3 py-1 rounded-full text-sm font-medium
-
-/* Badge Gradiente */
-bg-gradient-to-r from-violet-500 to-pink-500
-text-white px-3 py-1 rounded-full text-sm font-semibold
-```
+- **Modal**: `components/shared/Modal` (`Modal` en `components/ui`). Título en `gray-900`; los botones al pie con `FormActions`.
+- **Confirmar**: nunca `window.confirm()`. Se usa
+  ```tsx
+  const confirm = useConfirm();
+  if (!(await confirm({ title: '¿Eliminar el proveedor?', message: 'No se puede deshacer.', tone: 'danger' }))) return;
+  ```
+  Eliminar, anular y todo lo irreversible pide confirmación con `tone: 'danger'`.
+- **Avisos**: un solo sistema, `lib/toast` (`toast.success`, `toast.error`, `toast.info`, `toast.warning`), que pinta `ToastProvider`. También sirve `useToast()` del contexto. **No** usar `react-hot-toast` (no hay `<Toaster/>` montado: sus avisos no se ven).
+- Mensajes cortos y concretos: "Proveedor creado", "No se pudo guardar: el NIT ya existe".
 
 ---
 
-## 🎭 Efectos y Animaciones
+## 8. Cargando y vacíos
 
-### Transiciones
-
-```css
-/* Rápida */
-transition-all duration-150 ease-in-out
-
-/* Normal */
-transition-all duration-300 ease-in-out
-
-/* Lenta */
-transition-all duration-500 ease-in-out
-```
-
-### Hover Effects
-
-```css
-/* Elevación */
-hover:scale-105 transition-transform
-
-/* Brillo */
-hover:brightness-110 transition-all
-
-/* Sombra */
-hover:shadow-xl hover:shadow-violet-500/30
-
-/* Gradiente animado */
-bg-gradient-to-r from-violet-500 to-pink-500
-hover:from-violet-600 hover:to-pink-600
-transition-all duration-300
-```
-
-### Animaciones Personalizadas
-
-```css
-/* Pulse suave */
-@keyframes pulse-soft {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.05); }
-}
-
-/* Slide from right */
-@keyframes slide-in-right {
-  from {
-    transform: translateX(100%);
-    opacity: 0;
-  }
-  to {
-    transform: translateX(0);
-    opacity: 1;
-  }
-}
-
-/* Fade in up */
-@keyframes fade-in-up {
-  from {
-    transform: translateY(20px);
-    opacity: 0;
-  }
-  to {
-    transform: translateY(0);
-    opacity: 1;
-  }
-}
-```
+- Pantalla o bloque cargando: `<Spinner label="Cargando…" />` (color de la app).
+- Sin datos: `EmptyState` con título, descripción y, si aplica, el botón para crear el primero.
 
 ---
 
-## 📐 Iconos
+## 9. Tienda pública
 
-### Estilo
+La tienda usa el mismo kit. Su color de app es el **color de marca primario**, así que los botones `primary` de la tienda salen en el color de la marca.
 
-```css
-/* Tamaños */
-icon-sm: w-4 h-4 (16px)
-icon-md: w-5 h-5 (20px)
-icon-lg: w-6 h-6 (24px)
-icon-xl: w-8 h-8 (32px)
-
-/* Color */
-text-violet-600 (principal)
-text-pink-600 (secundario)
-text-gray-600 (neutro)
-```
+- Identidad de marca: el **gradiente** (`brandColors.primary → secondary → accent`) se reserva para el hero y los CTA grandes de portada. Va con estilo en línea desde `useSettings()`, nunca con `violet` o `pink` fijos.
+- Encabezado de cada página de la tienda: `components/shared/PageHeader` (fondo blanco, línea inferior, migas Inicio › sección anterior › página, título, subtítulo y acciones a la derecha). Mismo ancho y márgenes que el encabezado de la tienda (`max-w-7xl px-3 md:px-6`). Sin gradiente.
+- Fondo `gray-50`; contenido centrado en `max-w-7xl mx-auto px-4`.
+- Tarjeta de producto: `bg-white rounded-xl border border-gray-200 overflow-hidden`, imagen arriba con proporción fija, nombre `font-medium text-gray-900` y precio `font-semibold text-gray-900`. En hover solo sombra (`hover:shadow-md`), sin escalar.
+- Botones de compra: `Button` `primary` `lg` y `fullWidth` en móvil.
 
 ---
 
-## 🎪 Patrones Visuales
+## 10. Tipografía, espacios e iconos
 
-### Fondos Decorativos
-
-**Patrón de Puntos**
-```css
-background-image: radial-gradient(circle, #8B5CF6 1px, transparent 1px);
-background-size: 20px 20px;
-opacity: 0.1;
-```
-
-**Gradiente Mesh (fondo moderno)**
-```css
-background:
-  radial-gradient(at 0% 0%, rgba(139, 92, 246, 0.1) 0, transparent 50%),
-  radial-gradient(at 100% 100%, rgba(236, 72, 153, 0.1) 0, transparent 50%);
-```
+- Fuente `Inter` (`font-sans`). Títulos: `h1` 2xl bold (lo pone `PageHeader`), título de bloque `text-base font-semibold` (`CardTitle`), cuerpo `text-sm`, ayuda `text-xs`.
+- Radios: `rounded-lg` (botones, inputs), `rounded-xl` (tarjetas, tablas, modales), `rounded-full` (badges, avatares).
+- Sombras: las tarjetas del panel **no** llevan sombra (solo borde); los modales y menús flotantes `shadow-xl`.
+- Iconos: solo `lucide-react`. Tamaños `w-4 h-4` (botones, tablas), `w-5 h-5` (tarjetas, menú) y `w-6 h-6` (encabezado de página).
+- Espaciado entre bloques `space-y-5` o `gap-4`; dentro de tarjetas `p-4 md:p-5`.
 
 ---
 
-## 🎨 Uso por Secciones
+## 11. Catálogo de componentes (`components/ui`)
 
-### Header/Navbar
-- Fondo: blanco con sombra suave
-- Bordes: sin borde o borde inferior gris muy claro
-- Texto: gris oscuro
-- Links hover: violeta
+| Componente | Para qué |
+|---|---|
+| `Page`, `PageHeader` | Contenedor y encabezado de toda pantalla del panel (icono, título, subtítulo, `backTo`, `actions`). |
+| `Card`, `CardTitle` | Bloques de contenido. Una tarjeta = un tema. |
+| `StatCard` | Indicadores compactos (máx. 4 por fila, `grid grid-cols-2 lg:grid-cols-4 gap-3`): etiqueta + icono pequeño arriba, valor, nota opcional (`hint`, `hintTone`). El valor llega **formateado**: dinero `$37.667` (es-CO, sin decimales en COP), nunca `$37666.67`. Con `to` la tarjeta lleva al listado. Nunca se arman tarjetas de indicadores a mano. |
+| `Button`, `IconButton`, `ActionMenu` | Acciones. Más de 2 acciones por fila → `ActionMenu` (⋮). |
+| `Field` | Etiqueta + campo + ayuda/error. Envuelve a todos los inputs. |
+| `TextInput`, `TextArea`, `SelectInput` | Texto y listas cortas (≤ 10 opciones). |
+| `NumberInput`, `MoneyInput`, `AddonInput` | Números, dinero con símbolo y campos con unidad (`suffix="kg"`, `"%"`, `"x"`). |
+| `DateInput`, `ColorInput` | Fechas y colores (muestra + hex). |
+| `Combobox` | Listas largas con búsqueda (clientes, productos, insumos); `multiple` para varios. |
+| `Switch` | Activar o desactivar opciones (configuración, "publicado", "activo"). |
+| `Checkbox`, `RadioGroup` | Marcar en listas; opciones excluyentes (`list`, `cards` o `segmented`). |
+| `FormGrid`, `FormActions` | Rejilla de campos (1 a 4 columnas) y pie con los botones (`sticky` en formularios largos). |
+| `SettingsSection` | Bloque de Configuración: título y descripción a la izquierda, controles a la derecha. |
+| `ImageInput` | Una imagen del registro (logo, foto, banner): subir, arrastrar o pegar enlace; cambiar y quitar. Valor: URL o data URL. |
+| `ImageGallery` | Varias imágenes: la primera es la portada; se pueden mover y quitar. |
+| `FileDrop`, `FileList` | Archivos para importar o adjuntar (Excel, PDF), con validación de tipo y tamaño. |
+| `Thumb`, `Avatar` | Miniatura de imagen en tablas; avatar de persona con iniciales. |
+| `FilterBar`, `SearchInput` | Filtros de un listado. |
+| `TableCard`, `Table`, `THead`, `TBody`, `Th`, `Tr`, `Td`, `TableMessage`, `Pager` | Listados y paginación. |
+| `Badge` | Estados con los tonos fijos de la sección 1. |
+| `Tabs` | Dividir una pantalla grande (detalle de pedido: Resumen · Productos · Pagos · Envío · Historial). |
+| `DescriptionList`, `Timeline` | Datos de un registro en pantallas de detalle; historial de eventos. |
+| `Dialog` (`Modal`), `Drawer` | Formularios cortos; ver o editar sin salir del listado. |
+| `useConfirm`, `toast`, `Alert` | Confirmar; avisos flotantes; mensajes dentro de la página. |
+| `EmptyState`, `Spinner`, `Skeleton` | Vacío y carga. |
 
-### Hero Section
-- Fondo: gradiente suave violeta-rosa o blanco
-- Títulos: muy grandes, bold, gradiente en texto
-- CTAs: botón primario con gradiente
+Reglas de uso:
+- **Listado → detalle:** el listado navega al detalle, o abre un `Drawer` si el registro es simple. El detalle usa `PageHeader backTo`, `Tabs` si tiene varias secciones y `DescriptionList` para los datos.
+- **Crear o editar:** hasta 6 campos en un `Dialog`; más campos en una pantalla propia con tarjetas por tema y `FormActions sticky`.
+- **Imágenes:** siempre `ImageInput` o `ImageGallery`, nunca `<input type="file">` suelto. Archivos: `FileDrop`.
+- **Tarjetas limpias:** borde `gray-200`, sin sombra, sin fondos de color, un título por tarjeta y nada de tarjetas dentro de tarjetas.
 
-### Catálogo/Grid
-- Fondo: gris muy claro (gray-50)
-- Cards: blancas con sombra
-- Hover: elevación y sombra colorida
+## 12. Checklist antes de terminar una vista
 
-### Footer
-- Fondo: gris oscuro (gray-800)
-- Texto: gris claro
-- Links: violeta claro
-
----
-
-**Última actualización:** 2025-11-22
-**Versión:** 1.0
+- [ ] Está dentro de `<Page>` con `<PageHeader>` (panel) y no tiene `h1` a mano.
+- [ ] El acento usa `app-*`; ningún `orange-*`, `blue-*` o `violet-*` fijo como color principal.
+- [ ] Botones con `Button` o `IconButton`; un solo `primary` por zona; los de solo icono llevan `title`.
+- [ ] Campos con `Field` + inputs del kit; los obligatorios llevan `required`.
+- [ ] Tablas con `TableCard`/`Th`/`Td`; números a la derecha; estados con `Badge`.
+- [ ] Confirmaciones con `useConfirm` y avisos con `lib/toast` (nada de `confirm()` ni `react-hot-toast`).
+- [ ] Se ve bien en celular: nada desborda y las tablas hacen scroll dentro de su tarjeta.
+- [ ] `npx tsc -p tsconfig.app.json --noEmit` no suma errores nuevos en los archivos tocados.

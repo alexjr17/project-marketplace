@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use Illuminate\Support\Facades\Gate;
 use App\Http\Concerns\ApiResponse;
 use App\Models\Address;
 use App\Models\Role;
@@ -70,6 +71,10 @@ class UserController extends Controller
         if (! empty($data['roleId'])) {
             $query->where('roleId', $data['roleId']);
         }
+        // Sin ser SuperAdmin, el listado solo incluye clientes (UserPolicy).
+        if (Gate::denies('listAllRoles', User::class)) {
+            $query->where('roleId', 2);
+        }
 
         $total = $query->count();
         $users = $query->orderBy($data['sortBy'] ?? 'createdAt', $data['sortOrder'] ?? 'desc')
@@ -93,7 +98,7 @@ class UserController extends Controller
     {
         $user = User::with('role')->find($id);
 
-        if (! $user) {
+        if (! $user || Gate::denies('manage', $user)) {
             return $this->error('Usuario no encontrado', 404);
         }
 
@@ -121,6 +126,9 @@ class UserController extends Controller
         if (! Role::find($data['roleId'])) {
             return $this->error('El rol especificado no existe', 400);
         }
+        if (Gate::denies('assignRole', [User::class, (int) $data['roleId']])) {
+            return $this->error('Solo el SuperAdmin puede crear usuarios del staff', 403);
+        }
 
         $user = User::create([
             'email' => $email,
@@ -139,7 +147,7 @@ class UserController extends Controller
     {
         $user = User::find($id);
 
-        if (! $user) {
+        if (! $user || Gate::denies('manage', $user)) {
             return $this->error('Usuario no encontrado', 404);
         }
 
@@ -163,6 +171,9 @@ class UserController extends Controller
         if (! empty($data['roleId']) && ! Role::find($data['roleId'])) {
             return $this->error('El rol especificado no existe', 400);
         }
+        if (! empty($data['roleId']) && Gate::denies('assignRole', [User::class, (int) $data['roleId']])) {
+            return $this->error('Solo el SuperAdmin puede cambiar roles', 403);
+        }
 
         foreach (['name', 'phone', 'cedula', 'roleId', 'status'] as $field) {
             if (array_key_exists($field, $data) && $data[$field] !== null) {
@@ -178,7 +189,7 @@ class UserController extends Controller
     {
         $user = User::find($id);
 
-        if (! $user) {
+        if (! $user || Gate::denies('manage', $user)) {
             return $this->error('Usuario no encontrado', 404);
         }
 

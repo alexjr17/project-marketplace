@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
-import { Package, Loader } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Check, Package } from 'lucide-react';
 import { inputsService, type Input } from '../../services/inputs.service';
-import { useToast } from '../../context/ToastContext';
+import { Alert, Badge, EmptyState, SearchInput, Spinner, toast } from '../ui';
 
 interface TemplateRecipesSectionProps {
   templateId: number;
@@ -9,21 +9,18 @@ interface TemplateRecipesSectionProps {
   onInputsChange: (inputIds: number[]) => void;
 }
 
+/** Selección de los insumos base (camisetas, suéteres…) que usa un modelo. */
 export function TemplateRecipesSection({
   selectedInputIds,
   onInputsChange,
 }: TemplateRecipesSectionProps) {
-  const { showToast } = useToast();
   const [inputs, setInputs] = useState<Input[]>([]);
   const [loading, setLoading] = useState(true);
+  const [q, setQ] = useState('');
 
   useEffect(() => {
     loadInputs();
   }, []);
-
-  useEffect(() => {
-    console.log('TemplateRecipesSection - selectedInputIds cambiaron:', selectedInputIds);
-  }, [selectedInputIds]);
 
   const loadInputs = async () => {
     setLoading(true);
@@ -33,7 +30,7 @@ export function TemplateRecipesSection({
       setInputs(allInputs.filter((input) => input.isActive));
     } catch (error: any) {
       console.error('Error loading inputs:', error);
-      showToast('Error al cargar insumos', 'error');
+      toast.error('Error al cargar insumos');
     } finally {
       setLoading(false);
     }
@@ -47,84 +44,56 @@ export function TemplateRecipesSection({
     }
   };
 
-  if (loading) {
-    return (
-      <div className="text-center py-8">
-        <Loader className="w-8 h-8 animate-spin text-orange-500 mx-auto mb-3" />
-        <p className="text-sm text-gray-500">Cargando insumos...</p>
-      </div>
-    );
-  }
+  const shown = useMemo(() => {
+    const t = q.trim().toLowerCase();
+    return t ? inputs.filter((i) => `${i.name} ${i.code} ${i.inputType?.name ?? ''}`.toLowerCase().includes(t)) : inputs;
+  }, [inputs, q]);
+
+  if (loading) return <Spinner label="Cargando insumos…" />;
 
   return (
     <div className="space-y-4">
-      {/* Header Info */}
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-        <div className="flex items-start gap-3">
-          <Package className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
-          <div className="flex-1 text-sm text-blue-800">
-            <p className="font-medium mb-1">Insumos del Template</p>
-            <p>
-              Selecciona los insumos base (camisetas/suéteres) que se usarán para este template.
-              El sistema asociará automáticamente las variantes del insumo con las variantes del template que coincidan en color y talla.
-            </p>
-          </div>
-        </div>
-      </div>
+      <Alert tone="info">
+        Selecciona los insumos base (camisetas, suéteres…) que usa este modelo. El sistema asocia las variantes del insumo con las del modelo que coinciden en color y talla.
+      </Alert>
 
-      {/* Inputs Selection */}
-      <div className="border border-gray-300 rounded-lg p-4 bg-gray-50 max-h-96 overflow-y-auto">
-        {inputs.length === 0 ? (
-          <p className="text-sm text-gray-500 text-center py-4">
-            No hay insumos con variantes disponibles
-          </p>
-        ) : (
-          <div className="space-y-2">
-            {inputs.map((input) => {
-              const variantCount = input._count?.variants || 0;
-              const totalStock = input.variants?.reduce((sum, v) => sum + Number(v.currentStock), 0) || 0;
+      {inputs.length > 6 && <SearchInput value={q} onChange={setQ} placeholder="Buscar insumo por nombre o código…" />}
 
-              return (
-                <label
-                  key={input.id}
-                  className="flex items-center gap-3 p-3 hover:bg-white rounded-lg cursor-pointer transition-colors"
-                >
-                  <input
-                    type="checkbox"
-                    checked={selectedInputIds.includes(input.id)}
-                    onChange={() => toggleInput(input.id)}
-                    className="w-4 h-4 text-orange-500 border-gray-300 rounded focus:ring-orange-500"
-                  />
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-sm font-medium text-gray-900">
-                        {input.name}
-                      </span>
-                      <span className="text-xs px-2 py-0.5 bg-gray-200 text-gray-700 rounded">
-                        {input.inputType?.name}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-3 text-xs text-gray-500">
-                      <span>Código: {input.code}</span>
-                      <span>•</span>
-                      <span>{variantCount} variantes</span>
-                      <span>•</span>
-                      <span>Stock total: {totalStock} {input.unitOfMeasure}</span>
-                    </div>
-                  </div>
-                </label>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      {/* Selected Count */}
-      {selectedInputIds.length > 0 && (
-        <p className="text-xs text-gray-500">
-          {selectedInputIds.length} insumo{selectedInputIds.length !== 1 ? 's' : ''} seleccionado{selectedInputIds.length !== 1 ? 's' : ''}
-        </p>
+      {inputs.length === 0 ? (
+        <EmptyState icon={Package} title="No hay insumos activos" description="Crea los insumos en Inventario → Insumos." />
+      ) : (
+        <ul className="divide-y divide-gray-100 rounded-lg border border-gray-200 max-h-[28rem] overflow-y-auto">
+          {shown.map((input) => {
+            const variantCount = input._count?.variants || 0;
+            const totalStock = input.variants?.reduce((sum, v) => sum + Number(v.currentStock), 0) || 0;
+            const on = selectedInputIds.includes(input.id);
+            return (
+              <li key={input.id}>
+                <button type="button" onClick={() => toggleInput(input.id)} aria-pressed={on}
+                  className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors ${on ? 'bg-app-50' : 'hover:bg-gray-50'}`}>
+                  <span className={`flex h-5 w-5 flex-shrink-0 items-center justify-center rounded border ${on ? 'border-app-600 bg-app-600 text-white' : 'border-gray-300 bg-white'}`}>
+                    {on && <Check className="w-3.5 h-3.5" />}
+                  </span>
+                  <span className="flex-1 min-w-0">
+                    <span className="flex flex-wrap items-center gap-2">
+                      <span className="text-sm font-medium text-gray-900">{input.name}</span>
+                      {input.inputType?.name && <Badge>{input.inputType.name}</Badge>}
+                    </span>
+                    <span className="block text-xs text-gray-500 mt-0.5">
+                      Código {input.code} · {variantCount} variantes · Stock total {totalStock} {input.unitOfMeasure}
+                    </span>
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+          {shown.length === 0 && <li className="px-4 py-6 text-center text-sm text-gray-400">Sin resultados</li>}
+        </ul>
       )}
+
+      <p className="text-xs text-gray-500">
+        {selectedInputIds.length} insumo{selectedInputIds.length !== 1 ? 's' : ''} seleccionado{selectedInputIds.length !== 1 ? 's' : ''}
+      </p>
     </div>
   );
 }

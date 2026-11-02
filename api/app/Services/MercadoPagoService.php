@@ -4,7 +4,6 @@ namespace App\Services;
 
 use App\Models\Order;
 use App\Models\Payment;
-use App\Models\Setting;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Throwable;
@@ -20,51 +19,24 @@ class MercadoPagoService
 {
     private const API = 'https://api.mercadopago.com';
 
-    public function __construct(private OrderService $orders) {}
+    public function __construct(private OrderService $orders, private PaymentGatewayConfig $config) {}
 
-    /** Access token + public key desde la configuración guardada (o env). */
+    /** Access token + public key (Ajustes > Pagos o env), vía PaymentGatewayConfig. */
     public function credentials(): array
     {
-        $accessToken = '';
-        $publicKey = '';
+        $cred = $this->config->mercadoPago();
 
-        try {
-            $setting = Setting::where('key', 'payment_settings')->first();
-            $methods = is_array($setting?->value['methods'] ?? null) ? $setting->value['methods'] : [];
-            foreach ($methods as $m) {
-                if (($m['type'] ?? '') === 'mercadopago') {
-                    $cfg = $m['mercadoPagoConfig'] ?? [];
-                    $accessToken = (string) ($cfg['accessToken'] ?? '');
-                    $publicKey = (string) ($cfg['publicKey'] ?? '');
-                    break;
-                }
-            }
-        } catch (Throwable $e) {
-            Log::error('MercadoPago credentials: '.$e->getMessage());
-        }
-
-        if ($accessToken === '') {
-            $accessToken = (string) env('MERCADOPAGO_ACCESS_TOKEN', '');
-        }
-        if ($publicKey === '') {
-            $publicKey = (string) env('MERCADOPAGO_PUBLIC_KEY', '');
-        }
-
-        return [
-            'accessToken' => $accessToken,
-            'publicKey' => $publicKey,
-            'isTestMode' => str_starts_with($accessToken, 'TEST-'),
-        ];
+        return $cred + ['isTestMode' => str_starts_with($cred['accessToken'], 'TEST-')];
     }
 
     private function frontendUrl(): string
     {
-        return rtrim((string) env('FRONTEND_URL', 'https://project-marketplace-web.onrender.com'), '/');
+        return rtrim((string) config('app.frontend_url', 'https://project-marketplace-web.onrender.com'), '/');
     }
 
     private function notificationUrl(): string
     {
-        return rtrim((string) env('APP_URL', ''), '/').'/api/webhooks/mercadopago';
+        return rtrim((string) config('app.url', ''), '/').'/api/webhooks/mercadopago';
     }
 
     /**
@@ -180,6 +152,7 @@ class MercadoPagoService
                 'status' => $data['status'] ?? null,                       // approved | pending | rejected | ...
                 'externalReference' => $data['external_reference'] ?? null, // orderNumber
                 'amount' => $data['transaction_amount'] ?? 0,
+                'currency' => $data['currency_id'] ?? null,
                 'id' => (string) ($data['id'] ?? $paymentId),
             ];
         } catch (Throwable $e) {
@@ -210,6 +183,9 @@ class MercadoPagoService
         }
 
         if ($detail['status'] === 'approved') {
+            if (! $this->amountMatches($order, $detail)) {
+                return ['success' => false, 'message' => 'El monto pagado no coincide con el pedido'];
+            }
             $this->approve($order, $detail['id']);
 
             return ['success' => true, 'message' => 'Pago aprobado', 'orderId' => $order->id];
@@ -238,6 +214,9 @@ class MercadoPagoService
         }
 
         if ($detail['status'] === 'approved') {
+            if (! $this->amountMatches($order, $detail)) {
+                return ['success' => false, 'message' => 'El monto pagado no coincide con el pedido', 'status' => 'amount_mismatch'];
+            }
             $this->approve($order, $detail['id']);
 
             return ['success' => true, 'message' => 'Pago confirmado', 'status' => 'approved'];
@@ -246,8 +225,28 @@ class MercadoPagoService
         return ['success' => false, 'message' => 'El pago aún no está aprobado', 'status' => $detail['status']];
     }
 
+    /** El monto y la moneda pagados deben ser los del pedido (antes no se comprobaba). */
+    private function amountMatches(Order $order, array $detail): bool
+    {
+        $ok = (int) round(((float) $detail['amount']) * 100) === (int) round(((float) $order->total) * 100)
+            && ($detail['currency'] ?? 'COP') === 'COP';
+        if (! $ok) {
+            Log::warning("MercadoPago: monto pagado no coincide con el pedido {$order->orderNumber}", [
+                'esperado' => (float) $order->total, 'pagado' => $detail['amount'], 'moneda' => $detail['currency'] ?? null,
+            ]);
+        }
+
+        return $ok;
+    }
+
     private function approve(Order $order, string $paymentId): void
     {
+        if ($order->status === 'CANCELLED') {
+            $this->orders->recordPaymentOnCancelledOrder($order, 'mercadopago', $paymentId, (float) $order->total);
+
+            return;
+        }
+
         if ($order->status === 'PENDING') {
             $order->paymentRef = $paymentId;
             $order->save();

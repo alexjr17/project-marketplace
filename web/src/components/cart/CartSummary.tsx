@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ShoppingBag, Truck, Receipt, Tag } from 'lucide-react';
+import { Truck, Lock, RotateCcw, ShieldCheck } from 'lucide-react';
+import { Button } from '../ui';
 import { useCurrency } from '../../hooks/useCurrency';
 import { useCart } from '../../context/CartContext';
 import { useSettings } from '../../context/SettingsContext';
@@ -19,12 +20,6 @@ export const CartSummary = ({ cart, onCheckout }: CartSummaryProps) => {
   const { settings } = useSettings();
   const hasItems = cart.items.length > 0;
 
-  // Colores de marca dinámicos
-  const brandColors = settings.appearance?.brandColors || settings.general.brandColors || {
-    primary: '#7c3aed',
-    secondary: '#ec4899',
-    accent: '#f59e0b',
-  };
 
   // Obtener configuración del CartContext
   const { freeShippingThreshold, taxRate, taxIncluded } = orderConfig;
@@ -74,44 +69,31 @@ export const CartSummary = ({ cart, onCheckout }: CartSummaryProps) => {
   const shippingCost = shippingQuote ? shippingQuote.cost : cart.shipping;
   const displayTotal = cart.subtotal + cart.tax + shippingCost - cart.discount;
 
-  return (
-    <div className="bg-white rounded-xl shadow-lg p-4 lg:p-6 sticky top-4 lg:top-6">
-      <h2 className="text-lg lg:text-xl font-bold text-gray-900 mb-4 lg:mb-6 flex items-center gap-2">
-        <Receipt className="w-5 h-5" style={{ color: brandColors.primary }} />
-        Resumen
-      </h2>
+  const row = 'flex items-center justify-between gap-3 text-sm';
 
-      <div className="space-y-3 lg:space-y-4 mb-4 lg:mb-6 text-sm lg:text-base">
-        {/* Total de items */}
-        <div className="flex items-center justify-between text-gray-600">
-          <div className="flex items-center gap-2">
-            <ShoppingBag className="w-4 h-4" />
-            <span>Productos ({cart.totalItems})</span>
-          </div>
-          <span className="font-semibold text-gray-900">
-            {format(cart.subtotal)}
-          </span>
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-4 md:p-5">
+      <h2 className="text-base font-semibold text-gray-900 mb-4">Resumen del pedido</h2>
+
+      <div className="space-y-3">
+        <div className={row}>
+          <span className="text-gray-500">Productos ({cart.totalItems})</span>
+          <span className="font-medium text-gray-900">{format(cart.subtotal)}</span>
         </div>
 
-        {/* Envío */}
-        <div className="flex items-center justify-between text-gray-600">
-          <div className="flex items-center gap-2">
-            <Truck className="w-4 h-4" />
-            <span>Envío</span>
-          </div>
+        <div className={row}>
+          <span className="text-gray-500">Envío</span>
           {loadingShipping ? (
-            <span className="text-sm text-gray-400 animate-pulse">Calculando…</span>
+            <span className="text-gray-400 animate-pulse">Calculando…</span>
           ) : shippingCost === 0 ? (
-            <span className="font-semibold text-green-600">GRATIS</span>
+            <span className="font-medium text-green-700">Gratis</span>
           ) : (
-            <span className="font-semibold text-gray-900">
-              {format(shippingCost)}
-            </span>
+            <span className="font-medium text-gray-900">{format(shippingCost)}</span>
           )}
         </div>
 
         {!loadingShipping && shippingQuote && (
-          <p className="text-xs text-gray-400 -mt-1">
+          <p className="text-xs text-gray-400 -mt-2">
             Estimado a {defaultCity} · {shippingQuote.carrierName}
           </p>
         )}
@@ -122,91 +104,53 @@ export const CartSummary = ({ cart, onCheckout }: CartSummaryProps) => {
           !shippingQuote.free &&
           shippingQuote.freeShippingThreshold != null &&
           cart.subtotal < shippingQuote.freeShippingThreshold && (
-            <p className="text-xs text-amber-600 bg-amber-50 px-3 py-1.5 rounded-lg">
-              Agrega {format(shippingQuote.freeShippingThreshold - cart.subtotal)} más para envío
-              gratis a {defaultCity}
+            <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 px-3 py-2 rounded-lg">
+              Agrega {format(shippingQuote.freeShippingThreshold - cart.subtotal)} más para envío gratis a {defaultCity}
             </p>
           )}
 
         {/* Envío gratis: umbral global (sin cotización por zona) */}
         {!loadingShipping && !shippingQuote && cart.subtotal > 0 && cart.subtotal < freeShippingThreshold && (
-          <p className="text-xs text-amber-600 bg-amber-50 px-3 py-1.5 rounded-lg">
+          <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 px-3 py-2 rounded-lg">
             Agrega {format(freeShippingThreshold - cart.subtotal)} más para envío gratis
           </p>
         )}
 
-        {/* Impuestos */}
-        <div className="flex items-center justify-between text-gray-600">
-          <div className="flex items-center gap-2">
-            <Tag className="w-4 h-4" />
-            <span>IVA ({taxPercentage}%)</span>
-          </div>
-          <div className="text-right">
-            <span className="font-semibold text-gray-900">
-              {format(taxIncluded ? calculatedTax : cart.tax)}
-            </span>
-            {taxIncluded && (
-              <span className="text-xs text-green-600 ml-1">(incl.)</span>
-            )}
-          </div>
+        <div className={row}>
+          <span className="text-gray-500">IVA ({taxPercentage}%){taxIncluded && <span className="text-xs text-gray-400"> · incluido</span>}</span>
+          <span className="font-medium text-gray-900">{format(taxIncluded ? calculatedTax : cart.tax)}</span>
         </div>
 
-        {/* Descuento (si aplica) */}
         {cart.discount > 0 && (
-          <div className="flex items-center justify-between text-green-600">
-            <span>Descuento</span>
-            <span className="font-semibold">-{format(cart.discount)}</span>
+          <div className={row}>
+            <span className="text-gray-500">Descuento</span>
+            <span className="font-medium text-green-700">-{format(cart.discount)}</span>
           </div>
         )}
       </div>
 
-      {/* Total */}
-      <div className="border-t border-gray-200 pt-4 mb-4 lg:mb-6">
-        <div className="flex items-center justify-between">
-          <span className="text-base lg:text-lg font-bold text-gray-900">Total</span>
-          <span className="text-xl lg:text-2xl font-bold text-gray-900">
-            {loadingShipping ? (
-              <span className="text-gray-400 animate-pulse">…</span>
-            ) : (
-              format(displayTotal)
-            )}
-          </span>
-        </div>
+      <div className="border-t border-gray-200 mt-4 pt-4 flex items-baseline justify-between">
+        <span className="text-base font-semibold text-gray-900">Total</span>
+        <span className="text-xl font-bold text-gray-900">
+          {loadingShipping ? <span className="text-gray-400 animate-pulse">…</span> : format(displayTotal)}
+        </span>
       </div>
 
-      {/* Botón de checkout */}
       {onCheckout && (
-        <button
-          onClick={onCheckout}
-          disabled={!hasItems}
-          style={{ backgroundColor: hasItems ? brandColors.primary : undefined }}
-          className="w-full text-white font-bold py-3 px-6 rounded-lg hover:opacity-90 disabled:bg-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md hover:shadow-lg text-sm lg:text-base"
-        >
-          {hasItems ? 'Proceder al Pago' : 'Carrito Vacío'}
-        </button>
+        <Button size="lg" fullWidth className="mt-4" onClick={onCheckout} disabled={!hasItems} icon={<Lock className="w-4 h-4" />}>
+          {hasItems ? 'Proceder al pago' : 'Carrito vacío'}
+        </Button>
       )}
 
       {!hasItems && (
-        <p className="text-center text-xs lg:text-sm text-gray-500 mt-3 lg:mt-4">
-          Agrega productos al carrito para continuar
-        </p>
+        <p className="text-center text-xs text-gray-500 mt-3">Agrega productos al carrito para continuar</p>
       )}
 
-      {/* Políticas - solo desktop */}
-      <div className="hidden lg:block mt-6 pt-6 border-t border-gray-200 space-y-2 text-xs text-gray-500">
-        <p className="flex items-center gap-2">
-          <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: brandColors.primary }}></span>
-          Envío gratis en compras mayores a {format(freeShippingThreshold)}
-        </p>
-        <p className="flex items-center gap-2">
-          <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: brandColors.primary }}></span>
-          Devoluciones gratuitas en 30 días
-        </p>
-        <p className="flex items-center gap-2">
-          <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: brandColors.primary }}></span>
-          Garantía de satisfacción 100%
-        </p>
-      </div>
+      <ul className="mt-4 pt-4 border-t border-gray-100 space-y-1.5 text-xs text-gray-500">
+        <li className="flex items-center gap-2"><Truck className="w-3.5 h-3.5 text-gray-400" />Envío gratis en compras mayores a {format(freeShippingThreshold)}</li>
+        <li className="flex items-center gap-2"><RotateCcw className="w-3.5 h-3.5 text-gray-400" />Devoluciones gratuitas en 30 días</li>
+        <li className="flex items-center gap-2"><ShieldCheck className="w-3.5 h-3.5 text-gray-400" />Garantía de satisfacción 100%</li>
+      </ul>
     </div>
   );
 };

@@ -1,15 +1,19 @@
 import { useState, useEffect } from 'react';
+import { Check, Eye, Image as ImageIcon, Info, Layers, Save, Tag, Trash2 } from 'lucide-react';
 import type { Template } from '../../services/templates.service';
-import { Button } from '../shared/Button';
-import { Input } from '../shared/Input';
-import { ImageUploadField } from './ImageUploadField';
 import { catalogsService } from '../../services/catalogs.service';
-import type { Color, Size, Category, ProductType as CatalogProductType } from '../../services/catalogs.service';
+import type { Color, Size, Category, ProductType as CatalogProductType } from '../../types/catalog';
+import {
+  Alert, Button, Card, CardTitle, Field, FormActions, FormGrid, ImageGallery, MoneyInput, SelectInput, Switch,
+  TextArea, TextInput,
+} from '../ui';
 
 interface TemplateFormProps {
   template?: Template;
   onSubmit: (data: TemplateFormData) => Promise<void>;
   onDelete?: () => void;
+  /** Botón Cancelar del pie (si no se pasa, no se muestra). */
+  onCancel?: () => void;
 }
 
 export interface TemplateFormData {
@@ -27,17 +31,20 @@ export interface TemplateFormData {
   isActive: boolean;
 }
 
+const MAX_IMAGES = 5;
+
 // Función auxiliar para extraer imágenes del template
 const getTemplateImages = (template?: Template): string[] => {
   if (!template?.images) return [];
   // Si images es un array, usarlo directamente
-  if (Array.isArray(template.images)) return template.images.filter(Boolean);
+  if (Array.isArray(template.images)) return (template.images as string[]).filter(Boolean);
   // Si es objeto con front/back/side, convertirlo a array
   const imgs = template.images as { front?: string; back?: string; side?: string };
   return [imgs.front, imgs.back, imgs.side].filter((img): img is string => !!img);
 };
 
-export const TemplateForm = ({ template, onSubmit, onDelete }: TemplateFormProps) => {
+/** Ficha del modelo personalizable: una tarjeta por tema y pie de botones fijo. */
+export const TemplateForm = ({ template, onSubmit, onDelete, onCancel }: TemplateFormProps) => {
   const [formData, setFormData] = useState({
     name: template?.name || '',
     description: template?.description || '',
@@ -49,8 +56,9 @@ export const TemplateForm = ({ template, onSubmit, onDelete }: TemplateFormProps
     isActive: template?.isActive ?? true,
     tags: template?.tags?.join(', ') || '',
   });
+  const [saving, setSaving] = useState(false);
 
-  // Array de imágenes del producto
+  // Array de imágenes (la primera es la principal)
   const [images, setImages] = useState<string[]>(getTemplateImages(template));
 
   // Catálogos disponibles
@@ -126,6 +134,7 @@ export const TemplateForm = ({ template, onSubmit, onDelete }: TemplateFormProps
         setSelectedSizeIds([]);
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formData.categoryId, availableProductTypes]);
 
   // Auto-generar slug desde el nombre
@@ -145,6 +154,7 @@ export const TemplateForm = ({ template, onSubmit, onDelete }: TemplateFormProps
       const sku = `TPL-${formData.slug.toUpperCase().substring(0, 10)}-${Date.now().toString().slice(-4)}`;
       setFormData(prev => ({ ...prev, sku }));
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formData.slug, template]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -165,432 +175,166 @@ export const TemplateForm = ({ template, onSubmit, onDelete }: TemplateFormProps
       sizeIds: hasVariants ? selectedSizeIds : [],
     };
 
-    await onSubmit(templateData);
-  };
-
-  // Funciones para manejar imágenes (máximo 5)
-  const MAX_IMAGES = 5;
-  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
-  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
-
-  const addImage = (imageUrl: string) => {
-    if (imageUrl && images.length < MAX_IMAGES) {
-      setImages(prev => [...prev, imageUrl]);
+    setSaving(true);
+    try {
+      await onSubmit(templateData);
+    } finally {
+      setSaving(false);
     }
-  };
-
-  const removeImage = (index: number) => {
-    setImages(prev => prev.filter((_, i) => i !== index));
-  };
-
-  const updateImage = (index: number, newUrl: string) => {
-    setImages(prev => prev.map((img, i) => i === index ? newUrl : img));
-  };
-
-  // Drag and drop para reordenar imágenes
-  const handleDragStart = (index: number) => {
-    setDraggedIndex(index);
-  };
-
-  const handleDragOver = (e: React.DragEvent, index: number) => {
-    e.preventDefault();
-    if (draggedIndex !== null && draggedIndex !== index) {
-      setDragOverIndex(index);
-    }
-  };
-
-  const handleDragLeave = () => {
-    setDragOverIndex(null);
-  };
-
-  const handleDrop = (e: React.DragEvent, dropIndex: number) => {
-    e.preventDefault();
-    if (draggedIndex !== null && draggedIndex !== dropIndex) {
-      const newImages = [...images];
-      const [draggedImage] = newImages.splice(draggedIndex, 1);
-      newImages.splice(dropIndex, 0, draggedImage);
-      setImages(newImages);
-    }
-    setDraggedIndex(null);
-    setDragOverIndex(null);
-  };
-
-  const handleDragEnd = () => {
-    setDraggedIndex(null);
-    setDragOverIndex(null);
   };
 
   const toggleColor = (colorId: number) => {
-    setSelectedColorIds(prev =>
-      prev.includes(colorId)
-        ? prev.filter(id => id !== colorId)
-        : [...prev, colorId]
-    );
+    setSelectedColorIds(prev => (prev.includes(colorId) ? prev.filter(id => id !== colorId) : [...prev, colorId]));
   };
 
   const toggleSize = (sizeId: number) => {
-    setSelectedSizeIds(prev =>
-      prev.includes(sizeId)
-        ? prev.filter(id => id !== sizeId)
-        : [...prev, sizeId]
-    );
+    setSelectedSizeIds(prev => (prev.includes(sizeId) ? prev.filter(id => id !== sizeId) : [...prev, sizeId]));
   };
 
+  const missingVariants = hasVariants && (selectedColorIds.length === 0 || selectedSizeIds.length === 0);
+  const chip = (on: boolean) =>
+    `relative flex items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm transition-colors ${on ? 'border-app-500 bg-app-50 ring-1 ring-app-500 text-app-800' : 'border-gray-200 text-gray-700 hover:border-gray-300'}`;
+
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="grid grid-cols-12 gap-3">
-        {/* Primera fila: Nombre completo */}
-        <div className="col-span-12">
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Nombre del Modelo *
-          </label>
-          <Input
-            type="text"
-            value={formData.name}
-            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-            required
-          />
-        </div>
-
-        {/* Segunda fila: Descripción completa */}
-        <div className="col-span-12">
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Descripción *
-          </label>
-          <textarea
-            value={formData.description}
-            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-            rows={3}
-            required
-          />
-        </div>
-
-        {/* Tercera fila: Categoría, Tipo, Precio, SKU */}
-        <div className="col-span-12 md:col-span-3">
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Categoría *
-          </label>
-          <select
-            value={formData.categoryId || ''}
-            onChange={(e) => setFormData({ ...formData, categoryId: e.target.value ? Number(e.target.value) : null })}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-            required
-          >
-            <option value="">Selecciona una categoría</option>
-            {availableCategories.map(cat => (
-              <option key={cat.id} value={cat.id}>
-                {cat.name}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="col-span-12 md:col-span-3">
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Tipo de Producto *
-          </label>
-          <select
-            value={formData.typeId || ''}
-            onChange={(e) => setFormData({ ...formData, typeId: e.target.value ? Number(e.target.value) : null })}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-            required
-          >
-            <option value="">Selecciona un tipo</option>
-            {availableProductTypes
-              .filter(type => !formData.categoryId || type.categoryId === formData.categoryId)
-              .map(type => (
-                <option key={type.id} value={type.id}>
-                  {type.name}
-                </option>
-              ))}
-          </select>
-        </div>
-
-        <div className="col-span-12 md:col-span-3">
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Precio ($) *
-          </label>
-          <Input
-            type="number"
-            step="0.01"
-            min="0"
-            value={formData.basePrice}
-            onChange={(e) => setFormData({ ...formData, basePrice: parseFloat(e.target.value) })}
-            required
-          />
-        </div>
-
-        <div className="col-span-12 md:col-span-3">
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            SKU *
-          </label>
-          <Input
-            type="text"
-            value={formData.sku}
-            onChange={(e) => setFormData({ ...formData, sku: e.target.value })}
-            required
-          />
-        </div>
-
-        {/* Imágenes del Producto */}
-        <div className="col-span-12">
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Imágenes del Producto (opcional, máximo {MAX_IMAGES})
-          </label>
-
-          {/* Galería de imágenes existentes - arrastrables */}
-          {images.length > 0 && (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4 mb-4">
-              {images.map((img, index) => (
-                <div
-                  key={index}
-                  draggable
-                  onDragStart={() => handleDragStart(index)}
-                  onDragOver={(e) => handleDragOver(e, index)}
-                  onDragLeave={handleDragLeave}
-                  onDrop={(e) => handleDrop(e, index)}
-                  onDragEnd={handleDragEnd}
-                  className={`relative group aspect-square cursor-grab active:cursor-grabbing transition-all duration-200 ${
-                    draggedIndex === index ? 'opacity-50 scale-95' : ''
-                  } ${
-                    dragOverIndex === index ? 'ring-2 ring-orange-500 ring-offset-2' : ''
-                  }`}
-                >
-                  <img
-                    src={img}
-                    alt={`Imagen ${index + 1}`}
-                    className="w-full h-full object-contain bg-gray-50 rounded-lg border-2 border-gray-200 p-2 pointer-events-none"
-                  />
-                  {/* Indicador de arrastre */}
-                  <div className="absolute top-2 left-2 p-1 bg-gray-800/70 text-white rounded opacity-0 group-hover:opacity-100 transition-opacity">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8h16M4 16h16" />
-                    </svg>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => removeImage(index)}
-                    className="absolute -top-2 -right-2 p-1.5 bg-red-500 text-white rounded-full shadow-lg hover:bg-red-600 transition-colors"
-                    title="Eliminar imagen"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                  {index === 0 && (
-                    <span className="absolute bottom-2 left-2 px-2 py-0.5 bg-orange-500 text-white text-xs font-medium rounded shadow">
-                      Principal
-                    </span>
-                  )}
-                  {/* Número de orden */}
-                  <span className="absolute bottom-2 right-2 w-6 h-6 flex items-center justify-center bg-gray-800/70 text-white text-xs font-bold rounded-full">
-                    {index + 1}
-                  </span>
-                </div>
-              ))}
+    <form onSubmit={handleSubmit} className="space-y-5">
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-5 items-start">
+        <div className="xl:col-span-2 space-y-5">
+          {/* Información */}
+          <Card>
+            <CardTitle icon={Info}>Información</CardTitle>
+            <div className="space-y-4">
+              <Field label="Nombre del modelo" required htmlFor="tf-name">
+                <TextInput id="tf-name" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} required />
+              </Field>
+              <Field label="Descripción" required htmlFor="tf-desc">
+                <TextArea id="tf-desc" value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} rows={3} required />
+              </Field>
+              <FormGrid>
+                <Field label="Categoría" required htmlFor="tf-cat">
+                  <SelectInput id="tf-cat" value={formData.categoryId || ''} required
+                    onChange={(e) => setFormData({ ...formData, categoryId: e.target.value ? Number(e.target.value) : null })}>
+                    <option value="">Selecciona una categoría</option>
+                    {availableCategories.map(cat => <option key={cat.id} value={cat.id}>{cat.name}</option>)}
+                  </SelectInput>
+                </Field>
+                <Field label="Tipo de producto" required htmlFor="tf-type" hint="Define las tallas disponibles.">
+                  <SelectInput id="tf-type" value={formData.typeId || ''} required
+                    onChange={(e) => setFormData({ ...formData, typeId: e.target.value ? Number(e.target.value) : null })}>
+                    <option value="">Selecciona un tipo</option>
+                    {availableProductTypes
+                      .filter(type => !formData.categoryId || type.categoryId === formData.categoryId)
+                      .map(type => <option key={type.id} value={type.id}>{type.name}</option>)}
+                  </SelectInput>
+                </Field>
+                <Field label="SKU" required htmlFor="tf-sku" hint={!template ? 'Se genera con el nombre; puedes cambiarlo.' : undefined}>
+                  <TextInput id="tf-sku" value={formData.sku} onChange={(e) => setFormData({ ...formData, sku: e.target.value })} required className="font-mono" />
+                </Field>
+                <Field label="Slug (URL amigable)" htmlFor="tf-slug" hint={template ? 'No se puede cambiar después de crear el modelo.' : undefined}>
+                  <TextInput id="tf-slug" value={formData.slug} onChange={(e) => setFormData({ ...formData, slug: e.target.value })} placeholder="camiseta-basica" disabled={!!template} className="font-mono" />
+                </Field>
+              </FormGrid>
+              <Field label="Etiquetas" htmlFor="tf-tags" hint="Separadas por coma.">
+                <TextInput id="tf-tags" value={formData.tags} onChange={(e) => setFormData({ ...formData, tags: e.target.value })} placeholder="básico, algodón, unisex" />
+              </Field>
             </div>
-          )}
+          </Card>
 
-          {images.length > 1 && (
-            <p className="text-xs text-gray-500 mb-3">
-              💡 Arrastra las imágenes para cambiar el orden. La primera será la principal.
-            </p>
-          )}
+          {/* Imágenes */}
+          <Card>
+            <CardTitle icon={ImageIcon}>Imágenes</CardTitle>
+            <ImageGallery value={images} onChange={setImages} max={MAX_IMAGES} maxSizeMB={5} />
+            {images.length === 0 && <p className="text-xs text-gray-400 mt-1">Sin imagen: se mostrará un marcador de posición. La primera imagen es la vista frontal del editor de zonas.</p>}
+          </Card>
 
-          {/* Agregar nueva imagen (si no se alcanzó el límite) */}
-          {images.length < MAX_IMAGES ? (
-            <ImageUploadField
-              key={`image-upload-${images.length}`}
-              label={`Agregar imagen (${images.length}/${MAX_IMAGES})`}
-              value=""
-              onChange={(value) => {
-                if (value) addImage(value);
-              }}
-            />
-          ) : (
-            <div className="p-4 bg-green-50 border border-green-200 rounded-lg text-center">
-              <p className="text-sm text-green-700 font-medium">
-                ✓ Máximo de {MAX_IMAGES} imágenes alcanzado
-              </p>
-            </div>
-          )}
-
-          {images.length === 0 && (
-            <p className="text-xs text-gray-400 mt-1">Sin imagen: se mostrará un marcador de posición.</p>
-          )}
-        </div>
-
-        {/* Sexta fila: Slug, Tags, Estado Activo */}
-        <div className="col-span-12 md:col-span-4">
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Slug (URL amigable)
-          </label>
-          <Input
-            type="text"
-            value={formData.slug}
-            onChange={(e) => setFormData({ ...formData, slug: e.target.value })}
-            placeholder="camiseta-basica"
-            disabled={!!template}
-          />
-        </div>
-
-        <div className="col-span-12 md:col-span-5">
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Tags (separados por coma)
-          </label>
-          <Input
-            type="text"
-            value={formData.tags}
-            onChange={(e) => setFormData({ ...formData, tags: e.target.value })}
-            placeholder="básico, algodón, unisex"
-          />
-        </div>
-
-        <div className="col-span-12 md:col-span-3">
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            &nbsp;
-          </label>
-          <label className="flex items-center space-x-2 h-10 px-3 bg-gray-50 rounded-lg">
-            <input
-              type="checkbox"
-              checked={formData.isActive}
-              onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
-              className="w-4 h-4 text-orange-500 border-gray-300 rounded focus:ring-orange-500"
-            />
-            <span className="text-sm font-medium text-gray-700">Activo</span>
-          </label>
-        </div>
-
-        {/* Toggle de variantes (color y talla) */}
-        <div className="col-span-12">
-          <div className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 rounded-lg">
-            <div>
-              <p className="text-sm font-medium text-gray-900">Variantes (color y talla)</p>
-              <p className="text-xs text-gray-500">
-                Actívalo solo si el modelo se vende en distintos colores o tallas. Si no, se guarda como modelo simple.
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => {
-                const next = !hasVariants;
+          {/* Variantes */}
+          <Card>
+            <CardTitle icon={Layers}>Variantes</CardTitle>
+            <Switch
+              checked={hasVariants}
+              onChange={(next) => {
                 setHasVariants(next);
                 if (!next) { setSelectedColorIds([]); setSelectedSizeIds([]); }
               }}
-              className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors ${hasVariants ? 'bg-orange-500' : 'bg-gray-300'}`}
-              aria-pressed={hasVariants}
-            >
-              <span className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${hasVariants ? 'translate-x-5' : 'translate-x-0.5'}`} />
-            </button>
-          </div>
-        </div>
+              label="Se vende en colores o tallas"
+              description="Actívalo solo si el modelo tiene distintos colores o tallas. Si no, se guarda como modelo simple."
+            />
 
-        {hasVariants && (
-        <>
-        {/* Séptima fila: Colores (selector con checkboxes) */}
-        <div className="col-span-12 md:col-span-6">
-          <label className="block text-sm font-medium text-gray-700 mb-1.5">
-            Colores (selecciona al menos uno)
-          </label>
-          <div className="border border-gray-300 rounded-lg p-3 bg-gray-50 max-h-64 overflow-y-auto">
-            {availableColors.length === 0 ? (
-              <p className="text-sm text-gray-500">Cargando colores...</p>
-            ) : (
-              <div className="space-y-2">
-                {availableColors.map(color => (
-                  <label
-                    key={color.id}
-                    className="flex items-center gap-3 p-2 hover:bg-white rounded-lg cursor-pointer transition-colors"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selectedColorIds.includes(color.id)}
-                      onChange={() => toggleColor(color.id)}
-                      className="w-4 h-4 text-orange-500 border-gray-300 rounded focus:ring-orange-500"
-                    />
-                    <div
-                      className="w-8 h-8 rounded border border-gray-300 flex-shrink-0"
-                      style={{ backgroundColor: color.hexCode }}
-                      title={color.hexCode}
-                    />
-                    <span className="text-sm font-medium text-gray-700 flex-1">
-                      {color.name}
-                    </span>
-                  </label>
-                ))}
+            {hasVariants && (
+              <div className="mt-5 space-y-5">
+                {missingVariants && <Alert tone="warning">Selecciona al menos un color y una talla para poder guardar.</Alert>}
+                <div>
+                  <p className="text-sm font-medium text-gray-700 mb-2">
+                    Colores <span className="text-red-500">*</span>
+                    <span className="ml-2 text-xs font-normal text-gray-500">{selectedColorIds.length} seleccionado{selectedColorIds.length !== 1 ? 's' : ''}</span>
+                  </p>
+                  {availableColors.length === 0 ? (
+                    <p className="text-sm text-gray-500">Cargando colores…</p>
+                  ) : (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 max-h-72 overflow-y-auto p-0.5">
+                      {availableColors.map(color => {
+                        const on = selectedColorIds.includes(color.id);
+                        return (
+                          <button key={color.id} type="button" aria-pressed={on} onClick={() => toggleColor(color.id)} className={chip(on)}>
+                            <span className="w-5 h-5 rounded-md border border-gray-300 flex-shrink-0" style={{ backgroundColor: color.hexCode }} title={color.hexCode} />
+                            <span className="truncate flex-1">{color.name}</span>
+                            {on && <Check className="w-4 h-4 flex-shrink-0" />}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-700 mb-2">
+                    Tallas <span className="text-red-500">*</span>
+                    <span className="ml-2 text-xs font-normal text-gray-500">{selectedSizeIds.length} seleccionada{selectedSizeIds.length !== 1 ? 's' : ''}</span>
+                  </p>
+                  {!formData.typeId ? (
+                    <p className="text-sm text-gray-500">Selecciona un tipo de producto para ver sus tallas.</p>
+                  ) : availableSizes.length === 0 ? (
+                    <p className="text-sm text-gray-500">No hay tallas asignadas a este tipo de producto.</p>
+                  ) : (
+                    <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-2">
+                      {availableSizes.map(size => {
+                        const on = selectedSizeIds.includes(size.id);
+                        return (
+                          <button key={size.id} type="button" aria-pressed={on} onClick={() => toggleSize(size.id)} title={size.name} className={`${chip(on)} justify-center flex-col !gap-0`}>
+                            <span className="font-semibold">{size.abbreviation}</span>
+                            <span className="text-[11px] text-gray-500 truncate max-w-full">{size.name}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
               </div>
             )}
-          </div>
-          {selectedColorIds.length > 0 && (
-            <p className="text-xs text-gray-500 mt-1">
-              {selectedColorIds.length} color{selectedColorIds.length !== 1 ? 'es' : ''} seleccionado{selectedColorIds.length !== 1 ? 's' : ''}
-            </p>
-          )}
+          </Card>
         </div>
 
-        {/* Tallas (selector con checkboxes) */}
-        <div className="col-span-12 md:col-span-6">
-          <label className="block text-sm font-medium text-gray-700 mb-1.5">
-            Tallas (selecciona al menos una)
-          </label>
-          <div className="border border-gray-300 rounded-lg p-3 bg-gray-50 max-h-64 overflow-y-auto">
-            {!formData.typeId ? (
-              <p className="text-sm text-gray-500">Selecciona un tipo de producto primero para ver las tallas disponibles</p>
-            ) : availableSizes.length === 0 ? (
-              <p className="text-sm text-gray-500">No hay tallas asignadas a este tipo de producto</p>
-            ) : (
-              <div className="grid grid-cols-2 gap-2">
-                {availableSizes.map(size => (
-                  <label
-                    key={size.id}
-                    className="flex items-center gap-2 p-2 hover:bg-white rounded-lg cursor-pointer transition-colors"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selectedSizeIds.includes(size.id)}
-                      onChange={() => toggleSize(size.id)}
-                      className="w-4 h-4 text-orange-500 border-gray-300 rounded focus:ring-orange-500"
-                    />
-                    <span className="text-sm font-medium text-gray-700">
-                      {size.abbreviation} <span className="text-xs text-gray-500">({size.name})</span>
-                    </span>
-                  </label>
-                ))}
-              </div>
-            )}
-          </div>
-          {selectedSizeIds.length > 0 && (
-            <p className="text-xs text-gray-500 mt-1">
-              {selectedSizeIds.length} talla{selectedSizeIds.length !== 1 ? 's' : ''} seleccionada{selectedSizeIds.length !== 1 ? 's' : ''}
-            </p>
-          )}
+        <div className="space-y-5">
+          <Card>
+            <CardTitle icon={Tag}>Precio</CardTitle>
+            <Field label="Precio base" required htmlFor="tf-price" hint="Precio del modelo sin personalización.">
+              <MoneyInput id="tf-price" value={formData.basePrice} onChange={(e) => setFormData({ ...formData, basePrice: parseFloat(e.target.value) })} required />
+            </Field>
+          </Card>
+          <Card>
+            <CardTitle icon={Eye}>Publicación</CardTitle>
+            <Switch checked={formData.isActive} onChange={(v) => setFormData({ ...formData, isActive: v })} label="Activo" description="Los modelos inactivos no se ofrecen en el personalizador." />
+          </Card>
         </div>
-        </>
-        )}
       </div>
 
-      {/* Actions */}
-      <div className="flex gap-3 pt-6 mt-6 border-t border-gray-200">
+      <FormActions sticky>
         {onDelete && (
-          <Button
-            type="button"
-            onClick={onDelete}
-            variant="admin-danger"
-            className="flex-1"
-          >
-            Eliminar
-          </Button>
+          <Button variant="danger" className="sm:mr-auto" onClick={onDelete} icon={<Trash2 className="w-4 h-4" />}>Eliminar modelo</Button>
         )}
-        <Button
-          type="submit"
-          variant="admin-primary"
-          className="flex-1"
-          disabled={hasVariants && (selectedColorIds.length === 0 || selectedSizeIds.length === 0)}
-        >
-          {template ? 'Guardar' : 'Crear'}
+        {onCancel && <Button variant="secondary" onClick={onCancel}>Cancelar</Button>}
+        <Button type="submit" isLoading={saving} disabled={missingVariants} icon={<Save className="w-4 h-4" />}>
+          {template ? 'Guardar cambios' : 'Crear modelo'}
         </Button>
-      </div>
+      </FormActions>
     </form>
   );
 };
