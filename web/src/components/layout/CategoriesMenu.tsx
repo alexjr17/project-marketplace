@@ -71,7 +71,7 @@ export const CategoriesMenu = () => {
     >
       {/* Trigger Button */}
       <button
-        className={`flex items-center gap-2 h-9 px-3 rounded-lg font-medium text-sm transition-colors ${
+        className={`flex items-center gap-1.5 h-8 px-3 rounded-lg font-medium text-sm whitespace-nowrap transition-colors ${
           isOpen
             ? 'bg-app-50 text-app-700'
             : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'

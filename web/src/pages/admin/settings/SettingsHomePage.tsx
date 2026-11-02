@@ -2,8 +2,9 @@ import { useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import { useSettings } from '../../../context/SettingsContext';
 import { ImageUploadField } from '../../../components/admin/ImageUploadField';
-import type { FeatureCard, ProductSection, CTASettings, WhatsAppButtonSettings, SectionFilters, HeroCard, PromoBanner } from '../../../types/settings';
-import { FEATURE_ICONS } from '../../../types/settings';
+import type { FeatureCard, ProductSection, CTASettings, WhatsAppButtonSettings, SectionFilters, HeroCard, PromoBanner, HomeBlockKey, HomeBlockSettings } from '../../../types/settings';
+import { FEATURE_ICONS, DEFAULT_HOME_BLOCKS, homeBlock } from '../../../types/settings';
+import { FEATURE_ICON_COMPONENTS } from '../../../components/home/featureIcons';
 import { productsService } from '../../../services/products.service';
 import {
   Home,
@@ -17,19 +18,10 @@ import {
   Trash2,
   GripVertical,
   Palette,
-  Package,
-  Truck,
-  Shield,
-  Heart,
-  Star,
-  Zap,
-  Gift,
-  Percent,
   Film,
   Images,
   Layers,
   X,
-  Flame,
   Megaphone,
   AlignLeft,
   AlignCenter,
@@ -40,7 +32,15 @@ import {
   NumberInput, Page, PageHeader, RadioGroup, SelectInput, SettingsSection, Switch, Tabs, TextArea, TextInput, toast, useConfirm,
 } from '../../../components/ui';
 
-type HomeTab = 'hero' | 'features' | 'content' | 'cta' | 'whatsapp';
+type HomeTab = 'hero' | 'features' | 'blocks' | 'content' | 'cta' | 'whatsapp';
+
+/** Bloques fijos de la portada que se configuran en la pestaña "Bloques". */
+const BLOCK_INFO: { key: HomeBlockKey; label: string; description: string }[] = [
+  { key: 'categories', label: 'Compra por categoría', description: 'Tarjetas con la foto y el número de productos de cada categoría activa (las vacías no se muestran).' },
+  { key: 'showcase', label: 'Vitrina', description: 'Pestañas Novedades · Mejor calificados · Ofertas. La pestaña de ofertas se oculta si no hay descuentos vigentes.' },
+  { key: 'howItWorks', label: 'Personaliza en 3 pasos', description: 'Elige prenda → sube tu diseño → recíbelo. Solo se ve si el módulo de personalización está activo.' },
+  { key: 'reviews', label: 'Reseñas de clientes', description: 'Últimas reseñas aprobadas con 4 o 5 estrellas. Si aún no hay reseñas, el bloque no aparece.' },
+];
 
 /** Opción seleccionable con icono (tipo de carta, fondo, icono de la tarjeta). */
 function ChoiceButton({ active, onClick, title, children }: { active: boolean; onClick: () => void; title?: string; children: ReactNode }) {
@@ -80,20 +80,8 @@ function ItemRow({ icon, title, tag, inactive, meta, actions, className = '', ..
 const BG_LABELS: Record<string, string> = { gradient: 'Gradiente', image: 'Imagen', video: 'Video', carousel: 'Carrusel' };
 const BG_ICONS: Record<string, typeof Palette> = { gradient: Palette, image: Image, video: Film, carousel: Images };
 
-// Map de iconos
-const iconComponents: Record<string, typeof Palette> = {
-  palette: Palette,
-  sparkles: Sparkles,
-  flame: Flame,
-  package: Package,
-  truck: Truck,
-  shield: Shield,
-  heart: Heart,
-  star: Star,
-  zap: Zap,
-  gift: Gift,
-  percent: Percent,
-};
+// Iconos de las características (compartidos con la portada)
+const iconComponents = FEATURE_ICON_COMPONENTS;
 
 export const SettingsHomePage = () => {
   const {
@@ -124,6 +112,14 @@ export const SettingsHomePage = () => {
   const [ctaForm, setCtaForm] = useState<CTASettings>(settings.home.cta);
   const [whatsappForm, setWhatsappForm] = useState<WhatsAppButtonSettings>(settings.home.whatsappButton);
   const [promoBanners, setPromoBanners] = useState<PromoBanner[]>(settings.home.promoBanners || []);
+  const [blocksForm, setBlocksForm] = useState<Record<HomeBlockKey, HomeBlockSettings>>(() => ({
+    categories: homeBlock(settings.home, 'categories'),
+    showcase: homeBlock(settings.home, 'showcase'),
+    howItWorks: homeBlock(settings.home, 'howItWorks'),
+    reviews: homeBlock(settings.home, 'reviews'),
+  }));
+  const setBlock = (key: HomeBlockKey, patch: Partial<HomeBlockSettings>) =>
+    setBlocksForm((prev) => ({ ...prev, [key]: { ...prev[key], ...patch } }));
 
   // Drag and drop state
   const [draggedItem, setDraggedItem] = useState<{ type: 'section' | 'banner'; id: string } | null>(null);
@@ -209,6 +205,18 @@ export const SettingsHomePage = () => {
       setPromoBanners(settings.home.promoBanners);
     }
   }, [settings.home.hero?.cards, settings.home.cta, settings.home.whatsappButton, settings.home.promoBanners]);
+
+  // Bloques: se recalculan cuando llega lo guardado (los que no estén usan los por defecto).
+  const savedBlocksKey = JSON.stringify(settings.home.blocks ?? {});
+  useEffect(() => {
+    const home = { blocks: JSON.parse(savedBlocksKey) };
+    setBlocksForm({
+      categories: homeBlock(home, 'categories'),
+      showcase: homeBlock(home, 'showcase'),
+      howItWorks: homeBlock(home, 'howItWorks'),
+      reviews: homeBlock(home, 'reviews'),
+    });
+  }, [savedBlocksKey]);
 
   // Load categories and types from database
   useEffect(() => {
@@ -512,6 +520,15 @@ export const SettingsHomePage = () => {
     setDragOverItem(null);
   };
 
+  const handleSaveBlocks = () => withSaving(async () => {
+    try {
+      await updateHomeSettings({ blocks: blocksForm });
+      toast.success('Bloques de la portada guardados');
+    } catch {
+      toast.error('No se pudieron guardar los bloques');
+    }
+  });
+
   const handleSaveCTA = () => withSaving(async () => {
     try {
       await updateHomeSettings({ cta: ctaForm });
@@ -806,6 +823,7 @@ export const SettingsHomePage = () => {
         tabs={[
           { value: 'hero', label: 'Hero', count: heroCards.length },
           { value: 'features', label: 'Características', count: settings.home.features.length },
+          { value: 'blocks', label: 'Bloques' },
           { value: 'content', label: 'Secciones y banners', count: contentItems.length },
           { value: 'cta', label: 'Llamado a la acción' },
           { value: 'whatsapp', label: 'WhatsApp' },
@@ -1067,6 +1085,47 @@ export const SettingsHomePage = () => {
           </div>
           <FormActions sticky>
             <Button onClick={handleSaveCTA} isLoading={saving} icon={<Save className="w-4 h-4" />}>Guardar llamado a la acción</Button>
+          </FormActions>
+        </>
+      )}
+
+      {/* ───────── Bloques fijos de la portada ───────── */}
+      {tab === 'blocks' && (
+        <>
+          <div>
+            {BLOCK_INFO.map((b) => (
+              <SettingsSection key={b.key} title={b.label} description={b.description}>
+                <Switch
+                  checked={blocksForm[b.key].isActive}
+                  onChange={(v) => setBlock(b.key, { isActive: v })}
+                  label="Mostrar en la portada"
+                />
+                <FormGrid>
+                  <Field label="Título" hint={`Vacío = "${DEFAULT_HOME_BLOCKS[b.key].title}".`}>
+                    <TextInput
+                      value={blocksForm[b.key].title}
+                      onChange={(e) => setBlock(b.key, { title: e.target.value })}
+                      placeholder={DEFAULT_HOME_BLOCKS[b.key].title}
+                      disabled={!blocksForm[b.key].isActive}
+                    />
+                  </Field>
+                  <Field label="Subtítulo">
+                    <TextInput
+                      value={blocksForm[b.key].subtitle}
+                      onChange={(e) => setBlock(b.key, { subtitle: e.target.value })}
+                      placeholder="Opcional"
+                      disabled={!blocksForm[b.key].isActive}
+                    />
+                  </Field>
+                </FormGrid>
+                {b.key === 'howItWorks' && !settings.home.enableCustomizer && (
+                  <Alert tone="warning">El módulo de personalización está apagado: este bloque no se mostrará.</Alert>
+                )}
+              </SettingsSection>
+            ))}
+          </div>
+          <FormActions sticky>
+            <Button onClick={handleSaveBlocks} isLoading={saving} icon={<Save className="w-4 h-4" />}>Guardar bloques</Button>
           </FormActions>
         </>
       )}

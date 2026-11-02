@@ -277,6 +277,9 @@
         "permission:pos.cash_register,pos.access"
     ],
     "GET api/catalogs/categories": [],
+    "GET api/catalogs/categories/stats": [
+        "throttle:storefront"
+    ],
     "GET api/catalogs/categories/{id}": [],
     "GET api/catalogs/colors": [],
     "GET api/catalogs/colors/{id}": [],
@@ -686,12 +689,16 @@
         "auth:sanctum",
         "permission:pos.access,pos.view_sales"
     ],
-    "GET api/products": [],
+    "GET api/products": [
+        "auth.optional"
+    ],
     "GET api/products/categories": [],
     "GET api/products/category/{category}": [],
     "GET api/products/featured": [],
     "GET api/products/types": [],
-    "GET api/products/{id}": [],
+    "GET api/products/{id}": [
+        "auth.optional"
+    ],
     "GET api/purchase-orders": [
         "auth:sanctum",
         "permission:purchase_orders.view"
@@ -734,6 +741,9 @@
     ],
     "GET api/reviews/can-review/{productId}": [
         "auth:sanctum"
+    ],
+    "GET api/reviews/featured": [
+        "throttle:storefront"
     ],
     "GET api/reviews/my/all": [
         "auth:sanctum"

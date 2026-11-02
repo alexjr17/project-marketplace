@@ -4,6 +4,7 @@ import { ArrowRight, ChevronLeft, ChevronRight } from 'lucide-react';
 import { ProductCard } from './ProductCard';
 import { productsService, type ProductFilters } from '../../services/products.service';
 import { Skeleton } from '../ui';
+import { useStoreData } from '../../hooks/useStoreData';
 import type { ProductSection } from '../../types/settings';
 import type { Product } from '../../types/product';
 
@@ -13,10 +14,46 @@ interface FeaturedProductsProps {
   section?: ProductSection;
 }
 
+/** Parámetros del API para una sección configurada (solo activos; sin sección = destacados). */
+function buildSectionQuery(section?: ProductSection): ProductFilters {
+  const filters: ProductFilters = { limit: section?.maxProducts || 8, isActive: true };
+  const f = section?.filters;
+  if (!f) {
+    filters.featured = true;
+    return filters;
+  }
+  const category = f.category || f.categoryId;
+  const type = f.type || f.productTypeId;
+  if (category) filters.category = category;
+  if (type) filters.type = type;
+  if (f.featured) filters.featured = true;
+  if (f.inStock) filters.inStock = true;
+  if (f.minPrice != null) filters.minPrice = f.minPrice;
+  if (f.maxPrice != null) filters.maxPrice = f.maxPrice;
+  const sort: Record<string, [string, 'asc' | 'desc']> = {
+    price: ['basePrice', 'asc'],
+    rating: ['rating', 'desc'],
+    newest: ['createdAt', 'desc'],
+    reviewsCount: ['reviewsCount', 'desc'],
+  };
+  // "Más vendidos" no tiene métrica de ventas en el API: se ordena por nº de reseñas.
+  const sortKey = f.sortBy || (f.bestsellers ? 'reviewsCount' : f.newArrivals ? 'newest' : undefined);
+  if (sortKey && sort[sortKey]) [filters.sortBy, filters.sortOrder] = sort[sortKey];
+  return filters;
+}
+
 export const FeaturedProducts = ({ title, subtitle, section }: FeaturedProductsProps) => {
   const navigate = useNavigate();
-  const [products, setProducts] = useState<Product[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+
+  // Filtros de la sección en una clave PRIMITIVA: el efecto de carga solo depende de ella,
+  // así que recrear el objeto `section` (al cargar ajustes) no vuelve a pedir los productos.
+  const query = buildSectionQuery(section);
+  const queryKey = JSON.stringify(query);
+  const { data, loading: isLoading } = useStoreData<Product[]>(
+    `products:${queryKey}`,
+    () => productsService.getAll(JSON.parse(queryKey) as ProductFilters).then((r) => r.data || []),
+  );
+  const products = data ?? [];
 
   // Carrusel
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -54,70 +91,7 @@ export const FeaturedProducts = ({ title, subtitle, section }: FeaturedProductsP
         window.removeEventListener('resize', updateScrollButtons);
       };
     }
-  }, [products, updateScrollButtons]);
-
-  // Cargar productos desde la API
-  useEffect(() => {
-    const loadProducts = async () => {
-      setIsLoading(true);
-      try {
-        const filters: ProductFilters = {
-          limit: section?.maxProducts || 8,
-        };
-
-        // Aplicar filtros de la sección
-        if (section?.filters) {
-          const sectionFilters = section.filters;
-
-          // Filtros de categoría y tipo
-          const category = sectionFilters.category || sectionFilters.categoryId;
-          const type = sectionFilters.type || sectionFilters.productTypeId;
-          if (category) filters.category = category;
-          if (type) filters.type = type;
-
-          // Filtros booleanos
-          if (sectionFilters.featured) filters.featured = true;
-          if (sectionFilters.inStock) filters.inStock = true;
-
-          // Ordenamiento
-          if (sectionFilters.sortBy) {
-            switch (sectionFilters.sortBy) {
-              case 'price':
-                filters.sortBy = 'basePrice';
-                filters.sortOrder = 'asc';
-                break;
-              case 'rating':
-                filters.sortBy = 'rating';
-                filters.sortOrder = 'desc';
-                break;
-              case 'newest':
-                filters.sortBy = 'createdAt';
-                filters.sortOrder = 'desc';
-                break;
-              case 'reviewsCount':
-                filters.sortBy = 'reviewsCount';
-                filters.sortOrder = 'desc';
-                break;
-            }
-          }
-        } else {
-          // Por defecto, productos destacados
-          filters.featured = true;
-        }
-
-        const response = await productsService.getAll(filters);
-        setProducts(response.data || []);
-      } catch (error) {
-        console.error('Error loading featured products:', error);
-        setProducts([]);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    loadProducts();
-  }, [section?.filters, section?.maxProducts]);
-
+  }, [data, updateScrollButtons]);
 
   // Generar link de "Ver todo" con filtros dinámicos
   const getViewAllLink = () => {

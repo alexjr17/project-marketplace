@@ -14,6 +14,10 @@ export interface FilterValues {
   featured?: boolean;
   bestsellers?: boolean;
   newArrivals?: boolean;
+  /** Texto del buscador (?search=). Lo maneja CatalogPage, no el panel de filtros. */
+  search?: string;
+  /** Solo ofertas (?onSale=1). Lo maneja CatalogPage. */
+  onSale?: boolean;
 }
 
 interface ProductFiltersProps {

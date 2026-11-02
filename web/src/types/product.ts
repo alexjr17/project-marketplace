@@ -84,6 +84,7 @@ export interface Product {
   // Campos de relación con la BD (slugs en español)
   categorySlug?: string;  // Slug de categoría (ropa, accesorios, bebidas, hogar, oficina)
   categoryId?: number;    // ID de categoría en la BD
+  categoryName?: string;  // Nombre de la categoría (lo manda el API)
   typeSlug?: string;      // Slug de tipo de producto
   typeId?: number;        // ID de tipo de producto en la BD
   typeName?: string;      // Nombre del tipo de producto

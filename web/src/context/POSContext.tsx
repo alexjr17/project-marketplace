@@ -5,6 +5,7 @@ import type { ScanProductResponse, Sale, SaleItem, CreateSaleRequest, TemplateZo
 import type { CashSession } from '../services/cash-register.service';
 import { useToast } from './ToastContext';
 import { useSettings } from './SettingsContext';
+import { useAuth } from './AuthContext';
 
 // ==================== TYPES ====================
 
@@ -76,6 +77,10 @@ const POSContext = createContext<POSContextType | undefined>(undefined);
 export function POSProvider({ children }: { children: React.ReactNode }) {
   const { showToast } = useToast();
   const { settings } = useSettings();
+  const { user, hasPermission, isLoading: authLoading } = useAuth();
+  // La sesión de caja solo existe para quien entra al POS: antes se pedía en cada página de
+  // la tienda, también para invitados (401 en cada visita).
+  const canUsePOS = !!user && hasPermission('pos.access');
 
   // Session state
   const [currentSession, setCurrentSession] = useState<CashSession | null>(null);
@@ -109,6 +114,11 @@ export function POSProvider({ children }: { children: React.ReactNode }) {
    * Load current session
    */
   const loadSession = useCallback(async () => {
+    if (!canUsePOS) {
+      setCurrentSession(null);
+      setIsLoadingSession(false);
+      return;
+    }
     try {
       setIsLoadingSession(true);
       const session = await cashRegisterService.getMySession();
@@ -119,7 +129,7 @@ export function POSProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setIsLoadingSession(false);
     }
-  }, []);
+  }, [canUsePOS]);
 
   /**
    * Add product to cart
@@ -407,10 +417,11 @@ export function POSProvider({ children }: { children: React.ReactNode }) {
     [currentSession, cart, discount, editingSaleId, clearCart, loadSession, showToast]
   );
 
-  // Load session on mount
+  // Carga la sesión cuando hay usuario con pos.access (y la limpia al cerrar sesión).
   useEffect(() => {
+    if (authLoading) return;
     loadSession();
-  }, [loadSession]);
+  }, [authLoading, loadSession, user?.id]);
 
   const value: POSContextType = {
     // Session

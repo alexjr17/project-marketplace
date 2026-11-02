@@ -99,5 +99,7 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('uploads', fn (Request $r) => Limit::perMinute(30)->by($byUserOrIp($r)));
         // Imágenes redimensionadas: cada variante nueva cuesta CPU y disco.
         RateLimiter::for('images', fn (Request $r) => Limit::perMinute(300)->by('ip'.$r->ip()));
+        // Bloques públicos de la portada (reseñas destacadas, categorías con conteo).
+        RateLimiter::for('storefront', fn (Request $r) => Limit::perMinute(60)->by('ip'.$r->ip()));
     }
 }

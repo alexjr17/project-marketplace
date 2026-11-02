@@ -17,6 +17,8 @@ Route::prefix('catalogs')->group(function () {
     Route::get('colors', [CatalogController::class, 'listColors']);
     Route::get('colors/{id}', [CatalogController::class, 'getColor'])->whereNumber('id');
     Route::get('categories', [CatalogController::class, 'listCategories']);
+    // Tarjetas de la portada: nº de productos activos e imagen por categoría.
+    Route::get('categories/stats', [CatalogController::class, 'categoriesWithStats'])->middleware('throttle:storefront');
     Route::get('categories/{id}', [CatalogController::class, 'getCategory'])->whereNumber('id');
     Route::get('product-types', [CatalogController::class, 'listProductTypes']);
     Route::get('product-types/{id}', [CatalogController::class, 'getProductType'])->whereNumber('id');

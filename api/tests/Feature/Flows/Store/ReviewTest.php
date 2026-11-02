@@ -195,4 +195,43 @@ class ReviewTest extends TestCase
         $this->review()->assertCreated();
         $this->assertSame([$otro->id], array_column($this->getJson('/api/reviews/pending/products')->json('data'), 'productId'));
     }
+
+    public function test_resenas_destacadas_para_la_portada(): void
+    {
+        $tote = $this->makeProduct('Tote', 25000, [[null, null, 5]], ['category' => 'accesorios']);
+        $oculto = $this->makeProduct('Gorra vieja', 15000, [], ['isActive' => false]);
+        $ana = User::create(['email' => 'ana.secreta@vexa.test', 'name' => 'ana maría gómez ruiz', 'passwordHash' => bcrypt('x'), 'roleId' => 2, 'status' => 'ACTIVE']);
+        $luis = User::create(['email' => 'luis@vexa.test', 'name' => 'Luis', 'passwordHash' => bcrypt('x'), 'roleId' => 2, 'status' => 'ACTIVE']);
+        $cliente = $this->userByEmail('cliente@vexa.com'); // "Cliente Demo"
+
+        $make = fn (User $u, Product $p, int $rating, ?string $comment, string $status = 'APPROVED', int $daysAgo = 0) => Review::create([
+            'userId' => $u->id, 'productId' => $p->id, 'rating' => $rating, 'title' => 'T', 'comment' => $comment,
+            'status' => $status, 'verifiedPurchase' => true, 'createdAt' => now()->subDays($daysAgo),
+        ]);
+        $make($cliente, $this->product, 5, 'Me encantó la tela', 'APPROVED', 3);
+        $make($ana, $tote, 4, 'Muy buena calidad', 'APPROVED', 1);
+        $make($luis, $this->product, 5, 'Llegó rápido', 'APPROVED', 2);
+        $otro = fn (string $n) => User::create(['email' => "{$n}@vexa.test", 'name' => 'Otro '.$n, 'passwordHash' => bcrypt('x'), 'roleId' => 2, 'status' => 'ACTIVE']);
+        $make($otro('a'), $tote, 3, 'Normal');                          // menos de 4 estrellas
+        $make($otro('b'), $this->product, 5, '   ');                    // sin comentario
+        $make($otro('c'), $tote, 5, 'Pendiente de moderar', 'PENDING');
+        $make($otro('d'), $this->product, 5, 'Rechazada', 'REJECTED');
+        $make($otro('e'), $oculto, 5, 'De un producto oculto');         // producto inactivo
+
+        $res = $this->getJson('/api/reviews/featured')->assertOk()->assertJsonPath('success', true);
+        $data = $res->json('data');
+
+        // Solo aprobadas, 4-5 estrellas, con comentario y de productos visibles; recientes primero.
+        $this->assertSame(['Muy buena calidad', 'Llegó rápido', 'Me encantó la tela'], array_column($data, 'comment'));
+        $this->assertSame(['id', 'rating', 'title', 'comment', 'verifiedPurchase', 'createdAt', 'customerName', 'product'], array_keys($data[0]));
+        $this->assertSame(['id', 'name', 'image'], array_keys($data[0]['product']));
+        $this->assertSame([$tote->id, 'Tote'], [$data[0]['product']['id'], $data[0]['product']['name']]);
+        // Nombre de pila + inicial del apellido; nunca el email ni el id del usuario.
+        $this->assertSame(['Ana G.', 'Luis', 'Cliente D.'], array_column($data, 'customerName'));
+        $this->assertStringNotContainsString('@', $res->getContent());
+        $this->assertStringNotContainsString('userId', $res->getContent());
+
+        $this->getJson('/api/reviews/featured?limit=1')->assertOk()->assertJsonCount(1, 'data');
+        $this->getJson('/api/reviews/featured?limit=50')->assertStatus(422);
+    }
 }

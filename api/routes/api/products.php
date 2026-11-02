@@ -18,8 +18,10 @@ Route::prefix('products')->group(function () {
     Route::get('categories', [ProductController::class, 'categories']);
     Route::get('types', [ProductController::class, 'types']);
     Route::get('category/{category}', [ProductController::class, 'byCategory']);
-    Route::get('/', [ProductController::class, 'index']);
-    Route::get('{id}', [ProductController::class, 'show'])->whereNumber('id');
+    // auth.optional: el equipo con products.view/manage ve también inactivos (panel);
+    // el público solo ve productos activos que no son plantillas.
+    Route::get('/', [ProductController::class, 'index'])->middleware('auth.optional');
+    Route::get('{id}', [ProductController::class, 'show'])->whereNumber('id')->middleware('auth.optional');
 
     // Crear, editar y borrar productos: products.manage (ver la lista es products.view).
     Route::middleware(['auth:sanctum', 'permission:products.manage'])->group(function () {
@@ -61,6 +63,7 @@ Route::prefix('variants')->middleware('auth:sanctum')->group(function () {
 // ==================== RESEÑAS ====================
 Route::prefix('reviews')->group(function () {
     // Públicas.
+    Route::get('featured', [ReviewController::class, 'featured'])->middleware('throttle:storefront');
     Route::get('product/{productId}', [ReviewController::class, 'productReviews'])
         ->whereNumber('productId')->middleware('auth.optional');
     Route::get('product/{productId}/summary', [ReviewController::class, 'productSummary'])

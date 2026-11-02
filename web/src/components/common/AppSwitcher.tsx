@@ -7,7 +7,8 @@ import { Grid3x3, ShoppingCart, LayoutGrid, ChevronDown, MessageSquare, Shirt } 
 
 interface AppSwitcherProps {
   /** 'sidebar' = encabezado de ancho completo (icono + nombre + chevron). */
-  variant?: 'default' | 'sidebar';
+  /** 'icon' = solo un botón con icono (encabezado de la tienda). */
+  variant?: 'default' | 'sidebar' | 'icon';
   /** Solo en variant 'sidebar': oculta el texto cuando el sidebar está contraído. */
   collapsed?: boolean;
 }
@@ -159,6 +160,30 @@ export default function AppSwitcher({ variant = 'default', collapsed = false }: 
 
         {isOpen && canSwitch && (
           <div className="absolute left-0 right-0 mt-2 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
+            {appList}
+            {appButtons}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Variante icono: botón compacto; la lista de apps se abre igual que en la variante normal.
+  if (variant === 'icon') {
+    return (
+      <div className="relative" ref={dropdownRef}>
+        <button
+          type="button"
+          onClick={() => setIsOpen(!isOpen)}
+          title="Aplicaciones"
+          aria-label="Aplicaciones"
+          aria-expanded={isOpen}
+          className={`p-2 rounded-lg transition-colors ${isOpen ? 'bg-gray-100 text-gray-900' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'}`}
+        >
+          <LayoutGrid className="w-5 h-5" />
+        </button>
+        {isOpen && (
+          <div className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-xl border border-gray-200 py-2 z-50">
             {appList}
             {appButtons}
           </div>

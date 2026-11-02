@@ -3,6 +3,7 @@ import { Star } from 'lucide-react';
 import { useCurrency } from '../../hooks/useCurrency';
 import type { Product } from '../../types/product';
 import { FavoriteButton } from './FavoriteButton';
+import { ProductImage } from './ProductImage';
 import { Badge } from '../ui';
 
 interface ProductCardProps {
@@ -19,72 +20,79 @@ const categoryLabels: Record<string, string> = {
   office: 'Oficina',
 };
 
-// Para imágenes servidas por nuestro endpoint, pide un ancho acorde a la card.
-function sizedImage(url: string | undefined, w: number): string {
-  if (!url || !url.includes('/api/img/')) return url || '';
-  return url + (url.includes('?') ? '&' : '?') + 'w=' + w;
+/** % de descuento real entre el precio base y el de venta (redondeado). */
+function discountPercent(base: number, sale: number): number {
+  if (!base || sale >= base) return 0;
+  return Math.round(((base - sale) / base) * 100);
 }
 
-/** Tarjeta de producto de la tienda: blanca, borde gris, imagen cuadrada y solo sombra al pasar. */
+/**
+ * Tarjeta de producto de la tienda: blanca, borde gris, imagen cuadrada y solo sombra al pasar.
+ * Precio con descuento (tachado y %), calificación, agotado y favorito.
+ */
 export const ProductCard = ({ product, priority = false }: ProductCardProps) => {
   const { format } = useCurrency();
   const inStock = (product.stock ?? 0) > 0;
-  const onSale = product.hasDiscount && product.salePrice != null;
+  const lowStock = inStock && (product.stock ?? 0) <= 3;
+  const sale = product.hasDiscount && product.salePrice != null ? product.salePrice : null;
+  const pct = sale != null ? discountPercent(product.basePrice, sale) : 0;
+  const reviews = product.reviewsCount || 0;
+  const rating = Number(product.rating || 0);
   const sizes = product.sizes.map((size) => (typeof size === 'string' ? size : size.abbreviation));
+  const categoryLabel = product.categoryName || (product.category && categoryLabels[product.category]) || product.category;
 
   return (
     <Link
       to={`/product/${product.id}`}
-      className="group bg-white rounded-xl border border-gray-200 hover:shadow-md transition-shadow overflow-hidden flex flex-col focus:outline-none focus-visible:ring-2 focus-visible:ring-app-500"
+      className="group bg-white rounded-xl border border-gray-200 hover:shadow-md transition-shadow overflow-hidden flex flex-col h-full focus:outline-none focus-visible:ring-2 focus-visible:ring-app-500"
     >
-      {/* Imagen (proporción fija) */}
-      <div className="relative aspect-square bg-gray-100">
-        <img
-          src={sizedImage(product.images.front, 400)}
+      {/* Imagen (proporción fija; respaldo limpio si falla) */}
+      <div className="relative aspect-square bg-gray-100 overflow-hidden">
+        <ProductImage
+          src={product.images.front}
           alt={product.name}
-          loading={priority ? 'eager' : 'lazy'}
-          // @ts-expect-error fetchpriority es válido en HTML pero falta en los tipos de React
-          fetchpriority={priority ? 'high' : 'auto'}
-          decoding="async"
-          width={400}
-          height={400}
-          className={`w-full h-full object-cover ${inStock ? '' : 'opacity-60'}`}
+          priority={priority}
+          className={inStock ? '' : 'opacity-60'}
         />
-        <div className="absolute top-2 left-2 flex flex-col items-start gap-1">
-          {onSale && (
-            <Badge tone="green" className="shadow-sm">
-              {product.discountType === 'percent' && product.discountValue ? `-${Math.round(product.discountValue)}%` : 'Oferta'}
-            </Badge>
+        <div className="absolute top-2 left-2 right-12 flex flex-wrap items-start gap-1 pointer-events-none">
+          {sale != null && (
+            <Badge tone="green" className="shadow-sm ring-1 ring-white/70">{pct > 0 ? `-${pct}%` : 'Oferta'}</Badge>
           )}
-          {product.featured && <Badge tone="app" className="shadow-sm">Destacado</Badge>}
-          {!inStock && <Badge tone="red" className="shadow-sm">Agotado</Badge>}
+          {product.featured && <Badge tone="app" className="shadow-sm ring-1 ring-white/70">Destacado</Badge>}
+          {!inStock && <Badge tone="red" className="shadow-sm ring-1 ring-white/70">Agotado</Badge>}
         </div>
         <FavoriteButton
           productId={Number(product.id)}
           size={16}
-          className="absolute top-2 right-2 w-8 h-8 bg-white/95 hover:bg-white border border-gray-200"
+          className="absolute top-2 right-2 w-8 h-8 bg-white/95 hover:bg-white border border-gray-200 shadow-sm"
         />
       </div>
 
       {/* Datos */}
-      <div className="p-3 sm:p-4 flex flex-col gap-1.5 flex-1">
-        <span className="text-[11px] font-medium tracking-wide text-gray-500 uppercase truncate">
-          {(product.category && categoryLabels[product.category]) || product.category}
-        </span>
+      <div className="p-3 sm:p-4 flex flex-col gap-1.5 flex-1 min-w-0">
+        {categoryLabel && (
+          <span className="text-[11px] font-medium tracking-wide text-gray-500 uppercase truncate">{categoryLabel}</span>
+        )}
 
         <h3 className="font-medium text-gray-900 text-sm leading-snug line-clamp-2 min-h-[2.5rem]">
           {product.name}
         </h3>
 
-        <div className="flex items-center gap-1 text-xs text-gray-500">
-          <Star className={`w-3.5 h-3.5 ${(product.rating || 0) > 0 ? 'fill-amber-400 text-amber-400' : 'fill-gray-200 text-gray-200'}`} />
-          <span className="font-medium text-gray-700">{Number(product.rating || 0).toFixed(1)}</span>
-          <span>({product.reviewsCount || 0})</span>
-          {inStock && <span className="ml-auto text-green-700 whitespace-nowrap">{product.stock} disp.</span>}
+        <div className="flex items-center gap-1 text-xs text-gray-500 min-h-[1rem]">
+          {reviews > 0 ? (
+            <>
+              <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+              <span className="font-medium text-gray-700">{rating.toFixed(1)}</span>
+              <span>({reviews})</span>
+            </>
+          ) : (
+            <span className="text-gray-400">Sin reseñas</span>
+          )}
+          {lowStock && <span className="ml-auto text-amber-700 whitespace-nowrap">Últimas {product.stock}</span>}
         </div>
 
         {(product.colors.length > 0 || sizes.length > 0) && (
-          <div className="flex items-center gap-2 min-w-0">
+          <div className="hidden sm:flex items-center gap-2 min-w-0">
             {product.colors.length > 0 && (
               <div className="flex items-center -space-x-1 flex-shrink-0">
                 {product.colors.slice(0, 4).map((color, idx) => (
@@ -106,14 +114,10 @@ export const ProductCard = ({ product, priority = false }: ProductCardProps) => 
           </div>
         )}
 
-        <div className="mt-auto pt-1 flex items-baseline gap-2 flex-wrap">
-          {onSale ? (
-            <>
-              <span className="text-base font-semibold text-gray-900">{format(product.salePrice!)}</span>
-              <span className="text-xs text-gray-400 line-through">{format(product.basePrice)}</span>
-            </>
-          ) : (
-            <span className="text-base font-semibold text-gray-900">{format(product.basePrice)}</span>
+        <div className="mt-auto pt-1 flex items-baseline gap-x-2 flex-wrap">
+          <span className="text-base font-semibold text-gray-900">{format(sale ?? product.basePrice)}</span>
+          {sale != null && (
+            <span className="text-xs text-gray-400 line-through">{format(product.basePrice)}</span>
           )}
         </div>
       </div>

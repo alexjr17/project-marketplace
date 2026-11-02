@@ -3,7 +3,8 @@ import { useSettings } from '../../context/SettingsContext';
 import type { HeroCard as HeroCardType } from '../../types/settings';
 
 // Valores por defecto para el hero
-const getDefaultHeroCards = (brandColors: { primary: string; secondary: string; accent: string }): HeroCardType[] => [
+// Por defecto: un mensaje con UN botón principal y dos banners laterales.
+const getDefaultHeroCards = (brandColors: { primary: string; secondary: string; accent: string }, enableCustomizer: boolean): HeroCardType[] => [
   {
     id: 'main',
     position: 'main',
@@ -16,17 +17,9 @@ const getDefaultHeroCards = (brandColors: { primary: string; secondary: string; 
     buttons: [
       {
         id: 'btn-1',
-        text: 'Crear diseño',
-        link: '/customizer',
-        style: 'primary',
-        icon: 'palette',
-        isActive: true,
-      },
-      {
-        id: 'btn-2',
         text: 'Ver catálogo',
         link: '/catalog',
-        style: 'secondary',
+        style: 'primary',
         icon: 'shoppingBag',
         isActive: true,
       },
@@ -41,15 +34,16 @@ const getDefaultHeroCards = (brandColors: { primary: string; secondary: string; 
     id: 'side-1',
     position: 'side',
     order: 1,
-    title: 'Personaliza',
-    subtitle: 'Tu creatividad',
+    title: enableCustomizer ? 'Personaliza' : 'Novedades',
+    subtitle: enableCustomizer ? 'Sube tu diseño' : 'Lo último en llegar',
     showSubtitle: true,
     showBadge: false,
+    icon: enableCustomizer ? 'palette' : 'sparkles',
     buttons: [
       {
         id: 'btn-side-1',
-        text: 'Personalizar',
-        link: '/customizer',
+        text: enableCustomizer ? 'Personalizar' : 'Ver novedades',
+        link: enableCustomizer ? '/customize' : '/catalog?sort=newest',
         style: 'primary',
         isActive: true,
       },
@@ -68,15 +62,16 @@ const getDefaultHeroCards = (brandColors: { primary: string; secondary: string; 
     id: 'side-2',
     position: 'side',
     order: 2,
-    title: 'Lo más vendido',
-    subtitle: 'Tendencias',
+    title: 'Ofertas',
+    subtitle: 'Descuentos vigentes',
     showSubtitle: true,
     showBadge: false,
+    icon: 'percent',
     buttons: [
       {
         id: 'btn-side-2',
-        text: 'Ver más',
-        link: '/catalog?featured=true',
+        text: 'Ver ofertas',
+        link: '/catalog?onSale=1',
         style: 'primary',
         isActive: true,
       },
@@ -113,7 +108,7 @@ export const HeroSection = ({ className = '' }: HeroSectionProps) => {
   // Usar cards configurados o los por defecto
   const allCards = heroSettings?.cards?.length > 0
     ? heroSettings.cards
-    : getDefaultHeroCards(brandColors);
+    : getDefaultHeroCards(brandColors, settings.home?.enableCustomizer ?? true);
 
   // Separar carta principal y laterales
   const mainCard = allCards.find(c => c.position === 'main' && c.isActive);
@@ -145,7 +140,7 @@ export const HeroSection = ({ className = '' }: HeroSectionProps) => {
   };
 
   return (
-    <div className={`bg-gray-100 py-4 md:py-6 ${className}`}>
+    <div className={`py-4 md:py-6 ${className}`}>
       <div className="max-w-7xl mx-auto px-4">
         {/* Bento Layout con Flexbox */}
         <div className={`flex flex-col md:flex-row gap-3 md:gap-4 ${getHeroHeight()}`}>

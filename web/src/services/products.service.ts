@@ -91,6 +91,10 @@ export interface ProductFilters {
   minPrice?: number;
   maxPrice?: number;
   search?: string;
+  /** Solo productos con descuento automático vigente (lo resuelve el backend). */
+  onSale?: boolean;
+  /** La tienda manda isActive=true para que el equipo con sesión no vea inactivos en la portada. */
+  isActive?: boolean;
   sortBy?: string;
   sortOrder?: 'asc' | 'desc';
 }
