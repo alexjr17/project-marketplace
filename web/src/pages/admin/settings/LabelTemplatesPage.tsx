@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Plus, Settings, Copy, Tag, Save, ArrowLeft, Eye, Download, Search, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
+import { Plus, Pencil, Copy, Tag, Save, Eye, Download, Trash2, Ruler, LayoutGrid } from 'lucide-react';
 import {
   useReactTable,
   getCoreRowModel,
@@ -15,8 +15,13 @@ import * as barcodeService from '../../../services/barcode.service';
 import { catalogsService, type ProductType as ProductTypeCatalog } from '../../../services/catalogs.service';
 import type { LabelTemplate, LabelZone } from '../../../types/label-template';
 import { LabelTemplateEditor } from '../../../components/admin/LabelTemplateEditor';
-import { Modal } from '../../../components/shared/Modal';
-import { Button } from '../../../components/shared/Button';
+import {
+  ActionMenu, Badge, Button, Card, CardTitle, Checkbox, Dialog, EmptyState, Field, FilterBar, FormGrid, IconButton,
+  NumberInput, Page, PageHeader, Pager, SearchInput, SelectInput, Spinner, Switch, Table, TableCard, TBody, Td, TextInput,
+  Th, THead, Tr, toast, useConfirm, type Tone,
+} from '../../../components/ui';
+
+const utilTone = (pct: number): Tone => (pct >= 70 ? 'green' : pct >= 60 ? 'yellow' : 'red');
 
 type ViewMode = 'list' | 'editor';
 
@@ -32,6 +37,11 @@ export default function LabelTemplatesPage() {
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [sorting, setSorting] = useState<SortingState>([]);
+  const confirm = useConfirm();
+  // Duplicar: nombre de la copia (reemplaza al prompt() del navegador)
+  const [duplicating, setDuplicating] = useState<{ id: number; name: string } | null>(null);
+  const [duplicateName, setDuplicateName] = useState('');
+  const [duplicatingBusy, setDuplicatingBusy] = useState(false);
 
   // Editor state
   const [editorData, setEditorData] = useState({
@@ -63,7 +73,7 @@ export default function LabelTemplatesPage() {
       setProductTypes(productTypesData.filter(pt => pt.isActive));
     } catch (err: any) {
       console.error('Error loading data:', err);
-      alert(err.message || 'Error al cargar datos');
+      toast.error(err.message || 'Error al cargar datos');
     } finally {
       setLoading(false);
     }
@@ -75,7 +85,7 @@ export default function LabelTemplatesPage() {
       setTemplates(data);
     } catch (err: any) {
       console.error('Error loading templates:', err);
-      alert(err.message || 'Error al cargar plantillas');
+      toast.error(err.message || 'Error al cargar plantillas');
     }
   };
 
@@ -140,18 +150,18 @@ export default function LabelTemplatesPage() {
       setViewMode('editor');
     } catch (err: any) {
       console.error('Error loading template:', err);
-      alert(err.message || 'Error al cargar plantilla');
+      toast.error(err.message || 'Error al cargar plantilla');
     }
   };
 
   const handleSave = async () => {
     if (!editorData.name.trim()) {
-      alert('El nombre es requerido');
+      toast.error('El nombre es requerido');
       return;
     }
 
     if (editorData.width <= 0 || editorData.height <= 0) {
-      alert('Las dimensiones deben ser mayores a 0');
+      toast.error('Las dimensiones deben ser mayores a 0');
       return;
     }
 
@@ -232,18 +242,18 @@ export default function LabelTemplatesPage() {
 
       await loadTemplates();
       setViewMode('list');
-      alert(editingTemplate ? 'Plantilla actualizada correctamente' : 'Plantilla creada correctamente');
+      toast.success(editingTemplate ? 'Plantilla actualizada correctamente' : 'Plantilla creada correctamente');
     } catch (err: any) {
       console.error('Error saving template:', err);
-      alert(err.message || 'Error al guardar plantilla');
+      toast.error(err.message || 'Error al guardar plantilla');
     } finally {
       setSaving(false);
     }
   };
 
-  const handleCancel = () => {
+  const handleCancel = async () => {
     if (editorData.zones.length > 0 || editorData.name.trim()) {
-      if (!confirm('¿Descartar cambios?')) {
+      if (!(await confirm({ title: '¿Descartar los cambios?', message: 'Lo que no hayas guardado se perderá.', confirmText: 'Descartar', tone: 'danger' }))) {
         return;
       }
     }
@@ -251,29 +261,41 @@ export default function LabelTemplatesPage() {
   };
 
   const handleDelete = async (id: number, name: string) => {
-    if (!confirm(`¿Estás seguro de eliminar la plantilla "${name}"?`)) {
+    if (!(await confirm({ title: `¿Eliminar la plantilla "${name}"?`, message: 'No se puede deshacer.', tone: 'danger' }))) {
       return;
     }
 
     try {
       await labelTemplatesService.deleteLabelTemplate(id);
       await loadTemplates();
-      alert('Plantilla eliminada');
+      toast.success('Plantilla eliminada');
     } catch (err: any) {
-      alert(err.message || 'Error al eliminar plantilla');
+      toast.error(err.message || 'Error al eliminar plantilla');
     }
   };
 
-  const handleDuplicate = async (id: number, name: string) => {
-    const newName = prompt('Nombre para la plantilla duplicada:', `${name} (Copia)`);
-    if (!newName) return;
+  const handleDuplicate = (id: number, name: string) => {
+    setDuplicating({ id, name });
+    setDuplicateName(`${name} (Copia)`);
+  };
 
+  const confirmDuplicate = async () => {
+    if (!duplicating) return;
+    const newName = duplicateName.trim();
+    if (!newName) {
+      toast.error('Escribe un nombre para la copia');
+      return;
+    }
+    setDuplicatingBusy(true);
     try {
-      await labelTemplatesService.duplicateLabelTemplate(id, newName);
+      await labelTemplatesService.duplicateLabelTemplate(duplicating.id, newName);
       await loadTemplates();
-      alert('Plantilla duplicada');
+      toast.success('Plantilla duplicada');
+      setDuplicating(null);
     } catch (err: any) {
-      alert(err.message || 'Error al duplicar plantilla');
+      toast.error(err.message || 'Error al duplicar plantilla');
+    } finally {
+      setDuplicatingBusy(false);
     }
   };
 
@@ -284,7 +306,7 @@ export default function LabelTemplatesPage() {
       // Calcular cuántas etiquetas caben en una hoja con esta plantilla
       const template = templates.find(t => t.id === templateId);
       if (!template) {
-        alert('Plantilla no encontrada');
+        toast.error('Plantilla no encontrada');
         return;
       }
 
@@ -327,7 +349,7 @@ export default function LabelTemplatesPage() {
 
     } catch (err: any) {
       console.error('Error generando PDF:', err);
-      alert(err.response?.data?.message || err.message || 'Error al generar PDF de ejemplo');
+      toast.error(err.response?.data?.message || err.message || 'Error al generar PDF de ejemplo');
     } finally {
       setGeneratingPDF(false);
     }
@@ -378,7 +400,7 @@ export default function LabelTemplatesPage() {
           }
         }
       } else {
-        alert('Debes guardar la plantilla antes de ver el ejemplo');
+        toast.info('Debes guardar la plantilla antes de ver el ejemplo');
         return;
       }
 
@@ -421,7 +443,7 @@ export default function LabelTemplatesPage() {
 
     } catch (err: any) {
       console.error('Error generando PDF:', err);
-      alert(err.response?.data?.message || err.message || 'Error al generar PDF de ejemplo');
+      toast.error(err.response?.data?.message || err.message || 'Error al generar PDF de ejemplo');
     } finally {
       setGeneratingPDF(false);
     }
@@ -661,49 +683,32 @@ export default function LabelTemplatesPage() {
     });
   };
 
-  // Table columns
+  // Columnas de la tabla
   const columns = useMemo<ColumnDef<LabelTemplate>[]>(
     () => [
       {
         accessorKey: 'name',
         header: 'Nombre',
         cell: ({ row }) => (
-          <div className="flex items-center gap-2">
-            <Tag className="w-4 h-4 text-gray-400" />
-            <div>
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-lg bg-app-50 text-app-600 flex items-center justify-center flex-shrink-0"><Tag className="w-4 h-4" /></div>
+            <div className="min-w-0">
               <p className="font-medium text-gray-900">{row.original.name}</p>
-              {row.original.isDefault && (
-                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 mt-1">
-                  Por Defecto
-                </span>
-              )}
+              {row.original.isDefault && <Badge tone="app" className="mt-0.5">Por defecto</Badge>}
             </div>
           </div>
         ),
       },
       {
         accessorKey: 'productTypes',
-        header: 'Tipos de Producto',
+        header: 'Tipos de producto',
         cell: ({ row }) => {
           const productTypes = row.original.productTypes || [];
-          if (productTypes.length === 0) {
-            return <span className="text-sm text-gray-400 italic">Todos los tipos</span>;
-          }
+          if (productTypes.length === 0) return <span className="text-gray-400">Todos los tipos</span>;
           return (
             <div className="flex flex-wrap gap-1">
-              {productTypes.slice(0, 2).map((pt) => (
-                <span
-                  key={pt.id}
-                  className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800"
-                >
-                  {pt.productType.name}
-                </span>
-              ))}
-              {productTypes.length > 2 && (
-                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600">
-                  +{productTypes.length - 2}
-                </span>
-              )}
+              {productTypes.slice(0, 2).map((pt) => <Badge key={pt.id}>{pt.productType.name}</Badge>)}
+              {productTypes.length > 2 && <Badge>+{productTypes.length - 2}</Badge>}
             </div>
           );
         },
@@ -712,72 +717,43 @@ export default function LabelTemplatesPage() {
         accessorKey: 'dimensions',
         header: 'Dimensiones',
         cell: ({ row }) => (
-          <div className="text-sm">
-            <p className="text-gray-900 font-medium">
-              {(row.original.width / 28.35).toFixed(1)} × {(row.original.height / 28.35).toFixed(1)} cm
-            </p>
-            <p className="text-xs text-gray-400">
-              {row.original.pageType || 'A4'} • {row.original.zones.length} zona{row.original.zones.length !== 1 ? 's' : ''}
+          <div>
+            <p className="text-gray-900 whitespace-nowrap">{(row.original.width / 28.35).toFixed(1)} × {(row.original.height / 28.35).toFixed(1)} cm</p>
+            <p className="text-xs text-gray-500">
+              {row.original.pageType || 'A4'} · {row.original.zones.length} zona{row.original.zones.length !== 1 ? 's' : ''}
             </p>
           </div>
         ),
       },
       {
         accessorKey: 'backgroundImage',
-        header: 'Imagen',
-        cell: ({ row }) => (
-          row.original.backgroundImage ? (
-            <span className="text-xs text-green-600 font-medium">✓ Con imagen</span>
-          ) : (
-            <span className="text-xs text-gray-400">Fondo blanco</span>
-          )
-        ),
+        header: 'Fondo',
+        cell: ({ row }) => (row.original.backgroundImage ? <Badge tone="blue">Con imagen</Badge> : <span className="text-gray-400">Blanco</span>),
       },
       {
         accessorKey: 'isActive',
         header: 'Estado',
-        cell: ({ row }) => (
-          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-            row.original.isActive
-              ? 'bg-green-100 text-green-800'
-              : 'bg-gray-100 text-gray-800'
-          }`}>
-            {row.original.isActive ? 'Activa' : 'Inactiva'}
-          </span>
-        ),
+        cell: ({ row }) => <Badge tone={row.original.isActive ? 'green' : 'gray'}>{row.original.isActive ? 'Activa' : 'Inactiva'}</Badge>,
       },
       {
         id: 'actions',
-        header: () => <div className="text-right">Acciones</div>,
+        header: 'Acciones',
         cell: ({ row }) => (
-          <div className="flex items-center justify-end gap-1">
-            <button
-              onClick={() => handleEdit(row.original)}
-              className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-              title="Configurar"
-            >
-              <Settings className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => handleGenerateExample(row.original.id)}
-              className="p-2 text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
-              title="Ver Ejemplo"
-              disabled={generatingPDF}
-            >
-              <Eye className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => handleDuplicate(row.original.id, row.original.name)}
-              className="p-2 text-gray-600 hover:bg-gray-50 rounded-lg transition-colors"
-              title="Duplicar"
-            >
-              <Copy className="w-4 h-4" />
-            </button>
+          <div className="flex items-center justify-end">
+            <IconButton title="Editar plantilla" tone="app" onClick={() => handleEdit(row.original)}><Pencil className="w-4 h-4" /></IconButton>
+            <ActionMenu
+              items={[
+                { label: 'Ver ejemplo en PDF', icon: <Eye className="w-4 h-4" />, onClick: () => handleGenerateExample(row.original.id), disabled: generatingPDF },
+                { label: 'Duplicar', icon: <Copy className="w-4 h-4" />, onClick: () => handleDuplicate(row.original.id, row.original.name) },
+                { label: 'Eliminar', icon: <Trash2 className="w-4 h-4" />, danger: true, onClick: () => handleDelete(row.original.id, row.original.name) },
+              ]}
+            />
           </div>
         ),
       },
     ],
-    [generatingPDF]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [generatingPDF, templates]
   );
 
   // Filter data
@@ -807,382 +783,195 @@ export default function LabelTemplatesPage() {
     },
   });
 
+  const alignOf = (id: string) => (id === 'actions' ? 'right' : id === 'isActive' ? 'center' : 'left') as 'left' | 'center' | 'right';
+
+  // Previsualización del PDF (lista y editor)
+  const previewDialog = (
+    <Dialog
+      open={showPreviewModal && !!pdfPreviewUrl}
+      onClose={handleClosePreview}
+      title="Ejemplo de etiquetas"
+      description="Una hoja completa con la plantilla y datos de ejemplo."
+      size="xl"
+      footer={
+        <>
+          <Button variant="secondary" onClick={handleClosePreview}>Cerrar</Button>
+          <Button icon={<Download className="w-4 h-4" />} onClick={handleDownloadPDF}>Descargar PDF</Button>
+        </>
+      }
+    >
+      {pdfPreviewUrl && (
+        <div className="rounded-lg border border-gray-200 overflow-hidden h-[65vh]">
+          <iframe src={pdfPreviewUrl} className="w-full h-full" title="Vista previa del PDF" />
+        </div>
+      )}
+    </Dialog>
+  );
+
+  const cmField = (label: string, value: number, opts: { min: string; max: string; fallback: number; onCm: (cm: number) => void; hint?: string }) => (
+    <Field label={label} hint={opts.hint}>
+      <NumberInput
+        step="0.1"
+        min={opts.min}
+        max={opts.max}
+        suffix="cm"
+        value={(value / 28.35).toFixed(1)}
+        onChange={(e) => opts.onCm(parseFloat(e.target.value) || opts.fallback)}
+      />
+    </Field>
+  );
+
   // Vista de Editor
   if (viewMode === 'editor') {
     return (
-      <>
-        <div className="p-4 md:p-8">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={handleCancel}
-              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-              title="Volver"
-            >
-              <ArrowLeft className="w-6 h-6 text-gray-600" />
-            </button>
-            <div>
-              <h1 className="text-2xl md:text-3xl font-bold text-gray-900 flex items-center gap-2">
-                <Tag className="w-8 h-8 text-orange-500" />
-                {editingTemplate ? 'Editar Plantilla' : 'Nueva Plantilla'}
-              </h1>
-              <p className="text-gray-600 mt-1 text-sm">
-                Diseña la etiqueta arrastrando las zonas de información
-              </p>
-            </div>
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={handleCancel}
-              className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
-              disabled={saving}
-            >
-              Cancelar
-            </button>
-            <button
-              onClick={handleGenerateExampleFromEditor}
-              className="flex items-center gap-2 px-4 py-2 text-orange-600 bg-orange-50 border border-orange-300 rounded-lg hover:bg-orange-100 transition-colors disabled:opacity-50"
-              disabled={generatingPDF || !editingTemplate}
-              title={!editingTemplate ? 'Guarda la plantilla primero para ver el ejemplo' : 'Ver ejemplo de PDF'}
-            >
-              <Eye size={20} />
-              {generatingPDF ? 'Generando...' : 'Ver Ejemplo'}
-            </button>
-            <button
-              onClick={handleSave}
-              className="flex items-center gap-2 bg-orange-500 text-white px-4 py-2 rounded-lg hover:bg-orange-600 transition-colors disabled:opacity-50"
-              disabled={saving}
-            >
-              <Save size={20} />
-              {saving ? 'Guardando...' : 'Guardar Plantilla'}
-            </button>
-          </div>
-        </div>
+      <Page>
+        <PageHeader
+          icon={Tag}
+          title={editingTemplate ? 'Editar plantilla' : 'Nueva plantilla'}
+          subtitle="Diseña la etiqueta arrastrando las zonas de información"
+          actions={
+            <>
+              <Button variant="secondary" onClick={handleCancel} disabled={saving}>Cancelar</Button>
+              <Button
+                variant="outline"
+                icon={<Eye className="w-4 h-4" />}
+                onClick={handleGenerateExampleFromEditor}
+                isLoading={generatingPDF}
+                disabled={!editingTemplate}
+                title={!editingTemplate ? 'Guarda la plantilla primero para ver el ejemplo' : 'Ver ejemplo en PDF'}
+              >
+                Ver ejemplo
+              </Button>
+              <Button icon={<Save className="w-4 h-4" />} onClick={handleSave} isLoading={saving}>Guardar plantilla</Button>
+            </>
+          }
+        />
 
-        {/* Nombre de la plantilla */}
-        <div className="bg-white rounded-lg shadow-sm p-4 mb-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Nombre de la Plantilla <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                value={editorData.name}
-                onChange={(e) => setEditorData({ ...editorData, name: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
-                placeholder="Ej: Etiqueta Camisetas"
-              />
-            </div>
-            <div className="flex items-end">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
+        <Card>
+          <CardTitle icon={Tag}>Datos de la plantilla</CardTitle>
+          <div className="space-y-4">
+            <FormGrid>
+              <Field label="Nombre de la plantilla" required>
+                <TextInput value={editorData.name} onChange={(e) => setEditorData({ ...editorData, name: e.target.value })} placeholder="Ej: Etiqueta camisetas" />
+              </Field>
+              <div className="md:pt-7">
+                <Switch
                   checked={editorData.isDefault}
-                  onChange={(e) => setEditorData({ ...editorData, isDefault: e.target.checked })}
-                  className="w-4 h-4 text-orange-600 border-gray-300 rounded focus:ring-orange-500"
+                  onChange={(isDefault) => setEditorData({ ...editorData, isDefault })}
+                  label="Plantilla por defecto"
+                  description="Se usa cuando no hay otra para el tipo de producto."
                 />
-                <span className="text-sm text-gray-700">Plantilla por defecto</span>
-              </label>
-            </div>
+              </div>
+            </FormGrid>
+            <Field label="Tipos de producto" hint="Opcional. Si no marcas ninguno, la plantilla estará disponible para todos los tipos.">
+              {productTypes.length === 0 ? (
+                <p className="text-sm text-gray-400">No hay tipos de producto activos.</p>
+              ) : (
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-4 gap-y-2 pt-1">
+                  {productTypes.map((productType) => (
+                    <Checkbox
+                      key={productType.id}
+                      label={productType.name}
+                      checked={editorData.productTypeIds.includes(productType.id)}
+                      onChange={(e) => {
+                        const newIds = e.target.checked
+                          ? [...editorData.productTypeIds, productType.id]
+                          : editorData.productTypeIds.filter(id => id !== productType.id);
+                        setEditorData({ ...editorData, productTypeIds: newIds });
+                      }}
+                    />
+                  ))}
+                </div>
+              )}
+            </Field>
           </div>
+        </Card>
 
-          {/* Configuración de Impresión */}
-          <div className="border-t border-gray-200 pt-4 mt-4">
-            <h3 className="text-sm font-semibold text-gray-900 mb-3">Configuración de Impresión</h3>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              {/* Tipo de Hoja */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Tipo de Hoja
-                </label>
-                <select
-                  value={editorData.pageType}
-                  onChange={(e) => {
-                    const pageType = e.target.value;
-                    setEditorData({ ...editorData, pageType });
-                  }}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
-                >
+        <Card>
+          <CardTitle icon={Ruler}>Hoja e impresión</CardTitle>
+          <div className="space-y-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+              <Field label="Tipo de hoja">
+                <SelectInput value={editorData.pageType} onChange={(e) => setEditorData({ ...editorData, pageType: e.target.value })}>
                   <option value="A4">A4 (21 × 29.7 cm)</option>
                   <option value="A3">A3 (29.7 × 42 cm)</option>
                   <option value="LETTER">Carta (21.6 × 27.9 cm)</option>
                   <option value="CUSTOM">Personalizado</option>
-                </select>
-              </div>
-
-              {/* Ancho de Etiqueta */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Ancho Etiqueta (cm)
-                </label>
-                <input
-                  type="number"
-                  step="0.1"
-                  min="1"
-                  max="30"
-                  value={(editorData.width / 28.35).toFixed(1)}
-                  onChange={(e) => {
-                    const cm = parseFloat(e.target.value) || 6;
-                    const newWidth = cm * 28.35;
-
-                    // Usar la forma funcional para acceder al estado más reciente
-                    setEditorData(prevData => {
-                      // Escalar zonas proporcionalmente desde el ancho ACTUAL
-                      const scaledZones = scaleZones(
-                        prevData.zones,
-                        newWidth,
-                        prevData.height,
-                        prevData.width, // Referencia: valor ACTUAL del estado previo
-                        prevData.height
-                      );
-
-                      return {
-                        ...prevData,
-                        width: newWidth,
-                        zones: scaledZones,
-                      };
-                    });
-                  }}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
-                />
-              </div>
-
-              {/* Alto de Etiqueta */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Alto Etiqueta (cm)
-                </label>
-                <input
-                  type="number"
-                  step="0.1"
-                  min="1"
-                  max="40"
-                  value={(editorData.height / 28.35).toFixed(1)}
-                  onChange={(e) => {
-                    const cm = parseFloat(e.target.value) || 9;
-                    const newHeight = cm * 28.35;
-
-                    // Usar la forma funcional para acceder al estado más reciente
-                    setEditorData(prevData => {
-                      // Escalar zonas proporcionalmente desde el alto ACTUAL
-                      const scaledZones = scaleZones(
-                        prevData.zones,
-                        prevData.width,
-                        newHeight,
-                        prevData.width,
-                        prevData.height // Referencia: valor ACTUAL del estado previo
-                      );
-
-                      return {
-                        ...prevData,
-                        height: newHeight,
-                        zones: scaledZones,
-                      };
-                    });
-                  }}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
-                />
-              </div>
-
-              {/* Margen de Página */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Margen Página (cm)
-                </label>
-                <input
-                  type="number"
-                  step="0.1"
-                  min="0"
-                  max="5"
-                  value={(editorData.pageMargin / 28.35).toFixed(1)}
-                  onChange={(e) => {
-                    const cm = parseFloat(e.target.value) || 1;
-                    setEditorData({ ...editorData, pageMargin: cm * 28.35 });
-                  }}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
-                />
-              </div>
+                </SelectInput>
+              </Field>
+              {cmField('Ancho de etiqueta', editorData.width, {
+                min: '1', max: '30', fallback: 6,
+                onCm: (cm) => {
+                  const newWidth = cm * 28.35;
+                  // Escalar zonas proporcionalmente desde el ancho ACTUAL
+                  setEditorData(prevData => ({
+                    ...prevData,
+                    width: newWidth,
+                    zones: scaleZones(prevData.zones, newWidth, prevData.height, prevData.width, prevData.height),
+                  }));
+                },
+              })}
+              {cmField('Alto de etiqueta', editorData.height, {
+                min: '1', max: '40', fallback: 9,
+                onCm: (cm) => {
+                  const newHeight = cm * 28.35;
+                  // Escalar zonas proporcionalmente desde el alto ACTUAL
+                  setEditorData(prevData => ({
+                    ...prevData,
+                    height: newHeight,
+                    zones: scaleZones(prevData.zones, prevData.width, newHeight, prevData.width, prevData.height),
+                  }));
+                },
+              })}
+              {cmField('Margen de la hoja', editorData.pageMargin, {
+                min: '0', max: '5', fallback: 1,
+                onCm: (cm) => setEditorData({ ...editorData, pageMargin: cm * 28.35 }),
+              })}
+              {cmField('Separación', editorData.labelSpacing, {
+                min: '0', max: '2', fallback: 0.3, hint: 'Recomendado: 0.3–0.4 cm',
+                onCm: (cm) => setEditorData({ ...editorData, labelSpacing: cm * 28.35 }),
+              })}
             </div>
 
-            {/* Separación entre Etiquetas */}
-            <div className="mt-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Separación entre Etiquetas (cm)
-              </label>
-              <input
-                type="number"
-                step="0.1"
-                min="0"
-                max="2"
-                value={(editorData.labelSpacing / 28.35).toFixed(1)}
-                onChange={(e) => {
-                  const cm = parseFloat(e.target.value) || 0.3;
-                  setEditorData({ ...editorData, labelSpacing: cm * 28.35 });
-                }}
-                className="w-full md:w-64 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                Espacio entre etiquetas en la hoja (recomendado: 0.3-0.4 cm)
-              </p>
+            {/* Aprovechamiento */}
+            <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-lg border border-gray-200 px-4 py-3 text-sm">
+              <span className="inline-flex items-center gap-1.5 font-medium text-gray-700"><LayoutGrid className="w-4 h-4 text-app-600" /> Aprovechamiento</span>
+              <span className="text-gray-500">Hoja <b className="font-medium text-gray-900">{metrics.pageType} ({metrics.pageNameCm})</b></span>
+              <span className="text-gray-500">Rejilla <b className="font-medium text-gray-900">{metrics.labelCols} × {metrics.labelRows}</b></span>
+              <span className="text-gray-500">Etiquetas <b className="font-medium text-gray-900">{metrics.labelsPerPage} por hoja</b></span>
+              <Badge tone={utilTone(metrics.utilizationPercent)}>{metrics.utilizationPercent.toFixed(1)}% de la hoja</Badge>
             </div>
 
-            {/* Métricas de Aprovechamiento - Compacto */}
-            <div className="mt-4 p-3 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200">
-              <div className="flex items-center justify-between flex-wrap gap-3">
-                <div className="flex items-center gap-2">
-                  <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                  </svg>
-                  <span className="text-xs font-medium text-gray-700">Aprovechamiento:</span>
-                </div>
-                <div className="flex items-center gap-4 flex-wrap">
-                  <div className="text-xs">
-                    <span className="text-gray-600">Hoja:</span>
-                    <span className="font-semibold text-gray-900 ml-1">{metrics.pageType} ({metrics.pageNameCm})</span>
-                  </div>
-                  <div className="text-xs">
-                    <span className="text-gray-600">Grid:</span>
-                    <span className="font-semibold text-blue-600 ml-1">{metrics.labelCols} × {metrics.labelRows}</span>
-                  </div>
-                  <div className="text-xs">
-                    <span className="text-gray-600">Etiquetas:</span>
-                    <span className="font-bold text-green-600 ml-1 text-sm">{metrics.labelsPerPage}/hoja</span>
-                  </div>
-                  <div className={`px-2 py-1 rounded-full text-xs font-bold ${
-                    metrics.utilizationPercent >= 70 ? 'bg-green-100 text-green-700' :
-                    metrics.utilizationPercent >= 60 ? 'bg-yellow-100 text-yellow-700' :
-                    'bg-orange-100 text-orange-700'
-                  }`}>
-                    {metrics.utilizationPercent.toFixed(1)}% {
-                      metrics.utilizationPercent >= 70 ? '✨' :
-                      metrics.utilizationPercent >= 60 ? '✓' :
-                      metrics.utilizationPercent >= 50 ? '⚠' : '❌'
-                    }
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Recomendaciones de Tamaño - Dinámicas */}
-            <div className="mt-4">
-              <details className="group" open>
-                <summary className="cursor-pointer list-none">
-                  <div className="flex items-center justify-between p-2 bg-orange-50 hover:bg-orange-100 rounded-lg transition-colors">
-                    <div className="flex items-center gap-2">
-                      <svg className="w-4 h-4 text-orange-600 group-open:rotate-90 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                      </svg>
-                      <span className="text-sm font-medium text-gray-900">Recomendaciones de Tamaño para {editorData.pageType || 'A4'}</span>
-                    </div>
-                    <svg className="w-4 h-4 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                    </svg>
-                  </div>
-                </summary>
-                <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-3">
+            {/* Recomendaciones de tamaño */}
+            {optimizedConfigs.length > 0 && (
+              <div>
+                <p className="text-sm font-medium text-gray-700 mb-2">Tamaños recomendados para {editorData.pageType || 'A4'}</p>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                   {optimizedConfigs.map((config, index) => (
                     <button
                       key={index}
                       type="button"
                       onClick={() => applyOptimizedConfig(config)}
-                      className="text-left p-3 rounded-lg border-2 transition-all hover:shadow-md"
-                      style={{
-                        backgroundColor: config.color === 'purple' ? '#faf5ff' :
-                          config.color === 'green' ? '#f0fdf4' :
-                          '#fffbeb',
-                        borderColor: config.color === 'purple' ? '#d8b4fe' :
-                          config.color === 'green' ? '#86efac' :
-                          '#fcd34d',
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.backgroundColor =
-                          config.color === 'purple' ? '#f3e8ff' :
-                          config.color === 'green' ? '#dcfce7' :
-                          '#fef3c7';
-                        e.currentTarget.style.transform = 'scale(1.02)';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.backgroundColor =
-                          config.color === 'purple' ? '#faf5ff' :
-                          config.color === 'green' ? '#f0fdf4' :
-                          '#fffbeb';
-                        e.currentTarget.style.transform = 'scale(1)';
-                      }}
+                      className="text-left rounded-lg border border-gray-200 p-3 transition-colors hover:border-app-400 hover:bg-app-50"
                     >
-                      <div className="flex items-start gap-2 mb-2">
-                        <span className="text-2xl">{config.icon}</span>
-                        <div className="flex-1">
-                          <div className="text-sm font-bold text-gray-900">{config.name}</div>
-                          <div className="text-xs text-gray-600 mt-0.5">{config.widthCm} × {config.heightCm} cm</div>
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <p className="font-medium text-gray-900">{config.name}</p>
+                          <p className="text-xs text-gray-500">{config.widthCm} × {config.heightCm} cm · rejilla {config.metrics.cols} × {config.metrics.rows}</p>
                         </div>
+                        <Badge tone={utilTone(config.metrics.utilization)}>{config.metrics.utilization.toFixed(0)}%</Badge>
                       </div>
-
-                      <div className="flex items-center gap-3 mb-2">
-                        <div className="flex-1">
-                          <div className="text-xs text-gray-500">Etiquetas/hoja</div>
-                          <div className="text-lg font-bold text-gray-900">{config.metrics.total}</div>
-                        </div>
-                        <div className="flex-1">
-                          <div className="text-xs text-gray-500">Aprovechamiento</div>
-                          <div className={`text-lg font-bold ${
-                            config.metrics.utilization >= 70 ? 'text-green-600' :
-                            config.metrics.utilization >= 60 ? 'text-yellow-600' :
-                            'text-orange-600'
-                          }`}>
-                            {config.metrics.utilization.toFixed(0)}%
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="text-xs text-gray-500 border-t border-gray-200 pt-2">
-                        <div className="font-medium text-gray-700 mb-1">{config.description}</div>
-                        <div>{config.recommendation}</div>
-                        <div className="mt-1 text-gray-400">Grid: {config.metrics.cols} × {config.metrics.rows}</div>
-                      </div>
+                      <p className="mt-2 text-sm text-gray-700"><b className="font-semibold">{config.metrics.total}</b> etiquetas por hoja</p>
+                      <p className="mt-1 text-xs text-gray-500">{config.description}. {config.recommendation}.</p>
                     </button>
                   ))}
                 </div>
-              </details>
-            </div>
+              </div>
+            )}
           </div>
+        </Card>
 
-          {/* Selector de tipos de producto */}
-          <div className="border-t border-gray-200 pt-4 mt-4">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Tipos de Producto (Opcional)
-            </label>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
-              {productTypes.map((productType) => (
-                <label
-                  key={productType.id}
-                  className="flex items-center gap-2 p-2 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors"
-                >
-                  <input
-                    type="checkbox"
-                    checked={editorData.productTypeIds.includes(productType.id)}
-                    onChange={(e) => {
-                      const newIds = e.target.checked
-                        ? [...editorData.productTypeIds, productType.id]
-                        : editorData.productTypeIds.filter(id => id !== productType.id);
-                      setEditorData({ ...editorData, productTypeIds: newIds });
-                    }}
-                    className="w-4 h-4 text-orange-600 border-gray-300 rounded focus:ring-orange-500"
-                  />
-                  <span className="text-sm text-gray-700">{productType.name}</span>
-                </label>
-              ))}
-            </div>
-            <p className="text-xs text-gray-500 mt-2">
-              Si no seleccionas ninguno, la plantilla estará disponible para todos los tipos
-            </p>
-          </div>
-        </div>
-
-        {/* Editor Visual */}
-        <div className="bg-white rounded-lg shadow-sm p-4">
+        <Card>
           <LabelTemplateEditor
             key={`${editorData.width}-${editorData.height}`}
             backgroundImage={editorData.backgroundImage}
@@ -1192,200 +981,94 @@ export default function LabelTemplatesPage() {
             onZonesChange={(zones) => setEditorData(prevData => ({ ...prevData, zones }))}
             onBackgroundImageChange={(image) => setEditorData(prevData => ({ ...prevData, backgroundImage: image }))}
           />
-        </div>
-      </div>
+        </Card>
 
-      {/* Modal - Previsualización del PDF */}
-      {showPreviewModal && pdfPreviewUrl && (
-        <Modal
-          isOpen={showPreviewModal}
-          onClose={handleClosePreview}
-          title="Ejemplo de Etiquetas PDF"
-          size="xl"
-        >
-          <div className="space-y-4">
-            {/* Vista previa del PDF */}
-            <div className="border border-gray-300 rounded-lg overflow-hidden" style={{ height: '600px' }}>
-              <iframe
-                src={pdfPreviewUrl}
-                className="w-full h-full"
-                title="PDF Preview"
-              />
-            </div>
-
-            {/* Botones de acción */}
-            <div className="flex justify-end gap-3 pt-4 border-t">
-              <Button
-                variant="secondary"
-                onClick={handleClosePreview}
-              >
-                Cerrar
-              </Button>
-              <Button
-                variant="primary"
-                onClick={handleDownloadPDF}
-              >
-                <Download size={18} />
-                Descargar PDF
-              </Button>
-            </div>
-          </div>
-        </Modal>
-      )}
-      </>
+        {previewDialog}
+      </Page>
     );
   }
 
   // Vista de Lista
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <Loader2 className="w-8 h-8 animate-spin text-orange-600" />
-      </div>
-    );
-  }
+  const { pageIndex, pageSize } = table.getState().pagination;
 
   return (
-    <>
-      <div className="p-6 space-y-6">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Plantillas de Etiquetas</h1>
-            <p className="text-sm text-gray-500 mt-1">Gestión de plantillas para impresión de etiquetas</p>
-          </div>
-          <Button onClick={handleCreate} variant="admin-orange" size="sm">
-            <Plus className="w-4 h-4" />
-            Nueva Plantilla
-          </Button>
-        </div>
+    <Page>
+      <PageHeader
+        icon={Tag}
+        title="Plantillas de etiquetas"
+        subtitle="Diseño de las etiquetas con código de barras que se imprimen para los productos"
+        actions={<Button icon={<Plus className="w-4 h-4" />} onClick={handleCreate}>Nueva plantilla</Button>}
+      />
 
-        {/* Search */}
-        <div className="bg-white rounded-xl border border-gray-200 p-4">
-          <div className="relative max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Buscar por nombre, tipo de hoja..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-            />
-          </div>
-        </div>
+      {loading ? (
+        <Spinner label="Cargando plantillas…" />
+      ) : (
+        <>
+          <FilterBar>
+            <SearchInput value={searchTerm} onChange={setSearchTerm} placeholder="Buscar por nombre, tipo de hoja o tipo de producto…" className="sm:col-span-2" />
+          </FilterBar>
 
-        {/* Table */}
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50 border-b border-gray-200">
-                {table.getHeaderGroups().map((headerGroup) => (
-                  <tr key={headerGroup.id}>
-                    {headerGroup.headers.map((header) => (
-                      <th
-                        key={header.id}
-                        className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                      >
-                        {header.isPlaceholder
-                          ? null
-                          : flexRender(header.column.columnDef.header, header.getContext())}
-                      </th>
-                    ))}
-                  </tr>
-                ))}
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {table.getRowModel().rows.length === 0 ? (
-                  <tr>
-                    <td colSpan={columns.length} className="px-4 py-12 text-center">
-                      <Tag className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                      <p className="text-gray-500">No hay plantillas de etiquetas</p>
-                    </td>
-                  </tr>
-                ) : (
-                  table.getRowModel().rows.map((row) => (
-                    <tr key={row.id} className="hover:bg-gray-50">
-                      {row.getVisibleCells().map((cell) => (
-                        <td key={cell.id} className="px-4 py-3">
-                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                        </td>
+          <TableCard
+            footer={filteredData.length > 0 && (
+              <Pager page={pageIndex + 1} pageSize={pageSize} total={filteredData.length} onPage={(p) => table.setPageIndex(p - 1)} onPageSize={(s) => table.setPageSize(s)} />
+            )}
+          >
+            {table.getRowModel().rows.length === 0 ? (
+              <EmptyState
+                icon={Tag}
+                title={searchTerm ? 'No se encontraron plantillas' : 'No hay plantillas de etiquetas'}
+                description={searchTerm ? 'Intenta con otra búsqueda.' : 'Crea la primera para imprimir etiquetas de tus productos.'}
+                action={!searchTerm && <Button size="sm" icon={<Plus className="w-4 h-4" />} onClick={handleCreate}>Nueva plantilla</Button>}
+              />
+            ) : (
+              <Table>
+                <THead>
+                  {table.getHeaderGroups().map((hg) => (
+                    <tr key={hg.id}>
+                      {hg.headers.map((h) => (
+                        <Th key={h.id} align={alignOf(h.column.id)}>
+                          {h.isPlaceholder ? null : flexRender(h.column.columnDef.header, h.getContext())}
+                        </Th>
                       ))}
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Pagination */}
-          {table.getPageCount() > 1 && (
-            <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200">
-              <p className="text-sm text-gray-500">
-                Mostrando {table.getState().pagination.pageIndex * 10 + 1} -{' '}
-                {Math.min(
-                  (table.getState().pagination.pageIndex + 1) * 10,
-                  filteredData.length
-                )}{' '}
-                de {filteredData.length}
-              </p>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => table.previousPage()}
-                  disabled={!table.getCanPreviousPage()}
-                  className="p-2 rounded-lg border border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => table.nextPage()}
-                  disabled={!table.getCanNextPage()}
-                  className="p-2 rounded-lg border border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
-                >
-                  <ChevronRight className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Modal - Previsualización del PDF */}
-      {showPreviewModal && pdfPreviewUrl && (
-        <Modal
-          isOpen={showPreviewModal}
-          onClose={handleClosePreview}
-          title="Ejemplo de Etiquetas PDF"
-          size="xl"
-        >
-          <div className="space-y-4">
-            {/* Vista previa del PDF */}
-            <div className="border border-gray-300 rounded-lg overflow-hidden" style={{ height: '600px' }}>
-              <iframe
-                src={pdfPreviewUrl}
-                className="w-full h-full"
-                title="PDF Preview"
-              />
-            </div>
-
-            {/* Botones de acción */}
-            <div className="flex justify-end gap-3 pt-4 border-t">
-              <Button
-                variant="secondary"
-                onClick={handleClosePreview}
-              >
-                Cerrar
-              </Button>
-              <Button
-                variant="primary"
-                onClick={handleDownloadPDF}
-              >
-                <Download size={18} />
-                Descargar PDF
-              </Button>
-            </div>
-          </div>
-        </Modal>
+                  ))}
+                </THead>
+                <TBody>
+                  {table.getRowModel().rows.map((row) => (
+                    <Tr key={row.id}>
+                      {row.getVisibleCells().map((cell) => (
+                        <Td key={cell.id} align={alignOf(cell.column.id)}>
+                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                        </Td>
+                      ))}
+                    </Tr>
+                  ))}
+                </TBody>
+              </Table>
+            )}
+          </TableCard>
+        </>
       )}
-    </>
+
+      {previewDialog}
+
+      <Dialog
+        open={!!duplicating}
+        onClose={() => setDuplicating(null)}
+        title="Duplicar plantilla"
+        description={duplicating ? `Se crea una copia de "${duplicating.name}" con sus zonas.` : undefined}
+        size="sm"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setDuplicating(null)}>Cancelar</Button>
+            <Button icon={<Copy className="w-4 h-4" />} isLoading={duplicatingBusy} onClick={confirmDuplicate}>Duplicar</Button>
+          </>
+        }
+      >
+        <Field label="Nombre de la copia" required>
+          <TextInput autoFocus value={duplicateName} onChange={(e) => setDuplicateName(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') confirmDuplicate(); }} />
+        </Field>
+      </Dialog>
+    </Page>
   );
 }

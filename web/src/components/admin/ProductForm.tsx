@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
-import type { Product, ProductType, ProductCategory } from '../../types/product';
-import { Button } from '../shared/Button';
-import { Input } from '../shared/Input';
-import { ImageUploadField } from './ImageUploadField';
-import { X } from 'lucide-react';
+import type { Product } from '../../types/product';
+import { Check, Image as ImageIcon, Info, Layers, Save, Star, Tag, Trash2 } from 'lucide-react';
 import { catalogsService } from '../../services/catalogs.service';
 import type { Color, Size, Category, ProductType as CatalogProductType } from '../../services/catalogs.service';
+import {
+  Alert, Button, Card, CardTitle, Field, FormActions, FormGrid, ImageGallery, ImageInput, MoneyInput, NumberInput,
+  SelectInput, Switch, TextArea, TextInput, useConfirm,
+} from '../ui';
 
 const MAX_IMAGES = 5;
 
@@ -13,7 +14,7 @@ const MAX_IMAGES = 5;
 function getProductImages(product?: Product): string[] {
   if (!product?.images) return [];
   // Si images es un array, usarlo directamente
-  if (Array.isArray(product.images)) return product.images.filter(Boolean);
+  if (Array.isArray(product.images)) return (product.images as string[]).filter(Boolean);
   // Si es objeto con front/back/side, convertirlo a array
   const imgs = product.images as { front?: string; back?: string; side?: string };
   return [imgs.front, imgs.back, imgs.side].filter((img): img is string => !!img);
@@ -23,9 +24,14 @@ interface ProductFormProps {
   product?: Product;
   onSubmit: (data: Omit<Product, 'id' | 'createdAt' | 'updatedAt'>) => void;
   onDelete?: () => void;
+  /** Botón Cancelar del pie (si no se pasa, no se muestra). */
+  onCancel?: () => void;
+  saving?: boolean;
 }
 
-export const ProductForm = ({ product, onSubmit, onDelete }: ProductFormProps) => {
+/** Ficha de producto: una tarjeta por tema y el pie de botones fijo abajo. */
+export const ProductForm = ({ product, onSubmit, onDelete, onCancel, saving }: ProductFormProps) => {
+  const confirm = useConfirm();
   const [formData, setFormData] = useState({
     name: product?.name || '',
     description: product?.description || '',
@@ -39,12 +45,8 @@ export const ProductForm = ({ product, onSubmit, onDelete }: ProductFormProps) =
     tags: product?.tags?.join(', ') || '',
   });
 
-  // Imágenes (nuevo sistema de array)
+  // Imágenes (array; la primera es la principal)
   const [images, setImages] = useState<string[]>(getProductImages(product));
-
-  // Drag & Drop state
-  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
-  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
 
   // Catálogos disponibles
   const [availableColors, setAvailableColors] = useState<Color[]>([]);
@@ -118,54 +120,6 @@ export const ProductForm = ({ product, onSubmit, onDelete }: ProductFormProps) =
     loadSizes();
   }, [formData.typeId]);
 
-  // Funciones para manejar imágenes
-  const addImage = (imageUrl: string) => {
-    if (imageUrl && images.length < MAX_IMAGES) {
-      setImages([...images, imageUrl]);
-    }
-  };
-
-  const removeImage = (index: number) => {
-    const newImages = images.filter((_, i) => i !== index);
-    setImages(newImages);
-  };
-
-  // Drag & Drop handlers
-  const handleDragStart = (index: number) => {
-    setDraggedIndex(index);
-  };
-
-  const handleDragOver = (e: React.DragEvent, index: number) => {
-    e.preventDefault();
-    setDragOverIndex(index);
-  };
-
-  const handleDragLeave = () => {
-    setDragOverIndex(null);
-  };
-
-  const handleDrop = (e: React.DragEvent, dropIndex: number) => {
-    e.preventDefault();
-    if (draggedIndex === null || draggedIndex === dropIndex) {
-      setDraggedIndex(null);
-      setDragOverIndex(null);
-      return;
-    }
-
-    const newImages = [...images];
-    const [draggedImage] = newImages.splice(draggedIndex, 1);
-    newImages.splice(dropIndex, 0, draggedImage);
-
-    setImages(newImages);
-    setDraggedIndex(null);
-    setDragOverIndex(null);
-  };
-
-  const handleDragEnd = () => {
-    setDraggedIndex(null);
-    setDragOverIndex(null);
-  };
-
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -177,15 +131,17 @@ export const ProductForm = ({ product, onSubmit, onDelete }: ProductFormProps) =
     const productData: Omit<Product, 'id' | 'createdAt' | 'updatedAt'> = {
       name: formData.name,
       description: formData.description,
-      typeId: formData.typeId,
-      categoryId: formData.categoryId,
+      // El backend recibe null cuando no hay tipo/categoría (los selects son obligatorios).
+      typeId: formData.typeId as number,
+      categoryId: formData.categoryId as number,
       basePrice: Number(formData.basePrice),
       stock: Number(formData.stock),
       featured: formData.featured,
       rating: formData.rating || undefined,
       reviewsCount: formData.reviewsCount || undefined,
       tags: formData.tags.split(',').map(t => t.trim()).filter(Boolean),
-      images: images.filter(Boolean),
+      // El backend recibe la lista plana de imágenes (la primera es la principal).
+      images: images.filter(Boolean) as unknown as Product['images'],
       colors: selectedColors.map(c => ({
         id: c.id,
         name: c.name,
@@ -204,458 +160,212 @@ export const ProductForm = ({ product, onSubmit, onDelete }: ProductFormProps) =
   };
 
   const toggleColor = (colorId: number) => {
-    setSelectedColorIds(prev =>
-      prev.includes(colorId)
-        ? prev.filter(id => id !== colorId)
-        : [...prev, colorId]
-    );
-  };
-
-  const onColorImage = (colorId: number, file?: File) => {
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => setColorImages(prev => ({ ...prev, [colorId]: String(reader.result || '') }));
-    reader.readAsDataURL(file);
+    setSelectedColorIds(prev => (prev.includes(colorId) ? prev.filter(id => id !== colorId) : [...prev, colorId]));
   };
 
   const toggleSize = (sizeId: number) => {
-    setSelectedSizeIds(prev =>
-      prev.includes(sizeId)
-        ? prev.filter(id => id !== sizeId)
-        : [...prev, sizeId]
-    );
+    setSelectedSizeIds(prev => (prev.includes(sizeId) ? prev.filter(id => id !== sizeId) : [...prev, sizeId]));
   };
 
+  const toggleVariants = async (next: boolean) => {
+    if (!next) {
+      // Apagar variantes en un producto que YA tenía color/talla puede
+      // afectar variantes con stock/ventas: pedir confirmación.
+      const hadVariants = (product?.colors?.length ?? 0) > 0 ||
+        (Array.isArray(product?.sizes) && product.sizes.length > 0);
+      if (hadVariants) {
+        const stockNote = (product?.stock ?? 0) > 0 ? ` El producto tiene stock (${product?.stock}).` : '';
+        const ok = await confirm({
+          title: '¿Convertir en producto simple?',
+          message: `Este producto tiene variantes de color/talla.${stockNote} Si lo conviertes en producto simple, esas variantes dejarán de usarse y el inventario pasará a una sola variante. Esto puede afectar el stock y los reportes.`,
+          confirmText: 'Convertir',
+          tone: 'danger',
+        });
+        if (!ok) return;
+      }
+      setSelectedColorIds([]);
+      setSelectedSizeIds([]);
+    }
+    setHasVariants(next);
+  };
+
+  const missingVariants = hasVariants && (selectedColorIds.length === 0 || selectedSizeIds.length === 0);
+  const chip = (on: boolean) =>
+    `relative flex items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm transition-colors ${on ? 'border-app-500 bg-app-50 ring-1 ring-app-500 text-app-800' : 'border-gray-200 text-gray-700 hover:border-gray-300'}`;
+
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="grid grid-cols-12 gap-3">
-        {/* Primera fila: Nombre completo */}
-        <div className="col-span-12">
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Nombre del Producto *
-          </label>
-          <Input
-            type="text"
-            value={formData.name}
-            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-            required
-          />
-        </div>
-
-        {/* Segunda fila: Descripción completa */}
-        <div className="col-span-12">
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Descripción *
-          </label>
-          <textarea
-            value={formData.description}
-            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-            rows={3}
-            required
-          />
-        </div>
-
-        {/* Tercera fila: Categoría, Tipo, Precio */}
-        <div className="col-span-12 md:col-span-4">
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Categoría *
-          </label>
-          <select
-            value={formData.categoryId || ''}
-            onChange={(e) => setFormData({ ...formData, categoryId: e.target.value ? Number(e.target.value) : null })}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-            required
-          >
-            <option value="">Selecciona una categoría</option>
-            {availableCategories.map(cat => (
-              <option key={cat.id} value={cat.id}>
-                {cat.name}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="col-span-12 md:col-span-4">
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Tipo de Producto *
-          </label>
-          <select
-            value={formData.typeId || ''}
-            onChange={(e) => setFormData({ ...formData, typeId: e.target.value ? Number(e.target.value) : null })}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-            required
-          >
-            <option value="">Selecciona un tipo</option>
-            {availableProductTypes
-              .filter(type => !formData.categoryId || type.categoryId === formData.categoryId)
-              .map(type => (
-                <option key={type.id} value={type.id}>
-                  {type.name}
-                </option>
-              ))}
-          </select>
-        </div>
-
-        <div className="col-span-12 md:col-span-4">
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Precio ($) *
-          </label>
-          <Input
-            type="number"
-            step="0.01"
-            min="0"
-            value={formData.basePrice}
-            onChange={(e) => setFormData({ ...formData, basePrice: parseFloat(e.target.value) })}
-            required
-          />
-        </div>
-
-        {/* El descuento ya no se define aquí: se gestiona en Marketing →
-            Cupones / Descuentos (descuento automático por producto/categoría). */}
-
-        {/* El stock se administra por variante (módulo Variantes/Inventario),
-            no en el producto: por eso aquí no se edita. */}
-
-        {/* Imágenes del Producto */}
-        <div className="col-span-12">
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Imágenes del Producto (opcional, máximo {MAX_IMAGES})
-          </label>
-
-          {/* Galería de imágenes existentes - arrastrables */}
-          {images.length > 0 && (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4 mb-4">
-              {images.map((img, index) => (
-                <div
-                  key={index}
-                  draggable
-                  onDragStart={() => handleDragStart(index)}
-                  onDragOver={(e) => handleDragOver(e, index)}
-                  onDragLeave={handleDragLeave}
-                  onDrop={(e) => handleDrop(e, index)}
-                  onDragEnd={handleDragEnd}
-                  className={`relative group aspect-square cursor-grab active:cursor-grabbing transition-all duration-200 ${
-                    draggedIndex === index ? 'opacity-50 scale-95' : ''
-                  } ${
-                    dragOverIndex === index ? 'ring-2 ring-orange-500 ring-offset-2' : ''
-                  }`}
-                >
-                  <img
-                    src={img}
-                    alt={`Imagen ${index + 1}`}
-                    className="w-full h-full object-contain bg-gray-50 rounded-lg border-2 border-gray-200 p-2 pointer-events-none"
-                  />
-                  {/* Indicador de arrastre */}
-                  <div className="absolute top-2 left-2 p-1 bg-gray-800/70 text-white rounded opacity-0 group-hover:opacity-100 transition-opacity">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8h16M4 16h16" />
-                    </svg>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => removeImage(index)}
-                    className="absolute -top-2 -right-2 p-1.5 bg-red-500 text-white rounded-full shadow-lg hover:bg-red-600 transition-colors"
-                    title="Eliminar imagen"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                  {index === 0 && (
-                    <span className="absolute bottom-2 left-2 px-2 py-0.5 bg-orange-500 text-white text-xs font-medium rounded shadow">
-                      Principal
-                    </span>
-                  )}
-                  {/* Número de orden */}
-                  <span className="absolute bottom-2 right-2 w-6 h-6 flex items-center justify-center bg-gray-800/70 text-white text-xs font-bold rounded-full">
-                    {index + 1}
-                  </span>
-                </div>
-              ))}
+    <form onSubmit={handleSubmit} className="space-y-5">
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-5 items-start">
+        <div className="xl:col-span-2 space-y-5">
+          {/* Información */}
+          <Card>
+            <CardTitle icon={Info}>Información</CardTitle>
+            <div className="space-y-4">
+              <Field label="Nombre del producto" required htmlFor="pf-name">
+                <TextInput id="pf-name" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} required />
+              </Field>
+              <Field label="Descripción" required htmlFor="pf-desc">
+                <TextArea id="pf-desc" value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} rows={4} required />
+              </Field>
+              <FormGrid>
+                <Field label="Categoría" required htmlFor="pf-cat">
+                  <SelectInput id="pf-cat" value={formData.categoryId || ''} required
+                    onChange={(e) => setFormData({ ...formData, categoryId: e.target.value ? Number(e.target.value) : null })}>
+                    <option value="">Selecciona una categoría</option>
+                    {availableCategories.map(cat => <option key={cat.id} value={cat.id}>{cat.name}</option>)}
+                  </SelectInput>
+                </Field>
+                <Field label="Tipo de producto" required htmlFor="pf-type" hint="Define las tallas disponibles.">
+                  <SelectInput id="pf-type" value={formData.typeId || ''} required
+                    onChange={(e) => setFormData({ ...formData, typeId: e.target.value ? Number(e.target.value) : null })}>
+                    <option value="">Selecciona un tipo</option>
+                    {availableProductTypes
+                      .filter(type => !formData.categoryId || type.categoryId === formData.categoryId)
+                      .map(type => <option key={type.id} value={type.id}>{type.name}</option>)}
+                  </SelectInput>
+                </Field>
+              </FormGrid>
+              <Field label="Etiquetas" htmlFor="pf-tags" hint="Separadas por coma. Ayudan a encontrar el producto.">
+                <TextInput id="pf-tags" value={formData.tags} onChange={(e) => setFormData({ ...formData, tags: e.target.value })} placeholder="básico, algodón, unisex" />
+              </Field>
             </div>
-          )}
+          </Card>
 
-          {images.length > 1 && (
-            <p className="text-xs text-gray-500 mb-3">
-              💡 Arrastra las imágenes para cambiar el orden. La primera será la principal.
-            </p>
-          )}
+          {/* Imágenes */}
+          <Card>
+            <CardTitle icon={ImageIcon}>Imágenes</CardTitle>
+            <ImageGallery value={images} onChange={setImages} max={MAX_IMAGES} maxSizeMB={5} />
+            {images.length === 0 && <p className="text-xs text-gray-400 mt-1">Sin imagen: se mostrará un marcador de posición.</p>}
+          </Card>
 
-          {/* Agregar nueva imagen (si no se alcanzó el límite) */}
-          {images.length < MAX_IMAGES ? (
-            <ImageUploadField
-              key={`image-upload-${images.length}`}
-              label={`Agregar imagen (${images.length}/${MAX_IMAGES})`}
-              value=""
-              onChange={(value) => {
-                if (value) addImage(value);
-              }}
+          {/* Variantes */}
+          <Card>
+            <CardTitle icon={Layers}>Variantes</CardTitle>
+            <Switch
+              checked={hasVariants}
+              onChange={toggleVariants}
+              label="Se vende en colores o tallas"
+              description="Actívalo solo si el producto tiene distintos colores o tallas. Si no, se guarda como producto simple (una sola variante)."
             />
-          ) : (
-            <div className="p-4 bg-green-50 border border-green-200 rounded-lg text-center">
-              <p className="text-sm text-green-700 font-medium">
-                ✓ Máximo de {MAX_IMAGES} imágenes alcanzado
-              </p>
-            </div>
-          )}
 
-          {images.length === 0 && (
-            <p className="text-xs text-gray-400 mt-1">Sin imagen: se mostrará un marcador de posición.</p>
-          )}
-        </div>
+            {hasVariants && (
+              <div className="mt-5 space-y-5">
+                {missingVariants && <Alert tone="warning">Selecciona al menos un color y una talla para poder guardar.</Alert>}
 
-        {/* Rating, Reviews, Tags, Destacado */}
-        <div className="col-span-12 md:col-span-2">
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Rating (0-5)
-          </label>
-          <Input
-            type="number"
-            step="0.1"
-            min="0"
-            max="5"
-            value={formData.rating}
-            onChange={(e) => setFormData({ ...formData, rating: parseFloat(e.target.value) })}
-          />
-        </div>
-
-        <div className="col-span-12 md:col-span-2">
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Reseñas
-          </label>
-          <Input
-            type="number"
-            min="0"
-            value={formData.reviewsCount}
-            onChange={(e) => setFormData({ ...formData, reviewsCount: parseInt(e.target.value) })}
-          />
-        </div>
-
-        <div className="col-span-12 md:col-span-5">
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Tags (separados por coma)
-          </label>
-          <Input
-            type="text"
-            value={formData.tags}
-            onChange={(e) => setFormData({ ...formData, tags: e.target.value })}
-            placeholder="básico, algodón, unisex"
-          />
-        </div>
-
-        <div className="col-span-12 md:col-span-3">
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            &nbsp;
-          </label>
-          <label className="flex items-center space-x-2 h-10 px-3 bg-gray-50 rounded-lg">
-            <input
-              type="checkbox"
-              checked={formData.featured}
-              onChange={(e) => setFormData({ ...formData, featured: e.target.checked })}
-              className="w-4 h-4 text-orange-500 border-gray-300 rounded focus:ring-orange-500"
-            />
-            <span className="text-sm font-medium text-gray-700">Destacado</span>
-          </label>
-        </div>
-
-        {/* Toggle de variantes (color y talla) */}
-        <div className="col-span-12">
-          <div className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 rounded-lg">
-            <div>
-              <p className="text-sm font-medium text-gray-900">Variantes (color y talla)</p>
-              <p className="text-xs text-gray-500">
-                Actívalo solo si el producto se vende en distintos colores o tallas. Si no, se guarda como producto simple.
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => {
-                const next = !hasVariants;
-                if (!next) {
-                  // Apagar variantes en un producto que YA tenía color/talla puede
-                  // afectar variantes con stock/ventas: pedir confirmación.
-                  const hadVariants = (product?.colors?.length ?? 0) > 0 ||
-                    (Array.isArray(product?.sizes) && product.sizes.length > 0);
-                  if (hadVariants) {
-                    const stockNote = (product?.stock ?? 0) > 0 ? ` El producto tiene stock (${product?.stock}).` : '';
-                    const ok = window.confirm(
-                      `Este producto tiene variantes de color/talla.${stockNote}\n\n` +
-                      'Si lo conviertes en producto simple, esas variantes dejarán de usarse y el inventario pasará a una sola variante. ' +
-                      'Esto puede afectar el stock y los reportes.\n\n¿Continuar?'
-                    );
-                    if (!ok) return;
-                  }
-                  setSelectedColorIds([]);
-                  setSelectedSizeIds([]);
-                }
-                setHasVariants(next);
-              }}
-              className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors ${hasVariants ? 'bg-orange-500' : 'bg-gray-300'}`}
-              aria-pressed={hasVariants}
-            >
-              <span className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${hasVariants ? 'translate-x-5' : 'translate-x-0.5'}`} />
-            </button>
-          </div>
-        </div>
-
-        {hasVariants && (
-        <>
-        {/* Colores (selector con checkboxes) */}
-        <div className="col-span-12 md:col-span-6">
-          <label className="block text-sm font-medium text-gray-700 mb-1.5">
-            Colores (selecciona al menos uno)
-          </label>
-          <div className="border border-gray-300 rounded-lg p-3 bg-gray-50 max-h-64 overflow-y-auto">
-            {availableColors.length === 0 ? (
-              <p className="text-sm text-gray-500">Cargando colores...</p>
-            ) : (
-              <div className="space-y-2">
-                {availableColors.map(color => (
-                  <label
-                    key={color.id}
-                    className="flex items-center gap-3 p-2 hover:bg-white rounded-lg cursor-pointer transition-colors"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selectedColorIds.includes(color.id)}
-                      onChange={() => toggleColor(color.id)}
-                      className="w-4 h-4 text-orange-500 border-gray-300 rounded focus:ring-orange-500"
-                    />
-                    <div
-                      className="w-8 h-8 rounded border border-gray-300 flex-shrink-0"
-                      style={{ backgroundColor: color.hexCode }}
-                      title={color.hexCode}
-                    />
-                    <span className="text-sm font-medium text-gray-700 flex-1">
-                      {color.name}
-                    </span>
-                  </label>
-                ))}
-              </div>
-            )}
-          </div>
-          {selectedColorIds.length > 0 && (
-            <p className="text-xs text-gray-500 mt-1">
-              {selectedColorIds.length} color{selectedColorIds.length !== 1 ? 'es' : ''} seleccionado{selectedColorIds.length !== 1 ? 's' : ''}
-            </p>
-          )}
-        </div>
-
-        {/* Imagen por color (se muestra al elegir el color en tienda/carrito/POS) */}
-        {selectedColorIds.length > 0 && (
-          <div className="col-span-12">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Imagen por color (opcional)</label>
-            <p className="text-xs text-gray-500 mb-2">Al elegir el color en la tienda se mostrará esta imagen en su lugar.</p>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-              {availableColors.filter(c => selectedColorIds.includes(c.id)).map(color => (
-                <div key={color.id} className="border border-gray-200 rounded-lg p-2">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="w-4 h-4 rounded-full border border-gray-300 flex-shrink-0" style={{ backgroundColor: color.hexCode }} />
-                    <span className="text-xs font-medium text-gray-700 truncate">{color.name}</span>
-                  </div>
-                  {colorImages[color.id] ? (
-                    <div className="relative">
-                      <img src={colorImages[color.id]} alt={color.name} className="w-full h-24 object-cover rounded" />
-                      <button
-                        type="button"
-                        onClick={() => setColorImages(prev => { const n = { ...prev }; delete n[color.id]; return n; })}
-                        className="absolute top-1 right-1 bg-white/90 rounded-full p-0.5 text-gray-600 hover:text-red-600 shadow"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-700 mb-2">
+                    Colores <span className="text-red-500">*</span>
+                    <span className="ml-2 text-xs font-normal text-gray-500">{selectedColorIds.length} seleccionado{selectedColorIds.length !== 1 ? 's' : ''}</span>
+                  </p>
+                  {availableColors.length === 0 ? (
+                    <p className="text-sm text-gray-500">Cargando colores…</p>
                   ) : (
-                    <label className="flex flex-col items-center justify-center h-24 border-2 border-dashed border-gray-300 rounded cursor-pointer hover:border-orange-400 text-gray-400 text-xs">
-                      <input type="file" accept="image/*" className="hidden" onChange={(e) => onColorImage(color.id, e.target.files?.[0])} />
-                      + Imagen
-                    </label>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 max-h-72 overflow-y-auto p-0.5">
+                      {availableColors.map(color => {
+                        const on = selectedColorIds.includes(color.id);
+                        return (
+                          <button key={color.id} type="button" aria-pressed={on} onClick={() => toggleColor(color.id)} className={chip(on)}>
+                            <span className="w-5 h-5 rounded-md border border-gray-300 flex-shrink-0" style={{ backgroundColor: color.hexCode }} title={color.hexCode} />
+                            <span className="truncate flex-1">{color.name}</span>
+                            {on && <Check className="w-4 h-4 flex-shrink-0" />}
+                          </button>
+                        );
+                      })}
+                    </div>
                   )}
                 </div>
-              ))}
-            </div>
-          </div>
-        )}
 
-        {/* Tallas (selector con checkboxes) */}
-        <div className="col-span-12 md:col-span-6">
-          <label className="block text-sm font-medium text-gray-700 mb-1.5">
-            Tallas (selecciona al menos una)
-          </label>
-          <div className="border border-gray-300 rounded-lg p-3 bg-gray-50 max-h-64 overflow-y-auto">
-            {!formData.typeId ? (
-              <p className="text-sm text-gray-500">Selecciona un tipo de producto primero para ver las tallas disponibles</p>
-            ) : availableSizes.length === 0 ? (
-              <p className="text-sm text-gray-500">No hay tallas asignadas a este tipo de producto</p>
-            ) : (
-              <div className="grid grid-cols-2 gap-2">
-                {availableSizes.map(size => (
-                  <label
-                    key={size.id}
-                    className="flex items-center gap-2 p-2 hover:bg-white rounded-lg cursor-pointer transition-colors"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selectedSizeIds.includes(size.id)}
-                      onChange={() => toggleSize(size.id)}
-                      className="w-4 h-4 text-orange-500 border-gray-300 rounded focus:ring-orange-500"
-                    />
-                    <span className="text-sm font-medium text-gray-700">
-                      {size.abbreviation} <span className="text-xs text-gray-500">({size.name})</span>
-                    </span>
-                  </label>
-                ))}
+                <div>
+                  <p className="text-sm font-medium text-gray-700 mb-2">
+                    Tallas <span className="text-red-500">*</span>
+                    <span className="ml-2 text-xs font-normal text-gray-500">{selectedSizeIds.length} seleccionada{selectedSizeIds.length !== 1 ? 's' : ''}</span>
+                  </p>
+                  {!formData.typeId ? (
+                    <p className="text-sm text-gray-500">Selecciona un tipo de producto para ver sus tallas.</p>
+                  ) : availableSizes.length === 0 ? (
+                    <p className="text-sm text-gray-500">No hay tallas asignadas a este tipo de producto.</p>
+                  ) : (
+                    <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-2">
+                      {availableSizes.map(size => {
+                        const on = selectedSizeIds.includes(size.id);
+                        return (
+                          <button key={size.id} type="button" aria-pressed={on} onClick={() => toggleSize(size.id)} title={size.name} className={`${chip(on)} justify-center flex-col !gap-0`}>
+                            <span className="font-semibold">{size.abbreviation}</span>
+                            <span className="text-[11px] text-gray-500 truncate max-w-full">{size.name}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {selectedColorIds.length > 0 && (
+                  <div>
+                    <p className="text-sm font-medium text-gray-700">Imagen por color <span className="text-xs font-normal text-gray-500">(opcional)</span></p>
+                    <p className="text-xs text-gray-500 mb-3">Al elegir el color en la tienda, el carrito o el POS se muestra esta imagen.</p>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                      {availableColors.filter(c => selectedColorIds.includes(c.id)).map(color => (
+                        <div key={color.id}>
+                          <div className="flex items-center gap-2 mb-1.5">
+                            <span className="w-3.5 h-3.5 rounded-full border border-gray-300 flex-shrink-0" style={{ backgroundColor: color.hexCode }} />
+                            <span className="text-xs font-medium text-gray-700 truncate">{color.name}</span>
+                          </div>
+                          <ImageInput
+                            value={colorImages[color.id]}
+                            allowUrl={false}
+                            onChange={(v) => setColorImages(prev => {
+                              const n = { ...prev };
+                              if (v) n[color.id] = v; else delete n[color.id];
+                              return n;
+                            })}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
-          </div>
-          {selectedSizeIds.length > 0 && (
-            <p className="text-xs text-gray-500 mt-1">
-              {selectedSizeIds.length} talla{selectedSizeIds.length !== 1 ? 's' : ''} seleccionada{selectedSizeIds.length !== 1 ? 's' : ''}
-            </p>
-          )}
+          </Card>
         </div>
-        </>
-        )}
+
+        <div className="space-y-5">
+          {/* Precio */}
+          <Card>
+            <CardTitle icon={Tag}>Precio</CardTitle>
+            <Field label="Precio de venta" required htmlFor="pf-price"
+              hint="El stock se maneja por variante (Variantes / Inventario). Los descuentos, en Cupones.">
+              <MoneyInput id="pf-price" value={formData.basePrice} onChange={(e) => setFormData({ ...formData, basePrice: parseFloat(e.target.value) })} required />
+            </Field>
+          </Card>
+
+          {/* Publicación */}
+          <Card>
+            <CardTitle icon={Star}>Publicación</CardTitle>
+            <div className="space-y-4">
+              <Switch checked={formData.featured} onChange={(v) => setFormData({ ...formData, featured: v })} label="Destacado" description="Se muestra en las secciones de destacados de la tienda." />
+              <FormGrid>
+                <Field label="Calificación" htmlFor="pf-rating" hint="De 0 a 5.">
+                  <NumberInput id="pf-rating" step="0.1" min="0" max="5" value={formData.rating} onChange={(e) => setFormData({ ...formData, rating: parseFloat(e.target.value) })} />
+                </Field>
+                <Field label="Reseñas" htmlFor="pf-reviews">
+                  <NumberInput id="pf-reviews" min="0" step="1" value={formData.reviewsCount} onChange={(e) => setFormData({ ...formData, reviewsCount: parseInt(e.target.value) })} />
+                </Field>
+              </FormGrid>
+            </div>
+          </Card>
+        </div>
       </div>
 
-      {/* Actions */}
-      <div className="grid grid-cols-12 gap-3 pt-6 mt-6 border-t border-gray-200">
-        {onDelete ? (
-          <>
-            <div className="col-span-12 sm:col-span-6">
-              <Button
-                type="button"
-                onClick={onDelete}
-                variant="admin-danger"
-                className="w-full"
-              >
-                Eliminar Producto
-              </Button>
-            </div>
-            <div className="col-span-12 sm:col-span-6">
-              <Button
-                type="submit"
-                variant="admin-primary"
-                className="w-full"
-                disabled={hasVariants && (selectedColorIds.length === 0 || selectedSizeIds.length === 0)}
-              >
-                Actualizar Producto
-              </Button>
-            </div>
-          </>
-        ) : (
-          <div className="col-span-12">
-            <Button
-              type="submit"
-              variant="admin-primary"
-              className="w-full"
-              disabled={hasVariants && (selectedColorIds.length === 0 || selectedSizeIds.length === 0)}
-            >
-              Crear Producto
-            </Button>
-          </div>
+      <FormActions sticky>
+        {onDelete && (
+          <Button variant="danger" className="sm:mr-auto" onClick={onDelete} icon={<Trash2 className="w-4 h-4" />}>Eliminar producto</Button>
         )}
-      </div>
+        {onCancel && <Button variant="secondary" onClick={onCancel}>Cancelar</Button>}
+        <Button type="submit" isLoading={saving} disabled={missingVariants} icon={<Save className="w-4 h-4" />}>
+          {product ? 'Guardar cambios' : 'Crear producto'}
+        </Button>
+      </FormActions>
     </form>
   );
 };

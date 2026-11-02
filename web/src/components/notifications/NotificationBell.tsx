@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Bell, Star, Package, Tag, Info, Check, Loader2, X } from 'lucide-react';
+import { Bell, Star, Package, Tag, Info, Loader2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import * as notificationsService from '../../services/notifications.service';
 import type { Notification, NotificationType } from '../../types/notification';
@@ -17,7 +17,7 @@ const typeIcons: Record<NotificationType, React.ComponentType<{ className?: stri
 const typeColors: Record<NotificationType, string> = {
   REVIEW_AVAILABLE: 'bg-yellow-100 text-yellow-600',
   ORDER_STATUS: 'bg-blue-100 text-blue-600',
-  PROMO: 'bg-pink-100 text-pink-600',
+  PROMO: 'bg-app-100 text-app-600',
   SYSTEM: 'bg-gray-100 text-gray-600',
 };
 
@@ -158,7 +158,7 @@ export const NotificationBell = ({ className = '' }: NotificationBellProps) => {
             {unreadCount > 0 && (
               <button
                 onClick={handleMarkAllAsRead}
-                className="text-xs text-violet-600 hover:text-violet-700 font-medium"
+                className="text-xs text-app-600 hover:text-app-700 font-medium"
               >
                 Marcar todas como leídas
               </button>
@@ -169,7 +169,7 @@ export const NotificationBell = ({ className = '' }: NotificationBellProps) => {
           <div className="max-h-[400px] overflow-y-auto">
             {isLoading ? (
               <div className="flex justify-center items-center py-8">
-                <Loader2 className="w-6 h-6 animate-spin text-violet-500" />
+                <Loader2 className="w-6 h-6 animate-spin text-app-500" />
               </div>
             ) : notifications.length === 0 ? (
               <div className="text-center py-8 px-4">
@@ -191,7 +191,7 @@ export const NotificationBell = ({ className = '' }: NotificationBellProps) => {
                       className={`flex gap-3 p-4 transition-colors ${
                         notification.isRead
                           ? 'bg-white'
-                          : 'bg-violet-50/50'
+                          : 'bg-app-50/50'
                       } hover:bg-gray-50`}
                       onClick={() => handleMarkAsRead(notification)}
                     >
@@ -209,7 +209,7 @@ export const NotificationBell = ({ className = '' }: NotificationBellProps) => {
 
                       {/* Unread indicator */}
                       {!notification.isRead && (
-                        <div className="w-2 h-2 bg-violet-500 rounded-full flex-shrink-0 mt-2" />
+                        <div className="w-2 h-2 bg-app-500 rounded-full flex-shrink-0 mt-2" />
                       )}
                     </div>
                   );
@@ -236,7 +236,7 @@ export const NotificationBell = ({ className = '' }: NotificationBellProps) => {
               <Link
                 to="/account/notifications"
                 onClick={() => setIsOpen(false)}
-                className="block w-full text-center py-2 text-sm text-violet-600 hover:text-violet-700 hover:bg-violet-50 rounded-lg transition-colors font-medium"
+                className="block w-full text-center py-2 text-sm text-app-600 hover:text-app-700 hover:bg-app-50 rounded-lg transition-colors font-medium"
               >
                 Ver todas las notificaciones
               </Link>

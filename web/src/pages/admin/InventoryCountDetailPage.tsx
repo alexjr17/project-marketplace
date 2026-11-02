@@ -1,48 +1,36 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
-  ArrowLeft,
-  ClipboardCheck,
-  Trash2,
-  Send,
-  CheckCircle,
-  XCircle,
-  Plus,
-  Loader2,
-  Package,
-  AlertTriangle,
-  TrendingUp,
-  TrendingDown,
-  Minus,
+  ClipboardCheck, Trash2, Send, CheckCircle, XCircle, Plus, Package, TrendingUp, TrendingDown, Minus, Hourglass, Save,
 } from 'lucide-react';
-import { Button } from '../../components/shared/Button';
-import { Modal } from '../../components/shared/Modal';
-import { useToast } from '../../context/ToastContext';
+import {
+  Page, PageHeader, Button, Badge, Card, StatCard, DescriptionList, Field, DateInput, TextArea, RadioGroup, SearchInput,
+  Checkbox, FormActions, Alert, Spinner, EmptyState, TableCard, Table, THead, TBody, Th, Tr, Td, TableMessage,
+  useConfirm, toast,
+} from '../../components/ui';
 import * as inventoryCountsService from '../../services/inventory-counts.service';
 import { inputsService } from '../../services/inputs.service';
-import type {
-  InventoryCount,
-  InventoryCountItem,
-  InventoryCountType,
-} from '../../services/inventory-counts.service';
+import type { InventoryCount, InventoryCountType } from '../../services/inventory-counts.service';
+import { CountStatusBadge, fmtDate } from './InventoryCountShared';
+import { StepCard } from './InventoryStepCard';
+
+const LIST = '/admin-panel/inventory-counts';
+const money = (n: number) => '$' + Math.round(Math.abs(Number(n || 0))).toLocaleString('es-CO');
+const qty = (n: number) => Number(n || 0).toLocaleString('es-CO', { maximumFractionDigits: 2 });
 
 export default function InventoryCountDetailPage() {
   const navigate = useNavigate();
+  const confirm = useConfirm();
   const { id } = useParams<{ id: string }>();
-  const { showToast } = useToast();
   const isCreating = id === 'new';
 
   const [count, setCount] = useState<InventoryCount | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [inputs, setInputs] = useState<Array<{ id: number; code: string; name: string }>>([]);
+  const [inputSearch, setInputSearch] = useState('');
 
-  // Modal states
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [showApproveModal, setShowApproveModal] = useState(false);
-  const [showCancelModal, setShowCancelModal] = useState(false);
-
-  // Create form state
+  // Formulario de creación
   const [formData, setFormData] = useState<{
     countType: InventoryCountType;
     countDate: string;
@@ -55,7 +43,7 @@ export default function InventoryCountDetailPage() {
     selectedInputIds: [],
   });
 
-  // Count items state for editing
+  // Cantidades contadas que se están editando
   const [countItems, setCountItems] = useState<Record<number, { countedQuantity: number; notes: string }>>({});
 
   useEffect(() => {
@@ -67,16 +55,15 @@ export default function InventoryCountDetailPage() {
       setLoading(true);
 
       if (isCreating) {
-        // Load inputs for partial count selection
+        // Insumos para el conteo parcial
         const inputsData = await inputsService.getAll({});
-        setInputs(inputsData.map(i => ({ id: i.id, code: i.code, name: i.name })));
+        setInputs(inputsData.map((i) => ({ id: i.id, code: i.code, name: i.name })));
       } else {
         const countData = await inventoryCountsService.getInventoryCountById(Number(id));
         setCount(countData);
 
-        // Initialize count items state
         const items: Record<number, { countedQuantity: number; notes: string }> = {};
-        countData.items.forEach(item => {
+        countData.items.forEach((item) => {
           items[item.id] = {
             countedQuantity: item.countedQuantity ?? item.systemQuantity,
             notes: item.notes || '',
@@ -85,17 +72,16 @@ export default function InventoryCountDetailPage() {
         setCountItems(items);
       }
     } catch (error) {
-      showToast('Error al cargar datos', 'error');
-      navigate('/admin-panel/inventory-counts');
+      toast.error('Error al cargar datos');
+      navigate(LIST);
     } finally {
       setLoading(false);
     }
   };
 
-  // Create new count
   const handleCreate = async () => {
     if (formData.countType === 'PARTIAL' && formData.selectedInputIds.length === 0) {
-      showToast('Selecciona al menos un insumo para el conteo parcial', 'error');
+      toast.error('Selecciona al menos un insumo para el conteo parcial');
       return;
     }
 
@@ -107,19 +93,17 @@ export default function InventoryCountDetailPage() {
         notes: formData.notes || undefined,
         inputIds: formData.countType === 'PARTIAL' ? formData.selectedInputIds : undefined,
       });
-      showToast('Conteo de inventario creado', 'success');
-      navigate(`/admin-panel/inventory-counts/${newCount.id}`);
+      toast.success('Conteo de inventario creado');
+      navigate(`${LIST}/${newCount.id}`);
     } catch (error: any) {
-      showToast(error.message || 'Error al crear conteo', 'error');
+      toast.error(error.message || 'Error al crear conteo');
     } finally {
       setSaving(false);
     }
   };
 
-  // Update item count
   const handleUpdateItem = async (itemId: number) => {
     if (!count) return;
-
     const itemData = countItems[itemId];
     if (itemData === undefined) return;
 
@@ -128,645 +112,361 @@ export default function InventoryCountDetailPage() {
         countedQuantity: itemData.countedQuantity,
         notes: itemData.notes || undefined,
       });
-      showToast('Cantidad actualizada', 'success');
+      toast.success('Cantidad actualizada');
       loadData();
     } catch (error: any) {
-      showToast(error.message || 'Error al actualizar', 'error');
+      toast.error(error.message || 'Error al actualizar');
     }
   };
 
-  // Submit for approval
   const handleSubmit = async () => {
     if (!count) return;
-
     try {
       setSaving(true);
       await inventoryCountsService.submitForApproval(count.id);
-      showToast('Conteo enviado a aprobación', 'success');
+      toast.success('Conteo enviado a aprobación');
       loadData();
     } catch (error: any) {
-      showToast(error.message || 'Error al enviar', 'error');
+      toast.error(error.message || 'Error al enviar');
     } finally {
       setSaving(false);
     }
   };
 
-  // Approve count
-  const handleApprove = async () => {
-    if (!count) return;
-
-    try {
-      setSaving(true);
-      await inventoryCountsService.approveCount(count.id);
-      showToast('Conteo aprobado y ajustes aplicados', 'success');
-      setShowApproveModal(false);
-      loadData();
-    } catch (error: any) {
-      showToast(error.message || 'Error al aprobar', 'error');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  // Cancel count
-  const handleCancel = async () => {
-    if (!count) return;
-
-    try {
-      setSaving(true);
-      await inventoryCountsService.cancelCount(count.id);
-      showToast('Conteo cancelado', 'success');
-      setShowCancelModal(false);
-      loadData();
-    } catch (error: any) {
-      showToast(error.message || 'Error al cancelar', 'error');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  // Delete count
-  const handleDelete = async () => {
-    if (!count) return;
-
-    try {
-      setSaving(true);
-      await inventoryCountsService.deleteInventoryCount(count.id);
-      showToast('Conteo eliminado', 'success');
-      navigate('/admin-panel/inventory-counts');
-    } catch (error: any) {
-      showToast(error.message || 'Error al eliminar', 'error');
-    } finally {
-      setSaving(false);
-      setShowDeleteModal(false);
-    }
-  };
-
-  // Toggle input selection for partial count
   const toggleInputSelection = (inputId: number) => {
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
       selectedInputIds: prev.selectedInputIds.includes(inputId)
-        ? prev.selectedInputIds.filter(id => id !== inputId)
+        ? prev.selectedInputIds.filter((iid) => iid !== inputId)
         : [...prev.selectedInputIds, inputId],
     }));
   };
 
-  // Calculate statistics
-  const getCountStats = () => {
+  // Indicadores del conteo
+  const stats = useMemo(() => {
     if (!count) return null;
-
-    const countedItems = count.items.filter(i => i.isCounted);
-    const itemsWithPositiveDiff = count.items.filter(i => i.difference !== null && i.difference > 0);
-    const itemsWithNegativeDiff = count.items.filter(i => i.difference !== null && i.difference < 0);
-    const totalPositiveValue = itemsWithPositiveDiff.reduce((sum, i) => sum + (i.differenceValue || 0), 0);
-    const totalNegativeValue = itemsWithNegativeDiff.reduce((sum, i) => sum + Math.abs(i.differenceValue || 0), 0);
-
+    const countedItems = count.items.filter((i) => i.isCounted);
+    const positives = count.items.filter((i) => i.difference !== null && i.difference > 0);
+    const negatives = count.items.filter((i) => i.difference !== null && i.difference < 0);
     return {
       total: count.items.length,
       counted: countedItems.length,
       pending: count.items.length - countedItems.length,
       progress: count.items.length > 0 ? Math.round((countedItems.length / count.items.length) * 100) : 0,
-      positive: itemsWithPositiveDiff.length,
-      negative: itemsWithNegativeDiff.length,
-      totalPositiveValue,
-      totalNegativeValue,
+      positive: positives.length,
+      negative: negatives.length,
+      totalPositiveValue: positives.reduce((sum, i) => sum + (i.differenceValue || 0), 0),
+      totalNegativeValue: negatives.reduce((sum, i) => sum + Math.abs(i.differenceValue || 0), 0),
     };
+  }, [count]);
+
+  const handleApprove = async () => {
+    if (!count) return;
+    const ok = await confirm({
+      title: '¿Aprobar el conteo?',
+      message: (
+        <div className="space-y-2">
+          <p>Se aplicarán automáticamente los ajustes de inventario. Esta acción no se puede deshacer.</p>
+          {stats && stats.positive > 0 && <p className="text-green-700">+{stats.positive} ítem(s) con sobrante (+{money(stats.totalPositiveValue)})</p>}
+          {stats && stats.negative > 0 && <p className="text-red-700">{stats.negative} ítem(s) con faltante (−{money(stats.totalNegativeValue)})</p>}
+        </div>
+      ),
+      confirmText: 'Aprobar y aplicar',
+    });
+    if (!ok) return;
+    try {
+      setSaving(true);
+      await inventoryCountsService.approveCount(count.id);
+      toast.success('Conteo aprobado y ajustes aplicados');
+      loadData();
+    } catch (error: any) {
+      toast.error(error.message || 'Error al aprobar');
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const stats = getCountStats();
-  const canEdit = count && (count.status === 'DRAFT' || count.status === 'IN_PROGRESS');
+  const handleCancel = async () => {
+    if (!count) return;
+    const ok = await confirm({
+      title: `¿Cancelar el conteo ${count.countNumber}?`,
+      message: 'No se aplicarán ajustes al inventario.',
+      tone: 'danger',
+      confirmText: 'Cancelar conteo',
+      cancelText: 'Volver',
+    });
+    if (!ok) return;
+    try {
+      setSaving(true);
+      await inventoryCountsService.cancelCount(count.id);
+      toast.success('Conteo cancelado');
+      loadData();
+    } catch (error: any) {
+      toast.error(error.message || 'Error al cancelar');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!count) return;
+    const ok = await confirm({
+      title: `¿Eliminar el conteo ${count.countNumber}?`,
+      message: 'Esta acción no se puede deshacer.',
+      tone: 'danger',
+    });
+    if (!ok) return;
+    try {
+      setSaving(true);
+      await inventoryCountsService.deleteInventoryCount(count.id);
+      toast.success('Conteo eliminado');
+      navigate(LIST);
+    } catch (error: any) {
+      toast.error(error.message || 'Error al eliminar');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const canEdit = !!count && (count.status === 'DRAFT' || count.status === 'IN_PROGRESS');
+
+  const filteredInputs = useMemo(() => {
+    const t = inputSearch.trim().toLowerCase();
+    return t ? inputs.filter((i) => i.name.toLowerCase().includes(t) || i.code.toLowerCase().includes(t)) : inputs;
+  }, [inputs, inputSearch]);
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <Loader2 className="w-8 h-8 animate-spin text-orange-600" />
-      </div>
-    );
+    return <Page><Spinner label="Cargando…" /></Page>;
   }
 
-  // Create form
+  // ───────────── Crear ─────────────
   if (isCreating) {
+    const isPartial = formData.countType === 'PARTIAL';
+    const allFilteredSelected = filteredInputs.length > 0 && filteredInputs.every((i) => formData.selectedInputIds.includes(i.id));
     return (
-      <div className="p-6">
-        <div className="flex items-center gap-4 mb-6">
-          <button
-            onClick={() => navigate('/admin-panel/inventory-counts')}
-            className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg"
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </button>
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Nuevo Conteo de Inventario</h1>
-            <p className="text-gray-600 text-sm">Crea un nuevo conteo físico de insumos</p>
-          </div>
-        </div>
+      <Page>
+        <PageHeader icon={ClipboardCheck} backTo={LIST} title="Nuevo conteo" subtitle="Crea un conteo físico de insumos" />
 
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 max-w-2xl">
-          <div className="space-y-6">
-            {/* Count Type */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Tipo de Conteo
-              </label>
-              <div className="grid grid-cols-2 gap-4">
-                <button
-                  type="button"
-                  onClick={() => setFormData({ ...formData, countType: 'FULL', selectedInputIds: [] })}
-                  className={`p-4 border-2 rounded-lg text-left transition-colors ${
-                    formData.countType === 'FULL'
-                      ? 'border-orange-500 bg-orange-50'
-                      : 'border-gray-200 hover:border-gray-300'
-                  }`}
-                >
-                  <p className="font-medium text-gray-900">Conteo Completo</p>
-                  <p className="text-sm text-gray-500 mt-1">
-                    Cuenta todos los insumos activos del inventario
-                  </p>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setFormData({ ...formData, countType: 'PARTIAL' })}
-                  className={`p-4 border-2 rounded-lg text-left transition-colors ${
-                    formData.countType === 'PARTIAL'
-                      ? 'border-orange-500 bg-orange-50'
-                      : 'border-gray-200 hover:border-gray-300'
-                  }`}
-                >
-                  <p className="font-medium text-gray-900">Conteo Parcial</p>
-                  <p className="text-sm text-gray-500 mt-1">
-                    Selecciona insumos específicos para contar
-                  </p>
-                </button>
-              </div>
-            </div>
+        <div className="max-w-3xl space-y-4">
+          <StepCard step={1} done title="Qué vas a contar" description="Un conteo completo incluye todos los insumos activos.">
+            <RadioGroup
+              variant="cards"
+              value={formData.countType}
+              onChange={(v) => setFormData({ ...formData, countType: v, selectedInputIds: v === 'FULL' ? [] : formData.selectedInputIds })}
+              options={[
+                { value: 'FULL', label: 'Conteo completo', description: 'Cuenta todos los insumos activos del inventario' },
+                { value: 'PARTIAL', label: 'Conteo parcial', description: 'Selecciona insumos específicos para contar' },
+              ]}
+            />
+          </StepCard>
 
-            {/* Date */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Fecha del Conteo
-              </label>
-              <input
-                type="date"
-                value={formData.countDate}
-                onChange={(e) => setFormData({ ...formData, countDate: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500"
-              />
-            </div>
-
-            {/* Notes */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Notas (opcional)
-              </label>
-              <textarea
-                value={formData.notes}
-                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                rows={3}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 resize-none"
-                placeholder="Notas adicionales sobre este conteo..."
-              />
-            </div>
-
-            {/* Input Selection for Partial */}
-            {formData.countType === 'PARTIAL' && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Insumos a Contar ({formData.selectedInputIds.length} seleccionados)
-                </label>
-                <div className="border border-gray-200 rounded-lg max-h-60 overflow-y-auto">
-                  {inputs.length === 0 ? (
-                    <p className="p-4 text-center text-gray-500">No hay insumos disponibles</p>
-                  ) : (
-                    inputs.map((input) => (
-                      <label
-                        key={input.id}
-                        className="flex items-center gap-3 p-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-0"
-                      >
-                        <input
-                          type="checkbox"
+          {isPartial && (
+            <StepCard
+              step={2}
+              done={formData.selectedInputIds.length > 0}
+              title="Insumos a contar"
+              description="Marca los insumos que vas a revisar."
+              actions={<Badge tone={formData.selectedInputIds.length > 0 ? 'app' : 'gray'}>{formData.selectedInputIds.length} seleccionados</Badge>}
+            >
+              {inputs.length === 0 ? (
+                <EmptyState icon={Package} title="No hay insumos disponibles" />
+              ) : (
+                <div className="space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                    <SearchInput className="flex-1" value={inputSearch} onChange={setInputSearch} placeholder="Buscar insumo por nombre o código…" />
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setFormData((prev) => ({
+                        ...prev,
+                        selectedInputIds: allFilteredSelected
+                          ? prev.selectedInputIds.filter((sid) => !filteredInputs.some((i) => i.id === sid))
+                          : Array.from(new Set([...prev.selectedInputIds, ...filteredInputs.map((i) => i.id)])),
+                      }))}
+                    >
+                      {allFilteredSelected ? 'Quitar todos' : 'Marcar todos'}
+                    </Button>
+                  </div>
+                  <div className="rounded-lg border border-gray-200 max-h-72 overflow-y-auto divide-y divide-gray-100">
+                    {filteredInputs.length === 0 ? (
+                      <p className="p-4 text-center text-sm text-gray-400">Sin resultados</p>
+                    ) : filteredInputs.map((input) => (
+                      <div key={input.id} className="px-3 py-2.5 hover:bg-gray-50">
+                        <Checkbox
+                          className="w-full"
                           checked={formData.selectedInputIds.includes(input.id)}
                           onChange={() => toggleInputSelection(input.id)}
-                          className="w-4 h-4 text-orange-500 border-gray-300 rounded focus:ring-orange-500"
+                          label={<span className="font-medium text-gray-900">{input.name}</span>}
+                          description={<span className="font-mono">{input.code}</span>}
                         />
-                        <div>
-                          <p className="font-medium text-gray-900 text-sm">{input.name}</p>
-                          <p className="text-xs text-gray-500 font-mono">{input.code}</p>
-                        </div>
-                      </label>
-                    ))
-                  )}
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
+            </StepCard>
+          )}
 
-            {/* Actions */}
-            <div className="flex gap-3 pt-4 border-t">
-              <Button
-                variant="admin-secondary"
-                onClick={() => navigate('/admin-panel/inventory-counts')}
-                className="flex-1"
-              >
-                Cancelar
-              </Button>
-              <Button
-                variant="admin-primary"
-                onClick={handleCreate}
-                disabled={saving}
-                className="flex-1"
-              >
-                {saving ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Creando...
-                  </>
-                ) : (
-                  <>
-                    <Plus className="w-4 h-4 mr-2" />
-                    Crear Conteo
-                  </>
-                )}
-              </Button>
+          <StepCard step={isPartial ? 3 : 2} title="Fecha y notas">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <Field label="Fecha del conteo" required>
+                <DateInput value={formData.countDate} onChange={(e) => setFormData({ ...formData, countDate: e.target.value })} />
+              </Field>
+              <Field label="Notas" className="md:col-span-2">
+                <TextArea rows={2} value={formData.notes} onChange={(e) => setFormData({ ...formData, notes: e.target.value })} placeholder="Notas sobre este conteo (opcional)…" />
+              </Field>
             </div>
-          </div>
+          </StepCard>
         </div>
-      </div>
+
+        <FormActions sticky>
+          <Button variant="secondary" onClick={() => navigate(LIST)}>Cancelar</Button>
+          <Button icon={<Plus className="w-4 h-4" />} isLoading={saving} onClick={handleCreate}>Crear conteo</Button>
+        </FormActions>
+      </Page>
     );
   }
 
-  // Detail view
+  // ───────────── Detalle ─────────────
+  if (!count) return null;
+
+  const itemStatus = (difference: number | null, isCounted: boolean) =>
+    !isCounted ? <Badge tone="yellow">Sin contar</Badge>
+      : difference === 0 ? <Badge tone="green">Cuadra</Badge>
+      : (difference ?? 0) > 0 ? <Badge tone="blue">Sobrante</Badge>
+      : <Badge tone="red">Faltante</Badge>;
+
+  const diffView = (d: number | null) => {
+    if (d === null) return <span className="text-gray-400">—</span>;
+    const cls = d === 0 ? 'text-gray-500' : d > 0 ? 'text-green-700' : 'text-red-700';
+    const Icon = d === 0 ? Minus : d > 0 ? TrendingUp : TrendingDown;
+    return <span className={`inline-flex items-center gap-1 tabular-nums ${cls}`}><Icon className="w-3.5 h-3.5" />{d > 0 ? '+' : ''}{qty(d)}</span>;
+  };
+  const valueView = (v: number | null) => {
+    if (v === null || v === 0) return <span className="text-gray-400">—</span>;
+    return <span className={`tabular-nums ${v > 0 ? 'text-green-700' : 'text-red-700'}`}>{v > 0 ? '+' : '−'}{money(v)}</span>;
+  };
+
   return (
-    <div className="p-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-        <div className="flex items-center gap-4">
-          <button
-            onClick={() => navigate('/admin-panel/inventory-counts')}
-            className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg"
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </button>
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">{count?.countNumber}</h1>
-            <div className="flex items-center gap-2 mt-1">
-              <span
-                className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                  inventoryCountsService.STATUS_COLORS[count?.status || 'DRAFT']
-                }`}
-              >
-                {inventoryCountsService.STATUS_LABELS[count?.status || 'DRAFT']}
-              </span>
-              <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
-                count?.countType === 'FULL'
-                  ? 'bg-purple-100 text-purple-700'
-                  : 'bg-blue-100 text-blue-700'
-              }`}>
-                {inventoryCountsService.TYPE_LABELS[count?.countType || 'FULL']}
-              </span>
-            </div>
-          </div>
-        </div>
+    <Page>
+      <PageHeader
+        icon={ClipboardCheck}
+        backTo={LIST}
+        title={
+          <span className="flex items-center gap-3">
+            {count.countNumber}
+            <CountStatusBadge status={count.status} />
+          </span>
+        }
+        subtitle={`Conteo ${inventoryCountsService.TYPE_LABELS[count.countType].toLowerCase()} · ${fmtDate(count.countDate)}`}
+        actions={
+          <>
+            {['DRAFT', 'CANCELLED'].includes(count.status) && (
+              <Button variant="ghost" className="text-red-600 hover:bg-red-50 hover:text-red-700" icon={<Trash2 className="w-4 h-4" />} onClick={handleDelete} disabled={saving}>
+                Eliminar
+              </Button>
+            )}
+            {!['APPROVED', 'CANCELLED'].includes(count.status) && (
+              <Button variant="secondary" icon={<XCircle className="w-4 h-4" />} onClick={handleCancel} disabled={saving}>
+                Cancelar conteo
+              </Button>
+            )}
+            {count.status === 'IN_PROGRESS' && stats?.pending === 0 && (
+              <Button icon={<Send className="w-4 h-4" />} onClick={handleSubmit} isLoading={saving}>
+                Enviar a aprobación
+              </Button>
+            )}
+            {count.status === 'PENDING_APPROVAL' && (
+              <Button variant="success" icon={<CheckCircle className="w-4 h-4" />} onClick={handleApprove} disabled={saving}>
+                Aprobar
+              </Button>
+            )}
+          </>
+        }
+      />
 
-        {/* Action Buttons */}
-        <div className="flex items-center gap-2">
-          {count?.status === 'IN_PROGRESS' && stats?.pending === 0 && (
-            <Button variant="admin-secondary" size="sm" onClick={handleSubmit} disabled={saving}>
-              <Send className="w-4 h-4" />
-              Enviar a Aprobación
-            </Button>
-          )}
-          {count?.status === 'PENDING_APPROVAL' && (
-            <Button variant="admin-primary" size="sm" onClick={() => setShowApproveModal(true)} disabled={saving}>
-              <CheckCircle className="w-4 h-4" />
-              Aprobar
-            </Button>
-          )}
-          {count && !['APPROVED', 'CANCELLED'].includes(count.status) && (
-            <Button variant="admin-secondary" size="sm" onClick={() => setShowCancelModal(true)} disabled={saving}>
-              <XCircle className="w-4 h-4" />
-              Cancelar
-            </Button>
-          )}
-          {count && ['DRAFT', 'CANCELLED'].includes(count.status) && (
-            <Button variant="admin-danger" size="sm" onClick={() => setShowDeleteModal(true)} disabled={saving}>
-              <Trash2 className="w-4 h-4" />
-              Eliminar
-            </Button>
-          )}
-        </div>
-      </div>
-
-      {/* Stats Grid */}
       {stats && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
-            <p className="text-sm text-gray-500">Progreso</p>
-            <div className="flex items-end gap-2 mt-1">
-              <p className="text-2xl font-bold text-gray-900">{stats.progress}%</p>
-              <p className="text-sm text-gray-500 mb-1">{stats.counted}/{stats.total}</p>
-            </div>
-            <div className="w-full bg-gray-200 rounded-full h-1.5 mt-2">
-              <div
-                className="bg-orange-500 h-1.5 rounded-full transition-all"
-                style={{ width: `${stats.progress}%` }}
-              />
-            </div>
-          </div>
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
-            <p className="text-sm text-gray-500">Pendientes</p>
-            <p className="text-2xl font-bold text-yellow-600">{stats.pending}</p>
-          </div>
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
-            <p className="text-sm text-gray-500 flex items-center gap-1">
-              <TrendingUp className="w-3.5 h-3.5 text-green-500" />
-              Sobrantes
-            </p>
-            <p className="text-2xl font-bold text-green-600">{stats.positive}</p>
-            <p className="text-xs text-gray-500">+${stats.totalPositiveValue.toLocaleString()}</p>
-          </div>
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
-            <p className="text-sm text-gray-500 flex items-center gap-1">
-              <TrendingDown className="w-3.5 h-3.5 text-red-500" />
-              Faltantes
-            </p>
-            <p className="text-2xl font-bold text-red-600">{stats.negative}</p>
-            <p className="text-xs text-gray-500">-${stats.totalNegativeValue.toLocaleString()}</p>
-          </div>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <StatCard icon={ClipboardCheck} label="Progreso" value={`${stats.progress}%`} hint={`${stats.counted} de ${stats.total} contados`} />
+          <StatCard icon={Hourglass} tone={stats.pending > 0 ? 'yellow' : 'gray'} label="Sin contar" value={stats.pending} hint={stats.pending > 0 ? 'Cuenta todos para enviar' : 'Todo contado'} hintTone={stats.pending > 0 ? 'yellow' : 'gray'} />
+          <StatCard icon={TrendingUp} tone="green" label="Sobrantes" value={stats.positive} hint={`+${money(stats.totalPositiveValue)}`} hintTone="green" />
+          <StatCard icon={TrendingDown} tone="red" label="Faltantes" value={stats.negative} hint={`−${money(stats.totalNegativeValue)}`} hintTone="red" />
         </div>
       )}
 
-      {/* Items Table */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b border-gray-200">
-              <tr>
-                <th className="px-4 py-3 text-left font-medium text-gray-600">Insumo</th>
-                <th className="px-4 py-3 text-center font-medium text-gray-600 w-24">Sistema</th>
-                <th className="px-4 py-3 text-center font-medium text-gray-600 w-32">Contado</th>
-                <th className="px-4 py-3 text-center font-medium text-gray-600 w-24">Diferencia</th>
-                <th className="px-4 py-3 text-right font-medium text-gray-600 w-28">Valor Dif.</th>
-                {canEdit && <th className="px-4 py-3 w-24"></th>}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200">
-              {count?.items.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="px-4 py-12 text-center">
-                    <Package className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                    <p className="text-gray-500">No hay items en este conteo</p>
-                  </td>
-                </tr>
-              ) : (
-                count?.items.map((item) => {
-                  const itemState = countItems[item.id];
-                  const currentCountedQty = itemState?.countedQuantity ?? item.systemQuantity;
-                  const tempDifference = currentCountedQty - item.systemQuantity;
-
-                  return (
-                    <tr key={item.id} className={`hover:bg-gray-50 ${!item.isCounted && canEdit ? 'bg-yellow-50' : ''}`}>
-                      <td className="px-4 py-3">
-                        <div className="flex items-start gap-2">
-                          {/* Status indicator */}
-                          <div className={`w-1.5 h-10 rounded-full ${
-                            item.isCounted
-                              ? item.difference === 0
-                                ? 'bg-green-500'
-                                : item.difference! > 0
-                                ? 'bg-blue-500'
-                                : 'bg-red-500'
-                              : 'bg-yellow-400'
-                          }`} />
-                          <div>
-                            <p className="font-medium text-gray-900">{item.inputName}</p>
-                            <p className="text-xs text-gray-500 font-mono">{item.inputCode}</p>
-                            <p className="text-xs text-gray-400">{item.unitOfMeasure}</p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-center">
-                        <span className="font-mono text-gray-700">{item.systemQuantity}</span>
-                      </td>
-                      <td className="px-4 py-3 text-center">
-                        {canEdit ? (
-                          <input
-                            type="number"
-                            value={currentCountedQty}
-                            onChange={(e) => {
-                              setCountItems({
-                                ...countItems,
-                                [item.id]: {
-                                  ...countItems[item.id],
-                                  countedQuantity: Number(e.target.value),
-                                },
-                              });
-                            }}
-                            className="w-24 px-2 py-1 border border-gray-300 rounded text-center font-mono"
-                            min="0"
-                            step="0.01"
-                          />
-                        ) : (
-                          <span className={`font-mono ${item.isCounted ? 'text-gray-900' : 'text-gray-400'}`}>
-                            {item.countedQuantity ?? '-'}
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-center">
-                        {canEdit ? (
-                          <span className={`inline-flex items-center gap-1 font-mono text-sm ${
-                            tempDifference === 0
-                              ? 'text-gray-500'
-                              : tempDifference > 0
-                              ? 'text-green-600'
-                              : 'text-red-600'
-                          }`}>
-                            {tempDifference === 0 ? (
-                              <Minus className="w-3.5 h-3.5" />
-                            ) : tempDifference > 0 ? (
-                              <TrendingUp className="w-3.5 h-3.5" />
-                            ) : (
-                              <TrendingDown className="w-3.5 h-3.5" />
-                            )}
-                            {tempDifference > 0 ? '+' : ''}{tempDifference}
-                          </span>
-                        ) : (
-                          <span className={`inline-flex items-center gap-1 font-mono text-sm ${
-                            item.difference === null
-                              ? 'text-gray-400'
-                              : item.difference === 0
-                              ? 'text-gray-500'
-                              : item.difference > 0
-                              ? 'text-green-600'
-                              : 'text-red-600'
-                          }`}>
-                            {item.difference === null ? (
-                              '-'
-                            ) : item.difference === 0 ? (
-                              <><Minus className="w-3.5 h-3.5" />0</>
-                            ) : item.difference > 0 ? (
-                              <><TrendingUp className="w-3.5 h-3.5" />+{item.difference}</>
-                            ) : (
-                              <><TrendingDown className="w-3.5 h-3.5" />{item.difference}</>
-                            )}
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        {canEdit ? (
-                          <span className={`font-mono text-sm ${
-                            tempDifference === 0
-                              ? 'text-gray-500'
-                              : tempDifference > 0
-                              ? 'text-green-600'
-                              : 'text-red-600'
-                          }`}>
-                            {tempDifference === 0 ? '-' : `$${Math.abs(tempDifference * item.unitCost).toLocaleString()}`}
-                          </span>
-                        ) : (
-                          <span className={`font-mono text-sm ${
-                            item.differenceValue === null
-                              ? 'text-gray-400'
-                              : item.differenceValue === 0
-                              ? 'text-gray-500'
-                              : item.differenceValue > 0
-                              ? 'text-green-600'
-                              : 'text-red-600'
-                          }`}>
-                            {item.differenceValue === null
-                              ? '-'
-                              : item.differenceValue === 0
-                              ? '-'
-                              : `$${Math.abs(item.differenceValue).toLocaleString()}`}
-                          </span>
-                        )}
-                      </td>
-                      {canEdit && (
-                        <td className="px-4 py-3 text-center">
-                          <Button
-                            variant="admin-secondary"
-                            size="sm"
-                            onClick={() => handleUpdateItem(item.id)}
-                            className="text-xs"
-                          >
-                            <ClipboardCheck className="w-3.5 h-3.5" />
-                            Guardar
-                          </Button>
-                        </td>
-                      )}
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Legend */}
-        <div className="px-4 py-3 border-t border-gray-200 bg-gray-50">
-          <div className="flex flex-wrap gap-4 text-xs text-gray-500">
-            <span className="flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-yellow-400"></span>
-              Sin contar
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-green-500"></span>
-              Sin diferencia
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-blue-500"></span>
-              Sobrante
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-red-500"></span>
-              Faltante
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* Notes */}
-      {count?.notes && (
-        <div className="mt-6 bg-white rounded-lg border border-gray-200 p-4">
-          <p className="text-sm font-medium text-gray-700 mb-1">Notas</p>
-          <p className="text-gray-600 text-sm">{count.notes}</p>
-        </div>
+      {count.status === 'IN_PROGRESS' && stats && stats.pending > 0 && (
+        <Alert tone="info">Guarda la cantidad contada de cada insumo. Cuando no quede ninguno sin contar podrás enviarlo a aprobación.</Alert>
       )}
 
-      {/* Approve Modal */}
-      <Modal isOpen={showApproveModal} onClose={() => setShowApproveModal(false)} title="Aprobar Conteo">
-        <div className="space-y-4">
-          <div className="flex items-start gap-3 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-            <AlertTriangle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
-            <div>
-              <p className="text-yellow-800 font-medium">Confirmar Aprobación</p>
-              <p className="text-sm text-yellow-700 mt-1">
-                Al aprobar este conteo, se aplicarán automáticamente los ajustes de inventario.
-                Esta acción no se puede deshacer.
-              </p>
-            </div>
-          </div>
-          {stats && (stats.positive > 0 || stats.negative > 0) && (
-            <div className="p-4 bg-gray-50 rounded-lg">
-              <p className="text-sm font-medium text-gray-700 mb-2">Resumen de Ajustes:</p>
-              {stats.positive > 0 && (
-                <p className="text-sm text-green-600">
-                  +{stats.positive} item(s) con sobrante (+${stats.totalPositiveValue.toLocaleString()})
-                </p>
-              )}
-              {stats.negative > 0 && (
-                <p className="text-sm text-red-600">
-                  -{stats.negative} item(s) con faltante (-${stats.totalNegativeValue.toLocaleString()})
-                </p>
-              )}
-            </div>
-          )}
-          <div className="flex gap-3">
-            <Button variant="admin-secondary" onClick={() => setShowApproveModal(false)} className="flex-1">
-              Cancelar
-            </Button>
-            <Button variant="admin-primary" onClick={handleApprove} disabled={saving} className="flex-1">
-              {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <CheckCircle className="w-4 h-4 mr-2" />}
-              Aprobar y Aplicar
-            </Button>
-          </div>
-        </div>
-      </Modal>
+      <Card>
+        <DescriptionList
+          cols={3}
+          items={[
+            { label: 'Tipo', value: inventoryCountsService.TYPE_LABELS[count.countType] },
+            { label: 'Fecha del conteo', value: fmtDate(count.countDate) },
+            { label: 'Contado por', value: count.countedByName },
+            ...(count.approvedByName ? [{ label: 'Aprobado por', value: `${count.approvedByName}${count.approvedAt ? ' · ' + fmtDate(count.approvedAt) : ''}` }] : []),
+            ...(count.notes ? [{ label: 'Notas', value: count.notes, full: true }] : []),
+          ]}
+        />
+      </Card>
 
-      {/* Cancel Modal */}
-      <Modal isOpen={showCancelModal} onClose={() => setShowCancelModal(false)} title="Cancelar Conteo">
-        <div className="space-y-4">
-          <p className="text-gray-600">
-            ¿Estás seguro de cancelar el conteo <strong>{count?.countNumber}</strong>?
-            No se aplicarán ajustes al inventario.
-          </p>
-          <div className="flex gap-3">
-            <Button variant="admin-secondary" onClick={() => setShowCancelModal(false)} className="flex-1">
-              Volver
-            </Button>
-            <Button variant="admin-danger" onClick={handleCancel} disabled={saving} className="flex-1">
-              {saving ? 'Cancelando...' : 'Cancelar Conteo'}
-            </Button>
-          </div>
-        </div>
-      </Modal>
-
-      {/* Delete Modal */}
-      <Modal isOpen={showDeleteModal} onClose={() => setShowDeleteModal(false)} title="Eliminar Conteo">
-        <div className="space-y-4">
-          <p className="text-gray-600">
-            ¿Estás seguro de eliminar el conteo <strong>{count?.countNumber}</strong>?
-            Esta acción no se puede deshacer.
-          </p>
-          <div className="flex gap-3">
-            <Button variant="admin-secondary" onClick={() => setShowDeleteModal(false)} className="flex-1">
-              Cancelar
-            </Button>
-            <Button variant="admin-danger" onClick={handleDelete} disabled={saving} className="flex-1">
-              {saving ? 'Eliminando...' : 'Eliminar'}
-            </Button>
-          </div>
-        </div>
-      </Modal>
-    </div>
+      <TableCard>
+        <Table>
+          <THead>
+            <tr>
+              <Th>Insumo</Th>
+              <Th align="center">Estado</Th>
+              <Th align="right">Sistema</Th>
+              <Th align="right">Contado</Th>
+              <Th align="right">Diferencia</Th>
+              <Th align="right">Valor dif.</Th>
+              {canEdit && <Th align="right" aria-label="Acciones" />}
+            </tr>
+          </THead>
+          <TBody>
+            {count.items.length === 0 ? (
+              <TableMessage colSpan={canEdit ? 7 : 6}>No hay ítems en este conteo.</TableMessage>
+            ) : count.items.map((item) => {
+              const current = countItems[item.id]?.countedQuantity ?? item.systemQuantity;
+              const tempDiff = current - item.systemQuantity;
+              return (
+                <Tr key={item.id}>
+                  <Td className="min-w-[200px]">
+                    <p className="font-medium text-gray-900">{item.inputName}</p>
+                    <p className="text-xs text-gray-500"><span className="font-mono">{item.inputCode}</span> · {item.unitOfMeasure}</p>
+                  </Td>
+                  <Td align="center">{itemStatus(item.difference, item.isCounted)}</Td>
+                  <Td align="right" className="tabular-nums">{qty(item.systemQuantity)}</Td>
+                  <Td align="right">
+                    {canEdit ? (
+                      <input
+                        type="number"
+                        aria-label={`Cantidad contada de ${item.inputName}`}
+                        value={current}
+                        min="0"
+                        step="0.01"
+                        onChange={(e) => setCountItems({ ...countItems, [item.id]: { ...countItems[item.id], countedQuantity: Number(e.target.value) } })}
+                        onKeyDown={(e) => { if (e.key === 'Enter') handleUpdateItem(item.id); }}
+                        className="w-24 h-9 rounded-lg border border-gray-300 px-2 text-right tabular-nums focus:outline-none focus:ring-2 focus:ring-app-200 focus:border-app-500"
+                      />
+                    ) : (
+                      <span className={`tabular-nums ${item.isCounted ? 'text-gray-900' : 'text-gray-400'}`}>{item.countedQuantity !== null ? qty(item.countedQuantity) : '—'}</span>
+                    )}
+                  </Td>
+                  <Td align="right" className="whitespace-nowrap">{canEdit ? diffView(tempDiff) : diffView(item.difference)}</Td>
+                  <Td align="right" className="whitespace-nowrap">{canEdit ? valueView(tempDiff * item.unitCost) : valueView(item.differenceValue)}</Td>
+                  {canEdit && (
+                    <Td align="right">
+                      <Button size="sm" variant="outline" icon={<Save className="w-3.5 h-3.5" />} onClick={() => handleUpdateItem(item.id)}>Guardar</Button>
+                    </Td>
+                  )}
+                </Tr>
+              );
+            })}
+          </TBody>
+        </Table>
+      </TableCard>
+    </Page>
   );
 }

@@ -1,536 +1,187 @@
-import { useState, useEffect } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import type { ReactNode } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { ChevronDown, LogOut, Menu, PanelLeftClose, PanelLeftOpen, Search, User, X } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import {
-  Package,
-  ShoppingBag,
-  Users,
-  BarChart3,
-  Settings,
-  Menu,
-  User,
-  LogOut,
-  ChevronDown,
-  ChevronRight,
-  Layers,
-  Truck,
-  FileText,
-  Shield,
-  UserCog,
-  DollarSign,
-  Key,
-  Archive,
-  Box,
-  Palette,
-  Ruler,
-  Tag,
-  FolderTree,
-  LayoutTemplate,
-  Scissors,
-  Image,
-  LayoutGrid,
-  ShoppingCart,
-  ArrowDownUp,
-  ArrowRightLeft,
-  ClipboardList,
-  RotateCcw,
-  Building2,
-  Store,
-  Star,
-  Megaphone,
-  Ticket,
-  MapPin,
-  Plug,
-} from 'lucide-react';
-import type { Permission } from '../../types/roles';
+import { useSettings } from '../../context/SettingsContext';
 import AppSwitcher from '../common/AppSwitcher';
+import { Avatar } from '../ui/Media';
+import { Breadcrumbs, Tabs } from '../ui/Display';
+import { CommandPalette } from './CommandPalette';
+import { ADMIN_NAV, SETTINGS_ITEM, activeTab, canSee, entryPath, findActive, visibleTabs, type NavItem } from './adminNav';
 
-interface AdminLayoutProps {
-  children: React.ReactNode;
-}
+const COLLAPSE_KEY = 'admin_sidebar_collapsed';
+const readCollapsed = () => { try { return localStorage.getItem(COLLAPSE_KEY) === '1'; } catch { return false; } };
 
-// Módulos principales sin submenú
-const menuItems: {
-  path: string;
-  icon: typeof BarChart3;
-  label: string;
-  exact?: boolean;
-  permission?: Permission;
-}[] = [
-  { path: '/admin-panel', icon: BarChart3, label: 'Dashboard', exact: true, permission: 'dashboard.view' },
-];
-
-// Módulos con submenús organizados por categoría
-const menuWithSubmenus: {
-  id: string;
-  label: string;
-  icon: typeof Users;
-  basePath: string;
-  submenu: { path: string; label: string; icon?: typeof UserCog; permission?: Permission }[];
-}[] = [
-  // 1. VENTAS - Pedidos y Pagos
-  {
-    id: 'sales',
-    label: 'Ventas',
-    icon: ShoppingBag,
-    basePath: '/admin-panel/orders',
-    submenu: [
-      { path: '/admin-panel/orders', label: 'Pedidos', icon: FileText, permission: 'orders.view' },
-      { path: '/admin-panel/payments', label: 'Pagos', icon: DollarSign, permission: 'payments.view' },
-      { path: '/admin-panel/reviews', label: 'Reseñas', icon: Star, permission: 'reviews.view' },
-    ],
-  },
-  // 2. ENVÍOS - Transportadoras, zonas/tarifas, conexiones y despachos
-  {
-    id: 'shipping',
-    label: 'Envíos',
-    icon: Truck,
-    basePath: '/admin-panel/shipping',
-    submenu: [
-      { path: '/admin-panel/shipping/carriers', label: 'Transportadoras', icon: Truck, permission: 'shipping.carriers' },
-      { path: '/admin-panel/shipping/zones', label: 'Zonas y Tarifas', icon: MapPin, permission: 'shipping.zones' },
-      { path: '/admin-panel/shipping/connections', label: 'Conexiones', icon: Plug, permission: 'shipping.connections' },
-      { path: '/admin-panel/shipping/config', label: 'Configuración', icon: Settings, permission: 'shipping.config' },
-      { path: '/admin-panel/orders/shipping', label: 'Despachos', icon: Truck, permission: 'shipping.dispatch' },
-    ],
-  },
-  // 2. PUNTO DE VENTA - POS y códigos de barras
-  {
-    id: 'pos',
-    label: 'Punto de Venta',
-    icon: ShoppingCart,
-    basePath: '/admin-panel/cash-registers',
-    submenu: [
-      { path: '/admin-panel/cash-registers', label: 'Cajas Registradoras', icon: DollarSign, permission: 'pos.cash_register' },
-    ],
-  },
-  // 3. CATÁLOGO - Productos y clasificaciones
-  {
-    id: 'catalog',
-    label: 'Catálogo',
-    icon: Package,
-    basePath: '/admin-panel/products',
-    submenu: [
-      { path: '/admin-panel/products', label: 'Productos', icon: Package, permission: 'products.view' },
-      { path: '/admin-panel/variants', label: 'Variantes', icon: LayoutGrid, permission: 'variants.view' },
-      { path: '/admin-panel/templates', label: 'Plantillas/Modelos', icon: LayoutTemplate, permission: 'templates.view' },
-      { path: '/admin-panel/catalogs/categories', label: 'Categorías', icon: FolderTree, permission: 'categories.view' },
-      { path: '/admin-panel/catalogs/product-types', label: 'Tipos de Producto', icon: Tag, permission: 'product_types.view' },
-      { path: '/admin-panel/catalogs/sizes', label: 'Tallas', icon: Ruler, permission: 'sizes.view' },
-      { path: '/admin-panel/catalogs/colors', label: 'Colores', icon: Palette, permission: 'colors.view' },
-    ],
-  },
-  // 4. PERSONALIZADOR - Zonas de diseño de la tienda (la producción vive en la app Fábrica)
-  {
-    id: 'production',
-    label: 'Personalizador',
-    icon: Scissors,
-    basePath: '/admin-panel/zone',
-    submenu: [
-      { path: '/admin-panel/zone-types', label: 'Tipos de Zona', icon: Layers, permission: 'zone_types.view' },
-      { path: '/admin-panel/design-images', label: 'Imágenes de Diseño', icon: Image, permission: 'design_images.view' },
-    ],
-  },
-  // 5. INVENTARIO - Insumos y materiales
-  {
-    id: 'inventory',
-    label: 'Inventario',
-    icon: Archive,
-    basePath: '/admin-panel/input',
-    submenu: [
-      { path: '/admin-panel/inputs', label: 'Insumos', icon: Box, permission: 'inputs.view' },
-      { path: '/admin-panel/input-types', label: 'Tipos de Insumo', icon: Layers, permission: 'input_types.view' },
-    ],
-  },
-  // 6. COMPRAS - Proveedores y órdenes de compra
-  {
-    id: 'purchases',
-    label: 'Compras',
-    icon: ClipboardList,
-    basePath: '/admin-panel/suppliers',
-    submenu: [
-      { path: '/admin-panel/suppliers', label: 'Proveedores', icon: Building2, permission: 'suppliers.view' },
-      { path: '/admin-panel/purchase-orders', label: 'Órdenes de Compra', icon: ClipboardList, permission: 'purchase_orders.view' },
-      { path: '/admin-panel/purchase-returns', label: 'Devoluciones', icon: RotateCcw, permission: 'purchase_returns.view' },
-      { path: '/admin-panel/inventory-conversions', label: 'Conversiones', icon: ArrowRightLeft, permission: 'conversions.view' },
-      { path: '/admin-panel/inventory-counts', label: 'Conteo Físico', icon: Archive, permission: 'inventory_counts.view' },
-      { path: '/admin-panel/inventory-movements', label: 'Movimientos', icon: ArrowDownUp, permission: 'inventory_movements.view' },
-    ],
-  },
-  // 7. USUARIOS - Gestión de usuarios y roles
-  {
-    id: 'users',
-    label: 'Usuarios',
-    icon: Users,
-    basePath: '/admin-panel/users',
-    submenu: [
-      { path: '/admin-panel/users', label: 'Clientes', icon: UserCog, permission: 'users.view' },
-      { path: '/admin-panel/admins', label: 'Administradores', icon: Shield, permission: 'admins.view' },
-      { path: '/admin-panel/roles', label: 'Roles y Permisos', icon: Key, permission: 'roles.view' },
-    ],
-  },
-  // 8. MARKETING - Publicidad / anuncios en la tienda
-  {
-    id: 'marketing',
-    label: 'Marketing',
-    icon: Megaphone,
-    basePath: '/admin-panel/announcements',
-    submenu: [
-      { path: '/admin-panel/announcements', label: 'Publicidad / Anuncios', icon: Megaphone },
-      { path: '/admin-panel/discounts', label: 'Cupones / Descuentos', icon: Ticket },
-    ],
-  },
-  // 9. CONFIGURACIÓN - Ajustes del sistema
-  {
-    id: 'settings',
-    label: 'Configuración',
-    icon: Settings,
-    basePath: '/admin-panel/settings',
-    submenu: [
-      { path: '/admin-panel/settings/general', label: 'General', permission: 'settings.general' },
-      { path: '/admin-panel/settings/appearance', label: 'Apariencia', permission: 'settings.appearance' },
-      { path: '/admin-panel/settings/home', label: 'Página de Inicio', permission: 'settings.home' },
-      { path: '/admin-panel/settings/catalog', label: 'Catálogo', permission: 'settings.catalog' },
-      { path: '/admin-panel/settings/payment', label: 'Pagos', permission: 'settings.payment' },
-      { path: '/admin-panel/settings/legal', label: 'Legal', permission: 'settings.legal' },
-      { path: '/admin-panel/settings/printing', label: 'Impresión', permission: 'settings.printing' },
-      { path: '/admin-panel/settings/label-templates', label: 'Plantillas de Etiquetas', permission: 'settings.label_templates' },
-    ],
-  },
-];
-
-export const AdminLayout = ({ children }: AdminLayoutProps) => {
+/**
+ * Armazón del panel de Administración: menú lateral por secciones, barra superior con
+ * migas y buscador (Ctrl+K), y pestañas del área activa. La navegación sale de adminNav.ts.
+ * El contenido de cada pantalla va en <Page> (components/ui), que pone su propio padding.
+ */
+export const AdminLayout = ({ children }: { children: ReactNode }) => {
   const { user, role, logout, hasPermission } = useAuth();
+  const { settings } = useSettings();
   const location = useLocation();
-  // Iniciar sidebar cerrado en móvil
-  const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth >= 1024);
-  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
-  const [isMobile, setIsMobile] = useState(() => window.innerWidth < 1024);
+  const navigate = useNavigate();
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(readCollapsed);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
 
-  // Detectar cambios de tamaño de pantalla
+  const pathname = location.pathname.replace(/\/+$/, '') || '/';
+  const active = findActive(pathname);
+  const tabs = active ? visibleTabs(active.item, hasPermission) : [];
+  const currentTab = active ? activeTab(active.item, pathname) : undefined;
+  const siteName = settings.general?.siteName || 'Mi tienda';
+
+  useEffect(() => { setMobileOpen(false); setProfileOpen(false); }, [location.pathname]);
+
   useEffect(() => {
-    const handleResize = () => {
-      const mobile = window.innerWidth < 1024;
-      setIsMobile(mobile);
-      // Auto-cerrar sidebar al cambiar a móvil
-      if (mobile && sidebarOpen) {
-        setSidebarOpen(false);
-      }
+    const h = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); setPaletteOpen((o) => !o); }
     };
+    document.addEventListener('keydown', h);
+    return () => document.removeEventListener('keydown', h);
+  }, []);
 
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, [sidebarOpen]);
-
-  // Cerrar sidebar al navegar en móvil
-  useEffect(() => {
-    if (isMobile) {
-      setSidebarOpen(false);
-    }
-  }, [location.pathname, isMobile]);
-
-  // Filtrar menú items según permisos
-  const visibleMenuItems = menuItems.filter(
-    item => !item.permission || hasPermission(item.permission)
-  );
-
-  // Filtrar módulos con submenús según permisos
-  const visibleModules = menuWithSubmenus
-    .map(module => ({
-      ...module,
-      submenu: module.submenu.filter(
-        sub => !sub.permission || hasPermission(sub.permission)
-      ),
-    }))
-    .filter(module => module.submenu.length > 0);
-
-  // Estado para cada submenú
-  const [openSubmenus, setOpenSubmenus] = useState<Record<string, boolean>>({
-    sales: false,
-    shipping: false,
-    catalog: false,
-    production: false,
-    inventory: false,
-    purchases: false,
-    users: false,
-    settings: false,
+  const toggleCollapsed = () => setCollapsed((c) => {
+    try { localStorage.setItem(COLLAPSE_KEY, c ? '0' : '1'); } catch { /* sin almacenamiento */ }
+    return !c;
   });
 
-  const toggleSubmenu = (id: string) => {
-    setOpenSubmenus((prev) => ({ ...prev, [id]: !prev[id] }));
+  const NavLinkItem = ({ item, compact }: { item: NavItem; compact: boolean }) => {
+    const Icon = item.icon;
+    const isActive = active?.item === item;
+    return (
+      <Link
+        to={entryPath(item, hasPermission)}
+        title={compact ? item.label : undefined}
+        aria-current={isActive ? 'page' : undefined}
+        className={`group relative flex items-center gap-3 rounded-lg h-9 text-sm transition-colors ${compact ? 'justify-center px-0' : 'px-3'} ${
+          isActive ? 'bg-app-50 text-app-700 font-medium' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+        }`}
+      >
+        {isActive && <span className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-full bg-app-600" />}
+        <Icon className={`w-[18px] h-[18px] flex-shrink-0 ${isActive ? 'text-app-600' : 'text-gray-400 group-hover:text-gray-600'}`} />
+        {!compact && <span className="truncate">{item.label}</span>}
+      </Link>
+    );
   };
 
-  const isActive = (path: string, exact = false) => {
-    if (exact) {
-      return location.pathname === path;
-    }
-    return location.pathname.startsWith(path);
-  };
+  const sidebar = (compact: boolean) => (
+    <>
+      <div className={`flex h-16 items-center gap-3 border-b border-gray-100 flex-shrink-0 ${compact ? 'justify-center px-2' : 'px-4'}`}>
+        <Link to="/admin-panel" className="flex items-center gap-3 min-w-0">
+          {settings.general?.logo
+            ? <img src={settings.general.logo} alt="" className="w-9 h-9 rounded-lg object-contain flex-shrink-0" />
+            : <span className="w-9 h-9 rounded-lg bg-app-600 text-white font-bold flex items-center justify-center flex-shrink-0">{siteName.charAt(0).toUpperCase()}</span>}
+          {!compact && (
+            <span className="min-w-0">
+              <span className="block truncate text-sm font-semibold text-gray-900">{siteName}</span>
+              <span className="block text-xs text-gray-500">Administración</span>
+            </span>
+          )}
+        </Link>
+      </div>
 
-  // Verificar si algún submenú del módulo está activo
-  const isModuleActive = (module: typeof menuWithSubmenus[0]) => {
-    return module.submenu.some(sub => isActive(sub.path));
-  };
+      <nav className="flex-1 overflow-y-auto overflow-x-hidden px-3 py-3" aria-label="Menú del panel">
+        {ADMIN_NAV.map((section, si) => {
+          const items = section.items.filter((i) => canSee(i, hasPermission));
+          if (!items.length) return null;
+          return (
+            <div key={si} className={si ? 'mt-4' : ''}>
+              {section.label && (compact
+                ? <div className="mx-2 mb-2 border-t border-gray-100" />
+                : <p className="px-3 mb-1 text-[11px] font-semibold uppercase tracking-wider text-gray-400">{section.label}</p>)}
+              <div className="space-y-0.5">{items.map((i) => <NavLinkItem key={i.label} item={i} compact={compact} />)}</div>
+            </div>
+          );
+        })}
+      </nav>
+
+      <div className="border-t border-gray-100 p-3 space-y-0.5 flex-shrink-0">
+        <NavLinkItem item={SETTINGS_ITEM} compact={compact} />
+      </div>
+    </>
+  );
+
+  // Migas: Sección › Ítem › Pestaña
+  const crumbs: { label: string; to?: string }[] = [];
+  if (active) {
+    if (active.section) crumbs.push({ label: active.section, to: active.inSettings ? SETTINGS_ITEM.path : undefined });
+    if (active.item !== SETTINGS_ITEM || !active.section) crumbs.push({ label: active.item.label, to: entryPath(active.item, hasPermission) });
+    if (currentTab && currentTab.label !== active.item.label && tabs.length > 1) crumbs.push({ label: currentTab.label });
+  }
 
   return (
-    <div className="h-screen bg-gray-100 flex flex-col overflow-hidden">
-      {/* Header */}
-      <header className="bg-white border-b border-gray-200 flex-shrink-0 z-40">
-        <div className="flex items-center justify-between px-4 py-3">
-          {/* Left: Menu Toggle + Logo */}
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-            >
-              <Menu className="w-6 h-6 text-gray-600" />
-            </button>
+    <div className="flex h-screen overflow-hidden bg-gray-50">
+      {/* Sidebar escritorio */}
+      <aside className={`hidden lg:flex flex-col flex-shrink-0 border-r border-gray-200 bg-white transition-[width] duration-200 ${collapsed ? 'w-[72px]' : 'w-64'}`}>
+        {sidebar(collapsed)}
+      </aside>
 
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-gradient-to-br from-orange-500 to-red-500 rounded-lg">
-                <Package className="w-6 h-6 text-white" />
-              </div>
-              <div className="hidden sm:block">
-                <h1 className="text-lg font-bold text-gray-900">Panel Admin</h1>
-                <p className="text-xs text-gray-500">StylePrint Marketplace</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Right: User Menu */}
-          <div className="flex items-center gap-4">
-            {/* App Switcher - Solo desktop */}
-            <div className="hidden lg:block">
-              <AppSwitcher />
-            </div>
-
-            {/* Profile Dropdown */}
-            <div className="relative">
-              <button
-                onClick={() => setProfileMenuOpen(!profileMenuOpen)}
-                className="flex items-center gap-2 p-2 pr-3 hover:bg-gray-100 rounded-lg transition-colors"
-              >
-                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-orange-500 to-red-500 flex items-center justify-center">
-                  <span className="text-white text-sm font-bold">
-                    {user?.name.charAt(0).toUpperCase()}
-                  </span>
-                </div>
-                <ChevronDown
-                  className={`w-4 h-4 text-gray-600 transition-transform ${
-                    profileMenuOpen ? 'rotate-180' : ''
-                  }`}
-                />
-              </button>
-
-              {profileMenuOpen && (
-                <>
-                  <div
-                    className="fixed inset-0 z-10"
-                    onClick={() => setProfileMenuOpen(false)}
-                  />
-                  <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-xl border border-gray-200 py-2 z-20">
-                    <div className="px-4 py-3 border-b border-gray-100">
-                      <p className="text-sm font-medium text-gray-900">{user?.name}</p>
-                      <p className="text-xs text-gray-500 mt-1">{user?.email}</p>
-                      <span className="inline-block mt-2 px-2 py-1 bg-orange-100 text-orange-700 text-xs font-medium rounded">
-                        {role?.name || 'Usuario'}
-                      </span>
-                    </div>
-
-                    <Link
-                      to="/profile"
-                      onClick={() => setProfileMenuOpen(false)}
-                      className="flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                    >
-                      <User className="w-4 h-4" />
-                      Mi Perfil
-                    </Link>
-
-                    <div className="my-2 border-t border-gray-100"></div>
-
-                    <button
-                      onClick={() => {
-                        logout();
-                        setProfileMenuOpen(false);
-                      }}
-                      className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
-                    >
-                      <LogOut className="w-4 h-4" />
-                      Cerrar Sesión
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
+      {/* Sidebar móvil */}
+      {mobileOpen && (
+        <div className="fixed inset-0 z-50 lg:hidden">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setMobileOpen(false)} />
+          <aside className="absolute inset-y-0 left-0 flex w-72 max-w-[85vw] flex-col bg-white shadow-xl">
+            <button type="button" onClick={() => setMobileOpen(false)} title="Cerrar menú" className="absolute right-2 top-4 p-2 rounded-lg text-gray-500 hover:bg-gray-100"><X className="w-5 h-5" /></button>
+            {sidebar(false)}
+            <div className="border-t border-gray-100 p-3"><AppSwitcher /></div>
+          </aside>
         </div>
-      </header>
+      )}
 
-      <div className="flex flex-1 relative overflow-hidden">
-        {/* Overlay para móvil */}
-        {sidebarOpen && isMobile && (
-          <div
-            className="fixed inset-0 bg-black/50 z-40 lg:hidden transition-opacity duration-300"
-            onClick={() => setSidebarOpen(false)}
-          />
+      <div className="flex min-w-0 flex-1 flex-col">
+        {/* Barra superior */}
+        <header className="flex h-16 flex-shrink-0 items-center gap-3 border-b border-gray-200 bg-white px-4 md:px-6">
+          <button type="button" onClick={() => setMobileOpen(true)} title="Abrir menú" className="lg:hidden p-2 -ml-2 rounded-lg text-gray-600 hover:bg-gray-100"><Menu className="w-5 h-5" /></button>
+          <button type="button" onClick={toggleCollapsed} title={collapsed ? 'Expandir menú' : 'Contraer menú'} className="hidden lg:inline-flex p-2 -ml-2 rounded-lg text-gray-500 hover:bg-gray-100">
+            {collapsed ? <PanelLeftOpen className="w-5 h-5" /> : <PanelLeftClose className="w-5 h-5" />}
+          </button>
+          <div className="min-w-0 flex-1">{crumbs.length > 0 && <Breadcrumbs items={crumbs} />}</div>
+
+          <button type="button" onClick={() => setPaletteOpen(true)} className="hidden md:flex items-center gap-2 h-9 w-56 rounded-lg border border-gray-200 bg-gray-50 px-3 text-sm text-gray-400 hover:border-gray-300">
+            <Search className="w-4 h-4" /><span className="flex-1 text-left">Buscar módulo…</span>
+            <kbd className="rounded border border-gray-200 bg-white px-1.5 text-[10px]">Ctrl K</kbd>
+          </button>
+          <button type="button" onClick={() => setPaletteOpen(true)} title="Buscar módulo" className="md:hidden p-2 rounded-lg text-gray-600 hover:bg-gray-100"><Search className="w-5 h-5" /></button>
+
+          <div className="hidden lg:block"><AppSwitcher /></div>
+
+          <div className="relative">
+            <button type="button" onClick={() => setProfileOpen((o) => !o)} aria-expanded={profileOpen} className="flex items-center gap-1.5 rounded-lg p-1 hover:bg-gray-100">
+              <Avatar name={user?.name} size="sm" />
+              <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${profileOpen ? 'rotate-180' : ''}`} />
+            </button>
+            {profileOpen && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setProfileOpen(false)} />
+                <div className="absolute right-0 z-20 mt-2 w-60 rounded-xl border border-gray-200 bg-white py-1 shadow-xl">
+                  <div className="px-4 py-3 border-b border-gray-100">
+                    <p className="truncate text-sm font-medium text-gray-900">{user?.name}</p>
+                    <p className="truncate text-xs text-gray-500">{user?.email}</p>
+                    <span className="mt-2 inline-block rounded-full bg-app-100 px-2 py-0.5 text-xs font-medium text-app-700">{role?.name || 'Usuario'}</span>
+                  </div>
+                  <Link to="/profile" className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"><User className="w-4 h-4" /> Mi perfil</Link>
+                  <button type="button" onClick={() => { setProfileOpen(false); logout(); }} className="flex w-full items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50"><LogOut className="w-4 h-4" /> Cerrar sesión</button>
+                </div>
+              </>
+            )}
+          </div>
+        </header>
+
+        {/* Pestañas del área (solo si tiene más de una visible) */}
+        {tabs.length > 1 && currentTab && (
+          <div className="flex-shrink-0 bg-white px-4 md:px-6">
+            <Tabs tabs={tabs.map((t) => ({ value: t.path, label: t.label }))} value={currentTab.path} onChange={(p) => navigate(p)} />
+          </div>
         )}
 
-        {/* Sidebar */}
-        <aside
-          className={`
-            fixed lg:relative inset-y-0 left-0 z-50 lg:z-40
-            w-64 bg-white border-r border-gray-200 flex flex-col flex-shrink-0
-            transform transition-transform duration-300 ease-in-out
-            ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
-            ${isMobile ? 'h-full' : ''}
-          `}
-        >
-          {/* Header del sidebar en móvil */}
-          {isMobile && (
-            <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-white">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-gradient-to-br from-orange-500 to-red-500 rounded-lg">
-                  <Package className="w-5 h-5 text-white" />
-                </div>
-                <span className="text-lg font-bold text-gray-900">Admin</span>
-              </div>
-              <button
-                onClick={() => setSidebarOpen(false)}
-                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-              >
-                <ChevronRight className="w-5 h-5 text-gray-600 rotate-180" />
-              </button>
-            </div>
-          )}
-
-          {/* App Switcher - Mobile */}
-          {isMobile && (
-            <div className="p-4 border-b border-gray-200 bg-white">
-              <p className="px-2 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                Cambiar a
-              </p>
-              <div className="space-y-1">
-                {/* Tienda */}
-                <Link
-                  to="/"
-                  onClick={() => setSidebarOpen(false)}
-                  className="flex items-center gap-3 px-3 py-3 hover:bg-blue-50 rounded-xl transition-colors"
-                >
-                  <div className="p-2 bg-blue-100 rounded-lg">
-                    <Store className="w-5 h-5 text-blue-600" />
-                  </div>
-                  <div className="flex-1">
-                    <span className="font-bold text-gray-900">Tienda</span>
-                    <p className="text-xs text-gray-500">Navegar tienda</p>
-                  </div>
-                </Link>
-
-                {/* Punto de Venta */}
-                {hasPermission('pos.access') && (
-                  <Link
-                    to="/pos"
-                    onClick={() => setSidebarOpen(false)}
-                    className="flex items-center gap-3 px-3 py-3 hover:bg-green-50 rounded-xl transition-colors"
-                  >
-                    <div className="p-2 bg-green-100 rounded-lg">
-                      <ShoppingCart className="w-5 h-5 text-green-600" />
-                    </div>
-                    <div className="flex-1">
-                      <span className="font-bold text-gray-900">Punto de Venta</span>
-                      <p className="text-xs text-gray-500">Ventas y caja</p>
-                    </div>
-                  </Link>
-                )}
-              </div>
-            </div>
-          )}
-
-          <nav className="flex-1 px-2 py-3 space-y-1 bg-white overflow-y-auto overflow-x-hidden">
-              {/* Menús simples sin submenú */}
-              {visibleMenuItems.map((item) => {
-                const Icon = item.icon;
-                const active = isActive(item.path, item.exact);
-
-                return (
-                  <Link
-                    key={item.path}
-                    to={item.path}
-                    className={`flex items-center gap-3 px-3 py-3 rounded-lg font-medium text-sm transition-colors ${
-                      active
-                        ? 'bg-orange-50 text-orange-700'
-                        : 'text-gray-700 hover:bg-gray-50'
-                    }`}
-                  >
-                    <Icon className={`w-5 h-5 flex-shrink-0 ${active ? 'text-orange-600' : 'text-gray-500'}`} />
-                    <span className="whitespace-nowrap">{item.label}</span>
-                  </Link>
-                );
-              })}
-
-              {/* Separador */}
-              <div className="my-3 border-t border-gray-200"></div>
-
-              {/* Menús con submenús */}
-              {visibleModules.map((module) => {
-                const Icon = module.icon;
-                const moduleActive = isModuleActive(module);
-
-                return (
-                  <div key={module.id}>
-                    <button
-                      onClick={() => toggleSubmenu(module.id)}
-                      className={`w-full flex items-center justify-between gap-3 px-3 py-3 rounded-lg font-medium text-sm transition-colors ${
-                        moduleActive
-                          ? 'bg-orange-50 text-orange-700'
-                          : 'text-gray-700 hover:bg-gray-50'
-                      }`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <Icon className={`w-5 h-5 flex-shrink-0 ${moduleActive ? 'text-orange-600' : 'text-gray-500'}`} />
-                        <span className="whitespace-nowrap">{module.label}</span>
-                      </div>
-                      <ChevronRight
-                        className={`w-4 h-4 transition-transform ${openSubmenus[module.id] ? 'rotate-90' : ''}`}
-                      />
-                    </button>
-
-                    {openSubmenus[module.id] && (
-                      <div className="ml-4 mt-1 space-y-1 border-l-2 border-gray-100 pl-2">
-                        {module.submenu.map((subItem) => {
-                          const subActive = isActive(subItem.path);
-                          const SubIcon = subItem.icon;
-                          return (
-                            <Link
-                              key={subItem.path}
-                              to={subItem.path}
-                              className={`flex items-center gap-3 px-3 py-2 rounded-lg font-medium text-sm transition-colors ${
-                                subActive
-                                  ? 'bg-orange-50 text-orange-700'
-                                  : 'text-gray-600 hover:bg-gray-50'
-                              }`}
-                            >
-                              {SubIcon ? (
-                                <SubIcon className={`w-4 h-4 ${subActive ? 'text-orange-600' : 'text-gray-400'}`} />
-                              ) : (
-                                <span className="w-4 h-4 flex items-center justify-center text-xs text-gray-400">•</span>
-                              )}
-                              {subItem.label}
-                            </Link>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </nav>
-        </aside>
-
-        {/* Main Content */}
-        <main className="flex-1 overflow-y-auto transition-all duration-300 w-full p-6">
-          {children}
-        </main>
+        <main className="flex-1 overflow-y-auto">{children}</main>
       </div>
+
+      <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
     </div>
   );
 };

@@ -63,7 +63,7 @@ export const ReviewList = ({
               onClick={() => setShowFilters(!showFilters)}
               className={`flex items-center gap-2 px-3 py-2 text-sm rounded-lg border transition-colors ${
                 filterRating
-                  ? 'bg-violet-50 border-violet-200 text-violet-700'
+                  ? 'bg-app-50 border-app-200 text-app-700'
                   : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
               }`}
             >
@@ -92,7 +92,7 @@ export const ReviewList = ({
                         setShowFilters(false);
                       }}
                       className={`w-full px-3 py-2 text-left text-sm rounded-lg ${
-                        !filterRating ? 'bg-violet-50 text-violet-700' : 'hover:bg-gray-50'
+                        !filterRating ? 'bg-app-50 text-app-700' : 'hover:bg-gray-50'
                       }`}
                     >
                       Todas las reseñas
@@ -106,7 +106,7 @@ export const ReviewList = ({
                         }}
                         className={`w-full px-3 py-2 text-left text-sm rounded-lg flex items-center gap-2 ${
                           filterRating === rating
-                            ? 'bg-violet-50 text-violet-700'
+                            ? 'bg-app-50 text-app-700'
                             : 'hover:bg-gray-50'
                         }`}
                       >
@@ -132,7 +132,7 @@ export const ReviewList = ({
             <select
               value={sortBy}
               onChange={(e) => onSortChange(e.target.value as ListReviewsParams['sortBy'])}
-              className="appearance-none bg-white border border-gray-200 rounded-lg px-3 py-2 pr-8 text-sm text-gray-600 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-violet-500 cursor-pointer"
+              className="appearance-none bg-white border border-gray-200 rounded-lg px-3 py-2 pr-8 text-sm text-gray-600 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-app-500 cursor-pointer"
             >
               {sortOptions.map((option) => (
                 <option key={option.value} value={option.value}>

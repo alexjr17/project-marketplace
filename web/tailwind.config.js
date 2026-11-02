@@ -4,6 +4,11 @@ export default {
   theme: {
     extend: {
       colors: {
+        // Color de la app actual (Tienda, Administración, POS, Social, Fábrica). Lo publica <AppTheme>
+        // como variables --app-* desde la configuración; ver src/theme/appTheme.ts y DESIGN_SYSTEM.md.
+        app: Object.fromEntries(
+          [50, 100, 200, 300, 400, 500, 600, 700, 800, 900].map((s) => [s, `rgb(var(--app-${s}) / <alpha-value>)`]),
+        ),
         // Colores principales del brand
         primary: {
           DEFAULT: '#8B5CF6', // violet-500

@@ -1,16 +1,19 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Save, Loader2, Monitor, Trash2 } from 'lucide-react';
-import { useToast } from '../../context/ToastContext';
-import { Button } from '../../components/shared/Button';
-import { Input } from '../../components/shared/Input';
+import { Save, Monitor, Trash2, Tags } from 'lucide-react';
+import {
+  Alert, Button, Card, CardTitle, Checkbox, Field, FormActions, FormGrid, Page, PageHeader, Spinner, Switch, TextInput,
+  toast, useConfirm,
+} from '../../components/ui';
 import * as cashRegisterService from '../../services/cash-register.service';
 import { catalogsService, type Category } from '../../services/catalogs.service';
+
+const LIST = '/admin-panel/cash-registers';
 
 export default function CashRegisterFormPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { showToast } = useToast();
+  const confirm = useConfirm();
   const isEditing = !!id;
 
   const [loading, setLoading] = useState(isEditing);
@@ -42,12 +45,12 @@ export default function CashRegisterFormPage() {
         }
       } catch (error) {
         console.error('Error cargando la caja:', error);
-        showToast('Error al cargar la información', 'error');
+        toast.error('Error al cargar la información');
       } finally {
         setLoading(false);
       }
     })();
-  }, [id, isEditing, showToast]);
+  }, [id, isEditing]);
 
   const toggleCategory = (categoryId: number) => {
     setForm((prev) => ({
@@ -60,22 +63,22 @@ export default function CashRegisterFormPage() {
 
   const handleDelete = async () => {
     if (!isEditing) return;
-    if (!window.confirm('¿Eliminar esta caja registradora? Esta acción no se puede deshacer.')) return;
+    if (!(await confirm({ title: '¿Eliminar esta caja registradora?', message: 'Esta acción no se puede deshacer.', tone: 'danger' }))) return;
     try {
       setSaving(true);
       await cashRegisterService.deleteCashRegister(Number(id));
-      showToast('Caja eliminada correctamente', 'success');
-      navigate('/admin-panel/cash-registers');
+      toast.success('Caja eliminada correctamente');
+      navigate(LIST);
     } catch (error: any) {
       console.error('Error eliminando la caja:', error);
-      showToast(error.response?.data?.message || 'No se pudo eliminar la caja', 'error');
+      toast.error(error.response?.data?.message || 'No se pudo eliminar la caja');
       setSaving(false);
     }
   };
 
   const handleSave = async () => {
     if (!form.name.trim() || !form.location.trim() || !form.code.trim()) {
-      showToast('Completa nombre, ubicación y código', 'error');
+      toast.error('Completa nombre, ubicación y código');
       return;
     }
     try {
@@ -88,152 +91,92 @@ export default function CashRegisterFormPage() {
       };
       if (isEditing) {
         await cashRegisterService.updateCashRegister(Number(id), { ...payload, isActive: form.isActive });
-        showToast('Caja actualizada correctamente', 'success');
+        toast.success('Caja actualizada correctamente');
       } else {
         await cashRegisterService.createCashRegister(payload);
-        showToast('Caja creada correctamente', 'success');
+        toast.success('Caja creada correctamente');
       }
-      navigate('/admin-panel/cash-registers');
+      navigate(LIST);
     } catch (error: any) {
       console.error('Error guardando la caja:', error);
-      showToast(error.response?.data?.message || 'Error al guardar la caja', 'error');
+      toast.error(error.response?.data?.message || 'Error al guardar la caja');
     } finally {
       setSaving(false);
     }
   };
 
-  if (loading) {
-    return (
-      <div className="flex justify-center py-24 text-gray-400">
-        <Loader2 className="w-8 h-8 animate-spin" />
-      </div>
-    );
-  }
+  if (loading) return <Page><Spinner label="Cargando caja…" /></Page>;
 
   const allCategories = form.categoryIds.length === 0;
 
   return (
-    <div className="p-6 max-w-3xl mx-auto">
-      {/* Header */}
-      <div className="flex items-center justify-between gap-4 mb-6">
-        <div className="flex items-center gap-3">
-          <div className="p-3 bg-orange-100 rounded-xl">
-            <Monitor className="w-7 h-7 text-orange-600" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">
-              {isEditing ? 'Editar Caja Registradora' : 'Nueva Caja Registradora'}
-            </h1>
-            <p className="text-gray-600 mt-0.5 text-sm">
-              Datos de la caja y categorías de productos que puede vender
-            </p>
-          </div>
-        </div>
-        <button
-          onClick={() => navigate('/admin-panel/cash-registers')}
-          className="inline-flex items-center gap-2 px-4 py-2 text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 rounded-lg transition-colors"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          Volver
-        </button>
-      </div>
+    <Page>
+      <PageHeader
+        icon={Monitor}
+        backTo={LIST}
+        title={isEditing ? 'Editar caja' : 'Nueva caja'}
+        subtitle="Datos de la caja y categorías de productos que puede vender"
+        actions={isEditing && (
+          <Button variant="secondary" className="text-red-600" icon={<Trash2 className="w-4 h-4" />} onClick={handleDelete} disabled={saving}>
+            Eliminar
+          </Button>
+        )}
+      />
 
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 space-y-5">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Nombre *</label>
-            <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Caja principal" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Ubicación *</label>
-            <Input value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} placeholder="Mostrador" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Código *</label>
-            <Input value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} placeholder="CAJA01" />
-            <p className="text-xs text-gray-500 mt-1">Código único para identificar la caja</p>
-          </div>
+      <Card>
+        <CardTitle icon={Monitor}>Datos de la caja</CardTitle>
+        <FormGrid>
+          <Field label="Nombre" required>
+            <TextInput value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Caja principal" />
+          </Field>
+          <Field label="Ubicación" required>
+            <TextInput value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} placeholder="Mostrador" />
+          </Field>
+          <Field label="Código" required hint="Código único para identificar la caja.">
+            <TextInput value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} placeholder="CAJA01" className="font-mono" />
+          </Field>
           {isEditing && (
-            <div className="flex items-end">
-              <label className="flex items-center justify-between w-full p-3 bg-gray-50 rounded-lg cursor-pointer">
-                <div>
-                  <p className="text-sm font-medium text-gray-900">Estado de la caja</p>
-                  <p className="text-xs text-gray-500">{form.isActive ? 'Activa y disponible' : 'Inactiva'}</p>
-                </div>
-                <input
-                  type="checkbox"
-                  checked={form.isActive}
-                  onChange={(e) => setForm({ ...form, isActive: e.target.checked })}
-                  className="w-5 h-5 text-orange-600 border-gray-300 rounded focus:ring-orange-500"
-                />
-              </label>
+            <div className="md:pt-7">
+              <Switch
+                checked={form.isActive}
+                onChange={(isActive) => setForm({ ...form, isActive })}
+                label="Caja activa"
+                description={form.isActive ? 'Activa y disponible en el POS' : 'Inactiva: no se puede abrir'}
+              />
             </div>
           )}
-        </div>
+        </FormGrid>
+      </Card>
 
-        {/* Categorías */}
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <label className="block text-sm font-medium text-gray-700">
-              Categorías que vende esta caja
-            </label>
-            {form.categoryIds.length > 0 && (
-              <button
-                type="button"
-                onClick={() => setForm({ ...form, categoryIds: [] })}
-                className="text-xs font-medium text-orange-600 hover:text-orange-700"
-              >
-                Quitar todas (vender todo)
-              </button>
-            )}
-          </div>
-          <p className={`text-xs mb-2 ${allCategories ? 'text-green-600' : 'text-gray-500'}`}>
-            {allCategories
-              ? 'Sin categorías seleccionadas: esta caja podrá vender TODOS los productos.'
-              : 'Solo se mostrarán en el POS los productos de las categorías marcadas.'}
-          </p>
-          <div className="border border-gray-300 rounded-lg p-3 bg-gray-50 max-h-72 overflow-y-auto grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {categories.length === 0 ? (
-              <p className="text-sm text-gray-500">No hay categorías.</p>
-            ) : (
-              categories.map((cat) => (
-                <label
-                  key={cat.id}
-                  className="flex items-center gap-3 p-2 hover:bg-white rounded-lg cursor-pointer transition-colors"
-                >
-                  <input
-                    type="checkbox"
-                    checked={form.categoryIds.includes(cat.id)}
-                    onChange={() => toggleCategory(cat.id)}
-                    className="w-4 h-4 text-orange-600 border-gray-300 rounded focus:ring-orange-500"
-                  />
-                  <span className="text-sm font-medium text-gray-700">{cat.name}</span>
-                </label>
-              ))
-            )}
-          </div>
+      <Card>
+        <CardTitle
+          icon={Tags}
+          actions={form.categoryIds.length > 0 && (
+            <Button size="sm" variant="ghost" onClick={() => setForm({ ...form, categoryIds: [] })}>Quitar todas (vender todo)</Button>
+          )}
+        >
+          Categorías que vende
+        </CardTitle>
+        <div className="mb-3">
+          {allCategories
+            ? <Alert tone="success">Sin categorías seleccionadas: esta caja podrá vender <b>todos</b> los productos.</Alert>
+            : <Alert tone="info">Solo se mostrarán en el POS los productos de las {form.categoryIds.length} categorías marcadas.</Alert>}
         </div>
+        {categories.length === 0 ? (
+          <p className="text-sm text-gray-500">No hay categorías.</p>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-2.5 max-h-80 overflow-y-auto">
+            {categories.map((cat) => (
+              <Checkbox key={cat.id} label={cat.name} checked={form.categoryIds.includes(cat.id)} onChange={() => toggleCategory(cat.id)} />
+            ))}
+          </div>
+        )}
+      </Card>
 
-        <div className="flex justify-between gap-3 pt-4 border-t border-gray-200">
-          <div>
-            {isEditing && (
-              <Button variant="admin-danger" onClick={handleDelete} disabled={saving}>
-                <Trash2 className="w-4 h-4 mr-2" />
-                Eliminar
-              </Button>
-            )}
-          </div>
-          <div className="flex gap-3">
-            <Button variant="admin-secondary" onClick={() => navigate('/admin-panel/cash-registers')} disabled={saving}>
-              Cancelar
-            </Button>
-            <Button variant="admin-primary" onClick={handleSave} disabled={saving}>
-              {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
-              {isEditing ? 'Guardar' : 'Crear'}
-            </Button>
-          </div>
-        </div>
-      </div>
-    </div>
+      <FormActions sticky>
+        <Button variant="secondary" onClick={() => navigate(LIST)} disabled={saving}>Cancelar</Button>
+        <Button onClick={handleSave} isLoading={saving} icon={<Save className="w-4 h-4" />}>{isEditing ? 'Guardar' : 'Crear caja'}</Button>
+      </FormActions>
+    </Page>
   );
 }

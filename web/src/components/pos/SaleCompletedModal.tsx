@@ -111,29 +111,29 @@ export const SaleCompletedModal = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center" role="dialog" aria-modal="true">
       {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+      <div className="absolute inset-0 bg-black/50" />
 
       {/* Modal */}
-      <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[95vh] mx-4 flex flex-col overflow-hidden">
+      <div className="relative bg-white rounded-xl shadow-xl w-full max-w-4xl max-h-[95vh] mx-4 flex flex-col overflow-hidden">
         {/* Header con éxito */}
-        <div className="bg-gradient-to-r from-green-500 to-green-600 px-6 py-4">
+        <div className="px-5 py-4 border-b border-gray-100">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="bg-white/20 rounded-full p-2">
-                <CheckCircle className="w-6 h-6 text-white" />
+              <div className="bg-green-100 rounded-full p-2">
+                <CheckCircle className="w-6 h-6 text-green-600" />
               </div>
               <div>
-                <h2 className="text-xl font-bold text-white">Venta Exitosa</h2>
-                <p className="text-green-100 text-sm">Factura #{sale.orderNumber}</p>
+                <h2 className="text-lg font-semibold text-gray-900">Venta exitosa</h2>
+                <p className="text-gray-500 text-sm">Factura #{sale.orderNumber}</p>
               </div>
             </div>
             <button
               onClick={onClose}
-              className="p-2 hover:bg-white/20 rounded-lg transition-colors"
+              title="Cerrar" className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100"
             >
-              <X className="w-5 h-5 text-white" />
+              <X className="w-5 h-5" />
             </button>
           </div>
         </div>
@@ -143,7 +143,7 @@ export const SaleCompletedModal = ({
           {/* Panel izquierdo - Resumen y acciones */}
           <div className="lg:w-80 border-b lg:border-b-0 lg:border-r border-gray-200 p-4 space-y-4 overflow-y-auto">
             {/* Resumen de venta */}
-            <div className="bg-gray-50 rounded-lg p-4">
+            <div className="rounded-lg border border-gray-200 p-4">
               <h3 className="font-semibold text-gray-700 mb-3 text-sm">Resumen</h3>
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between text-gray-600">
@@ -172,16 +172,16 @@ export const SaleCompletedModal = ({
             </div>
 
             {/* Método de pago y cambio */}
-            <div className="bg-blue-50 rounded-lg p-4">
+            <div className="rounded-lg border border-gray-200 p-4">
               <div className="flex justify-between items-center text-sm">
                 <span className="text-gray-600">Método:</span>
-                <span className="font-medium text-blue-700">
+                <span className="font-medium text-gray-900">
                   {paymentMethod === 'cash' ? 'Efectivo' :
                    paymentMethod === 'card' ? 'Tarjeta' : 'Mixto'}
                 </span>
               </div>
               {paymentMethod !== 'card' && change > 0 && (
-                <div className="flex justify-between items-center mt-3 pt-3 border-t border-blue-200">
+                <div className="flex justify-between items-center mt-3 pt-3 border-t border-gray-200">
                   <span className="text-green-700 font-medium">Cambio:</span>
                   <span className="text-xl font-bold text-green-600">
                     ${change.toLocaleString()}
@@ -191,13 +191,13 @@ export const SaleCompletedModal = ({
             </div>
 
             {/* Email */}
-            <div className="bg-purple-50 rounded-lg p-4">
+            <div className="rounded-lg border border-gray-200 p-4">
               <div className="flex items-center gap-2 mb-2">
-                <Mail className="w-4 h-4 text-purple-600" />
-                <span className="font-medium text-purple-800 text-sm">Enviar por email</span>
+                <Mail className="w-4 h-4 text-app-600" />
+                <span className="font-medium text-gray-900 text-sm">Enviar por email</span>
               </div>
               {emailSent ? (
-                <div className="flex items-center gap-2 text-xs text-purple-700">
+                <div className="flex items-center gap-2 text-xs text-gray-600">
                   <CheckCircle className="w-3 h-3 text-green-500" />
                   <span>Enviada a: {sale.customerEmail || emailInput}</span>
                 </div>
@@ -208,12 +208,12 @@ export const SaleCompletedModal = ({
                     value={emailInput}
                     onChange={(e) => setEmailInput(e.target.value)}
                     placeholder="cliente@email.com"
-                    className="flex-1 px-3 py-2 border border-purple-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-app-200 focus:border-app-500 text-sm"
                   />
                   <button
                     onClick={handleSendEmail}
                     disabled={sendingEmail || !emailInput.trim()}
-                    className="px-3 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 text-sm"
+                    className="px-3 py-2 bg-app-600 text-white rounded-lg hover:bg-app-700 disabled:opacity-50 text-sm"
                   >
                     {sendingEmail ? (
                       <Loader2 className="w-4 h-4 animate-spin" />
@@ -230,7 +230,7 @@ export const SaleCompletedModal = ({
               <button
                 onClick={handlePrint}
                 disabled={loadingPdf || printing}
-                className="w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center gap-2 font-medium transition-colors"
+                className="w-full px-4 py-3 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 flex items-center justify-center gap-2 font-medium transition-colors"
               >
                 {printing ? (
                   <Loader2 className="w-5 h-5 animate-spin" />
@@ -243,7 +243,7 @@ export const SaleCompletedModal = ({
               <button
                 onClick={handleDownload}
                 disabled={!pdfUrl || loadingPdf}
-                className="w-full px-4 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 disabled:opacity-50 flex items-center justify-center gap-2 font-medium transition-colors"
+                className="w-full px-4 py-3 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 flex items-center justify-center gap-2 font-medium transition-colors"
               >
                 <Download className="w-5 h-5" />
                 Descargar PDF
@@ -251,7 +251,7 @@ export const SaleCompletedModal = ({
 
               <button
                 onClick={onClose}
-                className="w-full px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center justify-center gap-2 font-medium transition-colors"
+                className="w-full px-4 py-3 bg-app-600 text-white rounded-lg hover:bg-app-700 flex items-center justify-center gap-2 font-medium transition-colors"
               >
                 Nueva Venta
                 <ArrowRight className="w-5 h-5" />
@@ -261,11 +261,11 @@ export const SaleCompletedModal = ({
 
           {/* Panel derecho - Vista previa del PDF */}
           <div className="flex-1 bg-gray-100 p-4 overflow-hidden">
-            <div className="h-full bg-white rounded-lg shadow-inner overflow-hidden">
+            <div className="h-full bg-white rounded-lg border border-gray-200 overflow-hidden">
               {loadingPdf ? (
                 <div className="h-full flex items-center justify-center min-h-[400px]">
                   <div className="text-center">
-                    <Loader2 className="w-10 h-10 animate-spin text-blue-500 mx-auto mb-3" />
+                    <Loader2 className="w-10 h-10 animate-spin text-app-600 mx-auto mb-3" />
                     <p className="text-gray-600">Generando factura...</p>
                   </div>
                 </div>

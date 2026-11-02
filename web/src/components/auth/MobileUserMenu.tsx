@@ -3,6 +3,9 @@ import { useAuth } from '../../context/AuthContext';
 import { useFavorites } from '../../context/FavoritesContext';
 import { User, Package, LogOut, X, ShoppingCart, LayoutGrid, Heart, MessageSquare } from 'lucide-react';
 import { useEffect } from 'react';
+import { useSettings } from '../../context/SettingsContext';
+import { resolveAppColor, type AppKey } from '../../theme/appTheme';
+import { Button } from '../ui';
 
 interface MobileUserMenuProps {
   isOpen: boolean;
@@ -14,6 +17,13 @@ interface MobileUserMenuProps {
 export const MobileUserMenu = ({ isOpen, onClose, onLoginClick, onRegisterClick }: MobileUserMenuProps) => {
   const { user, isAuthenticated, logout, hasPermission, isAdmin } = useAuth();
   const { count: favoritesCount } = useFavorites();
+  const { settings } = useSettings();
+  // Icono de cada app en su color configurado (Ajustes → Apariencia).
+  const appIconStyle = (app: AppKey) => {
+    const c = resolveAppColor(app, settings.appearance);
+    return { backgroundColor: `${c}1a`, color: c };
+  };
+  const itemClass = 'flex items-center gap-3 px-3 py-3 text-gray-700 hover:bg-gray-50 hover:text-gray-900 rounded-lg transition-colors text-sm font-medium';
 
   // Acceso al panel admin según permisos (admin.access o módulos admin)
   const isAdminUser = isAdmin;
@@ -52,15 +62,18 @@ export const MobileUserMenu = ({ isOpen, onClose, onLoginClick, onRegisterClick 
       />
 
       {/* Menu Panel */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 z-[70] bg-white rounded-t-3xl shadow-2xl animate-slide-up max-h-[80vh] overflow-y-auto pb-safe">
+      <div className="md:hidden fixed bottom-0 left-0 right-0 z-[70] bg-white rounded-t-2xl shadow-xl animate-slide-up max-h-[80vh] overflow-y-auto pb-safe">
         {/* Header */}
-        <div className="sticky top-0 bg-white px-6 py-4 border-b border-gray-200 rounded-t-3xl flex items-center justify-between">
-          <h3 className="text-lg font-bold text-gray-900">
-            {isAuthenticated ? 'Mi Cuenta' : 'Menú'}
+        <div className="sticky top-0 bg-white px-5 py-3.5 border-b border-gray-100 rounded-t-2xl flex items-center justify-between">
+          <h3 className="text-base font-semibold text-gray-900">
+            {isAuthenticated ? 'Mi cuenta' : 'Menú'}
           </h3>
           <button
+            type="button"
             onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+            title="Cerrar"
+            aria-label="Cerrar"
+            className="p-2 -mr-2 hover:bg-gray-100 rounded-lg transition-colors"
           >
             <X className="w-5 h-5 text-gray-600" />
           </button>
@@ -71,17 +84,13 @@ export const MobileUserMenu = ({ isOpen, onClose, onLoginClick, onRegisterClick 
           {isAuthenticated && user ? (
             <>
               {/* User Info */}
-              <div className="px-4 py-4 bg-gradient-to-br from-violet-50 to-pink-50 rounded-2xl mb-4">
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="w-12 h-12 rounded-full bg-gradient-to-br from-violet-600 to-pink-500 flex items-center justify-center">
-                    <span className="text-white text-lg font-bold">
-                      {user.name.charAt(0).toUpperCase()}
-                    </span>
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-base font-bold text-gray-900">{user.name}</p>
-                    <p className="text-sm text-gray-600">{user.email}</p>
-                  </div>
+              <div className="flex items-center gap-3 px-3 py-3 mb-2 rounded-lg border border-gray-200">
+                <div className="w-10 h-10 rounded-full bg-app-100 text-app-700 flex items-center justify-center flex-shrink-0">
+                  <span className="text-base font-bold">{user.name.charAt(0).toUpperCase()}</span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-gray-900 truncate">{user.name}</p>
+                  <p className="text-xs text-gray-500 truncate">{user.email}</p>
                 </div>
               </div>
 
@@ -90,29 +99,29 @@ export const MobileUserMenu = ({ isOpen, onClose, onLoginClick, onRegisterClick 
                 <Link
                   to="/profile"
                   onClick={handleLinkClick}
-                  className="flex items-center gap-3 px-4 py-3.5 text-gray-700 hover:bg-violet-50 hover:text-violet-700 rounded-xl transition-colors font-medium"
+                  className={itemClass}
                 >
-                  <User className="w-5 h-5" />
-                  <span>Mi Perfil</span>
+                  <User className="w-5 h-5 text-gray-400" />
+                  <span>Mi perfil</span>
                 </Link>
 
                 <Link
                   to="/my-orders"
                   onClick={handleLinkClick}
-                  className="flex items-center gap-3 px-4 py-3.5 text-gray-700 hover:bg-violet-50 hover:text-violet-700 rounded-xl transition-colors font-medium"
+                  className={itemClass}
                 >
-                  <Package className="w-5 h-5" />
-                  <span>Mis Pedidos</span>
+                  <Package className="w-5 h-5 text-gray-400" />
+                  <span>Mis pedidos</span>
                 </Link>
 
                 <Link
                   to="/favorites"
                   onClick={handleLinkClick}
-                  className="flex items-center justify-between gap-3 px-4 py-3.5 text-gray-700 hover:bg-violet-50 hover:text-violet-700 rounded-xl transition-colors font-medium"
+                  className={`${itemClass} justify-between`}
                 >
                   <span className="flex items-center gap-3">
-                    <Heart className="w-5 h-5" />
-                    Mis Favoritos
+                    <Heart className="w-5 h-5 text-gray-400" />
+                    Mis favoritos
                   </span>
                   {favoritesCount > 0 && (
                     <span className="bg-red-500 text-white text-xs font-bold rounded-full min-w-[20px] h-5 px-1.5 flex items-center justify-center">
@@ -134,13 +143,13 @@ export const MobileUserMenu = ({ isOpen, onClose, onLoginClick, onRegisterClick 
                       <Link
                         to="/pos"
                         onClick={handleLinkClick}
-                        className="flex items-center gap-3 px-4 py-3.5 hover:bg-green-50 rounded-xl transition-colors"
+                        className="flex items-center gap-3 px-3 py-2.5 hover:bg-gray-50 rounded-lg transition-colors"
                       >
-                        <div className="p-2 bg-green-100 rounded-lg">
-                          <ShoppingCart className="w-5 h-5 text-green-600" />
+                        <div className="p-2 rounded-lg" style={appIconStyle('pos')}>
+                          <ShoppingCart className="w-5 h-5" />
                         </div>
                         <div className="flex-1">
-                          <span className="font-bold text-gray-900">Punto de Venta</span>
+                          <span className="text-sm font-semibold text-gray-900">Punto de Venta</span>
                           <p className="text-xs text-gray-500">Gestión de ventas y caja</p>
                         </div>
                       </Link>
@@ -151,13 +160,13 @@ export const MobileUserMenu = ({ isOpen, onClose, onLoginClick, onRegisterClick 
                       <Link
                         to="/messaging"
                         onClick={handleLinkClick}
-                        className="flex items-center gap-3 px-4 py-3.5 hover:bg-pink-50 rounded-xl transition-colors"
+                        className="flex items-center gap-3 px-3 py-2.5 hover:bg-gray-50 rounded-lg transition-colors"
                       >
-                        <div className="p-2 bg-pink-100 rounded-lg">
-                          <MessageSquare className="w-5 h-5 text-pink-600" />
+                        <div className="p-2 rounded-lg" style={appIconStyle('messaging')}>
+                          <MessageSquare className="w-5 h-5" />
                         </div>
                         <div className="flex-1">
-                          <span className="font-bold text-gray-900">Social Media</span>
+                          <span className="text-sm font-semibold text-gray-900">Social Media</span>
                           <p className="text-xs text-gray-500">Inbox y publicaciones</p>
                         </div>
                       </Link>
@@ -168,13 +177,13 @@ export const MobileUserMenu = ({ isOpen, onClose, onLoginClick, onRegisterClick 
                       <Link
                         to="/admin-panel"
                         onClick={handleLinkClick}
-                        className="flex items-center gap-3 px-4 py-3.5 hover:bg-purple-50 rounded-xl transition-colors"
+                        className="flex items-center gap-3 px-3 py-2.5 hover:bg-gray-50 rounded-lg transition-colors"
                       >
-                        <div className="p-2 bg-purple-100 rounded-lg">
-                          <LayoutGrid className="w-5 h-5 text-purple-600" />
+                        <div className="p-2 rounded-lg" style={appIconStyle('admin')}>
+                          <LayoutGrid className="w-5 h-5" />
                         </div>
                         <div className="flex-1">
-                          <span className="font-bold text-gray-900">Administración</span>
+                          <span className="text-sm font-semibold text-gray-900">Administración</span>
                           <p className="text-xs text-gray-500">Panel de administración</p>
                         </div>
                       </Link>
@@ -186,40 +195,28 @@ export const MobileUserMenu = ({ isOpen, onClose, onLoginClick, onRegisterClick 
 
                 <button
                   onClick={handleLogout}
-                  className="w-full flex items-center gap-3 px-4 py-3.5 text-red-600 hover:bg-red-50 rounded-xl transition-colors font-medium"
+                  type="button"
+                  className="w-full flex items-center gap-3 px-3 py-3 text-red-600 hover:bg-red-50 rounded-lg transition-colors text-sm font-medium"
                 >
                   <LogOut className="w-5 h-5" />
-                  <span>Cerrar Sesión</span>
+                  <span>Cerrar sesión</span>
                 </button>
               </div>
             </>
           ) : (
             <>
               {/* Not Authenticated */}
-              <div className="px-4 py-6 bg-gradient-to-br from-violet-50 to-pink-50 rounded-2xl mb-4 text-center">
-                <div className="w-16 h-16 mx-auto mb-3 rounded-full bg-gradient-to-br from-violet-600 to-pink-500 flex items-center justify-center">
-                  <User className="w-8 h-8 text-white" />
+              <div className="py-4 mb-2 text-center">
+                <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-app-100 text-app-600 flex items-center justify-center">
+                  <User className="w-6 h-6" />
                 </div>
-                <p className="text-base font-bold text-gray-900 mb-1">Bienvenido</p>
-                <p className="text-sm text-gray-600">Inicia sesión para continuar</p>
+                <p className="text-base font-semibold text-gray-900">Bienvenido</p>
+                <p className="text-sm text-gray-500">Inicia sesión para continuar</p>
               </div>
 
-              <div className="space-y-3">
-                <button
-                  onClick={onLoginClick}
-                  className="w-full flex items-center justify-center gap-3 px-6 py-4 bg-gradient-to-r from-violet-600 to-pink-500 text-white rounded-xl font-bold shadow-lg hover:shadow-xl transition-all"
-                >
-                  <User className="w-5 h-5" />
-                  <span>Iniciar Sesión</span>
-                </button>
-
-                <button
-                  onClick={onRegisterClick}
-                  className="w-full flex items-center justify-center gap-3 px-6 py-4 bg-white border-2 border-violet-200 text-violet-700 rounded-xl font-bold hover:bg-violet-50 transition-colors"
-                >
-                  <User className="w-5 h-5" />
-                  <span>Crear Cuenta</span>
-                </button>
+              <div className="space-y-2">
+                <Button size="lg" fullWidth onClick={onLoginClick}>Iniciar sesión</Button>
+                <Button size="lg" fullWidth variant="secondary" onClick={onRegisterClick}>Crear cuenta</Button>
               </div>
             </>
           )}

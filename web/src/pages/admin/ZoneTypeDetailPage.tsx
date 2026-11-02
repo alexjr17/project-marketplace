@@ -1,12 +1,18 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { zoneTypesService, type CreateZoneTypeDto, type UpdateZoneTypeDto } from '../../services/zone-types.service';
-import { Button } from '../../components/shared/Button';
-import { ArrowLeft, Save, Trash2 } from 'lucide-react';
+import { zoneTypesService, type CreateZoneTypeDto } from '../../services/zone-types.service';
+import { Save, Scissors, Trash2 } from 'lucide-react';
+import {
+  Alert, Button, Card, CardTitle, Field, FormActions, FormGrid, NumberInput, Page, PageHeader, Spinner,
+  TextArea, TextInput, toast, useConfirm,
+} from '../../components/ui';
+
+const LIST = '/admin-panel/zone-types';
 
 export default function ZoneTypeDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const confirm = useConfirm();
   const isNew = id === 'new';
 
   const [formData, setFormData] = useState<CreateZoneTypeDto>({
@@ -50,12 +56,16 @@ export default function ZoneTypeDetailPage() {
     try {
       if (isNew) {
         await zoneTypesService.create(formData);
+        toast.success('Tipo de zona creado');
       } else {
         await zoneTypesService.update(parseInt(id!), formData);
+        toast.success('Tipo de zona actualizado');
       }
-      navigate('/admin-panel/zone-types');
+      navigate(LIST);
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Error al guardar el tipo de zona');
+      const msg = err.response?.data?.message || 'Error al guardar el tipo de zona';
+      setError(msg);
+      toast.error(msg);
       console.error(err);
     } finally {
       setLoading(false);
@@ -63,187 +73,75 @@ export default function ZoneTypeDetailPage() {
   };
 
   const handleDelete = async () => {
-    if (!confirm('¿Estás seguro de eliminar este tipo de zona?')) return;
+    if (!(await confirm({ title: '¿Eliminar este tipo de zona?', message: 'Las plantillas que lo usen pueden quedar sin zona. No se puede deshacer.', tone: 'danger' }))) return;
 
     try {
       setLoading(true);
       await zoneTypesService.delete(parseInt(id!));
-      navigate('/admin-panel/zone-types');
+      toast.success('Tipo de zona eliminado');
+      navigate(LIST);
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Error al eliminar el tipo de zona');
+      const msg = err.response?.data?.message || 'Error al eliminar el tipo de zona';
+      setError(msg);
+      toast.error(msg);
       console.error(err);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: name === 'sortOrder' ? parseInt(value) || 0 : value,
-    }));
-  };
-
   // Auto-generar slug desde el nombre
-  const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const name = e.target.value;
+  const handleNameChange = (name: string) => {
     const slug = name
       .toLowerCase()
       .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[̀-ͯ]/g, '')
       .replace(/\s+/g, '-')
       .replace(/[^a-z0-9-]/g, '');
-
-    setFormData((prev) => ({
-      ...prev,
-      name,
-      slug,
-    }));
+    setFormData((prev) => ({ ...prev, name, slug }));
   };
 
-  if (loading && !isNew) {
-    return (
-      <div className="flex justify-center items-center min-h-[400px]">
-        <div className="text-lg text-gray-600">Cargando...</div>
-      </div>
-    );
-  }
-
   return (
-    <div className="p-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">
-            {isNew ? 'Nuevo Tipo de Zona' : 'Editar Tipo de Zona'}
-          </h1>
-          <p className="text-gray-600 mt-1 text-sm">
-            {isNew
-              ? 'Crea un nuevo tipo de zona para las plantillas'
-              : 'Modifica la información del tipo de zona'}
-          </p>
-        </div>
-        <button
-          onClick={() => navigate('/admin-panel/zone-types')}
-          className="inline-flex items-center gap-2 px-4 py-2 text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 rounded-lg transition-colors"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          Volver a Tipos de Zona
-        </button>
-      </div>
+    <Page>
+      <PageHeader
+        icon={Scissors}
+        backTo={LIST}
+        title={isNew ? 'Nuevo tipo de zona' : 'Editar tipo de zona'}
+        subtitle={isNew ? 'Crea un nuevo tipo de zona para las plantillas' : 'Modifica la información del tipo de zona'}
+      />
 
-      {/* Error message */}
-      {error && (
-        <div className="mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
-          {error}
-        </div>
-      )}
+      {error && <Alert tone="error">{error}</Alert>}
 
-      {/* Form */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-        <form onSubmit={handleSubmit} className="p-6">
-          <div className="space-y-6">
-            {/* Nombre */}
-            <div>
-              <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">
-                Nombre <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                id="name"
-                name="name"
-                value={formData.name}
-                onChange={handleNameChange}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-colors"
-                placeholder="Ej: Frente, Espalda, Mangas"
-                required
-              />
+      {loading && !isNew ? <Spinner label="Cargando…" /> : (
+        <form onSubmit={handleSubmit} className="max-w-3xl">
+          <Card>
+            <CardTitle>Información</CardTitle>
+            <div className="space-y-4">
+              <FormGrid>
+                <Field label="Nombre" required htmlFor="zt-name">
+                  <TextInput id="zt-name" value={formData.name} onChange={(e) => handleNameChange(e.target.value)} placeholder="Ej: Frente, Espalda, Mangas" required autoFocus={isNew} />
+                </Field>
+                <Field label="Slug" required htmlFor="zt-slug" hint="Identificador único; se genera desde el nombre.">
+                  <TextInput id="zt-slug" value={formData.slug} onChange={(e) => setFormData((p) => ({ ...p, slug: e.target.value }))} placeholder="frente" required className="font-mono" />
+                </Field>
+              </FormGrid>
+              <Field label="Descripción" htmlFor="zt-desc">
+                <TextArea id="zt-desc" value={formData.description} onChange={(e) => setFormData((p) => ({ ...p, description: e.target.value }))} rows={3} placeholder="Describe el tipo de zona…" />
+              </Field>
+              <Field label="Orden de aparición" htmlFor="zt-order" hint="Los números menores aparecen primero." className="max-w-xs">
+                <NumberInput id="zt-order" value={formData.sortOrder} onChange={(e) => setFormData((p) => ({ ...p, sortOrder: parseInt(e.target.value) || 0 }))} min="0" step="1" />
+              </Field>
             </div>
-
-            {/* Slug */}
-            <div>
-              <label htmlFor="slug" className="block text-sm font-medium text-gray-700 mb-2">
-                Slug <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                id="slug"
-                name="slug"
-                value={formData.slug}
-                onChange={handleChange}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-colors font-mono text-sm"
-                placeholder="frente"
-                required
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                Identificador único (se genera automáticamente desde el nombre)
-              </p>
-            </div>
-
-            {/* Descripción */}
-            <div>
-              <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-2">
-                Descripción
-              </label>
-              <textarea
-                id="description"
-                name="description"
-                value={formData.description}
-                onChange={handleChange}
-                rows={3}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-colors resize-none"
-                placeholder="Describe el tipo de zona..."
-              />
-            </div>
-
-            {/* Orden */}
-            <div>
-              <label htmlFor="sortOrder" className="block text-sm font-medium text-gray-700 mb-2">
-                Orden de Aparición
-              </label>
-              <input
-                type="number"
-                id="sortOrder"
-                name="sortOrder"
-                value={formData.sortOrder}
-                onChange={handleChange}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-colors"
-                placeholder="0"
-                min="0"
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                Los números menores aparecen primero en el listado
-              </p>
-            </div>
-          </div>
-
-          {/* Action Buttons */}
-          <div className="mt-8 flex gap-3">
-            {!isNew && (
-              <Button
-                type="button"
-                variant="admin-danger"
-                onClick={handleDelete}
-                disabled={loading}
-                className="flex-1"
-              >
-                <Trash2 className="w-4 h-4 mr-2" />
-                Eliminar
-              </Button>
-            )}
-            <Button
-              type="submit"
-              variant="admin-primary"
-              disabled={loading}
-              className="flex-1"
-            >
-              <Save className="w-4 h-4 mr-2" />
-              {loading ? 'Guardando...' : 'Guardar'}
-            </Button>
-          </div>
+            <FormActions>
+              {!isNew && (
+                <Button variant="danger" className="sm:mr-auto" onClick={handleDelete} disabled={loading} icon={<Trash2 className="w-4 h-4" />}>Eliminar</Button>
+              )}
+              <Button variant="secondary" onClick={() => navigate(LIST)}>Cancelar</Button>
+              <Button type="submit" isLoading={loading} icon={<Save className="w-4 h-4" />}>Guardar</Button>
+            </FormActions>
+          </Card>
         </form>
-      </div>
-    </div>
+      )}
+    </Page>
   );
 }

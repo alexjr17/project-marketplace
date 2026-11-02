@@ -3,23 +3,16 @@
 // - Si ya hay sesión (sessionStorage), retoma el hilo.
 // - Hace polling cada 4s para traer mensajes nuevos (incluida la respuesta del bot).
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Bot, MessageCircle, Minus, Send, User as UserIcon, X } from 'lucide-react';
 import webchatService from '../../services/webchat.service';
 import type { Message } from '../../types/messaging';
 import { useAuth } from '../../context/AuthContext';
-import { useSettings } from '../../context/SettingsContext';
 
 const POLL_MS = 4000;
 
 export const ChatWidget = () => {
   const { user } = useAuth();
-  const { settings } = useSettings();
-  const brandColors = settings.appearance?.brandColors || settings.general.brandColors || {
-    primary: '#7c3aed',
-    secondary: '#ec4899',
-    accent: '#f59e0b',
-  };
 
   const [open, setOpen] = useState(false);
   const [sessionStarted, setSessionStarted] = useState<boolean>(!!webchatService.getStoredToken());
@@ -32,11 +25,6 @@ export const ChatWidget = () => {
 
   const lastIdRef = useRef<number>(0);
   const endRef = useRef<HTMLDivElement>(null);
-
-  const gradient = useMemo(
-    () => `linear-gradient(135deg, ${brandColors.primary}, ${brandColors.secondary})`,
-    [brandColors]
-  );
 
   // Cargar histórico inicial al abrir si ya hay sesión
   useEffect(() => {
@@ -123,13 +111,15 @@ export const ChatWidget = () => {
     }
   };
 
+  // Colores: clases app-* (en la tienda equivalen al color de marca primario).
+  const inputCls = 'w-full h-10 rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-app-200 focus:border-app-500';
+
   // --- Burbuja cerrada ---
   if (!open) {
     return (
       <button
         onClick={() => setOpen(true)}
-        className="fixed bottom-6 right-6 z-40 w-14 h-14 rounded-full shadow-2xl flex items-center justify-center text-white hover:scale-105 transition-transform"
-        style={{ background: gradient }}
+        className="fixed bottom-6 right-6 z-40 w-14 h-14 rounded-full shadow-xl flex items-center justify-center bg-app-600 text-white hover:bg-app-700 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-app-500 focus-visible:ring-offset-2"
         title="Hablar con nosotros"
         aria-label="Abrir chat"
       >
@@ -140,22 +130,22 @@ export const ChatWidget = () => {
 
   // --- Panel abierto ---
   return (
-    <div className="fixed bottom-6 right-6 z-40 w-[340px] max-w-[calc(100vw-2rem)] h-[500px] max-h-[calc(100vh-3rem)] bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-gray-200">
-      {/* Header */}
-      <div className="px-4 py-3 flex items-center justify-between text-white" style={{ background: gradient }}>
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
+    <div className="fixed bottom-6 right-6 z-40 w-[360px] max-w-[calc(100vw-2rem)] h-[520px] max-h-[calc(100vh-3rem)] bg-white rounded-2xl shadow-xl flex flex-col overflow-hidden border border-gray-200">
+      {/* Encabezado */}
+      <div className="px-4 py-3 flex items-center justify-between bg-app-600 text-white">
+        <div className="flex items-center gap-2.5">
+          <div className="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center">
             <MessageCircle className="w-4 h-4" />
           </div>
           <div>
             <p className="font-semibold text-sm">Hablemos</p>
-            <p className="text-[11px] opacity-80">Te respondemos en minutos</p>
+            <p className="text-xs text-white/80">Te respondemos en minutos</p>
           </div>
         </div>
         <div className="flex items-center gap-1">
           <button
             onClick={() => setOpen(false)}
-            className="w-7 h-7 rounded-full hover:bg-white/15 flex items-center justify-center"
+            className="w-8 h-8 rounded-full hover:bg-white/15 flex items-center justify-center"
             title="Minimizar"
             aria-label="Minimizar chat"
           >
@@ -168,7 +158,7 @@ export const ChatWidget = () => {
               setMessages([]);
               setOpen(false);
             }}
-            className="w-7 h-7 rounded-full hover:bg-white/15 flex items-center justify-center"
+            className="w-8 h-8 rounded-full hover:bg-white/15 flex items-center justify-center"
             title="Cerrar"
             aria-label="Cerrar chat"
           >
@@ -180,32 +170,18 @@ export const ChatWidget = () => {
       {/* Cuerpo */}
       {!sessionStarted ? (
         <form onSubmit={handleStart} className="flex-1 flex flex-col justify-center px-5 gap-3">
-          <p className="text-sm text-gray-600">Antes de empezar, ¿cómo te llamas?</p>
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Tu nombre *"
-            className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2"
-            style={{ ['--tw-ring-color' as 'color']: `${brandColors.primary}40` }}
-          />
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="Email (opcional)"
-            className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2"
-            style={{ ['--tw-ring-color' as 'color']: `${brandColors.primary}40` }}
-          />
+          <p className="text-sm text-gray-700 font-medium">Antes de empezar, ¿cómo te llamas?</p>
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Tu nombre *" aria-label="Tu nombre" className={inputCls} />
+          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email (opcional)" aria-label="Email" className={inputCls} />
           {error && <p className="text-xs text-red-600">{error}</p>}
           <button
             type="submit"
             disabled={busy}
-            className="rounded-lg py-2 text-white font-medium text-sm disabled:opacity-50"
-            style={{ background: gradient }}
+            className="h-10 rounded-lg bg-app-600 hover:bg-app-700 text-white font-medium text-sm disabled:opacity-50 transition-colors"
           >
             {busy ? 'Iniciando…' : 'Empezar chat'}
           </button>
-          <p className="text-[10px] text-gray-400 text-center">
+          <p className="text-[11px] text-gray-400 text-center">
             Al iniciar aceptas que guardemos esta conversación para atenderte mejor.
           </p>
         </form>
@@ -214,22 +190,18 @@ export const ChatWidget = () => {
           {/* Mensajes */}
           <div className="flex-1 overflow-y-auto px-3 py-3 space-y-2 bg-gray-50">
             {messages.length === 0 && (
-              <p className="text-center text-xs text-gray-400 py-6">
-                Escribe tu primer mensaje y te respondemos en breve.
-              </p>
+              <p className="text-center text-xs text-gray-400 py-6">Escribe tu primer mensaje y te respondemos en breve.</p>
             )}
             {messages.map((m) => (
-              <WidgetBubble key={m.id} msg={m} brandPrimary={brandColors.primary} brandSecondary={brandColors.secondary} />
+              <WidgetBubble key={m.id} msg={m} />
             ))}
             <div ref={endRef} />
           </div>
 
-          {error && (
-            <div className="px-3 py-1.5 text-[11px] text-red-600 bg-red-50 border-t border-red-100">{error}</div>
-          )}
+          {error && <div className="px-3 py-1.5 text-xs text-red-700 bg-red-50 border-t border-red-100">{error}</div>}
 
-          {/* Composer */}
-          <form onSubmit={handleSend} className="border-t border-gray-200 px-2 py-2 flex items-end gap-2 bg-white">
+          {/* Redactar */}
+          <form onSubmit={handleSend} className="border-t border-gray-200 p-2 flex items-end gap-2 bg-white">
             <textarea
               value={input}
               onChange={(e) => setInput(e.target.value)}
@@ -241,14 +213,13 @@ export const ChatWidget = () => {
               }}
               rows={1}
               placeholder="Escribe un mensaje…"
-              className="flex-1 resize-none rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 max-h-24"
-              style={{ ['--tw-ring-color' as 'color']: `${brandColors.primary}40` }}
+              aria-label="Mensaje"
+              className="flex-1 resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-app-200 focus:border-app-500 max-h-24"
             />
             <button
               type="submit"
               disabled={!input.trim() || busy}
-              className="w-9 h-9 rounded-full text-white flex items-center justify-center disabled:opacity-50"
-              style={{ background: gradient }}
+              className="w-10 h-10 rounded-full bg-app-600 hover:bg-app-700 text-white flex items-center justify-center disabled:opacity-50 transition-colors flex-shrink-0"
               title="Enviar"
               aria-label="Enviar mensaje"
             >
@@ -263,31 +234,29 @@ export const ChatWidget = () => {
 
 interface WidgetBubbleProps {
   msg: Message;
-  brandPrimary: string;
-  brandSecondary: string;
 }
 
-const WidgetBubble = ({ msg, brandPrimary, brandSecondary }: WidgetBubbleProps) => {
+const WidgetBubble = ({ msg }: WidgetBubbleProps) => {
   // En el widget el "tú" es el cliente: inbound = a la derecha (mío), outbound = izquierda (empresa).
   const isMine = msg.direction === 'inbound';
   const isBot = msg.senderType === 'bot';
 
-  const style = isMine
-    ? { background: `linear-gradient(135deg, ${brandPrimary}, ${brandSecondary})`, color: '#fff' }
+  const cls = isMine
+    ? 'bg-app-600 text-white'
     : isBot
-      ? { backgroundColor: '#f5f3ff', color: '#5b21b6', border: '1px solid #ddd6fe' }
-      : { backgroundColor: '#fff', color: '#111827', border: '1px solid #e5e7eb' };
+      ? 'bg-app-50 text-gray-900 border border-app-200'
+      : 'bg-white text-gray-900 border border-gray-200';
 
   return (
     <div className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>
       <div className="max-w-[80%] flex items-end gap-1.5">
         {!isMine && (
-          <div className="w-5 h-5 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0">
-            {isBot ? <Bot className="w-3 h-3 text-purple-600" /> : <UserIcon className="w-3 h-3 text-gray-500" />}
+          <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0">
+            {isBot ? <Bot className="w-3.5 h-3.5 text-app-600" /> : <UserIcon className="w-3.5 h-3.5 text-gray-500" />}
           </div>
         )}
-        <div className="px-3 py-2 rounded-2xl text-xs shadow-sm" style={style}>
-          {isBot && <div className="text-[9px] font-medium opacity-80 mb-0.5">Asistente</div>}
+        <div className={`px-3 py-2 rounded-2xl text-sm ${cls}`}>
+          {isBot && <div className="text-[10px] font-medium text-app-700 mb-0.5">Asistente</div>}
           <div className="whitespace-pre-wrap break-words">{msg.content}</div>
         </div>
       </div>

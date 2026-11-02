@@ -3,7 +3,7 @@ import api from '../../services/api.service';
 import { assetUrl } from '../../utils/assetUrl';
 import { templateZonesService, type TemplateZone, type CreateTemplateZoneDto } from '../../services/template-zones.service';
 import { zoneTypesService, type ZoneType } from '../../services/zone-types.service';
-import { Button } from '../shared/Button';
+import { Badge, Button, Field, MoneyInput, NumberInput, RadioGroup, SelectInput, Spinner, TextInput, toast, useConfirm } from '../ui';
 import {
   Plus,
   Trash2,
@@ -94,6 +94,7 @@ export const VisualZoneEditor = ({
   zoneTypeImages: externalZoneTypeImages,
   onZoneTypeImagesChange,
 }: VisualZoneEditorProps) => {
+  const confirm = useConfirm();
   const containerRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -557,13 +558,13 @@ export const VisualZoneEditor = ({
 
     // Validar tipo de archivo
     if (!file.type.startsWith('image/')) {
-      alert('Por favor selecciona un archivo de imagen válido');
+      toast.error('Selecciona un archivo de imagen válido');
       return;
     }
 
     // Validar tamaño (máximo 5MB)
     if (file.size > 5 * 1024 * 1024) {
-      alert('La imagen no debe superar 5MB');
+      toast.error('La imagen no debe superar 5 MB');
       return;
     }
 
@@ -585,7 +586,7 @@ export const VisualZoneEditor = ({
       onZoneTypeImagesChange?.(newImages);
       setSelectedZoneTypeForImage(null);
     } catch {
-      alert('Error al subir la imagen');
+      toast.error('Error al subir la imagen');
     } finally {
       setUploadingImage(false);
       if (fileInputRef.current) {
@@ -604,12 +605,12 @@ export const VisualZoneEditor = ({
 
   const handleCreateZone = async () => {
     if (!newZoneType || !newZoneName.trim()) {
-      alert('Selecciona un tipo de zona y nombre');
+      toast.error('Selecciona la vista y escribe un nombre');
       return;
     }
 
     if (newZoneWidthCm <= 0 || newZoneHeightCm <= 0) {
-      alert('Las dimensiones deben ser mayores a 0');
+      toast.error('Las dimensiones deben ser mayores a 0');
       return;
     }
 
@@ -674,13 +675,13 @@ export const VisualZoneEditor = ({
       setSelectedZoneId(created.id);
       onZonesChange?.([...zones, createdWithType]);
     } catch (err) {
-      alert('Error al crear la zona');
+      toast.error('Error al crear la zona');
       console.error(err);
     }
   };
 
   const handleDeleteZone = async (zoneId: number) => {
-    if (!confirm('¿Eliminar esta zona?')) return;
+    if (!(await confirm({ title: '¿Eliminar esta zona?', message: 'Se quita del modelo. No se puede deshacer.', tone: 'danger' }))) return;
 
     try {
       await templateZonesService.delete(zoneId);
@@ -689,7 +690,7 @@ export const VisualZoneEditor = ({
       if (selectedZoneId === zoneId) setSelectedZoneId(null);
       onZonesChange?.(newZones);
     } catch (err) {
-      alert('Error al eliminar la zona');
+      toast.error('Error al eliminar la zona');
       console.error(err);
     }
   };
@@ -707,9 +708,9 @@ export const VisualZoneEditor = ({
       // Actualizar el precio en el estado local
       setZones(prev => prev.map(z => z.id === zone.id ? { ...z, price: editablePrice } : z));
       onZonesChange?.(zones);
-      alert('Zona guardada correctamente');
+      toast.success('Zona guardada');
     } catch (err) {
-      alert('Error al guardar la zona');
+      toast.error('Error al guardar la zona');
       console.error(err);
     } finally {
       setSaving(false);
@@ -727,10 +728,10 @@ export const VisualZoneEditor = ({
           maxHeight: zone.maxHeight,
         })
       ));
-      alert('Zonas guardadas correctamente');
+      toast.success('Zonas guardadas');
       onZonesChange?.(zones);
     } catch (err) {
-      alert('Error al guardar las zonas');
+      toast.error('Error al guardar las zonas');
       console.error(err);
     } finally {
       setSaving(false);
@@ -816,368 +817,232 @@ export const VisualZoneEditor = ({
   const filteredZones = getZonesForCurrentView();
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-96">
-        <div className="text-gray-500">Cargando editor de zonas...</div>
-      </div>
-    );
+    return <Spinner label="Cargando editor de zonas…" />;
   }
+
+  const resetNewZone = () => { setIsCreatingZone(false); setNewZoneIsBlocked(false); setNewZoneShape('rect'); setNewZonePrice(0); };
+  const shapeBtn = (active: boolean) =>
+    `flex flex-col items-center justify-center gap-1 px-2 py-2 rounded-lg border text-xs transition-colors ${
+      active
+        ? (newZoneIsBlocked ? 'border-red-500 bg-red-50 text-red-700 ring-1 ring-red-500' : 'border-app-500 bg-app-50 text-app-700 ring-1 ring-app-500')
+        : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
+    }`;
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-2">
-          <h3 className="text-lg font-semibold flex items-center gap-2">
-            <Layers className="w-5 h-5" />
-            Editor Visual de Zonas
+      {/* Barra de herramientas */}
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+        <div className="min-w-0">
+          <h3 className="text-base font-semibold text-gray-900 flex items-center gap-2">
+            <Layers className="w-5 h-5 text-app-600" />
+            Editor visual de zonas
           </h3>
+          <p className="text-sm text-gray-500">Define dónde se puede (y dónde no) colocar el diseño en cada vista.</p>
         </div>
 
-        <div className="flex items-center gap-2">
-          {/* Selector de tipo de zona basado en zonas existentes */}
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Selector de vista basado en las zonas existentes */}
           {availableZoneTypes.length > 0 && (
-            <div className="flex rounded-lg border border-gray-300 overflow-hidden">
-              {availableZoneTypes.map(type => (
-                <button
-                  key={type.slug}
-                  onClick={() => setCurrentViewSlug(type.slug)}
-                  className={`px-3 py-1.5 text-sm ${currentZoneType?.slug === type.slug ? 'bg-orange-500 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
-                >
-                  {type.name}
-                </button>
-              ))}
-            </div>
+            <RadioGroup
+              variant="segmented"
+              value={currentZoneType?.slug ?? ''}
+              onChange={(v) => setCurrentViewSlug(v)}
+              options={availableZoneTypes.map(type => ({ value: type.slug, label: type.name }))}
+            />
           )}
 
-          <button
-            onClick={() => setShowZones(!showZones)}
-            className={`p-2 rounded-lg border ${showZones ? 'bg-orange-50 border-orange-300' : 'bg-white border-gray-300'}`}
-            title={showZones ? 'Ocultar zonas' : 'Mostrar zonas'}
-          >
-            {showZones ? <Eye className="w-5 h-5 text-orange-600" /> : <EyeOff className="w-5 h-5 text-gray-500" />}
-          </button>
-
           <Button
-            onClick={handleSaveAllZones}
-            variant="admin-primary"
-            disabled={saving || zones.length === 0}
+            variant="secondary"
+            size="sm"
+            onClick={() => setShowZones(!showZones)}
+            title={showZones ? 'Ocultar zonas' : 'Mostrar zonas'}
+            icon={showZones ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
           >
-            <Save className="w-4 h-4 mr-1" />
-            {saving ? 'Guardando...' : 'Guardar Zonas'}
+            {showZones ? 'Ocultar' : 'Mostrar'}
+          </Button>
+
+          <Button onClick={handleSaveAllZones} size="sm" isLoading={saving} disabled={zones.length === 0} icon={<Save className="w-4 h-4" />}>
+            Guardar zonas
           </Button>
         </div>
       </div>
 
-      <div className="grid grid-cols-12 gap-4">
-        <div className="col-span-12 lg:col-span-4 space-y-3">
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,22rem)_1fr] gap-4">
+        <div className="space-y-3 min-w-0">
           {!isCreatingZone ? (
-            <Button
-              onClick={() => setIsCreatingZone(true)}
-              variant="admin-secondary"
-              className="w-full"
-            >
-              <Plus className="w-4 h-4 mr-1" />
-              Agregar Zona
+            <Button onClick={() => setIsCreatingZone(true)} variant="outline" fullWidth icon={<Plus className="w-4 h-4" />}>
+              Agregar zona
             </Button>
           ) : (
-            <div className={`border rounded-lg p-3 space-y-3 ${newZoneIsBlocked ? 'bg-red-50 border-red-300' : 'bg-gray-50 border-gray-300'}`}>
+            <div className={`rounded-xl border p-4 space-y-4 ${newZoneIsBlocked ? 'border-red-200' : 'border-gray-200'}`}>
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-semibold text-gray-900">Nueva zona</p>
+                <Badge tone={newZoneIsBlocked ? 'red' : 'app'}>{newZoneIsBlocked ? 'Bloqueada' : 'Normal'}</Badge>
+              </div>
+
               {/* Tipo de zona: Normal o Bloqueada */}
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Tipo de zona</label>
+              <Field label="Tipo" hint={newZoneIsBlocked ? 'Zona donde NO se puede colocar diseño' : 'Zona donde se puede colocar diseño'}>
                 <div className="grid grid-cols-2 gap-2">
-                  <button
-                    onClick={() => setNewZoneIsBlocked(false)}
-                    className={`flex items-center justify-center gap-1 px-2 py-2 rounded border text-xs ${
-                      !newZoneIsBlocked
-                        ? 'bg-blue-500 text-white border-blue-500'
-                        : 'bg-white text-gray-700 border-gray-300 hover:bg-blue-50'
-                    }`}
-                  >
-                    <CheckCircle className="w-4 h-4" />
-                    Normal
+                  <button type="button" onClick={() => setNewZoneIsBlocked(false)}
+                    className={`flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg border text-sm transition-colors ${!newZoneIsBlocked ? 'border-app-500 bg-app-50 text-app-700 ring-1 ring-app-500' : 'border-gray-200 text-gray-700 hover:border-gray-300'}`}>
+                    <CheckCircle className="w-4 h-4" /> Normal
                   </button>
-                  <button
-                    onClick={() => setNewZoneIsBlocked(true)}
-                    className={`flex items-center justify-center gap-1 px-2 py-2 rounded border text-xs ${
-                      newZoneIsBlocked
-                        ? 'bg-red-500 text-white border-red-500'
-                        : 'bg-white text-gray-700 border-gray-300 hover:bg-red-50'
-                    }`}
-                  >
-                    <Ban className="w-4 h-4" />
-                    Bloqueada
+                  <button type="button" onClick={() => setNewZoneIsBlocked(true)}
+                    className={`flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg border text-sm transition-colors ${newZoneIsBlocked ? 'border-red-500 bg-red-50 text-red-700 ring-1 ring-red-500' : 'border-gray-200 text-gray-700 hover:border-gray-300'}`}>
+                    <Ban className="w-4 h-4" /> Bloqueada
                   </button>
                 </div>
-                <p className="text-xs text-gray-500 mt-1">
-                  {newZoneIsBlocked
-                    ? 'Zona donde NO se puede colocar diseño'
-                    : 'Zona donde se puede colocar diseño'}
-                </p>
-              </div>
+              </Field>
 
-              <select
-                value={newZoneType}
-                onChange={(e) => setNewZoneType(parseInt(e.target.value))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
-              >
-                <option value={0}>Seleccionar vista...</option>
-                {zoneTypes.map(type => (
-                  <option key={type.id} value={type.id}>{type.name}</option>
-                ))}
-              </select>
+              <Field label="Vista" required>
+                <SelectInput value={newZoneType} onChange={(e) => setNewZoneType(parseInt(e.target.value))}>
+                  <option value={0}>Seleccionar vista…</option>
+                  {zoneTypes.map(type => <option key={type.id} value={type.id}>{type.name}</option>)}
+                </SelectInput>
+              </Field>
 
-              <input
-                type="text"
-                value={newZoneName}
-                onChange={(e) => setNewZoneName(e.target.value)}
-                placeholder={newZoneIsBlocked ? "Nombre (ej: Costura, Logo)" : "Nombre (ej: Regular, Grande)"}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
-              />
+              <Field label="Nombre" required>
+                <TextInput value={newZoneName} onChange={(e) => setNewZoneName(e.target.value)}
+                  placeholder={newZoneIsBlocked ? 'Ej: Costura, Logo' : 'Ej: Regular, Grande'} />
+              </Field>
 
-              {/* Selector de forma */}
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Forma</label>
+              <Field label="Forma">
                 <div className="grid grid-cols-3 gap-2">
-                  <button
-                    onClick={() => setNewZoneShape('rect')}
-                    className={`flex flex-col items-center justify-center gap-1 px-2 py-2 rounded border text-xs ${
-                      newZoneShape === 'rect'
-                        ? (newZoneIsBlocked ? 'bg-red-500 text-white border-red-500' : 'bg-gray-700 text-white border-gray-700')
-                        : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
-                    }`}
-                  >
-                    <Square className="w-4 h-4" />
-                    Rect
+                  <button type="button" onClick={() => setNewZoneShape('rect')} className={shapeBtn(newZoneShape === 'rect')}>
+                    <Square className="w-4 h-4" /> Rectángulo
                   </button>
-                  <button
-                    onClick={() => setNewZoneShape('circle')}
-                    className={`flex flex-col items-center justify-center gap-1 px-2 py-2 rounded border text-xs ${
-                      newZoneShape === 'circle'
-                        ? (newZoneIsBlocked ? 'bg-red-500 text-white border-red-500' : 'bg-gray-700 text-white border-gray-700')
-                        : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
-                    }`}
-                  >
-                    <Circle className="w-4 h-4" />
-                    Círculo
+                  <button type="button" onClick={() => setNewZoneShape('circle')} className={shapeBtn(newZoneShape === 'circle')}>
+                    <Circle className="w-4 h-4" /> Círculo
                   </button>
-                  <button
-                    onClick={() => setNewZoneShape('polygon')}
-                    className={`flex flex-col items-center justify-center gap-1 px-2 py-2 rounded border text-xs ${
-                      newZoneShape === 'polygon'
-                        ? (newZoneIsBlocked ? 'bg-red-500 text-white border-red-500' : 'bg-gray-700 text-white border-gray-700')
-                        : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
-                    }`}
-                  >
-                    <Triangle className="w-4 h-4" />
-                    Triángulo
+                  <button type="button" onClick={() => setNewZoneShape('polygon')} className={shapeBtn(newZoneShape === 'polygon')}>
+                    <Triangle className="w-4 h-4" /> Triángulo
                   </button>
                 </div>
-              </div>
+              </Field>
 
               {/* Dimensiones en cm */}
-              <div className="bg-white border border-gray-200 rounded-md p-2">
-                <label className="block text-xs font-medium text-gray-600 mb-2">
-                  Dimensiones {newZoneIsBlocked ? 'de la zona' : 'del área de impresión'} (cm)
-                </label>
-                <div className="flex gap-2 items-center">
-                  <div className="flex-1">
-                    <label className="block text-xs text-gray-500 mb-1">Ancho</label>
-                    <input
-                      type="number"
-                      value={newZoneWidthCm}
-                      onChange={(e) => setNewZoneWidthCm(parseFloat(e.target.value) || 0)}
-                      min="1"
-                      max="50"
-                      step="0.5"
-                      className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm text-center"
-                    />
-                  </div>
-                  <span className="text-gray-400 pt-4">×</span>
-                  <div className="flex-1">
-                    <label className="block text-xs text-gray-500 mb-1">Alto</label>
-                    <input
-                      type="number"
-                      value={newZoneHeightCm}
-                      onChange={(e) => setNewZoneHeightCm(parseFloat(e.target.value) || 0)}
-                      min="1"
-                      max="70"
-                      step="0.5"
-                      className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm text-center"
-                    />
-                  </div>
-                  <span className="text-xs text-gray-500 pt-4">cm</span>
+              <Field label={`Tamaño ${newZoneIsBlocked ? 'de la zona' : 'del área de impresión'}`} hint="Referencia: área máx. 50 × 70 cm">
+                <div className="grid grid-cols-2 gap-2">
+                  <NumberInput aria-label="Ancho" value={newZoneWidthCm} onChange={(e) => setNewZoneWidthCm(parseFloat(e.target.value) || 0)} min="1" max="50" step="0.5" prefix="An" suffix="cm" />
+                  <NumberInput aria-label="Alto" value={newZoneHeightCm} onChange={(e) => setNewZoneHeightCm(parseFloat(e.target.value) || 0)} min="1" max="70" step="0.5" prefix="Al" suffix="cm" />
                 </div>
-                <p className="text-xs text-gray-400 mt-1">
-                  Ref: área máx. 50×70cm
-                </p>
-              </div>
+              </Field>
 
-              {/* Precio */}
-              <div className="bg-white border border-gray-200 rounded-md p-2">
-                <label className="block text-xs font-medium text-gray-600 mb-1">Precio ($)</label>
-                <input
-                  type="number"
-                  value={newZonePrice}
-                  onChange={(e) => setNewZonePrice(parseFloat(e.target.value) || 0)}
-                  min="0"
-                  step="0.01"
-                  placeholder="0.00"
-                  className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
-                />
-                <p className="text-xs text-gray-400 mt-1">
-                  Costo adicional por personalizar esta zona
-                </p>
-              </div>
+              <Field label="Precio" hint="Costo adicional por personalizar esta zona.">
+                <MoneyInput value={newZonePrice} onChange={(e) => setNewZonePrice(parseFloat(e.target.value) || 0)} placeholder="0.00" />
+              </Field>
 
               <div className="flex gap-2">
-                <Button onClick={() => { setIsCreatingZone(false); setNewZoneIsBlocked(false); setNewZoneShape('rect'); setNewZonePrice(0); }} variant="admin-secondary" className="flex-1">
-                  Cancelar
-                </Button>
-                <Button onClick={handleCreateZone} variant={newZoneIsBlocked ? 'admin-danger' : 'admin-primary'} className="flex-1">
-                  {newZoneIsBlocked ? 'Crear Bloqueada' : 'Crear Zona'}
+                <Button onClick={resetNewZone} variant="secondary" className="flex-1">Cancelar</Button>
+                <Button onClick={handleCreateZone} variant={newZoneIsBlocked ? 'danger' : 'primary'} className="flex-1">
+                  {newZoneIsBlocked ? 'Crear bloqueada' : 'Crear zona'}
                 </Button>
               </div>
             </div>
           )}
 
-          {/* Indicador de tipo de zona actual */}
-          <div className="text-xs text-gray-500 bg-gray-100 px-3 py-2 rounded-lg">
-            {currentZoneType ? (
-              <>
-                Tipo: <span className="font-medium text-gray-700">{currentZoneType.name}</span>
-                <span className="ml-2">({filteredZones.length} zona{filteredZones.length !== 1 ? 's' : ''})</span>
-              </>
-            ) : (
-              <span>Sin zonas definidas</span>
-            )}
-          </div>
-
-          <div className="space-y-2 max-h-[500px] overflow-y-auto">
-            {filteredZones.length === 0 ? (
-              <p className="text-sm text-gray-500 text-center py-4">
-                No hay zonas de este tipo. Crea una nueva zona.
-              </p>
-            ) : (
-              filteredZones.map(zone => (
-                <div
-                  key={zone.id}
-                  onClick={() => setSelectedZoneId(zone.id)}
-                  className={`p-3 rounded-lg border cursor-pointer transition-all ${
-                    selectedZoneId === zone.id
-                      ? (zone.isBlocked ? 'border-red-500 bg-red-50' : 'border-orange-500 bg-orange-50 shadow-sm')
-                      : (zone.isBlocked ? 'border-red-200 bg-red-25 hover:border-red-300' : 'border-gray-200 bg-white hover:border-gray-300')
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      {zone.isBlocked ? (
-                        <Ban className="w-4 h-4 text-red-500" />
-                      ) : (
-                        <div
-                          className="w-4 h-4 rounded"
-                          style={{ backgroundColor: getBorderColor(zone) }}
-                        />
-                      )}
-                      <span className={`font-medium text-sm ${zone.isBlocked ? 'text-red-700' : ''}`}>{zone.name}</span>
-                    </div>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handleDeleteZone(zone.id); }}
-                      className="p-1 text-red-500 hover:bg-red-50 rounded"
+          {/* Zonas de la vista actual */}
+          <div className="rounded-xl border border-gray-200">
+            <div className="flex items-center justify-between px-3 py-2 border-b border-gray-100 text-xs text-gray-500">
+              {currentZoneType ? (
+                <span>Vista: <span className="font-medium text-gray-800">{currentZoneType.name}</span></span>
+              ) : <span>Sin zonas definidas</span>}
+              <span>{filteredZones.length} zona{filteredZones.length !== 1 ? 's' : ''}</span>
+            </div>
+            <div className="divide-y divide-gray-100 max-h-[420px] overflow-y-auto">
+              {filteredZones.length === 0 ? (
+                <p className="text-sm text-gray-400 text-center py-6 px-3">No hay zonas en esta vista. Usa «Agregar zona».</p>
+              ) : (
+                filteredZones.map(zone => {
+                  const active = selectedZoneId === zone.id;
+                  return (
+                    <div
+                      key={zone.id}
+                      onClick={() => setSelectedZoneId(zone.id)}
+                      className={`flex items-start gap-2 px-3 py-2.5 cursor-pointer transition-colors border-l-2 ${
+                        active ? (zone.isBlocked ? 'border-l-red-500 bg-red-50' : 'border-l-app-600 bg-app-50') : 'border-l-transparent hover:bg-gray-50'
+                      }`}
                     >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                  <div className="text-xs text-gray-500 flex items-center gap-2 flex-wrap">
-                    <span className={`inline-block px-1.5 py-0.5 rounded ${zone.isBlocked ? 'bg-red-100 text-red-700' : 'bg-gray-100'}`}>
-                      {zone.isBlocked ? 'Bloqueada' : zone.zoneType?.name || 'Sin tipo'}
-                    </span>
-                    {zone.shape && zone.shape !== 'rect' && (
-                      <span className="inline-block px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded capitalize">
-                        {zone.shape === 'polygon' ? 'triángulo' : zone.shape}
-                      </span>
-                    )}
-                    <span className="font-medium text-gray-700">
-                      {percentToCm(zone.maxWidth, true)} × {percentToCm(zone.maxHeight, false)} cm
-                    </span>
-                  </div>
-                </div>
-              ))
-            )}
+                      {zone.isBlocked
+                        ? <Ban className="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0" />
+                        : <span className="w-3.5 h-3.5 rounded mt-0.5 flex-shrink-0" style={{ backgroundColor: getBorderColor(zone) }} />}
+                      <div className="flex-1 min-w-0">
+                        <p className={`text-sm font-medium truncate ${zone.isBlocked ? 'text-red-700' : 'text-gray-900'}`}>{zone.name}</p>
+                        <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-gray-500">
+                          <Badge tone={zone.isBlocked ? 'red' : 'gray'}>{zone.isBlocked ? 'Bloqueada' : zone.zoneType?.name || 'Sin tipo'}</Badge>
+                          {zone.shape && zone.shape !== 'rect' && (
+                            <Badge tone="blue">{zone.shape === 'polygon' ? 'Triángulo' : 'Círculo'}</Badge>
+                          )}
+                          <span className="tabular-nums">{percentToCm(zone.maxWidth, true)} × {percentToCm(zone.maxHeight, false)} cm</span>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        title="Eliminar zona"
+                        aria-label="Eliminar zona"
+                        onClick={(e) => { e.stopPropagation(); handleDeleteZone(zone.id); }}
+                        className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  );
+                })
+              )}
+            </div>
           </div>
 
           {selectedZone && (
-            <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 space-y-3">
-              <div className="flex items-center justify-between">
-                <h4 className="font-medium text-sm text-gray-900">{selectedZone.name}</h4>
+            <div className="rounded-xl border border-gray-200 p-4 space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm font-semibold text-gray-900 truncate">{selectedZone.name}</p>
                 {/* Botón de bloqueo de proporciones */}
                 <button
+                  type="button"
                   onClick={() => setLockAspectRatio(!lockAspectRatio)}
-                  className={`flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors ${
-                    lockAspectRatio
-                      ? 'bg-orange-100 text-orange-700 border border-orange-300'
-                      : 'bg-gray-100 text-gray-600 border border-gray-300'
+                  className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs border transition-colors ${
+                    lockAspectRatio ? 'bg-app-50 text-app-700 border-app-300' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
                   }`}
-                  title={lockAspectRatio ? 'Proporciones bloqueadas - al redimensionar se mantiene la proporción' : 'Proporciones libres - redimensionar independiente'}
+                  title={lockAspectRatio ? 'Proporciones bloqueadas: al redimensionar se mantiene la proporción' : 'Proporciones libres: redimensionar independiente'}
                 >
                   {lockAspectRatio ? <Lock className="w-3 h-3" /> : <Unlock className="w-3 h-3" />}
-                  {lockAspectRatio ? 'Bloqueado' : 'Libre'}
+                  {lockAspectRatio ? 'Proporción fija' : 'Proporción libre'}
                 </button>
               </div>
 
-              {/* Dimensiones actuales */}
-              <div className="bg-white border border-gray-200 rounded-md p-2">
-                <div className="text-xs text-gray-500 mb-1">Dimensiones</div>
-                <div className="font-medium text-gray-900">
-                  {percentToCm(selectedZone.maxWidth, true)} × {percentToCm(selectedZone.maxHeight, false)} cm
-                </div>
-              </div>
-
-              {/* Precio */}
-              <div className="bg-white border border-gray-200 rounded-md p-2">
-                <label className="block text-xs text-gray-500 mb-1">Precio ($)</label>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={editablePrice}
-                  onChange={(e) => setEditablePrice(parseFloat(e.target.value) || 0)}
-                  className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
-                />
-              </div>
-
-              {/* Posición */}
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                <div>
-                  <label className="text-gray-500">Posición X</label>
-                  <div className="font-mono bg-white px-2 py-1 rounded border border-gray-200">{selectedZone.positionX}%</div>
+              <dl className="grid grid-cols-3 gap-2 text-xs">
+                <div className="col-span-3 sm:col-span-1 lg:col-span-3">
+                  <dt className="text-gray-500">Tamaño</dt>
+                  <dd className="font-medium text-gray-900 tabular-nums">{percentToCm(selectedZone.maxWidth, true)} × {percentToCm(selectedZone.maxHeight, false)} cm</dd>
                 </div>
                 <div>
-                  <label className="text-gray-500">Posición Y</label>
-                  <div className="font-mono bg-white px-2 py-1 rounded border border-gray-200">{selectedZone.positionY}%</div>
+                  <dt className="text-gray-500">Posición X</dt>
+                  <dd className="font-mono text-gray-900">{selectedZone.positionX}%</dd>
                 </div>
-              </div>
+                <div>
+                  <dt className="text-gray-500">Posición Y</dt>
+                  <dd className="font-mono text-gray-900">{selectedZone.positionY}%</dd>
+                </div>
+              </dl>
 
-              <Button
-                onClick={() => handleSaveZone(selectedZone)}
-                variant="admin-secondary"
-                className="w-full text-xs"
-                disabled={saving}
-              >
-                <Save className="w-3 h-3 mr-1" />
-                Guardar Esta Zona
+              <Field label="Precio">
+                <MoneyInput value={editablePrice} onChange={(e) => setEditablePrice(parseFloat(e.target.value) || 0)} />
+              </Field>
+
+              <Button onClick={() => handleSaveZone(selectedZone)} variant="secondary" size="sm" fullWidth disabled={saving} icon={<Save className="w-4 h-4" />}>
+                Guardar esta zona
               </Button>
             </div>
           )}
 
-          {/* Sección de imagen para el tipo de zona actual (independiente de la zona seleccionada) */}
+          {/* Imagen de fondo de la vista actual (independiente de la zona seleccionada) */}
           {currentZoneType && (
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-              <div className="flex items-center justify-between mb-2">
-                <div className="text-xs font-medium text-blue-800 flex items-center gap-1">
-                  <ImageIcon className="w-3 h-3" />
-                  Imagen: {currentZoneType.name}
-                </div>
-              </div>
+            <div className="rounded-xl border border-gray-200 p-4">
+              <p className="text-sm font-semibold text-gray-900 flex items-center gap-1.5 mb-1">
+                <ImageIcon className="w-4 h-4 text-app-600" />
+                Imagen de la vista «{currentZoneType.name}»
+              </p>
+              <p className="text-xs text-gray-500 mb-3">Se usa como fondo para posicionar sus zonas. Si no hay, se usa la imagen principal del modelo.</p>
 
               {zoneTypeImages[currentZoneType.slug] ? (
                 <div className="space-y-2">
@@ -1185,49 +1050,52 @@ export const VisualZoneEditor = ({
                     <img
                       src={assetUrl(zoneTypeImages[currentZoneType.slug])}
                       alt={`Imagen ${currentZoneType.name}`}
-                      className="w-full h-24 object-contain rounded border border-blue-200 bg-white"
+                      className="w-full h-28 object-contain rounded-lg border border-gray-200 bg-gray-50"
                     />
                     <button
+                      type="button"
                       onClick={() => handleRemoveZoneTypeImage(currentZoneType.slug)}
-                      className="absolute top-1 right-1 p-1 bg-red-500 text-white rounded-full hover:bg-red-600"
-                      title="Eliminar imagen"
+                      className="absolute top-1.5 right-1.5 p-1 bg-white border border-gray-200 text-gray-500 rounded-md hover:text-red-600"
+                      title="Quitar imagen"
                     >
-                      <X className="w-3 h-3" />
+                      <X className="w-3.5 h-3.5" />
                     </button>
                   </div>
-                  <button
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    fullWidth
+                    icon={<Upload className="w-4 h-4" />}
+                    isLoading={uploadingImage}
                     onClick={() => {
                       setSelectedZoneTypeForImage(currentZoneType.slug);
                       fileInputRef.current?.click();
                     }}
-                    className="w-full text-xs text-blue-600 hover:text-blue-800 py-1"
                   >
                     Cambiar imagen
-                  </button>
+                  </Button>
                 </div>
               ) : (
                 <button
+                  type="button"
                   onClick={() => {
                     setSelectedZoneTypeForImage(currentZoneType.slug);
                     fileInputRef.current?.click();
                   }}
                   disabled={uploadingImage}
-                  className="w-full flex items-center justify-center gap-2 px-3 py-3 border-2 border-dashed border-blue-300 rounded-md text-xs text-blue-500 hover:border-blue-400 hover:text-blue-600 transition-colors bg-white"
+                  className="w-full flex items-center justify-center gap-2 px-3 py-4 border-2 border-dashed border-gray-300 rounded-lg text-sm text-gray-500 hover:border-app-400 hover:text-app-700 transition-colors disabled:opacity-50"
                 >
                   <Upload className="w-4 h-4" />
-                  {uploadingImage ? 'Subiendo...' : 'Subir imagen para este tipo'}
+                  {uploadingImage ? 'Subiendo…' : 'Subir imagen para esta vista'}
                 </button>
               )}
-              <p className="text-xs text-blue-600 mt-2">
-                La imagen se usa como fondo para posicionar las zonas de "{currentZoneType.name}"
-              </p>
             </div>
           )}
 
           {/* Nota informativa */}
-          <div className="text-xs text-gray-500 bg-gray-50 px-3 py-2 rounded-lg border border-gray-200">
-            <p className="mb-1"><strong>Zonas normales:</strong> Donde se puede colocar diseño</p>
-            <p><strong className="text-red-600">Zonas bloqueadas:</strong> Donde NO se puede colocar diseño (costuras, logos, etc.)</p>
+          <div className="text-xs text-gray-500 px-1 space-y-1">
+            <p><span className="font-medium text-gray-700">Zonas normales:</span> donde se puede colocar diseño.</p>
+            <p><span className="font-medium text-red-600">Zonas bloqueadas:</span> donde NO se puede (costuras, logos, etc.).</p>
           </div>
 
           {/* Input oculto para subir archivos */}
@@ -1240,10 +1108,10 @@ export const VisualZoneEditor = ({
           />
         </div>
 
-        <div className="col-span-12 lg:col-span-8">
+        <div className="min-w-0">
           <div
             ref={containerRef}
-            className="relative bg-gray-100 rounded-lg overflow-hidden border-2 border-dashed border-gray-300"
+            className="relative bg-gray-50 rounded-xl overflow-hidden border border-gray-200"
             style={{ minHeight: '500px' }}
           >
             <img
@@ -1440,10 +1308,10 @@ export const VisualZoneEditor = ({
 
             {imageLoaded && zones.length === 0 && (
               <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                <div className="bg-white/90 px-4 py-3 rounded-lg shadow text-center">
+                <div className="bg-white px-4 py-3 rounded-lg border border-gray-200 text-center">
                   <MousePointer2 className="w-8 h-8 text-gray-400 mx-auto mb-2" />
                   <p className="text-sm text-gray-600">
-                    Agrega zonas desde el panel izquierdo
+                    Agrega zonas desde el panel lateral
                   </p>
                 </div>
               </div>

@@ -68,7 +68,7 @@ export const TemplateSelector = ({
         </p>
         <button
           onClick={() => onTemplateSelect(null)}
-          className="mt-3 text-sm text-purple-600 hover:text-purple-700 font-medium"
+          className="mt-3 text-sm text-app-600 hover:text-app-700 font-medium"
         >
           Personalizar desde cero
         </button>
@@ -85,7 +85,7 @@ export const TemplateSelector = ({
         {selectedTemplate && (
           <button
             onClick={() => onTemplateSelect(null)}
-            className="text-xs text-purple-600 hover:text-purple-700 font-medium"
+            className="text-xs text-app-600 hover:text-app-700 font-medium"
           >
             Personalizar desde cero
           </button>
@@ -97,9 +97,9 @@ export const TemplateSelector = ({
           <div key={template.id} className="relative group">
             <button
               onClick={() => onTemplateSelect(template)}
-              className={`w-full flex flex-col rounded-lg border-2 transition-all hover:scale-105 overflow-hidden ${
+              className={`w-full flex flex-col rounded-lg border-2 transition-all overflow-hidden ${
                 selectedTemplate?.id === template.id
-                  ? 'border-purple-600 bg-purple-50'
+                  ? 'border-app-600 bg-app-50'
                   : 'border-gray-300 hover:border-gray-400'
               }`}
             >
@@ -131,7 +131,7 @@ export const TemplateSelector = ({
 
             {/* Badge de seleccionado */}
             {selectedTemplate?.id === template.id && (
-              <div className="absolute top-2 right-2 bg-purple-600 text-white text-xs px-2 py-1 rounded-full font-semibold">
+              <div className="absolute top-2 right-2 bg-app-600 text-white text-xs px-2 py-1 rounded-full font-semibold">
                 Seleccionado
               </div>
             )}
@@ -166,7 +166,7 @@ export const TemplateSelector = ({
                   onTemplateSelect(previewTemplate);
                   setPreviewTemplate(null);
                 }}
-                className="flex-1 bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700"
+                className="flex-1 bg-app-600 text-white px-4 py-2 rounded-lg hover:bg-app-700"
               >
                 Usar este modelo
               </button>

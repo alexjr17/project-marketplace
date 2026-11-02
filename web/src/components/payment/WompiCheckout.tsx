@@ -251,14 +251,14 @@ export const WompiCheckout = ({
   // Si no hay credenciales válidas, mostrar alerta
   if (!credentialsValid) {
     return (
-      <div className="bg-orange-50 border border-orange-200 rounded-xl p-6">
+      <div className="bg-amber-50 border border-amber-200 rounded-xl p-6">
         <div className="flex items-start gap-3">
-          <AlertCircle className="w-6 h-6 text-orange-500 flex-shrink-0 mt-0.5" />
+          <AlertCircle className="w-6 h-6 text-amber-600 flex-shrink-0 mt-0.5" />
           <div>
-            <h3 className="text-lg font-semibold text-orange-800">
+            <h3 className="text-lg font-semibold text-amber-900">
               Método de pago no configurado
             </h3>
-            <p className="text-sm text-orange-700 mt-2">
+            <p className="text-sm text-amber-800 mt-2">
               El pago con Wompi no está disponible en este momento. Por favor selecciona otro método de pago o contacta al administrador.
             </p>
           </div>
@@ -270,7 +270,7 @@ export const WompiCheckout = ({
   if (isLoading) {
     return (
       <div className="flex flex-col items-center justify-center py-8">
-        <Loader2 className="w-8 h-8 text-purple-600 animate-spin mb-4" />
+        <Loader2 className="w-8 h-8 text-app-600 animate-spin mb-4" />
         <p className="text-gray-600">Cargando pasarela de pagos...</p>
       </div>
     );
@@ -279,10 +279,10 @@ export const WompiCheckout = ({
   return (
     <div className="space-y-6">
       {/* Resumen del pago */}
-      <div className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-xl p-6">
+      <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
         <div className="flex items-center justify-between mb-4">
           <span className="text-gray-600">Total a pagar:</span>
-          <span className="text-2xl font-bold text-purple-600">
+          <span className="text-2xl font-bold text-app-600">
             {formatCurrency(amountInCents)}
           </span>
         </div>
@@ -316,7 +316,7 @@ export const WompiCheckout = ({
       <button
         onClick={handlePayment}
         disabled={isProcessing}
-        className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white font-semibold py-4 px-6 rounded-xl hover:from-purple-700 hover:to-pink-700 transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+        className="w-full h-12 bg-app-600 hover:bg-app-700 text-white font-medium px-6 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
       >
         {isProcessing ? (
           <>
@@ -335,7 +335,7 @@ export const WompiCheckout = ({
       <div className="flex items-center justify-center gap-2 text-sm text-gray-500">
         <Shield className="w-4 h-4 text-green-500" />
         <span>Pago seguro procesado por</span>
-        <span className="font-semibold text-purple-600">Wompi</span>
+        <span className="font-semibold text-app-600">Wompi</span>
       </div>
 
       {/* Nota de modo prueba */}

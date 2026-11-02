@@ -78,14 +78,14 @@ export const HomePage = () => {
   ].sort((a, b) => a.data.order - b.data.order);
 
   return (
-    <div className="overflow-x-hidden bg-gray-100 min-h-screen">
+    <div className="overflow-x-hidden bg-gray-50 min-h-screen">
       <Seo />
       {/* Hero Section - Configurable */}
       <HeroSection />
 
       {/* Trust Bar - Características en tarjetas individuales */}
       {showFeatures && features.length > 0 && (
-        <div className="bg-gray-100 -mt-2 pb-2">
+        <div className="pt-1 pb-2">
           <div className="max-w-7xl mx-auto px-4">
             <div className="flex flex-wrap gap-2 md:gap-3">
               {features.slice(0, 4).map((feature) => {
@@ -93,12 +93,9 @@ export const HomePage = () => {
                 return (
                   <div
                     key={feature.id}
-                    className="bg-white rounded-xl p-3 md:p-4 shadow-sm flex items-center gap-3 flex-1 min-w-[calc(50%-0.25rem)] md:min-w-0"
+                    className="bg-white rounded-xl border border-gray-200 p-3 flex items-center gap-3 flex-1 min-w-[calc(50%-0.5rem)] md:min-w-0"
                   >
-                    <div
-                      className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
-                      style={{ backgroundColor: `${brandColors.primary}15`, color: brandColors.primary }}
-                    >
+                    <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 bg-app-50 text-app-600">
                       <IconComponent className="w-5 h-5" strokeWidth={2} />
                     </div>
                     <div className="min-w-0 flex-1">
@@ -133,34 +130,30 @@ export const HomePage = () => {
       )}
 
       {/* Testimonios Section */}
-      <section className="py-4 md:py-6">
+      <section className="py-5 md:py-7">
         <div className="max-w-7xl mx-auto px-4">
-          <div className="bg-white rounded-2xl p-4 md:p-6 shadow-sm">
-            {/* Header */}
-            <div className="text-center mb-6">
-              <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-1">
+          <div>
+            {/* Encabezado */}
+            <div className="mb-4">
+              <h2 className="text-lg md:text-xl font-bold text-gray-900">
                 Lo que dicen nuestros clientes
               </h2>
-              <p className="text-gray-600 text-sm md:text-base">
+              <p className="text-gray-500 text-sm mt-0.5">
                 Miles de personas ya crearon sus diseños únicos con Vexa
               </p>
             </div>
 
             {/* Testimonials Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4">
               {testimonials.map((testimonial) => (
                 <div
                   key={testimonial.id}
-                  className="bg-gray-50 rounded-xl p-4 hover:bg-gray-100 transition-colors"
+                  className="bg-white rounded-xl border border-gray-200 p-4 flex flex-col"
                 >
-                  {/* Quote Icon */}
-                  <Quote
-                    className="w-6 h-6 mb-3 opacity-30"
-                    style={{ color: brandColors.primary }}
-                  />
+                  <Quote className="w-5 h-5 mb-2 text-app-300" />
 
                   {/* Text */}
-                  <p className="text-gray-700 mb-4 leading-relaxed text-sm">
+                  <p className="text-gray-700 mb-4 leading-relaxed text-sm flex-1">
                     "{testimonial.text}"
                   </p>
 
@@ -182,7 +175,7 @@ export const HomePage = () => {
                       {Array.from({ length: testimonial.rating }).map((_, i) => (
                         <Star
                           key={i}
-                          className="w-3.5 h-3.5 fill-yellow-400 text-yellow-400"
+                          className="w-3.5 h-3.5 fill-amber-400 text-amber-400"
                         />
                       ))}
                     </div>
@@ -195,10 +188,10 @@ export const HomePage = () => {
       </section>
 
       {/* CTA Final Section */}
-      <section className="py-4 md:py-6 pb-8">
+      <section className="py-5 md:py-7 pb-10">
         <div className="max-w-7xl mx-auto px-4">
           <div
-            className="rounded-2xl p-6 md:p-10 text-center text-white overflow-hidden relative"
+            className="rounded-xl p-6 md:p-10 text-center text-white overflow-hidden relative"
             style={{ background: gradientBgStyle }}
           >
             {/* Pattern Overlay */}
@@ -223,9 +216,8 @@ export const HomePage = () => {
               {/* CTA Buttons */}
               <div className="flex flex-col sm:flex-row gap-3 justify-center items-center">
                 <Link
-                  to="/customizer"
-                  className="bg-white px-6 py-3 rounded-xl text-base font-bold hover:bg-gray-100 inline-flex items-center gap-2 transition-all hover:scale-105 shadow-lg"
-                  style={{ color: brandColors.primary }}
+                  to="/customize"
+                  className="bg-white h-12 px-6 rounded-lg text-base font-semibold hover:bg-gray-50 inline-flex items-center gap-2 transition-colors shadow-sm text-app-700"
                 >
                   <Palette className="w-5 h-5" />
                   Empezar a diseñar
@@ -233,7 +225,7 @@ export const HomePage = () => {
                 </Link>
                 <Link
                   to="/catalog"
-                  className="bg-white/10 backdrop-blur-sm border-2 border-white/50 text-white px-6 py-3 rounded-xl text-base font-bold hover:bg-white/20 inline-flex items-center gap-2 transition-all"
+                  className="bg-white/10 border border-white/60 text-white h-12 px-6 rounded-lg text-base font-semibold hover:bg-white/20 inline-flex items-center gap-2 transition-colors"
                 >
                   <ShoppingBag className="w-5 h-5" />
                   Explorar productos

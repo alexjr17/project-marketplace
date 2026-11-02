@@ -1,10 +1,9 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { Button } from '../shared/Button';
+import { Button, toast, useConfirm } from '../ui';
 import {
   Plus,
   Trash2,
   Move,
-  Save,
   Ban,
   Square,
   Circle,
@@ -39,6 +38,7 @@ export const ExclusionZoneEditor = ({
   onExclusionZonesChange,
   currentViewType = 'front'
 }: ExclusionZoneEditorProps) => {
+  const confirm = useConfirm();
   const containerRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
 
@@ -313,7 +313,7 @@ export const ExclusionZoneEditor = ({
 
   const handleCreateZone = () => {
     if (!newZoneName.trim()) {
-      alert('Ingresa un nombre para la zona de exclusión');
+      toast.error('Ingresa un nombre para la zona de exclusión');
       return;
     }
 
@@ -339,8 +339,8 @@ export const ExclusionZoneEditor = ({
     setSelectedZoneId(newZone.id);
   };
 
-  const handleDeleteZone = (zoneId: string) => {
-    if (!confirm('¿Eliminar esta zona de exclusión?')) return;
+  const handleDeleteZone = async (zoneId: string) => {
+    if (!(await confirm({ title: '¿Eliminar esta zona de exclusión?', tone: 'danger' }))) return;
 
     const newZones = currentZones.filter(z => z.id !== zoneId);
     updateZones(newZones);
@@ -386,7 +386,7 @@ export const ExclusionZoneEditor = ({
           {!isCreating ? (
             <Button
               onClick={() => setIsCreating(true)}
-              variant="admin-secondary"
+              variant="secondary"
               className="w-full"
             >
               <Plus className="w-4 h-4 mr-1" />
@@ -437,7 +437,7 @@ export const ExclusionZoneEditor = ({
                 </div>
               </div>
 
-              <Button onClick={handleCreateZone} variant="admin-danger" className="w-full">
+              <Button onClick={handleCreateZone} variant="danger" className="w-full">
                 Crear Zona
               </Button>
             </div>

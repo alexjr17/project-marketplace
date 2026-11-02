@@ -1,16 +1,20 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams, Link } from 'react-router-dom';
-import { ArrowLeft, Check, Ban, Package } from 'lucide-react';
-import toast from 'react-hot-toast';
+import { useParams, Link } from 'react-router-dom';
+import { Check, Ban, Truck } from 'lucide-react';
+import toast from '../../lib/toast';
 import manufacturingService from '../../services/manufacturing.service';
 import type { MfgDispatch, MfgDispatchItem } from '../../types/manufacturing';
 import { DES_STATUS_META } from './DispatchesPage';
+import {
+  Page, PageHeader, Button, Card, CardTitle, Badge, DescriptionList, Field, TextInput, DateInput, FormActions, Thumb, Spinner, EmptyState, useConfirm,
+} from '../../components/ui';
+import QtyMatrix from '../../components/manufacturing/QtyMatrix';
 
 const TYPE_LABEL: Record<string, string> = { VENTA: 'Venta', CONSIGNACION: 'Consignación', TRASLADO: 'Traslado', MUESTRA: 'Muestra' };
 
 export default function DispatchDetailPage() {
   const { id } = useParams();
-  const navigate = useNavigate();
+  const ask = useConfirm();
   const dispatchId = Number(id);
   const [d, setD] = useState<MfgDispatch | null>(null);
   const [loading, setLoading] = useState(true);
@@ -69,110 +73,87 @@ export default function DispatchDetailPage() {
     });
   }, [d]);
 
-  const confirm = async () => {
-    if (!window.confirm('¿Confirmar el despacho? Se descontará el inventario de producto terminado.')) return;
+  const confirmDispatch = async () => {
+    if (!(await ask({ title: '¿Confirmar el despacho?', message: 'Se descontará el inventario de producto terminado.', confirmText: 'Confirmar' }))) return;
     setBusy(true);
     try { setD(await manufacturingService.confirmDispatch(dispatchId)); toast.success('Despacho confirmado'); }
     catch (e: any) { toast.error(e?.message || 'No se pudo confirmar'); }
     finally { setBusy(false); }
   };
   const cancel = async () => {
-    if (!window.confirm('¿Anular el despacho? Si estaba confirmado, se devuelve el inventario.')) return;
+    if (!(await ask({ title: '¿Anular el despacho?', message: 'Si estaba confirmado, se devuelve el inventario.', confirmText: 'Anular', tone: 'danger' }))) return;
     setBusy(true);
     try { setD(await manufacturingService.cancelDispatch(dispatchId)); toast.success('Despacho anulado'); }
     catch (e: any) { toast.error(e?.message || 'No se pudo anular'); }
     finally { setBusy(false); }
   };
 
-  if (loading) return <div className="py-16 text-center text-gray-400">Cargando…</div>;
-  if (!d) return <div className="py-16 text-center text-gray-400">Despacho no encontrado.</div>;
+  if (loading) return <Page><Spinner label="Cargando…" /></Page>;
+  if (!d) return <Page><PageHeader icon={Truck} title="Despacho" backTo="/manufacturing/dispatches" /><Card><EmptyState title="Despacho no encontrado" /></Card></Page>;
 
   const total = d.items.reduce((t, it) => t + it.quantity, 0);
 
   return (
-    <div className="max-w-4xl mx-auto">
-      <button onClick={() => navigate('/manufacturing/dispatches')} className="inline-flex items-center gap-2 text-gray-500 hover:text-gray-800 mb-4 text-sm">
-        <ArrowLeft className="w-4 h-4" /> Volver a despachos
-      </button>
+    <Page>
+      <PageHeader
+        icon={Truck}
+        backTo="/manufacturing/dispatches"
+        title={<span className="inline-flex items-center gap-3"><span className="font-mono">{d.code}</span><Badge tone={DES_STATUS_META[d.status].tone}>{DES_STATUS_META[d.status].label}</Badge></span>}
+        subtitle={d.client?.name ?? 'Sin cliente'}
+        actions={<>
+          {d.status !== 'CANCELLED' && (
+            <Button variant={d.status === 'CONFIRMED' ? 'danger' : 'secondary'} icon={<Ban className="w-4 h-4" />} disabled={busy} onClick={cancel}>
+              {d.status === 'CONFIRMED' ? 'Anular (devolver stock)' : 'Anular'}
+            </Button>
+          )}
+          {d.status === 'DRAFT' && <Button variant="success" icon={<Check className="w-4 h-4" />} isLoading={busy} onClick={confirmDispatch}>Confirmar despacho</Button>}
+        </>}
+      />
 
-      <div className="bg-white rounded-xl border border-gray-200 p-5 mb-5">
-        <div className="flex items-start justify-between flex-wrap gap-4">
-          <div>
-            <div className="flex items-center gap-3 flex-wrap">
-              <h1 className="text-2xl font-bold text-gray-900 font-mono">{d.code}</h1>
-              <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${DES_STATUS_META[d.status].cls}`}>{DES_STATUS_META[d.status].label}</span>
-            </div>
-            <p className="text-gray-700 font-medium mt-1">{d.client?.name ?? 'Sin cliente'}</p>
-            <p className="text-sm text-gray-500 mt-1">
-              {TYPE_LABEL[d.type] ?? d.type} · {d.warehouse ? `Bodega: ${d.warehouse.name} · ` : ''}
-              {d.purchaseOrder ? <>Pedido: <Link to={`/manufacturing/purchase-orders/${d.purchaseOrderId}`} className="text-orange-600 font-mono">{d.purchaseOrder.code}</Link> · </> : ''}
-              Total: {total} und
-            </p>
-            {d.notes && <p className="text-sm text-gray-500 mt-1">Notas: {d.notes}</p>}
-          </div>
-          <div className="flex flex-col items-end gap-2">
-            {d.status === 'DRAFT' && (
-              <button onClick={confirm} disabled={busy} className="inline-flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white font-medium px-4 py-2 rounded-lg disabled:opacity-50"><Check className="w-4 h-4" /> Confirmar despacho</button>
-            )}
-            {d.status !== 'CANCELLED' && (
-              <button onClick={cancel} disabled={busy} className="inline-flex items-center gap-1 text-sm text-red-600 hover:bg-red-50 px-3 py-1.5 rounded-lg"><Ban className="w-4 h-4" /> {d.status === 'CONFIRMED' ? 'Anular (devolver stock)' : 'Anular'}</button>
-            )}
-          </div>
-        </div>
-      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
+        <div className="lg:col-span-2 space-y-5">
+          <Card>
+            <CardTitle>Datos del despacho</CardTitle>
+            <DescriptionList cols={3} items={[
+              { label: 'Tipo', value: TYPE_LABEL[d.type] ?? d.type },
+              { label: 'Bodega', value: d.warehouse?.name },
+              { label: 'Pedido', value: d.purchaseOrder ? <Link to={`/manufacturing/purchase-orders/${d.purchaseOrderId}`} className="font-mono text-app-700 hover:underline">{d.purchaseOrder.code}</Link> : null },
+              { label: 'Total', value: <span className="tabular-nums">{total.toLocaleString('es-CO')} und</span> },
+              ...(d.notes ? [{ label: 'Notas', value: d.notes, full: true }] : []),
+            ]} />
+          </Card>
 
-      {d.status !== 'CANCELLED' && (
-        <div className="bg-white rounded-xl border border-gray-200 p-5 mb-5">
-          <h2 className="font-semibold text-gray-900 mb-3">Remisión / Facturación</h2>
-          <div className="grid sm:grid-cols-3 gap-3">
-            <label className="block">
-              <span className="text-sm font-medium text-gray-700">N° remisión</span>
-              <input value={bill.shipmentNumber} onChange={(e) => setBill({ ...bill, shipmentNumber: e.target.value })} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
-            </label>
-            <label className="block">
-              <span className="text-sm font-medium text-gray-700">N° factura</span>
-              <input value={bill.invoiceNumber} onChange={(e) => setBill({ ...bill, invoiceNumber: e.target.value })} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
-            </label>
-            <label className="block">
-              <span className="text-sm font-medium text-gray-700">Fecha facturación</span>
-              <input type="date" value={bill.invoicedAt} onChange={(e) => setBill({ ...bill, invoicedAt: e.target.value })} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
-            </label>
-          </div>
-          <div className="flex justify-end mt-3">
-            <button onClick={saveBilling} disabled={busy} className="text-sm bg-slate-700 hover:bg-slate-800 text-white px-4 py-2 rounded-lg disabled:opacity-60">Guardar facturación</button>
-          </div>
-        </div>
-      )}
-
-      <div className="space-y-4">
-        {groups.map((g) => (
-          <div key={g.ref?.id} className="bg-white rounded-xl border border-gray-200 p-5">
-            <div className="flex items-center gap-3 mb-3">
-              {g.ref?.imagePath
-                ? <img src={g.ref.imagePath} alt="" className="w-11 h-11 rounded-lg object-cover border border-gray-100" />
-                : <div className="w-11 h-11 rounded-lg bg-gray-50 border border-dashed border-gray-200 flex items-center justify-center text-gray-300"><Package className="w-5 h-5" /></div>}
-              <div className="flex-1">
-                <p className="font-semibold text-gray-900"><span className="font-mono text-gray-500">{g.ref?.code}</span> {g.ref?.name}</p>
-                <p className="text-xs text-gray-500">{g.total} und</p>
+          {groups.map((g) => (
+            <Card key={g.ref?.id}>
+              <div className="flex items-center gap-3 mb-4">
+                <Thumb src={g.ref?.imagePath} alt={g.ref?.name} />
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-gray-900 truncate"><span className="font-mono text-gray-500 mr-1">{g.ref?.code}</span>{g.ref?.name}</p>
+                  <p className="text-xs text-gray-500 tabular-nums">{g.total.toLocaleString('es-CO')} und</p>
+                </div>
               </div>
+              <QtyMatrix
+                totals
+                sizes={g.S.map(([sid, s]) => ({ id: sid, label: s.abbr }))}
+                colors={g.C.map(([cid, c]) => ({ id: cid, name: c.name, hex: c.hex }))}
+                get={(sid, cid) => g.cell.get(`${sid}-${cid}`) ?? 0}
+              />
+            </Card>
+          ))}
+        </div>
+
+        {d.status !== 'CANCELLED' && (
+          <Card>
+            <CardTitle>Remisión y facturación</CardTitle>
+            <div className="space-y-4">
+              <Field label="N° remisión"><TextInput value={bill.shipmentNumber} onChange={(e) => setBill({ ...bill, shipmentNumber: e.target.value })} /></Field>
+              <Field label="N° factura"><TextInput value={bill.invoiceNumber} onChange={(e) => setBill({ ...bill, invoiceNumber: e.target.value })} /></Field>
+              <Field label="Fecha de facturación"><DateInput value={bill.invoicedAt} onChange={(e) => setBill({ ...bill, invoicedAt: e.target.value })} /></Field>
             </div>
-            <div className="overflow-x-auto border border-gray-100 rounded-lg">
-              <table className="text-sm w-full">
-                <thead><tr className="bg-gray-50">
-                  <th className="p-2 text-left text-gray-500 font-medium sticky left-0 bg-gray-50">Talla \ Color</th>
-                  {g.C.map(([cid, c]) => <th key={cid} className="p-2 text-center font-medium text-gray-700 min-w-[72px]"><span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full border border-gray-200" style={{ backgroundColor: c.hex }} />{c.name}</span></th>)}
-                </tr></thead>
-                <tbody>{g.S.map(([sid, s]) => (
-                  <tr key={sid} className="border-t border-gray-100">
-                    <td className="p-2 font-semibold text-gray-800 sticky left-0 bg-white">{s.abbr}</td>
-                    {g.C.map(([cid]) => { const q = g.cell.get(`${sid}-${cid}`) ?? 0; return <td key={cid} className={`p-2 text-center ${q ? 'text-gray-700' : 'text-gray-300'}`}>{q || '—'}</td>; })}
-                  </tr>
-                ))}</tbody>
-              </table>
-            </div>
-          </div>
-        ))}
+            <FormActions><Button variant="outline" isLoading={busy} onClick={saveBilling}>Guardar facturación</Button></FormActions>
+          </Card>
+        )}
       </div>
-    </div>
+    </Page>
   );
 }

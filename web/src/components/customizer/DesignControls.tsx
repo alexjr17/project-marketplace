@@ -91,7 +91,7 @@ export const DesignControls = ({ design, onUpdate, onDelete, maxZoneSize }: Desi
             onClick={() => setKeepAspectRatio(!keepAspectRatio)}
             className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-colors ${
               keepAspectRatio
-                ? 'bg-purple-100 text-purple-700 hover:bg-purple-200'
+                ? 'bg-app-100 text-app-700 hover:bg-app-200'
                 : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
             }`}
             title={keepAspectRatio ? 'Click para desbloquear proporción' : 'Click para mantener proporción'}
@@ -127,7 +127,7 @@ export const DesignControls = ({ design, onUpdate, onDelete, maxZoneSize }: Desi
               step="1"
               value={Math.min(design.size.width, maxWidth)}
               onChange={(e) => handleWidthChange(Number(e.target.value))}
-              className="w-full accent-purple-600"
+              className="w-full accent-app-600"
             />
             <div className="flex justify-between items-center">
               <span className="text-xs text-gray-400">{minSize}%</span>
@@ -144,7 +144,7 @@ export const DesignControls = ({ design, onUpdate, onDelete, maxZoneSize }: Desi
               step="1"
               value={Math.min(design.size.height, maxHeight)}
               onChange={(e) => handleHeightChange(Number(e.target.value))}
-              className="w-full accent-purple-600"
+              className="w-full accent-app-600"
             />
             <div className="flex justify-between items-center">
               <span className="text-xs text-gray-400">{minSize}%</span>
@@ -154,7 +154,7 @@ export const DesignControls = ({ design, onUpdate, onDelete, maxZoneSize }: Desi
           </div>
         </div>
         {keepAspectRatio && (
-          <p className="text-xs text-purple-600 flex items-center gap-1 bg-purple-50 px-2 py-1 rounded">
+          <p className="text-xs text-app-600 flex items-center gap-1 bg-app-50 px-2 py-1 rounded">
             <Link className="w-3 h-3" />
             <span>La proporción se mantiene automáticamente</span>
           </p>

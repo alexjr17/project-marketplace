@@ -1,8 +1,9 @@
-import { Minus, Plus, Trash2, Sparkles, Pencil, AlertTriangle } from 'lucide-react';
+import { Trash2, Sparkles, Pencil } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { useCurrency } from '../../hooks/useCurrency';
-import { useSettings } from '../../context/SettingsContext';
+import { Alert, Badge, IconButton } from '../ui';
+import { QuantityStepper } from './QuantityStepper';
 import { templateRecipesService } from '../../services/template-recipes.service';
 import type { CartItemCustomized } from '../../types/cart';
 
@@ -16,7 +17,6 @@ interface CustomizedCartItemProps {
 export const CustomizedCartItem = ({ item, onUpdateQuantity, onRemove, onStockChange }: CustomizedCartItemProps) => {
   const { format } = useCurrency();
   const navigate = useNavigate();
-  const { settings } = useSettings();
   const { customizedProduct } = item;
 
   // Estado de stock - usar valores de DB si están disponibles
@@ -25,13 +25,6 @@ export const CustomizedCartItem = ({ item, onUpdateQuantity, onRemove, onStockCh
   );
   const [loadingStock, setLoadingStock] = useState(item.availableStock === undefined);
 
-  // Colores de marca dinámicos
-  const brandColors = settings.appearance?.brandColors || settings.general.brandColors || {
-    primary: '#7c3aed',
-    secondary: '#ec4899',
-    accent: '#f59e0b',
-  };
-  const gradientStyle = `linear-gradient(to right, ${brandColors.primary}, ${brandColors.secondary}, ${brandColors.accent})`;
 
   // Obtener stock disponible (solo si no viene de la DB)
   useEffect(() => {
@@ -108,200 +101,89 @@ export const CustomizedCartItem = ({ item, onUpdateQuantity, onRemove, onStockCh
     navigate(`/customize?edit=${item.id}`);
   };
 
+  const canIncrease = !isOutOfStock && !(availableStock !== null && item.quantity >= availableStock);
+  const designsCount = customizedProduct.designs?.length || 0;
+
   return (
-    <div className={`bg-white rounded-xl border-2 transition-colors overflow-hidden ${
-      isOutOfStock ? 'border-red-300 bg-red-50' : hasInsufficientStock ? 'border-yellow-300 bg-yellow-50' : 'border-gray-200 hover:border-gray-300'
-    }`}>
-      {/* Badge de personalizado */}
-      <div className="px-3 py-1.5 flex items-center gap-1.5" style={{ background: isOutOfStock ? '#dc2626' : gradientStyle }}>
-        <Sparkles className="w-3.5 h-3.5 text-white" />
-        <span className="text-white text-xs font-bold">
-          {isOutOfStock ? 'SIN STOCK' : 'PERSONALIZADO'}
-        </span>
-      </div>
+    <div className={`bg-white rounded-xl border p-3 sm:p-4 ${isOutOfStock ? 'border-red-200' : hasInsufficientStock ? 'border-amber-200' : 'border-gray-200'}`}>
+      {(isOutOfStock || hasInsufficientStock) && (
+        <div className="mb-3">
+          <Alert tone={isOutOfStock ? 'error' : 'warning'}>
+            {isOutOfStock
+              ? 'Este producto no tiene stock disponible. Por favor elimínalo del carrito.'
+              : `Solo hay ${availableStock} unidades disponibles. Ajusta la cantidad.`}
+          </Alert>
+        </div>
+      )}
 
-      <div className="p-3 lg:p-4">
-        {/* Alerta de stock */}
-        {(isOutOfStock || hasInsufficientStock) && (
-          <div className={`flex items-center gap-2 p-2 rounded-lg mb-3 ${
-            isOutOfStock ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'
-          }`}>
-            <AlertTriangle className="w-4 h-4 flex-shrink-0" />
-            <span className="text-xs font-medium">
-              {isOutOfStock
-                ? 'Este producto no tiene stock disponible. Por favor elimínalo del carrito.'
-                : `Solo hay ${availableStock} unidades disponibles. Ajusta la cantidad.`
-              }
-            </span>
-          </div>
-        )}
-
-        <div className="flex gap-3 lg:gap-4">
-          {/* Preview del producto personalizado */}
-          <div className={`w-24 h-24 lg:w-32 lg:h-32 bg-gradient-to-br from-gray-50 to-gray-100 rounded-lg flex items-center justify-center flex-shrink-0 p-2 border ${
-            isOutOfStock ? 'border-red-200 opacity-50' : 'border-gray-200'
-          }`}>
-            {customizedProduct.previewImages?.front ? (
-              <img
-                src={customizedProduct.previewImages.front}
-                alt={`Preview de ${customizedProduct.productName}`}
-                loading="lazy"
-                decoding="async"
-                className="max-w-full max-h-full object-contain rounded"
-              />
-            ) : (
-              <div
-                className="w-20 h-20 lg:w-24 lg:h-24 rounded-lg shadow-inner"
-                style={{ backgroundColor: customizedProduct.selectedColor }}
-              />
-            )}
-          </div>
-
-          {/* Información del producto */}
-          <div className="flex-1 min-w-0">
-            <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0 flex-1">
-                <h3 className={`font-semibold text-sm lg:text-base truncate ${isOutOfStock ? 'text-gray-500' : 'text-gray-900'}`}>
-                  {customizedProduct.productName}
-                </h3>
-                <p className="text-xs text-gray-500">Personalizado</p>
-              </div>
-              {/* Botones - Desktop */}
-              <div className="hidden lg:flex items-center gap-1">
-                {customizedProduct.templateId && (
-                  <button
-                    onClick={handleEdit}
-                    className="text-gray-400 hover:text-blue-500 transition-colors p-1"
-                    aria-label="Editar diseño"
-                    title="Editar diseño"
-                  >
-                    <Pencil className="w-5 h-5" />
-                  </button>
-                )}
-                <button
-                  onClick={() => onRemove(item.id)}
-                  className="text-gray-400 hover:text-red-500 transition-colors p-1"
-                  aria-label="Eliminar producto"
-                >
-                  <Trash2 className="w-5 h-5" />
-                </button>
-              </div>
-            </div>
-
-            {/* Variantes - compacto en móvil */}
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5 text-xs lg:text-sm">
-              <div className="flex items-center gap-1">
-                <div
-                  className="w-4 h-4 rounded border border-gray-300"
-                  style={{ backgroundColor: customizedProduct.selectedColor }}
-                />
-                <span className="text-gray-600">{customizedProduct.selectedSize}</span>
-              </div>
-              <span className="text-gray-500">
-                {customizedProduct.designs?.length || 0} diseño{(customizedProduct.designs?.length || 0) > 1 ? 's' : ''}
-              </span>
-              {/* Indicador de stock */}
-              {!loadingStock && availableStock !== null && (
-                <span className={`text-xs font-medium ${
-                  isOutOfStock ? 'text-red-600' : hasInsufficientStock ? 'text-yellow-600' : 'text-green-600'
-                }`}>
-                  ({availableStock} disponibles)
-                </span>
-              )}
-            </div>
-
-            {/* Precio desglosado - móvil compacto */}
-            <div className="mt-2 text-xs text-gray-500">
-              <span>{format(customizedProduct.basePrice || 0)}</span>
-              <span className="mx-1">+</span>
-              <span className="text-gray-700 font-medium">{format(customizedProduct.customizationPrice || 0)}</span>
-              <span className="ml-1">= {format(item.price || 0)} c/u</span>
-            </div>
-
-            {/* Desktop: Precio y cantidad en línea */}
-            <div className="hidden lg:flex items-center justify-between mt-3">
-              {/* Control de cantidad - Desktop */}
-              <div className={`flex items-center gap-1 border rounded-lg overflow-hidden ${
-                isOutOfStock ? 'border-red-300 opacity-50' : 'border-gray-300'
-              }`}>
-                <button
-                  onClick={handleDecrease}
-                  disabled={item.quantity <= 1 || isOutOfStock}
-                  className="px-2 py-1 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  aria-label="Disminuir cantidad"
-                >
-                  <Minus className="w-4 h-4" />
-                </button>
-                <span className="px-3 py-1 font-semibold text-gray-900 min-w-[2rem] text-center text-sm">
-                  {item.quantity}
-                </span>
-                <button
-                  onClick={handleIncrease}
-                  disabled={isOutOfStock || (availableStock !== null && item.quantity >= availableStock)}
-                  className="px-2 py-1 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  aria-label="Aumentar cantidad"
-                >
-                  <Plus className="w-4 h-4" />
-                </button>
-              </div>
-
-              <div className={`text-lg font-bold ${isOutOfStock ? 'text-gray-400' : 'text-gray-900'}`}>
-                {format(item.subtotal || 0)}
-              </div>
-            </div>
-          </div>
+      <div className="flex gap-3 sm:gap-4">
+        {/* Vista previa del diseño */}
+        <div className={`w-20 h-20 sm:w-28 sm:h-28 bg-gray-50 rounded-lg border border-gray-200 flex items-center justify-center flex-shrink-0 p-1.5 ${isOutOfStock ? 'opacity-50' : ''}`}>
+          {customizedProduct.previewImages?.front ? (
+            <img
+              src={customizedProduct.previewImages.front}
+              alt={`Vista previa de ${customizedProduct.productName}`}
+              loading="lazy"
+              decoding="async"
+              className="max-w-full max-h-full object-contain"
+            />
+          ) : (
+            <div className="w-full h-full rounded-md" style={{ backgroundColor: customizedProduct.selectedColor }} />
+          )}
         </div>
 
-        {/* Móvil: Fila de acciones */}
-        <div className="lg:hidden flex items-center justify-between mt-3 pt-3 border-t border-gray-100">
-          {/* Control de cantidad */}
-          <div className={`flex items-center gap-1 border rounded-lg overflow-hidden ${
-            isOutOfStock ? 'border-red-300 opacity-50' : 'border-gray-300'
-          }`}>
-            <button
-              onClick={handleDecrease}
-              disabled={item.quantity <= 1 || isOutOfStock}
-              className="px-2.5 py-1.5 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              aria-label="Disminuir cantidad"
-            >
-              <Minus className="w-4 h-4" />
-            </button>
-            <span className="px-3 py-1.5 font-semibold text-gray-900 min-w-[2rem] text-center text-sm">
-              {item.quantity}
-            </span>
-            <button
-              onClick={handleIncrease}
-              disabled={isOutOfStock || (availableStock !== null && item.quantity >= availableStock)}
-              className="px-2.5 py-1.5 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              aria-label="Aumentar cantidad"
-            >
-              <Plus className="w-4 h-4" />
-            </button>
+        <div className="flex-1 min-w-0 flex flex-col">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 min-w-0">
+                <h3 className={`font-medium text-sm sm:text-base truncate ${isOutOfStock ? 'text-gray-500' : 'text-gray-900'}`}>
+                  {customizedProduct.productName}
+                </h3>
+                <Badge tone={isOutOfStock ? 'red' : 'app'} className="flex-shrink-0">
+                  <Sparkles className="w-3 h-3" />{isOutOfStock ? 'Sin stock' : 'Personalizado'}
+                </Badge>
+              </div>
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1 text-xs text-gray-500">
+                <span className="inline-flex items-center gap-1">
+                  <span className="w-3.5 h-3.5 rounded-full ring-1 ring-gray-300" style={{ backgroundColor: customizedProduct.selectedColor }} />
+                  Talla {customizedProduct.selectedSize}
+                </span>
+                <span>{designsCount} {designsCount === 1 ? 'diseño' : 'diseños'}</span>
+                {!loadingStock && availableStock !== null && (
+                  <span className={isOutOfStock ? 'text-red-600' : hasInsufficientStock ? 'text-amber-700' : 'text-green-700'}>
+                    {availableStock} disponibles
+                  </span>
+                )}
+              </div>
+            </div>
+            <div className="flex items-center -mr-1 -mt-1">
+              {customizedProduct.templateId && (
+                <IconButton title="Editar diseño" tone="app" onClick={handleEdit}>
+                  <Pencil className="w-4 h-4" />
+                </IconButton>
+              )}
+              <IconButton title="Eliminar producto" tone="danger" onClick={() => onRemove(item.id)}>
+                <Trash2 className="w-4 h-4" />
+              </IconButton>
+            </div>
           </div>
 
-          {/* Subtotal */}
-          <div className={`font-bold ${isOutOfStock ? 'text-gray-400' : 'text-gray-900'}`}>
-            {format(item.subtotal || 0)}
-          </div>
+          <p className="mt-1 text-xs text-gray-500">
+            {format(customizedProduct.basePrice || 0)} + {format(customizedProduct.customizationPrice || 0)} personalización =
+            <span className="font-medium text-gray-900"> {format(item.price || 0)}</span> c/u
+          </p>
 
-          {/* Botones - Móvil */}
-          <div className="flex items-center gap-1">
-            {customizedProduct.templateId && (
-              <button
-                onClick={handleEdit}
-                className="text-gray-400 hover:text-blue-500 transition-colors p-2"
-                aria-label="Editar diseño"
-              >
-                <Pencil className="w-5 h-5" />
-              </button>
-            )}
-            <button
-              onClick={() => onRemove(item.id)}
-              className="text-gray-400 hover:text-red-500 transition-colors p-2 -mr-2"
-              aria-label="Eliminar producto"
-            >
-              <Trash2 className="w-5 h-5" />
-            </button>
+          <div className="mt-auto pt-3 flex items-center justify-between gap-3">
+            <QuantityStepper
+              size="sm"
+              value={item.quantity}
+              onDecrease={handleDecrease}
+              onIncrease={handleIncrease}
+              canDecrease={item.quantity > 1}
+              canIncrease={canIncrease}
+              disabled={isOutOfStock}
+            />
+            <span className={`text-base font-semibold ${isOutOfStock ? 'text-gray-400' : 'text-gray-900'}`}>{format(item.subtotal || 0)}</span>
           </div>
         </div>
       </div>

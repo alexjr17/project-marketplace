@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react';
 import { templateZonesService, type TemplateZone, type CreateTemplateZoneDto } from '../../services/template-zones.service';
 import { zoneTypesService, type ZoneType } from '../../services/zone-types.service';
-import { Button } from '../shared/Button';
+import { Button, toast, useConfirm } from '../ui';
 
 interface TemplateZonesManagerProps {
   templateId: number;
 }
 
 export const TemplateZonesManager = ({ templateId }: TemplateZonesManagerProps) => {
+  const confirm = useConfirm();
   const [zones, setZones] = useState<TemplateZone[]>([]);
   const [zoneTypes, setZoneTypes] = useState<ZoneType[]>([]);
   const [loading, setLoading] = useState(true);
@@ -59,12 +60,12 @@ export const TemplateZonesManager = ({ templateId }: TemplateZonesManagerProps) 
 
   const handleCreateZone = async () => {
     if (!zoneFormData.zoneTypeId || zoneFormData.zoneTypeId === 0) {
-      alert('Debe seleccionar un tipo de zona');
+      toast.error('Debe seleccionar un tipo de zona');
       return;
     }
 
     if (!zoneFormData.name.trim()) {
-      alert('El nombre de la zona es requerido');
+      toast.error('El nombre de la zona es requerido');
       return;
     }
 
@@ -79,7 +80,7 @@ export const TemplateZonesManager = ({ templateId }: TemplateZonesManagerProps) 
       await loadData();
       resetZoneForm();
     } catch (err) {
-      alert('Error al crear la zona');
+      toast.error('Error al crear la zona');
       console.error(err);
     }
   };
@@ -102,19 +103,19 @@ export const TemplateZonesManager = ({ templateId }: TemplateZonesManagerProps) 
       await loadData();
       resetZoneForm();
     } catch (err) {
-      alert('Error al actualizar la zona');
+      toast.error('Error al actualizar la zona');
       console.error(err);
     }
   };
 
   const handleDeleteZone = async (zoneId: number) => {
-    if (!confirm('¿Estás seguro de eliminar esta zona?')) return;
+    if (!(await confirm({ title: '¿Estás seguro de eliminar esta zona?', tone: 'danger' }))) return;
 
     try {
       await templateZonesService.delete(zoneId);
       await loadData();
     } catch (err) {
-      alert('Error al eliminar la zona');
+      toast.error('Error al eliminar la zona');
       console.error(err);
     }
   };
@@ -176,7 +177,7 @@ export const TemplateZonesManager = ({ templateId }: TemplateZonesManagerProps) 
         <Button
           type="button"
           onClick={() => setShowZoneForm(true)}
-          variant="admin-secondary"
+          variant="secondary"
         >
           Agregar Zona
         </Button>
@@ -196,7 +197,7 @@ export const TemplateZonesManager = ({ templateId }: TemplateZonesManagerProps) 
               <select
                 value={zoneFormData.zoneTypeId}
                 onChange={(e) => setZoneFormData({ ...zoneFormData, zoneTypeId: parseInt(e.target.value) })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-app-200 focus:border-app-500"
                 required
               >
                 <option value={0}>Seleccionar tipo...</option>
@@ -216,7 +217,7 @@ export const TemplateZonesManager = ({ templateId }: TemplateZonesManagerProps) 
                 type="text"
                 value={zoneFormData.name}
                 onChange={(e) => setZoneFormData({ ...zoneFormData, name: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-app-200 focus:border-app-500"
                 required
               />
             </div>
@@ -231,7 +232,7 @@ export const TemplateZonesManager = ({ templateId }: TemplateZonesManagerProps) 
                 max="100"
                 value={zoneFormData.positionX}
                 onChange={(e) => setZoneFormData({ ...zoneFormData, positionX: parseInt(e.target.value) })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-app-200 focus:border-app-500"
               />
             </div>
 
@@ -245,7 +246,7 @@ export const TemplateZonesManager = ({ templateId }: TemplateZonesManagerProps) 
                 max="100"
                 value={zoneFormData.positionY}
                 onChange={(e) => setZoneFormData({ ...zoneFormData, positionY: parseInt(e.target.value) })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-app-200 focus:border-app-500"
               />
             </div>
 
@@ -259,7 +260,7 @@ export const TemplateZonesManager = ({ templateId }: TemplateZonesManagerProps) 
                 max="100"
                 value={zoneFormData.maxWidth}
                 onChange={(e) => setZoneFormData({ ...zoneFormData, maxWidth: parseInt(e.target.value) })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-app-200 focus:border-app-500"
               />
             </div>
 
@@ -273,7 +274,7 @@ export const TemplateZonesManager = ({ templateId }: TemplateZonesManagerProps) 
                 max="100"
                 value={zoneFormData.maxHeight}
                 onChange={(e) => setZoneFormData({ ...zoneFormData, maxHeight: parseInt(e.target.value) })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-app-200 focus:border-app-500"
               />
             </div>
 
@@ -287,7 +288,7 @@ export const TemplateZonesManager = ({ templateId }: TemplateZonesManagerProps) 
                 step="0.01"
                 value={zoneFormData.price}
                 onChange={(e) => setZoneFormData({ ...zoneFormData, price: parseFloat(e.target.value) || 0 })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-app-200 focus:border-app-500"
               />
             </div>
 
@@ -299,7 +300,7 @@ export const TemplateZonesManager = ({ templateId }: TemplateZonesManagerProps) 
                 type="number"
                 value={zoneFormData.sortOrder}
                 onChange={(e) => setZoneFormData({ ...zoneFormData, sortOrder: parseInt(e.target.value) })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-app-200 focus:border-app-500"
               />
             </div>
 
@@ -309,7 +310,7 @@ export const TemplateZonesManager = ({ templateId }: TemplateZonesManagerProps) 
                   type="checkbox"
                   checked={zoneFormData.isRequired}
                   onChange={(e) => setZoneFormData({ ...zoneFormData, isRequired: e.target.checked })}
-                  className="w-4 h-4 text-orange-500 border-gray-300 rounded focus:ring-orange-500"
+                  className="w-4 h-4 text-app-500 border-gray-300 rounded focus:ring-app-200 focus:border-app-500"
                 />
                 <span className="text-sm font-medium text-gray-700">Zona requerida</span>
               </label>
@@ -320,14 +321,14 @@ export const TemplateZonesManager = ({ templateId }: TemplateZonesManagerProps) 
             <Button
               type="button"
               onClick={resetZoneForm}
-              variant="admin-secondary"
+              variant="secondary"
             >
               Cancelar
             </Button>
             <Button
               type="button"
               onClick={editingZone ? handleUpdateZone : handleCreateZone}
-              variant="admin-primary"
+              variant="primary"
             >
               {editingZone ? 'Actualizar' : 'Crear'}
             </Button>
@@ -353,7 +354,7 @@ export const TemplateZonesManager = ({ templateId }: TemplateZonesManagerProps) 
                     Precio: ${zone.price.toLocaleString()}
                   </p>
                   {zone.isRequired && (
-                    <span className="inline-block mt-1 px-2 py-0.5 bg-orange-100 text-orange-800 text-xs rounded">
+                    <span className="inline-block mt-1 px-2 py-0.5 bg-app-100 text-app-800 text-xs rounded">
                       Requerida
                     </span>
                   )}
@@ -361,7 +362,7 @@ export const TemplateZonesManager = ({ templateId }: TemplateZonesManagerProps) 
                 <div className="flex gap-2">
                   <button
                     onClick={() => handleEditZone(zone)}
-                    className="text-blue-600 hover:text-blue-900 text-sm"
+                    className="text-app-700 hover:text-app-900 text-sm"
                   >
                     Editar
                   </button>

@@ -127,7 +127,7 @@ export const ImageUpload = ({
           className={`
             relative border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors
             ${isDragging
-              ? 'border-orange-500 bg-orange-50'
+              ? 'border-app-500 bg-app-50'
               : 'border-gray-300 hover:border-gray-400 bg-gray-50 hover:bg-gray-100'
             }
           `}
@@ -141,12 +141,12 @@ export const ImageUpload = ({
           />
           <div className="flex flex-col items-center gap-2">
             {isDragging ? (
-              <Upload className="w-8 h-8 text-orange-500" />
+              <Upload className="w-8 h-8 text-app-500" />
             ) : (
               <ImageIcon className="w-8 h-8 text-gray-400" />
             )}
             <div className="text-sm">
-              <span className="font-medium text-orange-600">Clic para subir</span>
+              <span className="font-medium text-app-600">Clic para subir</span>
               {' '}o arrastra y suelta
             </div>
             <p className="text-xs text-gray-500">

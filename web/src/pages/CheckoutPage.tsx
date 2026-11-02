@@ -1,8 +1,9 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  ShoppingBag,
   ArrowLeft,
+  ShieldCheck,
+  Truck,
   User,
   MapPin,
   CreditCard,
@@ -27,8 +28,7 @@ import { usePayments } from '../context/PaymentsContext';
 import { useSettings } from '../context/SettingsContext';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
-import { Input } from '../components/shared/Input';
-import { Button } from '../components/shared/Button';
+import { Alert, Badge, Button, Card, CardTitle, DescriptionList, EmptyState, Field, TextArea, TextInput } from '../components/ui';
 import { WompiCheckout } from '../components/payment/WompiCheckout';
 import { addressesService, type Address } from '../services/addresses.service';
 import { quoteShipping } from '../utils/shippingQuote';
@@ -93,13 +93,6 @@ export const CheckoutPage = () => {
   const [couponError, setCouponError] = useState('');
   const [couponBusy, setCouponBusy] = useState(false);
 
-  // Colores de marca dinámicos
-  const brandColors = settings.appearance?.brandColors || settings.general?.brandColors || {
-    primary: '#7c3aed',
-    secondary: '#ec4899',
-    accent: '#f59e0b',
-  };
-  const gradientStyle = `linear-gradient(to right, ${brandColors.primary}, ${brandColors.secondary}, ${brandColors.accent})`;
 
   // Redirect if cart is empty
   useEffect(() => {
@@ -273,18 +266,14 @@ export const CheckoutPage = () => {
       </label>
       {proofImage ? (
         <div className="flex items-center gap-3 p-3 border border-gray-200 rounded-lg">
-          <img src={proofImage} alt="Comprobante" className="w-14 h-14 object-cover rounded-md border" />
+          <img src={proofImage} alt="Comprobante" className="w-14 h-14 object-cover rounded-md border border-gray-200" />
           <span className="text-sm text-gray-600 truncate flex-1">{proofName || 'Comprobante adjunto'}</span>
-          <button
-            type="button"
-            onClick={() => { setProofImage(null); setProofName(''); }}
-            className="text-sm text-red-600 hover:text-red-700 font-medium"
-          >
+          <Button variant="ghost" size="sm" className="text-red-600 hover:text-red-700" onClick={() => { setProofImage(null); setProofName(''); }}>
             Quitar
-          </button>
+          </Button>
         </div>
       ) : (
-        <label className="flex flex-col items-center justify-center gap-2 p-4 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-gray-400 hover:bg-gray-50 transition-colors">
+        <label className="flex flex-col items-center justify-center gap-2 p-4 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-app-400 hover:bg-app-50 transition-colors">
           <Upload className="w-5 h-5 text-gray-400" />
           <span className="text-sm text-gray-500">Sube la captura de tu transferencia / pago</span>
           <input
@@ -569,206 +558,147 @@ export const CheckoutPage = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header con gradiente dinámico */}
+      {/* Encabezado de la tienda (gradiente de marca) */}
       <PageHeader
-        title="Finalizar Compra"
+        title="Finalizar compra"
         subtitle={step === 'info' ? 'Completa tu información' : 'Selecciona método de pago'}
         backLabel="Carrito"
         backTo="/cart"
       />
 
-      <div className="max-w-6xl mx-auto px-4 py-6">
-        {/* Progress Steps */}
-        <div className="bg-white rounded-xl shadow-sm p-4 mb-6">
-          <div className="flex items-center justify-center gap-8">
-            {steps.map((s, index) => {
-              const isActive = step === s.id;
-              const isCompleted = steps.findIndex((x) => x.id === step) > index;
+      <div className="max-w-7xl mx-auto px-4 py-6 lg:py-8">
+        {/* Pasos */}
+        <ol className="flex items-center gap-2 sm:gap-3 mb-6">
+          {steps.map((s, index) => {
+            const isActive = step === s.id;
+            const isCompleted = steps.findIndex((x) => x.id === step) > index;
+            return (
+              <li key={s.id} className="flex items-center gap-2 sm:gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (s.id === 'info') setStep('info');
+                    else if (s.id === 'payment' && canProceedToPayment) setStep('payment');
+                  }}
+                  className={`inline-flex items-center gap-2 h-9 pl-1.5 pr-3 rounded-full border text-sm font-medium transition-colors ${
+                    isActive
+                      ? 'border-app-300 bg-app-50 text-app-700'
+                      : isCompleted
+                        ? 'border-green-200 bg-green-50 text-green-700'
+                        : 'border-gray-200 bg-white text-gray-500'
+                  }`}
+                >
+                  <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-semibold ${
+                    isActive ? 'bg-app-600 text-white' : isCompleted ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-500'
+                  }`}>
+                    {isCompleted ? <CheckCircle2 className="w-4 h-4" /> : index + 1}
+                  </span>
+                  {s.label}
+                </button>
+                {index < steps.length - 1 && <ChevronRight className="w-4 h-4 text-gray-300" />}
+              </li>
+            );
+          })}
+        </ol>
 
-              return (
-                <div key={s.id} className="flex items-center">
-                  <button
-                    onClick={() => {
-                      if (s.id === 'info') setStep('info');
-                      else if (s.id === 'payment' && canProceedToPayment) setStep('payment');
-                    }}
-                    className="flex flex-col items-center gap-1 transition-colors"
-                  >
-                    <div
-                      className="w-10 h-10 rounded-full flex items-center justify-center border-2 transition-colors"
-                      style={{
-                        borderColor: isActive ? brandColors.primary : isCompleted ? '#22c55e' : '#d1d5db',
-                        backgroundColor: isActive ? `${brandColors.primary}15` : isCompleted ? '#dcfce7' : 'transparent',
-                        color: isActive ? brandColors.primary : isCompleted ? '#22c55e' : '#9ca3af',
-                      }}
-                    >
-                      {isCompleted ? (
-                        <CheckCircle2 className="w-5 h-5" />
-                      ) : (
-                        <s.icon className="w-5 h-5" />
-                      )}
-                    </div>
-                    <span
-                      className="text-xs font-medium"
-                      style={{ color: isActive ? brandColors.primary : isCompleted ? '#22c55e' : '#9ca3af' }}
-                    >
-                      {s.label}
-                    </span>
-                  </button>
-                  {index < steps.length - 1 && (
-                    <div
-                      className="w-12 h-0.5 mx-4"
-                      style={{ backgroundColor: isCompleted ? '#22c55e' : '#d1d5db' }}
-                    />
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Main Content */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Step 1: Customer Information */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8 items-start">
+          {/* Contenido */}
+          <div className="lg:col-span-2 space-y-5">
+            {/* Paso 1: datos del cliente y envío */}
             {step === 'info' && (
-              <div className="bg-white rounded-xl shadow-sm p-6">
-                <h2 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2">
-                  <User className="w-5 h-5" style={{ color: brandColors.primary }} />
-                  Información del Cliente
-                </h2>
-
-                <div className="space-y-4">
-                  <Input
-                    label="Nombre completo *"
-                    name="customerName"
-                    value={formData.customerName}
-                    onChange={handleInputChange}
-                    error={errors.customerName}
-                    placeholder="Juan Pérez"
-                  />
-
+              <>
+                <Card>
+                  <CardTitle icon={User}>Información del cliente</CardTitle>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <Input
-                      label="Correo electrónico *"
-                      name="customerEmail"
-                      type="email"
-                      value={formData.customerEmail}
-                      onChange={handleInputChange}
-                      error={errors.customerEmail}
-                      placeholder="correo@ejemplo.com"
-                    />
-                    <Input
-                      label="Teléfono *"
-                      name="customerPhone"
-                      type="tel"
-                      value={formData.customerPhone}
-                      onChange={handleInputChange}
-                      error={errors.customerPhone}
-                      placeholder="300 123 4567"
-                    />
+                    <Field label="Nombre completo" required error={errors.customerName} className="md:col-span-2">
+                      <TextInput
+                        name="customerName"
+                        value={formData.customerName}
+                        onChange={handleInputChange}
+                        error={!!errors.customerName}
+                        placeholder="Juan Pérez"
+                        autoComplete="name"
+                      />
+                    </Field>
+                    <Field label="Correo electrónico" required error={errors.customerEmail}>
+                      <TextInput
+                        name="customerEmail"
+                        type="email"
+                        value={formData.customerEmail}
+                        onChange={handleInputChange}
+                        error={!!errors.customerEmail}
+                        placeholder="correo@ejemplo.com"
+                        autoComplete="email"
+                      />
+                    </Field>
+                    <Field label="Teléfono" required error={errors.customerPhone}>
+                      <TextInput
+                        name="customerPhone"
+                        type="tel"
+                        value={formData.customerPhone}
+                        onChange={handleInputChange}
+                        error={!!errors.customerPhone}
+                        placeholder="300 123 4567"
+                        autoComplete="tel"
+                      />
+                    </Field>
                   </div>
+                </Card>
 
-                  <div className="border-t pt-4 mt-6">
-                    <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2 mb-4">
-                      <MapPin className="w-5 h-5" style={{ color: brandColors.secondary }} />
-                      Dirección de Envío
-                    </h3>
+                <Card>
+                  <CardTitle icon={MapPin}>Dirección de envío</CardTitle>
 
-                    {/* Selector de direcciones guardadas */}
-                    {savedAddresses.length > 0 && (
-                      <div className="space-y-3 mb-4">
-                        {savedAddresses.map((a) => {
-                          const isSelected = selectedAddressId === a.id;
-                          return (
-                            <button
-                              type="button"
-                              key={a.id}
-                              onClick={() => selectSavedAddress(a)}
-                              className="w-full p-4 rounded-xl border-2 text-left transition-all"
-                              style={{
-                                borderColor: isSelected ? brandColors.primary : '#e5e7eb',
-                                backgroundColor: isSelected ? `${brandColors.primary}08` : 'transparent',
-                              }}
-                            >
-                              <div className="flex items-start gap-3">
-                                <div
-                                  className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0"
-                                  style={{ backgroundColor: `${brandColors.secondary}15` }}
-                                >
-                                  <Home className="w-5 h-5" style={{ color: brandColors.secondary }} />
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-center gap-2 flex-wrap">
-                                    <p className="font-medium text-gray-900">{a.label}</p>
-                                    {a.isDefault && (
-                                      <span
-                                        className="text-xs font-medium px-2 py-0.5 rounded-full"
-                                        style={{ backgroundColor: `${brandColors.primary}15`, color: brandColors.primary }}
-                                      >
-                                        Predeterminada
-                                      </span>
-                                    )}
-                                  </div>
-                                  <p className="text-sm text-gray-600 mt-0.5">{a.address}</p>
-                                  <p className="text-sm text-gray-600">
-                                    {a.city}
-                                    {a.postalCode && `, ${a.postalCode}`}
-                                  </p>
-                                </div>
-                                <div
-                                  className="w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 mt-1"
-                                  style={{
-                                    borderColor: isSelected ? brandColors.primary : '#d1d5db',
-                                    backgroundColor: isSelected ? brandColors.primary : 'transparent',
-                                  }}
-                                >
-                                  {isSelected && <div className="w-2 h-2 rounded-full bg-white" />}
-                                </div>
-                              </div>
-                            </button>
-                          );
-                        })}
-
-                        {/* Opción: escribir otra dirección */}
-                        <button
-                          type="button"
-                          onClick={selectNewAddress}
-                          className="w-full p-4 rounded-xl border-2 text-left transition-all flex items-center gap-3"
-                          style={{
-                            borderColor: selectedAddressId === 'new' ? brandColors.primary : '#e5e7eb',
-                            backgroundColor: selectedAddressId === 'new' ? `${brandColors.primary}08` : 'transparent',
-                          }}
-                        >
-                          <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0">
-                            <Edit3 className="w-5 h-5 text-gray-500" />
-                          </div>
-                          <span className="flex-1 font-medium text-gray-900">Usar otra dirección</span>
-                          <div
-                            className="w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0"
-                            style={{
-                              borderColor: selectedAddressId === 'new' ? brandColors.primary : '#d1d5db',
-                              backgroundColor: selectedAddressId === 'new' ? brandColors.primary : 'transparent',
-                            }}
+                  {/* Direcciones guardadas */}
+                  {savedAddresses.length > 0 && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+                      {savedAddresses.map((a) => {
+                        const isSelected = selectedAddressId === a.id;
+                        return (
+                          <button
+                            type="button"
+                            key={a.id}
+                            onClick={() => selectSavedAddress(a)}
+                            className={`${choiceClass(isSelected)} p-3`}
                           >
-                            {selectedAddressId === 'new' && <div className="w-2 h-2 rounded-full bg-white" />}
-                          </div>
-                        </button>
-                      </div>
-                    )}
+                            <Home className={`w-5 h-5 flex-shrink-0 mt-0.5 ${isSelected ? 'text-app-600' : 'text-gray-400'}`} />
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <p className="text-sm font-medium text-gray-900">{a.label}</p>
+                                {a.isDefault && <Badge tone="app">Predeterminada</Badge>}
+                              </div>
+                              <p className="text-sm text-gray-600 mt-0.5 truncate">{a.address}</p>
+                              <p className="text-xs text-gray-500">
+                                {a.city}
+                                {a.postalCode && `, ${a.postalCode}`}
+                              </p>
+                            </div>
+                            <RadioDot checked={isSelected} />
+                          </button>
+                        );
+                      })}
 
-                    {/* Formulario para dirección nueva */}
-                    {selectedAddressId === 'new' && (
-                      <div className="space-y-4">
-                        <Input
-                          label="Dirección completa *"
+                      <button type="button" onClick={selectNewAddress} className={`${choiceClass(selectedAddressId === 'new')} p-3 items-center`}>
+                        <Edit3 className={`w-5 h-5 flex-shrink-0 ${selectedAddressId === 'new' ? 'text-app-600' : 'text-gray-400'}`} />
+                        <span className="flex-1 text-sm font-medium text-gray-900">Usar otra dirección</span>
+                        <RadioDot checked={selectedAddressId === 'new'} />
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Dirección nueva */}
+                  {selectedAddressId === 'new' && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                      <Field label="Dirección completa" required error={errors.shippingAddress} className="md:col-span-2">
+                        <TextInput
                           name="shippingAddress"
                           value={formData.shippingAddress}
                           onChange={handleInputChange}
-                          error={errors.shippingAddress}
+                          error={!!errors.shippingAddress}
                           placeholder="Calle 123 #45-67, Apto 301"
+                          autoComplete="street-address"
                         />
-
+                      </Field>
+                      <div className="md:col-span-2">
                         <CitySelect
                           city={formData.shippingCity}
                           onChange={(city) => {
@@ -778,127 +708,94 @@ export const CheckoutPage = () => {
                           error={errors.shippingCity}
                           required
                         />
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <Input
-                            label="Código postal"
-                            name="shippingPostalCode"
-                            value={formData.shippingPostalCode}
-                            onChange={handleInputChange}
-                            placeholder="110111"
-                          />
-                        </div>
                       </div>
-                    )}
-
-                    {/* Notas de entrega (siempre visibles) */}
-                    <div className="mt-4">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Notas de entrega (opcional)
-                      </label>
-                      <textarea
-                        name="shippingNotes"
-                        value={formData.shippingNotes}
-                        onChange={handleInputChange}
-                        rows={3}
-                        className="w-full px-4 py-2 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-200 focus:border-gray-500 transition-all"
-                        placeholder="Edificio azul, portería 24h, timbre..."
-                      />
+                      <Field label="Código postal">
+                        <TextInput
+                          name="shippingPostalCode"
+                          value={formData.shippingPostalCode}
+                          onChange={handleInputChange}
+                          placeholder="110111"
+                          autoComplete="postal-code"
+                        />
+                      </Field>
                     </div>
-                  </div>
+                  )}
 
-                  <div className="pt-4">
-                    <button
+                  <Field label="Notas de entrega" hint="Opcional: indicaciones para el repartidor.">
+                    <TextArea
+                      name="shippingNotes"
+                      value={formData.shippingNotes}
+                      onChange={handleInputChange}
+                      rows={3}
+                      placeholder="Edificio azul, portería 24h, timbre..."
+                    />
+                  </Field>
+
+                  <div className="pt-5 mt-5 border-t border-gray-100 flex justify-end">
+                    <Button
+                      size="lg"
+                      className="w-full sm:w-auto"
                       onClick={() => {
                         if (validateForm()) {
                           setStep('payment');
                         }
                       }}
                       disabled={!canProceedToPayment}
-                      style={{ backgroundColor: brandColors.primary }}
-                      className="w-full flex items-center justify-center gap-2 text-white font-semibold py-3 px-6 rounded-lg hover:opacity-90 transition-all shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      Continuar al Pago
+                      Continuar al pago
                       <ChevronRight className="w-4 h-4" />
-                    </button>
+                    </Button>
                   </div>
-                </div>
-              </div>
+                </Card>
+              </>
             )}
 
-            {/* Step 2: Payment */}
+            {/* Paso 2: pago */}
             {step === 'payment' && (
-              <div className="space-y-6">
+              <>
                 {/* Resumen del cliente */}
-                <div className="bg-white rounded-xl shadow-sm p-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
+                <Card>
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-9 h-9 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
                         <CheckCircle2 className="w-5 h-5 text-green-600" />
                       </div>
-                      <div>
-                        <p className="font-medium text-gray-900">{formData.customerName}</p>
-                        <p className="text-sm text-gray-500">{formData.shippingAddress}, {formData.shippingCity}</p>
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-gray-900 truncate">{formData.customerName}</p>
+                        <p className="text-sm text-gray-500 truncate">{formData.shippingAddress}, {formData.shippingCity}</p>
                       </div>
                     </div>
-                    <button
-                      onClick={() => setStep('info')}
-                      className="text-sm font-medium hover:underline transition-colors"
-                      style={{ color: brandColors.primary }}
-                    >
+                    <Button variant="ghost" size="sm" icon={<Edit3 className="w-4 h-4" />} onClick={() => setStep('info')}>
                       Editar
-                    </button>
+                    </Button>
                   </div>
-                </div>
+                </Card>
 
-                {/* Selección de método de pago */}
+                {/* Método de pago */}
                 {activePaymentMethods.length > 0 && (
-                  <div className="bg-white rounded-xl shadow-sm p-6">
-                    <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
-                      <CreditCard className="w-5 h-5" style={{ color: brandColors.accent }} />
-                      Método de Pago
-                    </h2>
+                  <Card>
+                    <CardTitle icon={CreditCard}>Método de pago</CardTitle>
 
-                    <div className="space-y-3 mb-6">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       {activePaymentMethods.map((method) => {
                         const isSelected = selectedPaymentMethod === method.id;
                         return (
                           <button
+                            type="button"
                             key={method.id}
                             onClick={() => setSelectedPaymentMethod(method.id)}
-                            className="w-full p-4 rounded-xl border-2 transition-all text-left"
-                            style={{
-                              borderColor: isSelected ? brandColors.primary : '#e5e7eb',
-                              backgroundColor: isSelected ? `${brandColors.primary}08` : 'transparent',
-                            }}
+                            className={`${choiceClass(isSelected)} p-3 items-center`}
                           >
-                            <div className="flex items-center gap-3">
-                              <div
-                                className="w-10 h-10 rounded-full flex items-center justify-center"
-                                style={{
-                                  backgroundColor: isSelected ? `${brandColors.primary}20` : '#f3f4f6',
-                                  color: isSelected ? brandColors.primary : '#6b7280',
-                                }}
-                              >
-                                {getPaymentIcon(method.type)}
-                              </div>
-                              <div className="flex-1">
-                                <p className="font-semibold text-gray-900">{method.name}</p>
-                                {method.description && (
-                                  <p className="text-sm text-gray-500">{method.description}</p>
-                                )}
-                              </div>
-                              <div
-                                className="w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors"
-                                style={{
-                                  borderColor: isSelected ? brandColors.primary : '#d1d5db',
-                                  backgroundColor: isSelected ? brandColors.primary : 'transparent',
-                                }}
-                              >
-                                {isSelected && (
-                                  <div className="w-2 h-2 rounded-full bg-white" />
-                                )}
-                              </div>
-                            </div>
+                            <span className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 [&>svg]:w-5 [&>svg]:h-5 ${
+                              isSelected ? 'bg-app-100 text-app-700' : 'bg-gray-100 text-gray-500'
+                            }`}>
+                              {getPaymentIcon(method.type)}
+                            </span>
+                            <span className="flex-1 min-w-0">
+                              <span className="block text-sm font-medium text-gray-900">{method.name}</span>
+                              {method.description && <span className="block text-xs text-gray-500 line-clamp-2">{method.description}</span>}
+                            </span>
+                            <RadioDot checked={isSelected} />
                           </button>
                         );
                       })}
@@ -906,7 +803,7 @@ export const CheckoutPage = () => {
 
                     {/* Área de pago según método seleccionado */}
                     {selectedMethod?.type === 'wompi' && wompiConfig && (
-                      <div className="border-t pt-6">
+                      <div className="border-t border-gray-100 pt-5 mt-5">
                         <WompiCheckout
                           publicKey={wompiConfig.publicKey}
                           integrityKey={wompiConfig.integrityKey}
@@ -923,255 +820,172 @@ export const CheckoutPage = () => {
                       </div>
                     )}
 
-                    {/* Transferencia Bancaria */}
+                    {/* Transferencia bancaria */}
                     {selectedMethod?.type === 'transfer' && (
-                      <div className="border-t pt-6">
+                      <div className="border-t border-gray-100 pt-5 mt-5 space-y-4">
                         {selectedMethod.bankInfo && (
-                          <div className="mb-4 p-4 bg-gray-50 rounded-lg">
-                            <p className="text-sm font-medium text-gray-700 mb-3">Datos para transferencia:</p>
-                            <div className="text-sm text-gray-600 space-y-1">
-                              <p><span className="font-medium">Banco:</span> {selectedMethod.bankInfo.bankName}</p>
-                              <p><span className="font-medium">Tipo:</span> {selectedMethod.bankInfo.accountType}</p>
-                              <p><span className="font-medium">Número:</span> {selectedMethod.bankInfo.accountNumber}</p>
-                              <p><span className="font-medium">Titular:</span> {selectedMethod.bankInfo.accountHolder}</p>
-                              <p><span className="font-medium">{selectedMethod.bankInfo.documentType}:</span> {selectedMethod.bankInfo.documentNumber}</p>
-                            </div>
+                          <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+                            <p className="text-sm font-medium text-gray-900 mb-3">Datos para transferencia</p>
+                            <DescriptionList
+                              items={[
+                                { label: 'Banco', value: selectedMethod.bankInfo.bankName },
+                                { label: 'Tipo de cuenta', value: selectedMethod.bankInfo.accountType },
+                                { label: 'Número', value: selectedMethod.bankInfo.accountNumber },
+                                { label: 'Titular', value: selectedMethod.bankInfo.accountHolder },
+                                { label: selectedMethod.bankInfo.documentType, value: selectedMethod.bankInfo.documentNumber },
+                              ]}
+                            />
                           </div>
                         )}
-                        {selectedMethod.instructions && (
-                          <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                            <p className="text-sm text-yellow-700">{selectedMethod.instructions}</p>
-                          </div>
-                        )}
+                        {selectedMethod.instructions && <Alert tone="warning">{selectedMethod.instructions}</Alert>}
                         {selectedMethod.requireProof && renderProofUploader()}
-                        <button
-                          onClick={handleManualPayment}
-                          disabled={isSubmitting}
-                          style={{ background: gradientStyle }}
-                          className="w-full flex items-center justify-center gap-2 text-white font-semibold py-3 px-6 rounded-lg hover:opacity-90 transition-all shadow-md hover:shadow-lg disabled:opacity-50"
-                        >
-                          {isSubmitting ? (
-                            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                          ) : (
-                            <CheckCircle2 className="w-5 h-5" />
-                          )}
-                          Confirmar Pedido - {formatCurrency(orderTotal)}
-                        </button>
+                        <Button size="lg" fullWidth onClick={handleManualPayment} isLoading={isSubmitting} icon={<CheckCircle2 className="w-5 h-5" />}>
+                          Confirmar pedido · {formatCurrency(orderTotal)}
+                        </Button>
                       </div>
                     )}
 
                     {/* Nequi */}
                     {selectedMethod?.type === 'nequi' && (
-                      <div className="border-t pt-6">
-                        <div className="mb-4 p-4 bg-fuchsia-50 border border-fuchsia-100 rounded-lg">
-                          <p className="text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
-                            <Smartphone className="w-4 h-4 text-fuchsia-600" />
-                            Paga con Nequi a:
-                          </p>
-                          <div className="text-sm text-gray-600 space-y-1">
-                            <p className="text-lg font-bold text-fuchsia-700">
-                              {selectedMethod.nequiConfig?.phone || '—'}
+                      <div className="border-t border-gray-100 pt-5 mt-5 space-y-4">
+                        <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 flex flex-col sm:flex-row gap-4 sm:items-center">
+                          <div className="flex-1">
+                            <p className="text-sm text-gray-500 flex items-center gap-2">
+                              <Smartphone className="w-4 h-4" />
+                              Paga con Nequi a
                             </p>
+                            <p className="text-xl font-bold text-gray-900 mt-1">{selectedMethod.nequiConfig?.phone || '—'}</p>
                             {selectedMethod.nequiConfig?.accountHolder && (
-                              <p><span className="font-medium">Titular:</span> {selectedMethod.nequiConfig.accountHolder}</p>
+                              <p className="text-sm text-gray-600 mt-0.5">Titular: {selectedMethod.nequiConfig.accountHolder}</p>
                             )}
                           </div>
                           {selectedMethod.nequiConfig?.qrImage && (
                             <img
                               src={selectedMethod.nequiConfig.qrImage}
                               alt="QR Nequi"
-                              className="mt-3 w-40 h-40 object-contain rounded-lg border border-fuchsia-200 bg-white"
+                              className="w-36 h-36 object-contain rounded-lg border border-gray-200 bg-white"
                             />
                           )}
                         </div>
-                        {selectedMethod.instructions && (
-                          <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                            <p className="text-sm text-yellow-700">{selectedMethod.instructions}</p>
-                          </div>
-                        )}
+                        {selectedMethod.instructions && <Alert tone="warning">{selectedMethod.instructions}</Alert>}
                         {selectedMethod.requireProof && renderProofUploader()}
-                        <button
-                          onClick={handleManualPayment}
-                          disabled={isSubmitting}
-                          style={{ background: gradientStyle }}
-                          className="w-full flex items-center justify-center gap-2 text-white font-semibold py-3 px-6 rounded-lg hover:opacity-90 transition-all shadow-md hover:shadow-lg disabled:opacity-50"
-                        >
-                          {isSubmitting ? (
-                            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                          ) : (
-                            <CheckCircle2 className="w-5 h-5" />
-                          )}
-                          Confirmar Pedido - {formatCurrency(orderTotal)}
-                        </button>
+                        <Button size="lg" fullWidth onClick={handleManualPayment} isLoading={isSubmitting} icon={<CheckCircle2 className="w-5 h-5" />}>
+                          Confirmar pedido · {formatCurrency(orderTotal)}
+                        </Button>
                       </div>
                     )}
 
-                    {/* Mercado Pago (Checkout Pro) */}
+                    {/* Mercado Pago (Checkout Pro): conserva el color propio de Mercado Pago */}
                     {selectedMethod?.type === 'mercadopago' && (
-                      <div className="border-t pt-6">
-                        {selectedMethod.instructions && (
-                          <div className="mb-4 p-3 bg-sky-50 border border-sky-200 rounded-lg">
-                            <p className="text-sm text-sky-700">{selectedMethod.instructions}</p>
-                          </div>
-                        )}
-                        <button
+                      <div className="border-t border-gray-100 pt-5 mt-5 space-y-3">
+                        {selectedMethod.instructions && <Alert tone="info">{selectedMethod.instructions}</Alert>}
+                        <Button
+                          size="lg"
+                          fullWidth
                           onClick={handleMercadoPago}
-                          disabled={isSubmitting}
-                          className="w-full flex items-center justify-center gap-2 text-white font-semibold py-3 px-6 rounded-lg transition-all shadow-md hover:shadow-lg disabled:opacity-50 bg-[#009ee3] hover:bg-[#008fcc]"
+                          isLoading={isSubmitting}
+                          icon={<Wallet className="w-5 h-5" />}
+                          className="!bg-[#009ee3] hover:!bg-[#008fcc]"
                         >
-                          {isSubmitting ? (
-                            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                          ) : (
-                            <Wallet className="w-5 h-5" />
-                          )}
-                          Pagar con Mercado Pago - {formatCurrency(orderTotal)}
-                        </button>
-                        <p className="text-xs text-gray-500 text-center mt-3">
+                          Pagar con Mercado Pago · {formatCurrency(orderTotal)}
+                        </Button>
+                        <p className="text-xs text-gray-500 text-center">
                           Serás redirigido a Mercado Pago para completar el pago de forma segura.
                         </p>
                       </div>
                     )}
 
-                    {/* Contra Entrega */}
+                    {/* Contra entrega */}
                     {selectedMethod?.type === 'cash' && (
-                      <div className="border-t pt-6">
-                        {selectedMethod.instructions && (
-                          <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                            <p className="text-sm text-yellow-700">{selectedMethod.instructions}</p>
-                          </div>
-                        )}
-                        <button
-                          onClick={handleManualPayment}
-                          disabled={isSubmitting}
-                          style={{ background: gradientStyle }}
-                          className="w-full flex items-center justify-center gap-2 text-white font-semibold py-3 px-6 rounded-lg hover:opacity-90 transition-all shadow-md hover:shadow-lg disabled:opacity-50"
-                        >
-                          {isSubmitting ? (
-                            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                          ) : (
-                            <Banknote className="w-5 h-5" />
-                          )}
-                          Confirmar Pedido - {formatCurrency(orderTotal)}
-                        </button>
-                        <p className="text-xs text-gray-500 text-center mt-3">
+                      <div className="border-t border-gray-100 pt-5 mt-5 space-y-3">
+                        {selectedMethod.instructions && <Alert tone="warning">{selectedMethod.instructions}</Alert>}
+                        <Button size="lg" fullWidth onClick={handleManualPayment} isLoading={isSubmitting} icon={<Banknote className="w-5 h-5" />}>
+                          Confirmar pedido · {formatCurrency(orderTotal)}
+                        </Button>
+                        <p className="text-xs text-gray-500 text-center">
                           Pagarás {formatCurrency(orderTotal)} al momento de recibir tu pedido
                         </p>
                       </div>
                     )}
 
-                    {/* Punto Físico */}
+                    {/* Recoger en punto físico */}
                     {selectedMethod?.type === 'pickup' && (
-                      <div className="border-t pt-6">
+                      <div className="border-t border-gray-100 pt-5 mt-5 space-y-4">
                         {selectedMethod.pickupConfig && (
-                          <div className="mb-4 p-4 bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-xl">
-                            <div className="flex items-start gap-3">
-                              <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
-                                <Store className="w-5 h-5 text-green-600" />
-                              </div>
-                              <div className="flex-1">
-                                <h4 className="font-semibold text-gray-900">
-                                  {selectedMethod.pickupConfig.storeName}
-                                </h4>
-                                <div className="mt-2 space-y-1.5 text-sm text-gray-600">
+                          <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 flex items-start gap-3">
+                            <Store className="w-5 h-5 text-gray-500 flex-shrink-0 mt-0.5" />
+                            <div className="flex-1 min-w-0">
+                              <h4 className="text-sm font-semibold text-gray-900">{selectedMethod.pickupConfig.storeName}</h4>
+                              <div className="mt-2 space-y-1.5 text-sm text-gray-600">
+                                <p className="flex items-center gap-2">
+                                  <MapPin className="w-4 h-4 text-gray-400" />
+                                  {selectedMethod.pickupConfig.address}, {selectedMethod.pickupConfig.city}
+                                </p>
+                                <p className="flex items-center gap-2">
+                                  <Clock className="w-4 h-4 text-gray-400" />
+                                  {selectedMethod.pickupConfig.scheduleWeekdays}
+                                </p>
+                                {selectedMethod.pickupConfig.scheduleWeekends && (
                                   <p className="flex items-center gap-2">
-                                    <MapPin className="w-4 h-4 text-green-600" />
-                                    {selectedMethod.pickupConfig.address}, {selectedMethod.pickupConfig.city}
+                                    <Clock className="w-4 h-4 text-gray-400" />
+                                    {selectedMethod.pickupConfig.scheduleWeekends}
                                   </p>
+                                )}
+                                {selectedMethod.pickupConfig.phone && (
                                   <p className="flex items-center gap-2">
-                                    <Clock className="w-4 h-4 text-green-600" />
-                                    {selectedMethod.pickupConfig.scheduleWeekdays}
+                                    <Phone className="w-4 h-4 text-gray-400" />
+                                    {selectedMethod.pickupConfig.phone}
                                   </p>
-                                  {selectedMethod.pickupConfig.scheduleWeekends && (
-                                    <p className="flex items-center gap-2">
-                                      <Clock className="w-4 h-4 text-green-600" />
-                                      {selectedMethod.pickupConfig.scheduleWeekends}
-                                    </p>
-                                  )}
-                                  {selectedMethod.pickupConfig.phone && (
-                                    <p className="flex items-center gap-2">
-                                      <Phone className="w-4 h-4 text-green-600" />
-                                      {selectedMethod.pickupConfig.phone}
-                                    </p>
-                                  )}
-                                </div>
-                                {selectedMethod.pickupConfig.mapUrl && (
-                                  <a
-                                    href={selectedMethod.pickupConfig.mapUrl}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="inline-flex items-center gap-1 mt-3 text-sm text-green-600 hover:text-green-700 font-medium"
-                                  >
-                                    <MapPin className="w-4 h-4" />
-                                    Ver en Google Maps
-                                  </a>
                                 )}
                               </div>
+                              {selectedMethod.pickupConfig.mapUrl && (
+                                <a
+                                  href={selectedMethod.pickupConfig.mapUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1 mt-3 text-sm text-app-700 hover:underline font-medium"
+                                >
+                                  <MapPin className="w-4 h-4" />
+                                  Ver en Google Maps
+                                </a>
+                              )}
                             </div>
                           </div>
                         )}
-                        {selectedMethod.instructions && (
-                          <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                            <p className="text-sm text-blue-700">{selectedMethod.instructions}</p>
-                          </div>
-                        )}
+                        {selectedMethod.instructions && <Alert tone="info">{selectedMethod.instructions}</Alert>}
                         {selectedMethod.requireProof && renderProofUploader()}
-                        <button
-                          onClick={handleManualPayment}
-                          disabled={isSubmitting}
-                          style={{ background: gradientStyle }}
-                          className="w-full flex items-center justify-center gap-2 text-white font-semibold py-3 px-6 rounded-lg hover:opacity-90 transition-all shadow-md hover:shadow-lg disabled:opacity-50"
-                        >
-                          {isSubmitting ? (
-                            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                          ) : (
-                            <Store className="w-5 h-5" />
-                          )}
-                          Reservar para Recoger - {formatCurrency(orderTotal)}
-                        </button>
-                        <p className="text-xs text-gray-500 text-center mt-3">
+                        <Button size="lg" fullWidth onClick={handleManualPayment} isLoading={isSubmitting} icon={<Store className="w-5 h-5" />}>
+                          Reservar para recoger · {formatCurrency(orderTotal)}
+                        </Button>
+                        <p className="text-xs text-gray-500 text-center">
                           Pagarás {formatCurrency(orderTotal)} al recoger tu pedido en tienda
                         </p>
                       </div>
                     )}
-                  </div>
+                  </Card>
                 )}
 
-                {/* Mensaje si no hay métodos de pago activos */}
                 {activePaymentMethods.length === 0 && (
-                  <div className="bg-white rounded-xl shadow-sm p-6">
-                    <div className="text-center py-8">
-                      <CreditCard className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                      <p className="text-gray-500">No hay métodos de pago disponibles en este momento.</p>
-                    </div>
-                  </div>
+                  <Card padded={false}>
+                    <EmptyState icon={CreditCard} title="No hay métodos de pago disponibles" description="Intenta de nuevo más tarde o contáctanos." />
+                  </Card>
                 )}
 
-                {/* Botón volver */}
-                <div className="flex justify-start">
-                  <button
-                    onClick={() => setStep('info')}
-                    className="flex items-center gap-2 px-4 py-2 border-2 border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 hover:border-gray-400 transition-colors"
-                  >
-                    <ArrowLeft className="w-4 h-4" />
-                    Volver
-                  </button>
-                </div>
-              </div>
+                <Button variant="secondary" icon={<ArrowLeft className="w-4 h-4" />} onClick={() => setStep('info')}>
+                  Volver
+                </Button>
+              </>
             )}
           </div>
 
-          {/* Order Summary Sidebar */}
-          <div className="lg:col-span-1">
-            <div className="bg-white rounded-xl shadow-sm p-6 sticky top-4">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-bold text-gray-900">Resumen del Pedido</h2>
-                <span className="text-xs font-medium text-gray-500 bg-gray-100 rounded-full px-2.5 py-1">
-                  {cart.totalItems} {cart.totalItems === 1 ? 'artículo' : 'artículos'}
-                </span>
-              </div>
+          {/* Resumen del pedido */}
+          <aside className="lg:col-span-1 lg:sticky lg:top-24">
+            <Card>
+              <CardTitle actions={<Badge>{cart.totalItems} {cart.totalItems === 1 ? 'artículo' : 'artículos'}</Badge>}>
+                Resumen del pedido
+              </CardTitle>
 
-              {/* Lista de productos */}
-              <div className="space-y-3 mb-4 max-h-60 overflow-y-auto">
+              <ul className="divide-y divide-gray-100 -mt-1 mb-4 max-h-64 overflow-y-auto">
                 {cart.items.map((item) => {
                   const isCustomized = item.type === 'customized';
                   let name: string;
@@ -1199,54 +1013,77 @@ export const CheckoutPage = () => {
                   }
 
                   return (
-                    <div key={item.id} className="flex gap-3">
-                      <img src={image} alt={name} className="w-12 h-12 object-cover rounded-lg" />
+                    <li key={item.id} className="flex gap-3 py-2.5">
+                      <div className="relative flex-shrink-0">
+                        <img src={image} alt={name} className="w-12 h-12 object-cover rounded-lg border border-gray-200 bg-gray-50" />
+                        <span className="absolute -top-1.5 -right-1.5 min-w-[1.25rem] h-5 px-1 rounded-full bg-gray-700 text-white text-[11px] font-semibold flex items-center justify-center">
+                          {item.quantity}
+                        </span>
+                      </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-gray-900 truncate">{name}</p>
                         {(colorHex || size) && (
-                          <div className="flex items-center gap-2 mt-0.5">
+                          <p className="flex items-center gap-1.5 mt-0.5 text-xs text-gray-500">
                             {colorHex && (
-                              <div className="flex items-center gap-1">
-                                <span
-                                  className="w-3 h-3 rounded-full border border-gray-300"
-                                  style={{ backgroundColor: colorHex }}
-                                  title={color}
-                                />
-                                <span className="text-xs text-gray-500">{color}</span>
-                              </div>
+                              <span className="w-3 h-3 rounded-full ring-1 ring-gray-300" style={{ backgroundColor: colorHex }} title={color} />
                             )}
-                            {colorHex && size && <span className="text-xs text-gray-400">•</span>}
-                            {size && <span className="text-xs text-gray-500">Talla: {size}</span>}
-                          </div>
+                            {colorHex && <span className="truncate">{color}</span>}
+                            {colorHex && size && <span className="text-gray-300">·</span>}
+                            {size && <span>Talla {size}</span>}
+                          </p>
                         )}
-                        <p className="text-xs text-gray-400">x{item.quantity}</p>
                       </div>
-                      <p className="text-sm font-medium">{formatCurrency(item.subtotal)}</p>
-                    </div>
+                      <p className="text-sm font-medium text-gray-900 whitespace-nowrap">{formatCurrency(item.subtotal)}</p>
+                    </li>
                   );
                 })}
+              </ul>
+
+              {/* Cupón */}
+              <div className="mb-4">
+                {coupon ? (
+                  <div className="flex items-center justify-between rounded-lg bg-green-50 border border-green-200 px-3 py-2">
+                    <span className="text-xs font-semibold text-green-700 flex items-center gap-1.5">
+                      <Ticket className="w-3.5 h-3.5" /> {coupon.code}
+                    </span>
+                    <button type="button" onClick={removeCoupon} className="text-xs text-green-700 hover:text-green-900 underline">Quitar</button>
+                  </div>
+                ) : (
+                  <div className="flex gap-2">
+                    <TextInput
+                      value={couponInput}
+                      onChange={(e) => setCouponInput(e.target.value.toUpperCase())}
+                      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); applyCoupon(); } }}
+                      placeholder="Código de cupón"
+                      className="flex-1 min-w-0 uppercase placeholder:normal-case"
+                      error={!!couponError}
+                    />
+                    <Button variant="secondary" onClick={applyCoupon} isLoading={couponBusy} disabled={!couponInput.trim()}>
+                      Aplicar
+                    </Button>
+                  </div>
+                )}
+                {couponError && <p className="text-xs text-red-600 mt-1">{couponError}</p>}
               </div>
 
-              <div className="border-t pt-4 space-y-2 text-sm">
+              <div className="border-t border-gray-100 pt-4 space-y-2.5 text-sm">
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Subtotal</span>
-                  <span className="font-medium">{formatCurrency(cart.subtotal)}</span>
+                  <span className="text-gray-500">Subtotal</span>
+                  <span className="font-medium text-gray-900">{formatCurrency(cart.subtotal)}</span>
                 </div>
-
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Impuestos</span>
-                  <span className="font-medium">{formatCurrency(cart.tax)}</span>
+                  <span className="text-gray-500">Impuestos</span>
+                  <span className="font-medium text-gray-900">{formatCurrency(cart.tax)}</span>
                 </div>
-
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Envío</span>
-                  <span className={`font-medium ${shippingCost === 0 ? 'text-green-600' : ''}`}>
+                  <span className="text-gray-500">Envío</span>
+                  <span className={`font-medium ${shippingCost === 0 ? 'text-green-700' : 'text-gray-900'}`}>
                     {shippingCost === 0 ? 'Gratis' : formatCurrency(shippingCost)}
                   </span>
                 </div>
                 {shippingQuote && (
-                  <div className="mt-1 rounded-lg bg-gray-50 px-3 py-2">
-                    <p className="flex items-center gap-1.5 text-sm font-semibold text-gray-800">
+                  <div className="rounded-lg bg-gray-50 px-3 py-2">
+                    <p className="flex items-center gap-1.5 text-sm font-medium text-gray-800">
                       <Clock className="w-4 h-4 text-gray-500" />
                       Llega en {handlingDays + shippingQuote.estimatedDays.min}–{handlingDays + shippingQuote.estimatedDays.max} días hábiles
                     </p>
@@ -1257,73 +1094,47 @@ export const CheckoutPage = () => {
                   </div>
                 )}
                 {!shippingQuote && formData.shippingCity.trim() !== '' && (
-                  <p className="text-xs text-amber-500 -mt-1">
+                  <p className="text-xs text-amber-700">
                     {handlingDays > 0 && <>Preparación {handlingDays} {handlingDays === 1 ? 'día' : 'días'}. </>}
                     Tarifa estimada — "{formData.shippingCity}" aún no está en una zona de cobertura
                   </p>
                 )}
-
-                {/* Cupón (compacto, dentro del resumen) */}
-                <div className="pt-1">
-                  {coupon ? (
-                    <div className="flex items-center justify-between rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-2">
-                      <span className="text-xs font-semibold text-emerald-700 flex items-center gap-1.5">
-                        <Ticket className="w-3.5 h-3.5" /> {coupon.code}
-                      </span>
-                      <button onClick={removeCoupon} className="text-xs text-emerald-700 hover:text-emerald-900 underline">Quitar</button>
-                    </div>
-                  ) : (
-                    <div className="flex gap-2">
-                      <input
-                        value={couponInput}
-                        onChange={(e) => setCouponInput(e.target.value.toUpperCase())}
-                        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); applyCoupon(); } }}
-                        placeholder="Código de cupón"
-                        className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-lg text-sm uppercase placeholder:normal-case focus:outline-none focus:border-gray-400"
-                      />
-                      <button
-                        onClick={applyCoupon}
-                        disabled={couponBusy || !couponInput.trim()}
-                        className="px-3 py-2 rounded-lg text-white text-xs font-semibold disabled:opacity-50"
-                        style={{ backgroundColor: brandColors.primary }}
-                      >
-                        {couponBusy ? '…' : 'Aplicar'}
-                      </button>
-                    </div>
-                  )}
-                  {couponError && <p className="text-xs text-red-500 mt-1">{couponError}</p>}
-                </div>
-
                 {discountAmount > 0 && (
-                  <div className="flex justify-between text-green-600">
+                  <div className="flex justify-between text-green-700">
                     <span>Descuento{coupon ? ` (${coupon.code})` : ''}</span>
                     <span className="font-medium">-{formatCurrency(discountAmount)}</span>
                   </div>
                 )}
-
-                <div className="border-t pt-3 mt-3">
-                  <div className="flex justify-between text-lg font-bold">
-                    <span>Total</span>
-                    <span className="text-gray-900">{formatCurrency(orderTotal)}</span>
-                  </div>
-                </div>
               </div>
 
-              {/* Trust badges */}
-              <div className="mt-6 pt-4 border-t space-y-2">
-                <div className="flex items-center gap-2 text-xs text-gray-500">
-                  <CheckCircle2 className="w-4 h-4 text-green-500" />
-                  <span>Pago 100% seguro</span>
-                </div>
-                <div className="flex items-center gap-2 text-xs text-gray-500">
-                  <CheckCircle2 className="w-4 h-4 text-green-500" />
-                  <span>Envío con seguimiento</span>
-                </div>
+              <div className="border-t border-gray-200 pt-4 mt-4 flex items-baseline justify-between">
+                <span className="text-base font-semibold text-gray-900">Total</span>
+                <span className="text-xl font-bold text-gray-900">{formatCurrency(orderTotal)}</span>
               </div>
-            </div>
-          </div>
+
+              <ul className="mt-4 pt-4 border-t border-gray-100 space-y-1.5 text-xs text-gray-500">
+                <li className="flex items-center gap-2"><ShieldCheck className="w-4 h-4 text-gray-400" />Pago 100% seguro</li>
+                <li className="flex items-center gap-2"><Truck className="w-4 h-4 text-gray-400" />Envío con seguimiento</li>
+              </ul>
+            </Card>
+          </aside>
         </div>
       </div>
     </div>
   );
 };
+
+/** Clase de las tarjetas seleccionables (direcciones y métodos de pago). */
+const choiceClass = (selected: boolean) =>
+  `w-full flex items-start gap-3 rounded-lg border text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-app-500 ${
+    selected ? 'border-app-500 bg-app-50 ring-1 ring-app-500' : 'border-gray-200 bg-white hover:border-gray-300'
+  }`;
+
+/** Indicador de radio de las tarjetas seleccionables. */
+function RadioDot({ checked }: { checked: boolean }) {
+  return (
+    <span className={`w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 mt-0.5 ${checked ? 'border-app-600 bg-app-600' : 'border-gray-300 bg-white'}`}>
+      {checked && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+    </span>
+  );
+}

@@ -1,7 +1,7 @@
-import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Plus, Trash2, Pencil, Save, ImageIcon, ChevronDown, Package, Boxes, Layers, Coins } from 'lucide-react';
-import toast from 'react-hot-toast';
+import { Plus, Trash2, Pencil, Save, ImageIcon, Package, Boxes, Layers, Coins, Shirt, Check, Calculator, TrendingUp, Tag } from 'lucide-react';
+import toast from '../../lib/toast';
 import manufacturingService from '../../services/manufacturing.service';
 import MultiSelect from '../../components/manufacturing/MultiSelect';
 import { socialService } from '../../services/social.service';
@@ -9,32 +9,24 @@ import type {
   MfgGarmentType, MfgColor, MfgSize, MfgInput, MfgCollection,
   MfgColorType, MfgMarket, MfgComponentPosition, MfgReferenceInput, MfgInputBatch,
 } from '../../types/manufacturing';
+import {
+  Page, PageHeader, Button, IconButton, Card, CardTitle, StatCard, Badge, Tabs, Alert, DescriptionList,
+  Field, TextInput, TextArea, SelectInput, NumberInput, MoneyInput, AddonInput, Switch, Checkbox, ImageInput, FormGrid,
+  TableCard, Table, THead, TBody, Th, Tr, Td, Spinner, EmptyState,
+} from '../../components/ui';
+import { MarketBadge } from '../../components/manufacturing/mfgUi';
 
 const money = (n: number) => '$' + n.toLocaleString('es-CO', { maximumFractionDigits: 2 });
+// Indicadores en pesos: sin decimales.
+const money0 = (n: number) => '$' + Math.round(n).toLocaleString('es-CO');
 
 interface ComponentRow { _key: number; position: MfgComponentPosition; description: string; }
 interface MaterialRow { inputId: number | ''; colorId: number | ''; componentKey: number | ''; consumptionInitial: string; increment: string; consumption: string; unitValue: string; unitOfMeasure: string; notes: string; }
-interface GroupRow { name: string; market: MfgMarket; fixedCostExtra: string; factor: string; listPrice: string; auto: boolean; isWholesale: boolean; sizeIds: number[]; surcharges: Record<number, string>; }
+// factorLinked: el check "Usar" del factor sugerido es explícito por grupo (no se deduce de la igualdad),
+// así se puede desmarcar aunque el factor general sea igual al sugerido.
+interface GroupRow { name: string; market: MfgMarket; fixedCostExtra: string; factor: string; factorLinked: boolean; listPrice: string; auto: boolean; isWholesale: boolean; sizeIds: number[]; surcharges: Record<number, string>; }
 
-/** Sección plegable reutilizable. */
-function Section({ icon, title, subtitle, defaultOpen = true, right, children }: { icon: ReactNode; title: string; subtitle?: string; defaultOpen?: boolean; right?: ReactNode; children: ReactNode }) {
-  const [open, setOpen] = useState(defaultOpen);
-  return (
-    <div className="bg-white rounded-xl border border-gray-200 mb-4 overflow-hidden">
-      <button type="button" onClick={() => setOpen(!open)} className="w-full flex items-center justify-between px-5 py-4 hover:bg-gray-50">
-        <div className="flex items-center gap-3 text-left">
-          <div className="p-2 bg-orange-100 rounded-lg text-orange-600">{icon}</div>
-          <div>
-            <h2 className="font-semibold text-gray-900">{title}</h2>
-            {subtitle && <p className="text-xs text-gray-500">{subtitle}</p>}
-          </div>
-        </div>
-        <div className="flex items-center gap-3">{right}<ChevronDown className={`w-5 h-5 text-gray-400 transition-transform ${open ? 'rotate-180' : ''}`} /></div>
-      </button>
-      {open && <div className="px-5 pb-5 border-t border-gray-100 pt-4">{children}</div>}
-    </div>
-  );
-}
+type TabKey = 'summary' | 'info' | 'materials' | 'prices';
 
 export default function ReferenceFormPage() {
   const { id } = useParams();
@@ -43,7 +35,7 @@ export default function ReferenceFormPage() {
   const refId = isEdit ? Number(id) : 0;
   const keyRef = useRef(1);
 
-  const [tab, setTab] = useState<'summary' | 'edit'>(isEdit ? 'summary' : 'edit');
+  const [tab, setTab] = useState<TabKey>(isEdit ? 'summary' : 'info');
 
   const [garmentTypes, setGarmentTypes] = useState<MfgGarmentType[]>([]);
   const [collections, setCollections] = useState<MfgCollection[]>([]);
@@ -108,8 +100,11 @@ export default function ReferenceFormPage() {
             consumptionInitial: m.consumptionInitial != null ? String(m.consumptionInitial) : '', increment: m.increment != null ? String(m.increment) : '',
             consumption: String(m.consumption ?? ''), unitValue: String(m.unitValue ?? ''), unitOfMeasure: m.unitOfMeasure ?? '', notes: m.notes ?? '',
           })));
+          const gtL = gts.find((x) => x.id === r.garmentTypeId);
+          const sugFactor = (m: MfgMarket) => Number((m === 'EXPORT' ? gtL?.factorExport : gtL?.factor) ?? r.factor ?? 1);
           setGroups(r.sizeGroups.map((g) => ({
             name: g.name, market: g.market, fixedCostExtra: String(g.fixedCostExtra ?? 0), factor: String(g.factor ?? 1),
+            factorLinked: Number(g.factor ?? 1) === sugFactor(g.market),
             listPrice: String(g.listPrice ?? 0), auto: false, isWholesale: g.isWholesale, sizeIds: g.sizes.map((s) => s.sizeId),
             surcharges: Object.fromEntries(g.surcharges.map((s) => [s.colorId, String(s.amount)])),
           })));
@@ -152,6 +147,16 @@ export default function ReferenceFormPage() {
     try { setImagePath(await socialService.uploadImage(file, 'referencias')); }
     catch { toast.error('No se pudo subir la imagen'); }
     finally { setUploading(false); }
+  };
+  // ImageInput entrega un data URL (archivo) o un enlace: el archivo se sube igual que antes y se guarda su URL.
+  const onImage = async (v: string) => {
+    if (!v) { setImagePath(null); return; }
+    if (!v.startsWith('data:')) { setImagePath(v); return; }
+    try {
+      const blob = await (await fetch(v)).blob();
+      const ext = (blob.type.split('/')[1] || 'png').replace('jpeg', 'jpg');
+      await uploadImg(new File([blob], `referencia.${ext}`, { type: blob.type }));
+    } catch { toast.error('No se pudo leer la imagen'); }
   };
 
   const refColors = useMemo(() => colors.filter((c) => colorState[c.id]), [colors, colorState]);
@@ -205,12 +210,15 @@ export default function ReferenceFormPage() {
   const groupPrice = (g: GroupRow) => {
     if (!(g.auto || !g.listPrice)) return Number(g.listPrice);
     const pesos = (costUnit + (Number(g.fixedCostExtra) || 0)) * (Number(g.factor) || 1);
-    if (g.market === 'EXPORT') return exchangeRate > 0 ? Math.round((pesos / exchangeRate) * 100) / 100 : pesos;
+    // Sin tasa activa no hay precio en USD (nunca mostrar/guardar pesos como dólares).
+    if (g.market === 'EXPORT') return exchangeRate > 0 ? Math.round((pesos / exchangeRate) * 100) / 100 : 0;
     return Math.round(pesos);
   };
   const groupProfitPct = (g: GroupRow) => { const f = Number(g.factor) || 0; return f > 0 ? (1 - 1 / f) * 100 : 0; };
   // Formato de moneda por grupo (US$ con 2 decimales para exportación).
-  const groupMoney = (g: GroupRow, n: number) => (g.market === 'EXPORT' ? 'US$' : '$') + n.toLocaleString('es-CO', { maximumFractionDigits: g.market === 'EXPORT' ? 2 : 0 });
+  const groupMoney = (g: GroupRow, n: number) => (g.market === 'EXPORT' ? 'US$' : '$') + n.toLocaleString('es-CO', g.market === 'EXPORT' ? { minimumFractionDigits: 2, maximumFractionDigits: 2 } : { maximumFractionDigits: 0 });
+  // El precio depende de la tasa solo si es automático o no tiene precio de lista (los USD manuales no).
+  const needsRate = (g: GroupRow) => g.market === 'EXPORT' && (g.auto || !g.listPrice);
 
   // Fija el conjunto de colores de un tipo (PRIMARY/SECONDARY); un color solo puede ser uno.
   const setColorsByType = (type: MfgColorType, ids: number[]) =>
@@ -278,13 +286,16 @@ export default function ReferenceFormPage() {
   const addGroup = () => {
     const g = garmentTypes.find((x) => x.id === garmentTypeId);
     const natIds = (g?.sizes ?? []).filter((s) => (s.pivot?.market ?? 'NATIONAL') === 'NATIONAL').map((s) => s.id);
-    setGroups([...groups, { name: '', market: 'NATIONAL', fixedCostExtra: '0', factor: gtFactorFor('NATIONAL'), listPrice: '', auto: true, isWholesale: false, sizeIds: natIds, surcharges: {} }]);
+    setGroups([...groups, { name: '', market: 'NATIONAL', fixedCostExtra: '0', factor: gtFactorFor('NATIONAL'), factorLinked: true, listPrice: '', auto: true, isWholesale: false, sizeIds: natIds, surcharges: {} }]);
   };
 
   const save = async () => {
-    if (garmentTypeId === '') { toast.error('Selecciona el tipo de prenda'); setTab('edit'); return; }
-    if (!name.trim()) { toast.error('El nombre es obligatorio'); setTab('edit'); return; }
-    if (materials.some((m) => m.inputId === '')) { toast.error('Cada material debe tener un insumo'); setTab('edit'); return; }
+    if (garmentTypeId === '') { toast.error('Selecciona el tipo de prenda'); setTab('info'); return; }
+    if (!name.trim()) { toast.error('El nombre es obligatorio'); setTab('info'); return; }
+    if (materials.some((m) => m.inputId === '')) { toast.error('Cada material debe tener un insumo'); setTab('materials'); return; }
+    if (!(exchangeRate > 0) && groups.some(needsRate)) {
+      toast.error('No hay tasa de cambio activa: regístrala en Catálogos para calcular los precios de exportación'); setTab('prices'); return;
+    }
 
     const keyToIdx = new Map(components.map((c, i) => [c._key, i]));
     const gtObj = garmentTypes.find((g) => g.id === garmentTypeId);
@@ -319,7 +330,7 @@ export default function ReferenceFormPage() {
     finally { setSaving(false); }
   };
 
-  if (loading) return <div className="py-16 text-center text-gray-400">Cargando…</div>;
+  if (loading) return <Page><Spinner label="Cargando…" /></Page>;
   const gt = garmentTypes.find((g) => g.id === garmentTypeId);
   const gtPrefix = gt?.code ? `${gt.code}-` : '';
   const fullCode = gtPrefix + codeSuffix;
@@ -331,43 +342,44 @@ export default function ReferenceFormPage() {
   const secondary = refColors.filter((c) => colorState[c.id] === 'SECONDARY');
 
   // Fila de la tabla de insumos (modo normal o edición en línea).
+  const cellInput = 'h-8 rounded-md border border-gray-300 bg-white px-2 text-xs text-gray-900 focus:outline-none focus:ring-2 focus:ring-app-200 focus:border-app-500';
   const renderMaterialRow = (m: MaterialRow, i: number) => {
     if (editIdx === i) {
       const eBatch = m.inputId !== '' ? batchCache[Number(m.inputId)] : undefined;
       const eLots = eBatch?.batches ?? [];
       return (
-        <tr key={i} className="bg-orange-50/40">
+        <tr key={i} className="bg-app-50/40">
           <td className="px-2 py-2">
-            <select value={m.inputId} onChange={(e) => onSelectInputAt(i, e.target.value === '' ? '' : Number(e.target.value))} className="w-full border border-gray-300 rounded px-1.5 py-1 text-xs">
+            <select value={m.inputId} onChange={(e) => onSelectInputAt(i, e.target.value === '' ? '' : Number(e.target.value))} className={`${cellInput} w-full min-w-[10rem]`} aria-label="Insumo">
               <option value="">—</option>
               {inputsByType.map(([tn, list]) => <optgroup key={tn} label={tn}>{list.map((inp) => <option key={inp.id} value={inp.id}>{inp.code} · {inp.name}</option>)}</optgroup>)}
             </select>
           </td>
           <td className="px-2 py-2">
-            <select value={m.componentKey} onChange={(e) => patchMaterialAt(i, { componentKey: e.target.value === '' ? '' : Number(e.target.value) })} className="w-full border border-gray-300 rounded px-1.5 py-1 text-xs">
+            <select value={m.componentKey} onChange={(e) => patchMaterialAt(i, { componentKey: e.target.value === '' ? '' : Number(e.target.value) })} className={`${cellInput} w-full`} aria-label="Componente">
               <option value="">—</option>{components.map((c) => <option key={c._key} value={c._key}>{c.position === 'SUPERIOR' ? 'Sup' : 'Inf'}{c.description ? ` · ${c.description}` : ''}</option>)}
             </select>
           </td>
           <td className="px-2 py-2">
-            <select value={m.colorId} onChange={(e) => patchMaterialAt(i, { colorId: e.target.value === '' ? '' : Number(e.target.value) })} className="w-full border border-gray-300 rounded px-1.5 py-1 text-xs">
+            <select value={m.colorId} onChange={(e) => patchMaterialAt(i, { colorId: e.target.value === '' ? '' : Number(e.target.value) })} className={`${cellInput} w-full`} aria-label="Color">
               <option value="">Todos</option>{colors.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </td>
-          <td className="px-2 py-2"><input type="number" step="0.0001" min="0" value={m.consumptionInitial} onChange={(e) => patchMaterialAt(i, { consumptionInitial: e.target.value })} className="w-16 border border-gray-300 rounded px-1.5 py-1 text-xs text-right" /></td>
-          <td className="px-2 py-2"><input type="number" step="0.01" min="0" value={m.increment} onChange={(e) => patchMaterialAt(i, { increment: e.target.value })} className="w-14 border border-gray-300 rounded px-1.5 py-1 text-xs text-right" /></td>
-          <td className="px-2 py-2"><input type="number" step="0.0001" min="0" value={m.consumption} onChange={(e) => patchMaterialAt(i, { consumption: e.target.value })} className="w-16 border border-orange-300 rounded px-1.5 py-1 text-xs text-right" /></td>
+          <td className="px-2 py-2"><input type="number" step="0.0001" min="0" value={m.consumptionInitial} onChange={(e) => patchMaterialAt(i, { consumptionInitial: e.target.value })} className={`${cellInput} w-20 text-right`} aria-label="Consumo inicial" /></td>
+          <td className="px-2 py-2"><input type="number" step="0.01" min="0" value={m.increment} onChange={(e) => patchMaterialAt(i, { increment: e.target.value })} className={`${cellInput} w-16 text-right`} aria-label="Incremento %" /></td>
+          <td className="px-2 py-2"><input type="number" step="0.0001" min="0" value={m.consumption} onChange={(e) => patchMaterialAt(i, { consumption: e.target.value })} className={`${cellInput} w-20 text-right border-app-300`} aria-label="Consumo final" /></td>
           <td className="px-2 py-2">
-            <input type="number" step="0.01" min="0" value={m.unitValue} onChange={(e) => patchMaterialAt(i, { unitValue: e.target.value })} className="w-20 border border-gray-300 rounded px-1.5 py-1 text-xs text-right" />
+            <input type="number" step="0.01" min="0" value={m.unitValue} onChange={(e) => patchMaterialAt(i, { unitValue: e.target.value })} className={`${cellInput} w-24 text-right`} aria-label="Valor unitario" />
             {eLots.length > 0 && (
-              <select onChange={(e) => { const v = e.target.value; if (v === 'avg') patchMaterialAt(i, { unitValue: String(eBatch!.average) }); else { const b = eLots.find((x) => String(x.id) === v); if (b) patchMaterialAt(i, { unitValue: String(b.unitCost), colorId: b.colorId ?? m.colorId }); } }} value="" className="mt-1 w-full border border-gray-200 rounded px-1 py-0.5 text-[10px]">
-                <option value="">lote…</option>
+              <select onChange={(e) => { const v = e.target.value; if (v === 'avg') patchMaterialAt(i, { unitValue: String(eBatch!.average) }); else { const b = eLots.find((x) => String(x.id) === v); if (b) patchMaterialAt(i, { unitValue: String(b.unitCost), colorId: b.colorId ?? m.colorId }); } }} value="" className={`${cellInput} mt-1 w-24 h-7 text-[11px]`} aria-label="Tomar precio de un lote">
+                <option value="">Lote…</option>
                 <option value="avg">Prom · {money(eBatch!.average)}</option>
                 {eLots.map((b) => <option key={b.id} value={b.id}>{b.color?.name ? `${b.color.name} · ` : ''}{money(Number(b.unitCost))}</option>)}
               </select>
             )}
           </td>
-          <td className="px-2 py-2 text-right font-medium text-gray-800">{money((Number(m.consumption) || 0) * (Number(m.unitValue) || 0))}</td>
-          <td className="px-2 py-2 text-right"><button type="button" onClick={() => setEditIdx(null)} className="px-2 py-1 rounded bg-green-600 text-white text-xs">Listo</button></td>
+          <td className="px-2 py-2 text-right font-medium text-gray-900 tabular-nums">{money((Number(m.consumption) || 0) * (Number(m.unitValue) || 0))}</td>
+          <td className="px-2 py-2 text-right"><Button size="sm" variant="success" icon={<Check className="w-4 h-4" />} onClick={() => setEditIdx(null)}>Listo</Button></td>
         </tr>
       );
     }
@@ -375,443 +387,433 @@ export default function ReferenceFormPage() {
     const comp = components.find((c) => c._key === m.componentKey);
     const col2 = colors.find((c) => c.id === m.colorId);
     return (
-      <tr key={i} className="hover:bg-gray-50">
-        <td className="px-3 py-2 text-gray-800">{inp ? `${inp.code} · ${inp.name}` : '—'}</td>
-        <td className="px-3 py-2 text-gray-600">{comp ? `${comp.position === 'SUPERIOR' ? 'Sup' : 'Inf'}${comp.description ? ' · ' + comp.description : ''}` : '—'}</td>
-        <td className="px-3 py-2 text-gray-600">{col2 ? col2.name : 'Todos'}</td>
-        <td className="px-3 py-2 text-right text-gray-600">{m.consumptionInitial || '—'}</td>
-        <td className="px-3 py-2 text-right text-gray-600">{m.increment && Number(m.increment) > 0 ? `${m.increment}%` : '—'}</td>
-        <td className="px-3 py-2 text-right font-medium text-gray-800">{m.consumption} {m.unitOfMeasure}</td>
-        <td className="px-3 py-2 text-right text-gray-600">{money(Number(m.unitValue) || 0)}</td>
-        <td className="px-3 py-2 text-right font-medium text-gray-800">{money((Number(m.consumption) || 0) * (Number(m.unitValue) || 0))}</td>
-        <td className="px-3 py-2 text-right">
+      <Tr key={i}>
+        <Td className="text-gray-900">{inp ? <><span className="font-mono text-xs text-gray-500 mr-1">{inp.code}</span>{inp.name}</> : '—'}</Td>
+        <Td>{comp ? `${comp.position === 'SUPERIOR' ? 'Sup' : 'Inf'}${comp.description ? ' · ' + comp.description : ''}` : '—'}</Td>
+        <Td>{col2 ? <span className="inline-flex items-center gap-1.5"><span className="w-3 h-3 rounded-full border border-gray-200" style={{ backgroundColor: col2.hexCode }} />{col2.name}</span> : 'Todos'}</Td>
+        <Td align="right" className="tabular-nums">{m.consumptionInitial || '—'}</Td>
+        <Td align="right" className="tabular-nums">{m.increment && Number(m.increment) > 0 ? `${m.increment}%` : '—'}</Td>
+        <Td align="right" className="font-medium text-gray-900 tabular-nums whitespace-nowrap">{m.consumption} {m.unitOfMeasure}</Td>
+        <Td align="right" className="tabular-nums">{money(Number(m.unitValue) || 0)}</Td>
+        <Td align="right" className="font-medium text-gray-900 tabular-nums">{money((Number(m.consumption) || 0) * (Number(m.unitValue) || 0))}</Td>
+        <Td align="right">
           <div className="flex items-center justify-end gap-0.5">
-            <button type="button" onClick={() => startEdit(i)} className="p-1.5 text-gray-400 hover:text-orange-600 rounded-lg"><Pencil className="w-4 h-4" /></button>
-            <button type="button" onClick={() => removeMaterial(i)} className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg"><Trash2 className="w-4 h-4" /></button>
+            <IconButton title="Editar insumo" tone="app" onClick={() => startEdit(i)}><Pencil className="w-4 h-4" /></IconButton>
+            <IconButton title="Quitar insumo" tone="danger" onClick={() => removeMaterial(i)}><Trash2 className="w-4 h-4" /></IconButton>
           </div>
-        </td>
-      </tr>
+        </Td>
+      </Tr>
     );
   };
 
+  const sizeChips = (list: { id: number; abbreviation: string }[], market: MfgMarket) => (
+    list.length
+      ? <div className="flex flex-wrap gap-1">{list.map((s) => <Badge key={s.id} tone={market === 'EXPORT' ? 'blue' : 'gray'}>{s.abbreviation}</Badge>)}</div>
+      : <span className="text-xs text-gray-400">—</span>
+  );
+
+  const dBatch = draft.inputId !== '' ? batchCache[Number(draft.inputId)] : undefined;
+  const dLots = dBatch?.batches ?? [];
+
   return (
-    <div className="max-w-5xl mx-auto">
-      <button onClick={() => navigate('/manufacturing/references')} className="inline-flex items-center gap-2 text-gray-500 hover:text-gray-800 mb-4 text-sm">
-        <ArrowLeft className="w-4 h-4" /> Volver a referencias
-      </button>
+    <Page>
+      <PageHeader
+        icon={Shirt}
+        backTo="/manufacturing/references"
+        title={isEdit ? (name || 'Referencia') : 'Nueva referencia'}
+        subtitle={fullCode ? <span className="font-mono">{fullCode}</span> : 'Ficha técnica: producto, insumos y precios.'}
+        actions={<Button icon={<Save className="w-4 h-4" />} isLoading={saving} onClick={save}>Guardar</Button>}
+      />
 
-      <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
-        <h1 className="text-2xl font-bold text-gray-900">{isEdit ? (name || 'Referencia') : 'Nueva referencia'}{fullCode && <span className="ml-2 text-base font-mono text-gray-400">{fullCode}</span>}</h1>
-        <button onClick={save} disabled={saving} className="inline-flex items-center gap-2 px-5 py-2 rounded-lg bg-orange-500 hover:bg-orange-600 text-white font-medium disabled:opacity-60">
-          <Save className="w-4 h-4" /> {saving ? 'Guardando…' : 'Guardar'}
-        </button>
-      </div>
-
-      {/* Tabs */}
-      <div className="flex gap-1 border-b border-gray-200 mb-5">
-        {(['summary', 'edit'] as const).map((t) => (
-          <button key={t} onClick={() => setTab(t)} className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${tab === t ? 'border-orange-500 text-orange-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
-            {t === 'summary' ? 'Resumen' : 'Editar referencia'}
-          </button>
-        ))}
-      </div>
+      <Tabs<TabKey>
+        value={tab}
+        onChange={setTab}
+        tabs={[
+          { value: 'summary', label: 'Resumen' },
+          { value: 'info', label: 'Producto' },
+          { value: 'materials', label: 'Ficha técnica', count: materials.length },
+          { value: 'prices', label: 'Costos y precios', count: groups.length },
+        ]}
+      />
 
       {/* ======================= RESUMEN ======================= */}
       {tab === 'summary' && (
-        <div className="grid lg:grid-cols-3 gap-5">
-          <div className="lg:col-span-2 bg-white rounded-xl border border-gray-200 p-5">
-            <div className="flex gap-5 flex-col sm:flex-row">
-              <div className="w-full sm:w-52 flex-shrink-0">
-                {imagePath ? <img src={imagePath} alt="ref" className="w-full aspect-square object-cover rounded-xl border border-gray-100" /> : <div className="w-full aspect-square rounded-xl bg-gray-50 border border-dashed border-gray-200 flex items-center justify-center text-gray-300"><ImageIcon className="w-10 h-10" /></div>}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h2 className="text-xl font-bold text-gray-900">{name || '—'}</h2>
-                  {fullCode && <span className="px-2 py-0.5 rounded bg-gray-100 text-gray-600 text-xs font-mono">{fullCode}</span>}
-                  {gt && <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${gt.composition === 'SET' ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-600'}`}>{compositionLabel[gt.composition]}</span>}
-                  <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>{isActive ? 'Activa' : 'Inactiva'}</span>
-                </div>
-                <p className="text-sm text-gray-500 mt-1">{gt ? gt.name : 'Sin tipo'}{gt?.brand?.name ? ` · ${gt.brand.name}` : ''}{col ? ` · ${col.name}` : ''}</p>
+        <>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <StatCard icon={Layers} label="Costo insumos" value={money0(costVariable)} hint={`${materials.length} insumo${materials.length !== 1 ? 's' : ''}`} />
+            <StatCard icon={Calculator} tone="blue" label="Costo unidad" value={money0(costUnit)} hint={`Costo fijo ${money0(Number(fixedCost) || 0)}`} />
+            <StatCard icon={Tag} tone="green" label="Precio base" value={money0(basePrice)} hint={`Factor x${Number(factor) || 1}`} />
+            <StatCard icon={TrendingUp} tone={profit >= 0 ? 'green' : 'red'} label="Ganancia" value={`${profitPct.toFixed(1)}%`} hint={`${profit >= 0 ? '+' : ''}${money0(profit)} por unidad`} hintTone={profit >= 0 ? 'green' : 'red'} />
+          </div>
 
-                <div className="mt-3">
-                  <p className="text-xs text-gray-400 uppercase tracking-wide mb-1">Colores</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {primary.map((c) => <span key={c.id} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-orange-50 text-orange-700 text-xs"><span className="w-3 h-3 rounded-full border border-white shadow" style={{ backgroundColor: c.hexCode }} />{c.name}</span>)}
-                    {secondary.map((c) => <span key={c.id} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 text-xs"><span className="w-3 h-3 rounded-full border border-white shadow" style={{ backgroundColor: c.hexCode }} />{c.name}</span>)}
-                    {refColors.length === 0 && <span className="text-sm text-gray-400">—</span>}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
+            <div className="lg:col-span-2 space-y-5">
+              <Card>
+                <div className="flex gap-5 flex-col sm:flex-row">
+                  <div className="w-full sm:w-44 flex-shrink-0">
+                    {imagePath ? <img src={imagePath} alt={name} className="w-full aspect-square object-cover rounded-xl border border-gray-200" /> : <div className="w-full aspect-square rounded-xl bg-gray-50 border border-dashed border-gray-200 flex items-center justify-center text-gray-300"><ImageIcon className="w-10 h-10" /></div>}
+                  </div>
+                  <div className="flex-1 min-w-0 space-y-4">
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h2 className="text-lg font-semibold text-gray-900">{name || '—'}</h2>
+                        {gt && <Badge tone={gt.composition === 'SET' ? 'purple' : 'gray'}>{compositionLabel[gt.composition]}</Badge>}
+                        <Badge tone={isActive ? 'green' : 'gray'}>{isActive ? 'Activa' : 'Inactiva'}</Badge>
+                      </div>
+                      {description && <p className="text-sm text-gray-500 mt-1">{description}</p>}
+                    </div>
+                    <DescriptionList cols={2} items={[
+                      { label: 'Código', value: fullCode ? <span className="font-mono">{fullCode}</span> : null },
+                      { label: 'Tipo de prenda', value: gt?.name },
+                      { label: 'Marca', value: gt?.brand?.name },
+                      { label: 'Colección', value: col?.name },
+                      {
+                        label: 'Colores', full: true,
+                        value: refColors.length === 0 ? null : (
+                          <div className="flex flex-wrap gap-1.5">
+                            {[...primary, ...secondary].map((c) => (
+                              <span key={c.id} className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs ${colorState[c.id] === 'PRIMARY' ? 'bg-app-50 text-app-700' : 'bg-gray-100 text-gray-600'}`}>
+                                <span className="w-3 h-3 rounded-full border border-gray-200" style={{ backgroundColor: c.hexCode }} />{c.name}
+                              </span>
+                            ))}
+                          </div>
+                        ),
+                      },
+                    ]} />
                   </div>
                 </div>
+              </Card>
 
-                <div className="grid grid-cols-3 gap-2 mt-4">
-                  <div className="bg-gray-50 rounded-lg p-2 text-center"><p className="text-[11px] text-gray-500">Costo insumos</p><p className="font-semibold text-gray-800 text-sm">{money(costVariable)}</p></div>
-                  <div className="bg-gray-50 rounded-lg p-2 text-center"><p className="text-[11px] text-gray-500">Costo unidad</p><p className="font-semibold text-gray-800 text-sm">{money(costUnit)}</p></div>
-                  <div className="bg-orange-50 rounded-lg p-2 text-center"><p className="text-[11px] text-orange-600">Precio base</p><p className="font-semibold text-orange-700 text-sm">{money(basePrice)}</p></div>
-                </div>
-                {description && <p className="text-sm text-gray-500 mt-3">{description}</p>}
-              </div>
+              <Card>
+                <CardTitle icon={Coins}>Precios por grupo de tallas</CardTitle>
+                {groups.length === 0 ? <p className="text-sm text-gray-400">Sin grupos de precio.</p> : (
+                  <div className="divide-y divide-gray-100 -my-2">
+                    {groups.map((g, i) => (
+                      <div key={i} className="flex items-center justify-between gap-3 py-2.5">
+                        <div className="min-w-0">
+                          <p className="flex items-center gap-2 flex-wrap text-sm font-medium text-gray-900">{g.name || 'Grupo'}<MarketBadge market={g.market} />{g.isWholesale && <Badge>Mayorista</Badge>}</p>
+                          <div className="flex flex-wrap gap-1 mt-1">{g.sizeIds.map((sid) => <span key={sid} className="text-[11px] bg-gray-100 text-gray-600 rounded px-1.5">{sizeById(sid)?.abbreviation}</span>)}</div>
+                        </div>
+                        <span className="font-semibold text-gray-900 tabular-nums whitespace-nowrap">{groupMoney(g, groupPrice(g))}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </Card>
             </div>
 
-            {/* Precios por grupo */}
-            <div className="mt-5">
-              <p className="text-xs text-gray-400 uppercase tracking-wide mb-2">Precios por grupo de tallas</p>
-              {groups.length === 0 ? <p className="text-sm text-gray-400">Sin grupos de precio.</p> : (
-                <div className="space-y-2">
-                  {groups.map((g, i) => (
-                    <div key={i} className="flex items-center justify-between border border-gray-100 rounded-lg px-3 py-2">
-                      <div className="min-w-0">
-                        <p className="font-medium text-gray-800 text-sm truncate">{g.name || 'Grupo'} <span className="text-xs text-gray-400">· {g.market === 'EXPORT' ? 'Exportación' : 'Nacional'}{g.isWholesale ? ' · Mayorista' : ''}</span></p>
-                        <div className="flex flex-wrap gap-1 mt-0.5">{g.sizeIds.map((sid) => <span key={sid} className="text-[11px] bg-gray-100 text-gray-600 rounded px-1.5">{sizeById(sid)?.abbreviation}</span>)}</div>
+            <Card>
+              <CardTitle icon={Layers} actions={<span className="text-sm font-medium text-gray-900 tabular-nums">{money(costVariable)}</span>}>Insumos</CardTitle>
+              {materials.length === 0 ? <p className="text-sm text-gray-400">Sin materiales.</p> : (
+                <div className="space-y-4">
+                  {insumoGroups.map((grp) => (
+                    <div key={grp.name}>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                          {grp.name}
+                          {grp.classification === 'SERVICIO' && <Badge tone="purple" className="normal-case">Servicio</Badge>}
+                        </span>
+                        <span className="text-xs font-medium text-gray-700 tabular-nums">{money(grp.subtotal)}</span>
                       </div>
-                      <span className={`font-semibold ${g.market === 'EXPORT' ? 'text-blue-600' : 'text-orange-600'}`}>{groupMoney(g, groupPrice(g))}</span>
+                      <ul className="space-y-1.5">
+                        {grp.rows.map((r) => (
+                          <li key={r.key} className="flex items-center justify-between gap-2 text-sm">
+                            <div className="min-w-0">
+                              <p className="text-gray-900 truncate">{r.name}{r.scope && <span className="ml-1.5 text-[10px] text-gray-400">({r.scope === 'EXTERNAL' ? 'ext.' : 'int.'})</span>}</p>
+                              <p className="text-xs text-gray-400">{r.detail}</p>
+                            </div>
+                            <span className="text-gray-700 tabular-nums">{money(r.subtotal)}</span>
+                          </li>
+                        ))}
+                      </ul>
                     </div>
                   ))}
                 </div>
               )}
-            </div>
+            </Card>
           </div>
-
-          {/* Insumos */}
-          <div className="bg-white rounded-xl border border-gray-200 p-5">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="font-semibold text-gray-900">Insumos</h2>
-              <span className="text-sm text-gray-500">{money(costVariable)}</span>
-            </div>
-            {materials.length === 0 ? <p className="text-sm text-gray-400">Sin materiales.</p> : (
-              <div className="space-y-3">
-                {insumoGroups.map((grp) => (
-                  <div key={grp.name}>
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                        {grp.name}
-                        {grp.classification === 'SERVICIO' && <span className="px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 text-[10px] font-medium normal-case">Servicio</span>}
-                      </span>
-                      <span className="text-xs font-medium text-gray-600">{money(grp.subtotal)}</span>
-                    </div>
-                    <ul className="space-y-1.5">
-                      {grp.rows.map((r) => (
-                        <li key={r.key} className="flex items-center justify-between text-sm">
-                          <div className="min-w-0">
-                            <p className="text-gray-800 truncate">{r.name}{r.scope && <span className="ml-1.5 text-[10px] text-gray-400">({r.scope === 'EXTERNAL' ? 'ext.' : 'int.'})</span>}</p>
-                            <p className="text-xs text-gray-400">{r.detail}</p>
-                          </div>
-                          <span className="text-gray-600">{money(r.subtotal)}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
+        </>
       )}
 
-      {/* ======================= EDITAR ======================= */}
-      {tab === 'edit' && (
+      {/* ======================= PRODUCTO ======================= */}
+      {tab === 'info' && (
         <>
-          {/* Información del producto */}
-          <div className="bg-white rounded-xl border border-gray-200 p-5 mb-4">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="p-2 bg-orange-100 rounded-lg text-orange-600"><Package className="w-5 h-5" /></div>
-              <h2 className="font-semibold text-gray-900">Información del producto</h2>
-            </div>
-            <div className="grid sm:grid-cols-3 gap-5">
-              <div className="sm:col-span-1">
-                <span className="text-sm font-medium text-gray-700">Imagen</span>
-                <label className="mt-1 flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-xl aspect-square cursor-pointer hover:bg-gray-50 overflow-hidden">
-                  {imagePath ? <img src={imagePath} alt="ref" className="w-full h-full object-cover" /> : <span className="text-gray-400 text-sm flex flex-col items-center gap-2"><ImageIcon className="w-8 h-8" />{uploading ? 'Subiendo…' : 'Subir imagen'}</span>}
-                  <input type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && uploadImg(e.target.files[0])} />
-                </label>
-                {imagePath && <button onClick={() => setImagePath(null)} className="mt-1 text-xs text-red-500 hover:underline">Quitar imagen</button>}
-
-                {/* Tallas (solo lectura) — definidas en el tipo de prenda, por mercado */}
-                <div className="mt-4">
-                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Tallas</p>
-                  {!gt ? <p className="text-xs text-gray-400">Selecciona un tipo de prenda.</p> : (
-                    <div className="space-y-2">
-                      <div>
-                        <p className="text-[11px] text-gray-400 mb-1">Nacional</p>
-                        <div className="flex flex-wrap gap-1">
-                          {natSizes.length ? natSizes.map((s) => <span key={s.id} className="px-2 py-0.5 rounded bg-gray-100 text-gray-700 text-xs font-medium">{s.abbreviation}</span>) : <span className="text-xs text-gray-300">—</span>}
-                        </div>
-                      </div>
-                      <div>
-                        <p className="text-[11px] text-gray-400 mb-1">Exportación</p>
-                        <div className="flex flex-wrap gap-1">
-                          {expSizes.length ? expSizes.map((s) => <span key={s.id} className="px-2 py-0.5 rounded bg-blue-50 text-blue-700 text-xs font-medium">{s.abbreviation}</span>) : <span className="text-xs text-gray-300">—</span>}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-              <div className="sm:col-span-2 grid sm:grid-cols-2 gap-4">
-                <label className="block"><span className="text-sm font-medium text-gray-700">Tipo de prenda *</span>
-                  <select value={garmentTypeId} onChange={(e) => onGarmentTypeChange(e.target.value === '' ? '' : Number(e.target.value))} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2">
-                    <option value="">— Selecciona —</option>{garmentTypes.map((g) => <option key={g.id} value={g.id}>{g.code} · {g.name}</option>)}
-                  </select>
-                  {gt && <span className="text-xs text-gray-400">Composición: {compositionLabel[gt.composition]}</span>}
-                </label>
-                <label className="block"><span className="text-sm font-medium text-gray-700">Colección</span>
-                  <select value={collectionId} onChange={(e) => setCollectionId(e.target.value === '' ? '' : Number(e.target.value))} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2">
-                    <option value="">— Sin colección —</option>{collections.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                  </select>
-                </label>
-                <label className="block"><span className="text-sm font-medium text-gray-700">Código</span>
-                  <div className="mt-1 flex items-stretch">
-                    <span className="inline-flex items-center px-3 rounded-l-lg border border-r-0 border-gray-300 bg-gray-100 text-gray-500 font-mono text-sm">{gtPrefix || '—'}</span>
-                    <input value={codeSuffix} onChange={(e) => setCodeSuffix(e.target.value)} className="w-full border border-gray-300 rounded-r-lg px-3 py-2 font-mono" placeholder="0001" />
-                  </div>
-                  <span className="text-xs text-gray-400">El prefijo del tipo de prenda no se edita.</span>
-                </label>
-                <label className="block"><span className="text-sm font-medium text-gray-700">Estado</span>
-                  <select value={isActive ? '1' : '0'} onChange={(e) => setIsActive(e.target.value === '1')} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2">
-                    <option value="1">Activa</option><option value="0">Inactiva</option>
-                  </select>
-                </label>
-                <label className="block sm:col-span-2"><span className="text-sm font-medium text-gray-700">Nombre *</span>
-                  <input value={name} onChange={(e) => setName(e.target.value)} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2" />
-                </label>
-                <label className="block sm:col-span-2"><span className="text-sm font-medium text-gray-700">Descripción</span>
-                  <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2" />
-                </label>
+          <Card>
+            <CardTitle icon={Package}>Información del producto</CardTitle>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+              <Field label="Imagen" hint={uploading ? 'Subiendo imagen…' : undefined}>
+                <ImageInput value={imagePath} onChange={onImage} disabled={uploading} />
+              </Field>
+              <div className="md:col-span-2">
+                <FormGrid>
+                  <Field label="Tipo de prenda" required hint={gt ? `Composición: ${compositionLabel[gt.composition]}` : undefined}>
+                    <SelectInput value={garmentTypeId} onChange={(e) => onGarmentTypeChange(e.target.value === '' ? '' : Number(e.target.value))}>
+                      <option value="">— Selecciona —</option>{garmentTypes.map((g) => <option key={g.id} value={g.id}>{g.code} · {g.name}</option>)}
+                    </SelectInput>
+                  </Field>
+                  <Field label="Colección">
+                    <SelectInput value={collectionId} onChange={(e) => setCollectionId(e.target.value === '' ? '' : Number(e.target.value))}>
+                      <option value="">— Sin colección —</option>{collections.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </SelectInput>
+                  </Field>
+                  <Field label="Código" hint="El prefijo del tipo de prenda no se edita.">
+                    <AddonInput prefix={gtPrefix || "—"} value={codeSuffix} onChange={(e) => setCodeSuffix(e.target.value)} className="font-mono" placeholder="0001" />
+                  </Field>
+                  <Field label="Estado">
+                    <div className="h-10 flex items-center"><Switch checked={isActive} onChange={setIsActive} label={isActive ? 'Activa' : 'Inactiva'} /></div>
+                  </Field>
+                  <Field label="Nombre" required className="md:col-span-2"><TextInput value={name} onChange={(e) => setName(e.target.value)} /></Field>
+                  <Field label="Descripción" className="md:col-span-2"><TextArea rows={2} value={description} onChange={(e) => setDescription(e.target.value)} /></Field>
+                </FormGrid>
               </div>
             </div>
+          </Card>
 
-            {/* Colores + tallas dentro del panel de producto */}
-            <div className="mt-6 pt-5 border-t border-gray-100">
-              <p className="text-sm font-medium text-gray-700 mb-2">Colores</p>
-              {colors.length === 0 ? <span className="text-sm text-gray-400">Sin colores en catálogo.</span> : (
-                <div className="grid sm:grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-xs text-gray-500 mb-1">Primarios (muestra)</p>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
+            <Card className="lg:col-span-2">
+              <CardTitle>Colores</CardTitle>
+              {colors.length === 0 ? <p className="text-sm text-gray-400">Sin colores en el catálogo.</p> : (
+                <FormGrid>
+                  <Field label="Primarios (muestra)">
                     <MultiSelect placeholder="Buscar colores…" value={primaryIds} onChange={(ids) => setColorsByType('PRIMARY', ids)}
                       options={colors.filter((c) => !secondaryIds.includes(c.id)).map((c) => ({ id: c.id, label: c.name, hex: c.hexCode }))} />
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-500 mb-1">Secundarios</p>
+                  </Field>
+                  <Field label="Secundarios">
                     <MultiSelect placeholder="Buscar colores…" value={secondaryIds} onChange={(ids) => setColorsByType('SECONDARY', ids)}
                       options={colors.filter((c) => !primaryIds.includes(c.id)).map((c) => ({ id: c.id, label: c.name, hex: c.hexCode }))} />
-                  </div>
+                  </Field>
+                </FormGrid>
+              )}
+            </Card>
+
+            <Card>
+              <CardTitle>Tallas</CardTitle>
+              {!gt ? <p className="text-sm text-gray-400">Selecciona un tipo de prenda.</p> : (
+                <div className="space-y-3">
+                  <div className="space-y-1.5"><MarketBadge market="NATIONAL" />{sizeChips(natSizes, 'NATIONAL')}</div>
+                  <div className="space-y-1.5"><MarketBadge market="EXPORT" />{sizeChips(expSizes, 'EXPORT')}</div>
+                  <p className="text-xs text-gray-500">Se definen en el tipo de prenda.</p>
                 </div>
               )}
-            </div>
+            </Card>
           </div>
 
-          {/* Componentes */}
-          <Section icon={<Boxes className="w-5 h-5" />} title="Componentes" subtitle="Piezas de la prenda de esta referencia (ej. Superior · Sweater, Inferior · Pantalón)" defaultOpen={gt?.composition === 'SET'}
-            right={<span onClick={(e) => { e.stopPropagation(); addComponent(); }} className="inline-flex items-center gap-1 text-sm text-orange-700 font-medium cursor-pointer"><Plus className="w-4 h-4" /> Agregar</span>}>
-            {components.length === 0 ? <div className="text-sm text-gray-400 py-2">Sin componentes.</div> : (
+          <Card>
+            <CardTitle icon={Boxes} actions={<Button size="sm" variant="ghost" icon={<Plus className="w-4 h-4" />} onClick={addComponent}>Agregar</Button>}>Componentes</CardTitle>
+            <p className="text-xs text-gray-500 -mt-2 mb-3">Piezas de la prenda (ej. Superior · Sweater, Inferior · Pantalón).</p>
+            {components.length === 0 ? <p className="text-sm text-gray-400">Sin componentes.</p> : (
               <div className="space-y-2">
                 {components.map((c, i) => (
                   <div key={c._key} className="flex items-center gap-2">
-                    <select value={c.position} onChange={(e) => setComponents(components.map((x, idx) => idx === i ? { ...x, position: e.target.value as MfgComponentPosition } : x))} className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm">
+                    <div className="w-36 flex-shrink-0"><SelectInput value={c.position} onChange={(e) => setComponents(components.map((x, idx) => idx === i ? { ...x, position: e.target.value as MfgComponentPosition } : x))} aria-label="Posición">
                       <option value="SUPERIOR">Superior</option><option value="INFERIOR">Inferior</option>
-                    </select>
-                    <input value={c.description} onChange={(e) => setComponents(components.map((x, idx) => idx === i ? { ...x, description: e.target.value } : x))} placeholder="Nombre de la pieza (ej. Sweater, Pantalón)" className="flex-1 border border-gray-300 rounded-lg px-2 py-1.5 text-sm" />
-                    <button type="button" onClick={() => setComponents(components.filter((_, idx) => idx !== i))} className="p-2 text-gray-400 hover:text-red-600 rounded-lg"><Trash2 className="w-4 h-4" /></button>
+                    </SelectInput></div>
+                    <TextInput value={c.description} onChange={(e) => setComponents(components.map((x, idx) => idx === i ? { ...x, description: e.target.value } : x))} placeholder="Nombre de la pieza (ej. Sweater, Pantalón)" aria-label="Nombre de la pieza" />
+                    <IconButton title="Quitar componente" tone="danger" onClick={() => setComponents(components.filter((_, idx) => idx !== i))}><Trash2 className="w-4 h-4" /></IconButton>
                   </div>
                 ))}
               </div>
             )}
-          </Section>
+          </Card>
+        </>
+      )}
 
-          {/* Ficha técnica / insumos — formulario de alta arriba + tabla abajo */}
-          <Section icon={<Layers className="w-5 h-5" />} title="Ficha técnica (insumos)" subtitle="Agrega insumos: consumo inicial + incremento → consumo final; el precio se toma de los lotes (promedio)">
-            {(() => {
-              const dBatch = draft.inputId !== '' ? batchCache[Number(draft.inputId)] : undefined;
-              const dLots = dBatch?.batches ?? [];
-              return (
-                <div className="bg-gray-50 rounded-xl p-4 mb-4">
-                  <div className="grid grid-cols-12 gap-2 items-end">
-                    <div className="col-span-12 sm:col-span-4"><span className="text-xs text-gray-500">Insumo *</span>
-                      <select value={draft.inputId} onChange={(e) => onSelectDraftInput(e.target.value === '' ? '' : Number(e.target.value))} className="mt-1 w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm">
-                        <option value="">— Selecciona —</option>
-                        {inputsByType.map(([typeName, list]) => (
-                          <optgroup key={typeName} label={typeName}>{list.map((inp) => <option key={inp.id} value={inp.id}>{inp.code} · {inp.name}</option>)}</optgroup>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="col-span-6 sm:col-span-4"><span className="text-xs text-gray-500">Componente</span>
-                      <select value={draft.componentKey} onChange={(e) => patchDraft({ componentKey: e.target.value === '' ? '' : Number(e.target.value) })} className="mt-1 w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm">
-                        <option value="">—</option>{components.map((c) => <option key={c._key} value={c._key}>{c.position === 'SUPERIOR' ? 'Sup' : 'Inf'}{c.description ? ` · ${c.description}` : ''}</option>)}
-                      </select>
-                    </div>
-                    <div className="col-span-6 sm:col-span-4"><span className="text-xs text-gray-500">Color</span>
-                      <select value={draft.colorId} onChange={(e) => patchDraft({ colorId: e.target.value === '' ? '' : Number(e.target.value) })} className="mt-1 w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm">
-                        <option value="">Todos</option>{colors.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                      </select>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-12 gap-2 items-end mt-2">
-                    <div className="col-span-4 sm:col-span-2"><span className="text-xs text-gray-500">C. inicial</span><input type="number" step="0.0001" min="0" value={draft.consumptionInitial} onChange={(e) => patchDraft({ consumptionInitial: e.target.value })} className="mt-1 w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm" /></div>
-                    <div className="col-span-4 sm:col-span-1"><span className="text-xs text-gray-500">Inc. %</span><input type="number" step="0.01" min="0" value={draft.increment} onChange={(e) => patchDraft({ increment: e.target.value })} className="mt-1 w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm" /></div>
-                    <div className="col-span-4 sm:col-span-2"><span className="text-xs text-gray-500">C. final</span><input type="number" step="0.0001" min="0" value={draft.consumption} onChange={(e) => patchDraft({ consumption: e.target.value })} className="mt-1 w-full border border-orange-200 bg-orange-50/40 rounded-lg px-2 py-1.5 text-sm" /></div>
-                    <div className="col-span-7 sm:col-span-3"><span className="text-xs text-gray-500">Precio {dLots.length > 0 ? `· ${dLots.length} lote${dLots.length > 1 ? 's' : ''}` : ''}</span>
-                      {dLots.length > 0 ? (
-                        <select onChange={(e) => { const v = e.target.value; if (v === 'avg') patchDraft({ unitValue: String(dBatch!.average) }); else { const b = dLots.find((x) => String(x.id) === v); if (b) patchDraft({ unitValue: String(b.unitCost), colorId: b.colorId ?? draft.colorId }); } }} value="" className="mt-1 w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm">
-                          <option value="avg">Promedio · {money(dBatch!.average)}</option>
-                          {dLots.map((b) => <option key={b.id} value={b.id}>{b.color?.name ? `${b.color.name} · ` : ''}{b.purchasedAt ?? 's/f'} · {money(Number(b.unitCost))}</option>)}
-                        </select>
-                      ) : <p className="mt-1 text-[11px] text-gray-400 py-1.5">Sin lotes; ingresa el valor.</p>}
-                    </div>
-                    <div className="col-span-5 sm:col-span-2"><span className="text-xs text-gray-500">Valor unit.</span><input type="number" step="0.01" min="0" value={draft.unitValue} onChange={(e) => patchDraft({ unitValue: e.target.value })} className="mt-1 w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm" /></div>
-                    <div className="col-span-12 sm:col-span-2"><button type="button" onClick={addDraft} className="w-full inline-flex items-center justify-center gap-1 bg-slate-700 hover:bg-slate-800 text-white px-3 py-2 rounded-lg text-sm"><Plus className="w-4 h-4" /> Agregar</button></div>
-                  </div>
-                </div>
-              );
-            })()}
+      {/* ======================= FICHA TÉCNICA ======================= */}
+      {tab === 'materials' && (
+        <>
+          <Card>
+            <CardTitle icon={Plus}>Agregar insumo</CardTitle>
+            <p className="text-xs text-gray-500 -mt-2 mb-4">Consumo inicial + incremento → consumo final. El precio se toma de los lotes del insumo (promedio).</p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <Field label="Insumo" required>
+                <SelectInput value={draft.inputId} onChange={(e) => onSelectDraftInput(e.target.value === '' ? '' : Number(e.target.value))}>
+                  <option value="">— Selecciona —</option>
+                  {inputsByType.map(([typeName, list]) => (
+                    <optgroup key={typeName} label={typeName}>{list.map((inp) => <option key={inp.id} value={inp.id}>{inp.code} · {inp.name}</option>)}</optgroup>
+                  ))}
+                </SelectInput>
+              </Field>
+              <Field label="Componente">
+                <SelectInput value={draft.componentKey} onChange={(e) => patchDraft({ componentKey: e.target.value === '' ? '' : Number(e.target.value) })}>
+                  <option value="">—</option>{components.map((c) => <option key={c._key} value={c._key}>{c.position === 'SUPERIOR' ? 'Sup' : 'Inf'}{c.description ? ` · ${c.description}` : ''}</option>)}
+                </SelectInput>
+              </Field>
+              <Field label="Color">
+                <SelectInput value={draft.colorId} onChange={(e) => patchDraft({ colorId: e.target.value === '' ? '' : Number(e.target.value) })}>
+                  <option value="">Todos</option>{colors.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </SelectInput>
+              </Field>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mt-4 items-start">
+              <Field label="Consumo inicial"><NumberInput step="0.0001" min="0" value={draft.consumptionInitial} onChange={(e) => patchDraft({ consumptionInitial: e.target.value })} /></Field>
+              <Field label="Incremento"><NumberInput step="0.01" min="0" suffix="%" value={draft.increment} onChange={(e) => patchDraft({ increment: e.target.value })} /></Field>
+              <Field label="Consumo final" required><NumberInput step="0.0001" min="0" suffix={draft.unitOfMeasure || undefined} value={draft.consumption} onChange={(e) => patchDraft({ consumption: e.target.value })} /></Field>
+              <Field label={`Precio de lote${dLots.length > 0 ? ` (${dLots.length})` : ''}`} className="col-span-2 md:col-span-1">
+                {dLots.length > 0 ? (
+                  <SelectInput onChange={(e) => { const v = e.target.value; if (v === 'avg') patchDraft({ unitValue: String(dBatch!.average) }); else { const b = dLots.find((x) => String(x.id) === v); if (b) patchDraft({ unitValue: String(b.unitCost), colorId: b.colorId ?? draft.colorId }); } }} value="">
+                    <option value="avg">Promedio · {money(dBatch!.average)}</option>
+                    {dLots.map((b) => <option key={b.id} value={b.id}>{b.color?.name ? `${b.color.name} · ` : ''}{b.purchasedAt?.slice(0, 10) ?? 's/f'} · {money(Number(b.unitCost))}</option>)}
+                  </SelectInput>
+                ) : <p className="h-10 flex items-center text-xs text-gray-400">Sin lotes; ingresa el valor.</p>}
+              </Field>
+              <Field label="Valor unitario"><MoneyInput value={draft.unitValue} onChange={(e) => patchDraft({ unitValue: e.target.value })} /></Field>
+              <div className="col-span-2 md:col-span-1 md:pt-6"><Button variant="outline" fullWidth icon={<Plus className="w-4 h-4" />} onClick={addDraft}>Agregar</Button></div>
+            </div>
+          </Card>
 
-            {materials.length === 0 ? <div className="text-sm text-gray-400 py-2 text-center border border-dashed border-gray-200 rounded-lg">Aún no hay insumos. Agrega arriba.</div> : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="bg-gray-50 text-gray-500 text-left">
-                    <tr>
-                      <th className="px-3 py-2 font-medium">Insumo</th>
-                      <th className="px-3 py-2 font-medium">Comp.</th>
-                      <th className="px-3 py-2 font-medium">Color</th>
-                      <th className="px-3 py-2 font-medium text-right">C.ini</th>
-                      <th className="px-3 py-2 font-medium text-right">Inc.%</th>
-                      <th className="px-3 py-2 font-medium text-right">C.final</th>
-                      <th className="px-3 py-2 font-medium text-right">V.unit</th>
-                      <th className="px-3 py-2 font-medium text-right">Total</th>
-                      <th className="px-3 py-2" />
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {materialTableGroups.map((grp) => {
-                      const pct = basePrice > 0 ? (grp.subtotal / basePrice) * 100 : 0;
-                      return (
-                        <Fragment key={grp.name}>
-                          <tr className="bg-slate-50 border-l-2 border-orange-400">
-                            <td colSpan={2} className="px-3 py-1.5 text-xs font-semibold text-gray-600 uppercase tracking-wide">
+          {materials.length === 0 ? (
+            <Card><EmptyState icon={Layers} title="Aún no hay insumos" description="Agrégalos con el formulario de arriba." /></Card>
+          ) : (
+            <TableCard>
+              <Table>
+                <THead>
+                  <tr>
+                    <Th>Insumo</Th><Th>Comp.</Th><Th>Color</Th><Th align="right">C. inicial</Th><Th align="right">Inc.</Th><Th align="right">C. final</Th><Th align="right">V. unit.</Th><Th align="right">Total</Th><Th align="right"><span className="sr-only">Acciones</span></Th>
+                  </tr>
+                </THead>
+                <TBody>
+                  {materialTableGroups.map((grp) => {
+                    const pct = basePrice > 0 ? (grp.subtotal / basePrice) * 100 : 0;
+                    return (
+                      <Fragment key={grp.name}>
+                        <tr className="bg-gray-50">
+                          <td colSpan={2} className="px-4 py-2 text-xs font-semibold text-gray-600 uppercase tracking-wide border-l-2 border-app-500">
+                            <span className="inline-flex items-center gap-1.5">
                               {grp.name}
-                              {grp.classification === 'SERVICIO' && <span className="ml-1.5 px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 text-[10px] font-medium normal-case">Servicio</span>}
-                              <span className="ml-1.5 text-gray-400 font-normal normal-case">· {grp.rows.length} ítem{grp.rows.length > 1 ? 's' : ''}</span>
-                            </td>
-                            <td colSpan={5} className="px-3 py-1.5 text-right text-[11px] text-gray-400">{pct > 0 ? `${pct.toFixed(1)}% del precio` : ''}</td>
-                            <td className="px-3 py-1.5 text-right text-xs font-semibold text-gray-700">{money(grp.subtotal)}</td>
-                            <td />
-                          </tr>
-                          {grp.rows.map(({ m, i }) => renderMaterialRow(m, i))}
-                        </Fragment>
-                      );
-                    })}
-                  </tbody>
-                  <tfoot>
-                    <tr className="border-t border-gray-200 bg-gray-50">
-                      <td colSpan={7} className="px-3 py-2 text-right font-medium text-gray-700">Costo insumos</td>
-                      <td className="px-3 py-2 text-right font-bold text-gray-900">{money(costVariable)}</td>
-                      <td />
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-            )}
-          </Section>
+                              {grp.classification === 'SERVICIO' && <Badge tone="purple" className="normal-case">Servicio</Badge>}
+                              <span className="text-gray-400 font-normal normal-case">· {grp.rows.length} ítem{grp.rows.length > 1 ? 's' : ''}</span>
+                            </span>
+                          </td>
+                          <td colSpan={5} className="px-4 py-2 text-right text-[11px] text-gray-400">{pct > 0 ? `${pct.toFixed(1)}% del precio` : ''}</td>
+                          <td className="px-4 py-2 text-right text-xs font-semibold text-gray-900 tabular-nums">{money(grp.subtotal)}</td>
+                          <td />
+                        </tr>
+                        {grp.rows.map(({ m, i }) => renderMaterialRow(m, i))}
+                      </Fragment>
+                    );
+                  })}
+                </TBody>
+                <tfoot className="border-t border-gray-200 bg-gray-50">
+                  <tr>
+                    <td colSpan={7} className="px-4 py-3 text-right font-medium text-gray-700">Costo insumos</td>
+                    <td className="px-4 py-3 text-right font-bold text-gray-900 tabular-nums">{money(costVariable)}</td>
+                    <td />
+                  </tr>
+                </tfoot>
+              </Table>
+            </TableCard>
+          )}
+        </>
+      )}
 
-          {/* Costos y precios */}
-          <Section icon={<Coins className="w-5 h-5" />} title="Costos y precios" subtitle="Costo fijo, factor y grupos de precio por tallas">
-            {/* Costo Fijo · % Costo Fijo · Factor */}
-            <div className="grid sm:grid-cols-3 gap-3 mb-3">
-              <label className="block"><span className="text-sm font-medium text-gray-700">Costo Fijo</span><input type="number" step="0.01" min="0" value={fixedCost} onChange={(e) => setFixedCost(e.target.value)} placeholder="0.00" className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2" /><span className="text-[11px] text-gray-400">Sugerido por el tipo de prenda.</span></label>
-              <label className="block"><span className="text-sm font-medium text-gray-700">% Costo Fijo</span><input type="number" value={fixedPct.toFixed(2)} readOnly className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 bg-gray-50 text-gray-500" /><span className="text-[11px] text-gray-400">Costo fijo ÷ costo insumos.</span></label>
-              <label className="block"><span className="text-sm font-medium text-gray-700">Factor</span><input type="number" step="0.0001" min="0" value={factor} onChange={(e) => setFactor(e.target.value)} placeholder="1.00" className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2" /><span className="text-[11px] text-gray-400">Sugerido por el tipo de prenda.</span></label>
+      {/* ======================= COSTOS Y PRECIOS ======================= */}
+      {tab === 'prices' && (
+        <>
+          <Card>
+            <CardTitle icon={Calculator}>Costo base</CardTitle>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <Field label="Costo fijo" hint="Sugerido por el tipo de prenda."><MoneyInput value={fixedCost} onChange={(e) => setFixedCost(e.target.value)} placeholder="0.00" /></Field>
+              <Field label="% costo fijo" hint="Costo fijo ÷ costo insumos."><NumberInput value={fixedPct.toFixed(2)} readOnly disabled suffix="%" /></Field>
+              <Field label="Factor" hint="Sugerido por el tipo de prenda."><NumberInput step="0.0001" min="0" value={factor} onChange={(e) => setFactor(e.target.value)} placeholder="1.00" suffix="x" /></Field>
             </div>
-            {/* Info: Costo Fijo · Factor · Costo Unitario · Precio de Venta */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-5">
-              <div className="border border-gray-200 bg-gray-50 rounded-lg px-3 py-2">
-                <p className="text-[11px] text-gray-500">Costo Fijo</p>
-                <p><span className="font-semibold text-orange-600">{fixedPct.toFixed(2)}%</span><span className="text-gray-300 mx-1">|</span><span className="text-gray-500 text-sm">{money(Number(fixedCost) || 0)}</span></p>
-              </div>
-              <div className="border border-gray-200 bg-gray-50 rounded-lg px-3 py-2">
-                <p className="text-[11px] text-gray-500">Factor (x{Number(factor) || 1})</p>
-                <p><span className="font-semibold text-green-600">{profitPct.toFixed(2)}%</span><span className="text-gray-300 mx-1">|</span><span className="text-gray-500 text-sm">+{money(profit)}</span></p>
-              </div>
-              <div className="border border-blue-200 bg-blue-50 rounded-lg px-3 py-2">
-                <p className="text-[11px] text-blue-600">Costo Unitario</p>
-                <p className="text-lg font-bold text-blue-700">{money(costUnit)}</p>
-              </div>
-              <div className="border border-green-200 bg-green-50 rounded-lg px-3 py-2">
-                <p className="text-[11px] text-green-600">Precio de Venta</p>
-                <p className="text-lg font-bold text-green-700">{money(basePrice)}</p>
-              </div>
-            </div>
+          </Card>
 
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-sm font-medium text-gray-700">Grupos de tallas (listas de precio)</p>
-              <button type="button" onClick={addGroup} className="inline-flex items-center gap-1 text-sm text-orange-700 font-medium"><Plus className="w-4 h-4" /> Agregar grupo</button>
-            </div>
-            {groups.length === 0 ? <div className="text-sm text-gray-400 py-2 text-center border border-dashed border-gray-200 rounded-lg">Sin grupos de precio.</div> : (
-              <div className="space-y-4">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <StatCard icon={Coins} tone="gray" label="Costo fijo" value={money0(Number(fixedCost) || 0)} hint={`${fixedPct.toFixed(2)}% de los insumos`} />
+            <StatCard icon={TrendingUp} tone={profit >= 0 ? 'green' : 'red'} label={`Factor x${Number(factor) || 1}`} value={`${profitPct.toFixed(2)}%`} hint={`${profit >= 0 ? '+' : ''}${money0(profit)} de ganancia`} hintTone={profit >= 0 ? 'green' : 'red'} />
+            <StatCard icon={Calculator} tone="blue" label="Costo unitario" value={money0(costUnit)} />
+            <StatCard icon={Tag} tone="green" label="Precio de venta" value={money0(basePrice)} />
+          </div>
+
+          <Card>
+            <CardTitle icon={Coins} actions={<Button size="sm" variant="outline" icon={<Plus className="w-4 h-4" />} onClick={addGroup}>Agregar grupo</Button>}>Grupos de tallas (listas de precio)</CardTitle>
+            {groups.length === 0 ? <EmptyState icon={Coins} title="Sin grupos de precio" description="Crea un grupo por mercado y tallas para definir su precio de lista." /> : (
+              <div className="divide-y divide-gray-200 border-y border-gray-200 -mx-4 md:-mx-5">
                 {groups.map((g, gi) => {
                   const set = (patch: Partial<GroupRow>) => setGroups(groups.map((x, idx) => idx === gi ? { ...x, ...patch } : x));
-                  const accent = g.market === 'EXPORT' ? 'blue' : 'orange';
                   const marketSizes = sizesForMarket(g.market);
+                  const sugFactor = gtFactorFor(g.market);
+                  const finalPrice = g.auto || !g.listPrice ? groupPrice(g) : Number(g.listPrice);
+                  const noRate = needsRate(g) && !(exchangeRate > 0);
                   return (
-                    <div key={gi} className={`border rounded-xl overflow-hidden ${g.market === 'EXPORT' ? 'border-blue-200' : 'border-orange-200'}`}>
-                      {/* Header: nombre · mercado · mayorista · eliminar */}
-                      <div className={`flex items-center gap-2 flex-wrap px-3 py-2 ${g.market === 'EXPORT' ? 'bg-blue-50' : 'bg-orange-50'}`}>
-                        <input value={g.name} onChange={(e) => set({ name: e.target.value })} placeholder="Nombre del grupo" className="flex-1 min-w-[8rem] border border-gray-300 rounded-lg px-2 py-1.5 text-sm bg-white" />
-                        <select value={g.market} onChange={(e) => { const m = e.target.value as MfgMarket; set({ market: m, sizeIds: sizesForMarket(m).map((s) => s.id), factor: gtFactorFor(m) }); }} className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm bg-white"><option value="NATIONAL">Nacional</option><option value="EXPORT">Exportación</option></select>
-                        <label className="inline-flex items-center gap-1.5 text-sm text-gray-700"><input type="checkbox" checked={g.isWholesale} onChange={(e) => set({ isWholesale: e.target.checked })} /> Mayorista</label>
-                        <button type="button" onClick={() => setGroups(groups.filter((_, idx) => idx !== gi))} className="ml-auto inline-flex items-center gap-1 text-xs text-red-600 hover:bg-red-50 px-2 py-1 rounded-lg"><Trash2 className="w-3.5 h-3.5" /> Eliminar</button>
+                    <div key={gi} className="px-4 md:px-5 py-4 space-y-4">
+                      {/* Nombre · mercado · mayorista · eliminar */}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <MarketBadge market={g.market} />
+                        <div className="flex-1 min-w-[10rem]"><TextInput value={g.name} onChange={(e) => set({ name: e.target.value })} placeholder="Nombre del grupo" aria-label="Nombre del grupo" /></div>
+                        <div className="w-40"><SelectInput value={g.market} onChange={(e) => { const m = e.target.value as MfgMarket; set({ market: m, sizeIds: sizesForMarket(m).map((s) => s.id), factor: gtFactorFor(m), factorLinked: true }); }} aria-label="Mercado">
+                          <option value="NATIONAL">Nacional</option><option value="EXPORT">Exportación</option>
+                        </SelectInput></div>
+                        <Checkbox label="Mayorista" checked={g.isWholesale} onChange={(e) => set({ isWholesale: e.target.checked })} />
+                        <IconButton title="Eliminar grupo" tone="danger" onClick={() => setGroups(groups.filter((_, idx) => idx !== gi))} className="ml-auto"><Trash2 className="w-4 h-4" /></IconButton>
                       </div>
 
-                      <div className="p-3 grid lg:grid-cols-3 gap-3">
-                        {/* Costos + precio final */}
-                        <div className="lg:col-span-2">
-                          <div className="grid grid-cols-3 gap-2 items-end">
-                            <div className="block"><span className="text-xs text-gray-500">Costo fijo adic.</span>
-                              <div className="mt-1 flex"><span className="inline-flex items-center px-2 rounded-l-lg border border-r-0 border-gray-300 bg-gray-100 text-gray-500 text-sm">$</span><input type="number" step="0.01" min="0" value={g.fixedCostExtra} onChange={(e) => set({ fixedCostExtra: e.target.value })} className="w-full border border-gray-300 rounded-r-lg px-2 py-1.5 text-sm" /></div>
+                      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                        <div className="lg:col-span-2 space-y-3">
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <div>
+                              <Field label="Costo fijo adicional"><MoneyInput value={g.fixedCostExtra} onChange={(e) => set({ fixedCostExtra: e.target.value })} /></Field>
                               {Number(gt?.fixedCost) > 0 && (
-                                <label className="inline-flex items-center gap-1 mt-1 text-[11px] text-gray-500 cursor-pointer">
-                                  <input type="checkbox" checked={Number(g.fixedCostExtra) === Number(gt?.fixedCost)} onChange={(e) => set({ fixedCostExtra: e.target.checked ? String(gt?.fixedCost) : '0' })} />
-                                  Usar: <b className="text-blue-600">{money(Number(gt?.fixedCost))}</b>
-                                </label>
+                                <Checkbox className="mt-1.5 text-xs" checked={Number(g.fixedCostExtra) === Number(gt?.fixedCost)} onChange={(e) => set({ fixedCostExtra: e.target.checked ? String(gt?.fixedCost) : '0' })}
+                                  label={<>Usar <b className="text-gray-900">{money(Number(gt?.fixedCost))}</b></>} />
                               )}
                             </div>
-                            <div className="block"><span className="text-xs text-gray-500">Factor</span>
-                              <div className="mt-1 flex"><span className="inline-flex items-center px-2 rounded-l-lg border border-r-0 border-gray-300 bg-gray-100 text-gray-500 text-sm">x</span><input type="number" step="0.0001" min="0" value={g.factor} onChange={(e) => set({ factor: e.target.value })} className="w-full border border-gray-300 px-2 py-1.5 text-sm" /><span className="inline-flex items-center px-1.5 rounded-r-lg border border-l-0 border-gray-300 bg-sky-500 text-white text-[11px] min-w-[46px] justify-center">{groupProfitPct(g).toFixed(1)}%</span></div>
-                              {Number(gtFactorFor(g.market)) > 0 && (
-                                <label className="inline-flex items-center gap-1 mt-1 text-[11px] text-gray-500 cursor-pointer">
-                                  <input type="checkbox" checked={Number(g.factor) === Number(gtFactorFor(g.market))} onChange={(e) => set({ factor: e.target.checked ? gtFactorFor(g.market) : g.factor })} />
-                                  Usar: <b className="text-green-600">x{Number(gtFactorFor(g.market))}</b>
-                                </label>
+                            <div>
+                              <Field label="Factor">
+                                <AddonInput type="number" step="0.0001" min="0" prefix="x" suffix={`${groupProfitPct(g).toFixed(1)}%`} value={g.factor}
+                                  onChange={(e) => set({ factor: e.target.value, factorLinked: false })} />
+                              </Field>
+                              {Number(sugFactor) > 0 && (
+                                <Checkbox className="mt-1.5 text-xs" checked={g.factorLinked}
+                                  onChange={(e) => set(e.target.checked ? { factor: sugFactor, factorLinked: true } : { factor, factorLinked: false })}
+                                  label={<>Usar sugerido <b className="text-gray-900">x{Number(sugFactor)}</b></>} />
                               )}
                             </div>
-                            <div className="block"><span className="text-xs text-gray-500">Precio Lista</span>
-                              <div className="mt-1 flex"><span className="inline-flex items-center px-2 rounded-l-lg border border-r-0 border-gray-300 bg-gray-100 text-gray-500 text-sm">{g.market === 'EXPORT' ? 'US$' : '$'}</span><input type="number" step="0.01" min="0" disabled={g.auto} value={g.auto ? groupPrice(g) : g.listPrice} onChange={(e) => set({ listPrice: e.target.value })} className="w-full border border-gray-300 rounded-r-lg px-2 py-1.5 text-sm disabled:bg-gray-50 disabled:text-gray-500" /></div>
-                              <label className="inline-flex items-center gap-1 mt-1 text-[11px] text-gray-500 cursor-pointer"><input type="checkbox" checked={g.auto} onChange={(e) => set({ auto: e.target.checked })} /> Auto: <b className={g.market === 'EXPORT' ? 'text-blue-600' : 'text-orange-600'}>{groupMoney(g, groupPrice(g))}</b></label>
+                            <div>
+                              <Field label="Precio de lista">
+                                <AddonInput type="number" step="0.01" min="0" prefix={g.market === 'EXPORT' ? 'US$' : '$'} disabled={g.auto}
+                                  value={g.auto ? groupPrice(g) : g.listPrice} onChange={(e) => set({ listPrice: e.target.value })} />
+                              </Field>
+                              <Checkbox className="mt-1.5 text-xs" checked={g.auto} onChange={(e) => set({ auto: e.target.checked })}
+                                label={<>Automático: <b className="text-gray-900">{groupMoney(g, groupPrice(g))}</b></>} />
                             </div>
                           </div>
-                          {/* Precio Final destacado */}
-                          <div className={`mt-2 rounded-lg py-2 text-center border ${g.market === 'EXPORT' ? 'bg-blue-50 border-blue-200' : 'bg-orange-50 border-orange-200'}`}>
-                            <p className="text-[11px] text-gray-500">Precio Final{g.market === 'EXPORT' && exchangeRate > 0 ? ` · tasa ${money(exchangeRate)}` : ''}</p>
-                            <p className={`text-lg font-bold ${g.market === 'EXPORT' ? 'text-blue-700' : 'text-orange-700'}`}>{groupMoney(g, g.auto || !g.listPrice ? groupPrice(g) : Number(g.listPrice))}</p>
+
+                          <div className="flex items-center justify-between gap-3 rounded-lg border border-gray-200 px-4 py-3">
+                            <div className="min-w-0">
+                              <p className="text-xs text-gray-500">Precio final{g.market === 'EXPORT' && exchangeRate > 0 ? ` · tasa ${money(exchangeRate)}` : ''}</p>
+                              {noRate && <p className="text-xs font-medium text-red-600">Sin tasa de cambio activa</p>}
+                            </div>
+                            <p className={`text-xl font-bold tabular-nums ${noRate ? 'text-red-600' : 'text-gray-900'}`}>{groupMoney(g, finalPrice)}</p>
                           </div>
                         </div>
-                        {/* Derecha: Tallas + Recargo por color (con scroll al desbordar) */}
-                        <div className="grid grid-cols-2 lg:grid-cols-1 gap-3">
+
+                        {/* Tallas + recargo por color (con scroll al desbordar) */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-3">
                           <div>
-                            <p className="text-xs text-gray-500 mb-1">Tallas del grupo</p>
+                            <p className="text-sm font-medium text-gray-700 mb-1">Tallas del grupo</p>
                             {marketSizes.length === 0 ? <span className="text-xs text-gray-400">Sin tallas para {g.market === 'EXPORT' ? 'Exportación' : 'Nacional'}.</span> : (
-                              <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto p-1 border border-gray-100 rounded-lg">
-                                {marketSizes.map((s) => (
-                                  <button key={s.id} type="button" onClick={() => set({ sizeIds: g.sizeIds.includes(s.id) ? g.sizeIds.filter((x) => x !== s.id) : [...g.sizeIds, s.id] })} className={`px-2.5 py-1 rounded-lg border text-xs font-medium ${g.sizeIds.includes(s.id) ? (accent === 'blue' ? 'border-blue-500 bg-blue-50 text-blue-800' : 'border-orange-500 bg-orange-50 text-orange-800') : 'border-gray-300 text-gray-500'}`}>{s.abbreviation}</button>
-                                ))}
+                              <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto">
+                                {marketSizes.map((s) => {
+                                  const on = g.sizeIds.includes(s.id);
+                                  return (
+                                    <button key={s.id} type="button" aria-pressed={on} onClick={() => set({ sizeIds: on ? g.sizeIds.filter((x) => x !== s.id) : [...g.sizeIds, s.id] })}
+                                      className={`min-w-[2.25rem] h-7 px-2 rounded-md border text-xs font-medium transition-colors ${on ? 'border-app-500 bg-app-50 text-app-700' : 'border-gray-300 text-gray-500 hover:bg-gray-50'}`}>{s.abbreviation}</button>
+                                  );
+                                })}
                               </div>
                             )}
                           </div>
                           {refColors.length > 0 && (
                             <div>
-                              <p className="text-xs text-gray-500 mb-1">Recargo por color</p>
-                              <div className="space-y-1 max-h-32 overflow-y-auto p-1 border border-gray-100 rounded-lg">
+                              <p className="text-sm font-medium text-gray-700 mb-1">Recargo por color</p>
+                              <div className="space-y-1 max-h-32 overflow-y-auto pr-1">
                                 {refColors.map((c) => (
-                                  <div key={c.id} className="flex items-center gap-1.5">
+                                  <div key={c.id} className="flex items-center gap-2">
                                     <span className="w-3 h-3 rounded-full border border-gray-200 flex-shrink-0" style={{ backgroundColor: c.hexCode }} />
                                     <span className="text-xs text-gray-600 flex-1 truncate">{c.name}</span>
-                                    <input type="number" step="0.01" min="0" value={g.surcharges[c.id] ?? ''} onChange={(e) => set({ surcharges: { ...g.surcharges, [c.id]: e.target.value } })} placeholder="+$0" className="w-16 border border-gray-300 rounded px-1.5 py-0.5 text-xs flex-shrink-0" />
+                                    <input type="number" step="0.01" min="0" value={g.surcharges[c.id] ?? ''} onChange={(e) => set({ surcharges: { ...g.surcharges, [c.id]: e.target.value } })}
+                                      placeholder="+$0" aria-label={`Recargo ${c.name}`} className={`${cellInput} w-20 h-7 text-right flex-shrink-0`} />
                                   </div>
                                 ))}
                               </div>
@@ -824,9 +826,12 @@ export default function ReferenceFormPage() {
                 })}
               </div>
             )}
-          </Section>
+            {!(exchangeRate > 0) && groups.some(needsRate) && (
+              <div className="mt-4"><Alert tone="error" title="Sin tasa de cambio activa">Regístrala en Catálogos → Tasa de cambio para calcular los precios de exportación. No se puede guardar mientras falte.</Alert></div>
+            )}
+          </Card>
         </>
       )}
-    </div>
+    </Page>
   );
 }

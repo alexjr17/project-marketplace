@@ -159,12 +159,12 @@ export const AdminPage = () => {
         <div className="bg-white rounded-lg shadow-sm p-4 md:p-6 border border-gray-100 hover:shadow-md transition-shadow">
           <div className="flex flex-col">
             <div className="flex items-center justify-between mb-2">
-              <div className="p-2 bg-purple-50 rounded-lg">
-                <Star className="w-5 h-5 md:w-6 md:h-6 text-purple-600" />
+              <div className="p-2 bg-app-50 rounded-lg">
+                <Star className="w-5 h-5 md:w-6 md:h-6 text-app-600" />
               </div>
             </div>
             <p className="text-xs md:text-sm text-gray-600 font-medium">Destacados</p>
-            <p className="text-2xl md:text-3xl font-bold text-purple-600 mt-1">{stats.featured}</p>
+            <p className="text-2xl md:text-3xl font-bold text-app-600 mt-1">{stats.featured}</p>
           </div>
         </div>
       </div>
@@ -227,7 +227,7 @@ export const AdminPage = () => {
                   <td className="px-6 py-4">
                     <div className="flex flex-col gap-1">
                       {product.featured && (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-app-100 text-app-800">
                           Destacado
                         </span>
                       )}

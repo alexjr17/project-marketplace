@@ -1,23 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Button } from '../shared/Button';
-import {
-  Plus,
-  Trash2,
-  Move,
-  Eye,
-  EyeOff,
-  Save,
-  Upload,
-  X,
-  Lock,
-  Unlock,
-  Type,
-  Maximize2,
-  ZoomIn,
-  ZoomOut,
-} from 'lucide-react';
+import { Plus, Trash2, Move, Eye, EyeOff, Lock, Unlock, Type, Maximize2, ZoomIn, ZoomOut } from 'lucide-react';
 import type { LabelZone, LabelZoneType } from '../../types/label-template';
 import { ZONE_TYPE_LABELS, ZONE_SAMPLE_DATA } from '../../types/label-template';
+import { Button, Field, IconButton, ImageInput, NumberInput, SelectInput, Switch, toast, useConfirm } from '../ui';
 
 interface LabelTemplateEditorProps {
   backgroundImage: string | null;
@@ -69,12 +54,12 @@ export const LabelTemplateEditor = ({
 }: LabelTemplateEditorProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const confirm = useConfirm();
 
   const [selectedZoneId, setSelectedZoneId] = useState<number | null>(null);
   const [showZones, setShowZones] = useState(true);
   const [imageLoaded, setImageLoaded] = useState(false);
-  const [imageDimensions, setImageDimensions] = useState({ width: 0, height: 0 });
+  const [, setImageDimensions] = useState({ width: 0, height: 0 });
   const [lockAspectRatio, setLockAspectRatio] = useState<boolean>(false);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [imageError, setImageError] = useState(false);
@@ -459,61 +444,14 @@ export const LabelTemplateEditor = ({
     };
   };
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    if (!file.type.startsWith('image/')) {
-      alert('Por favor selecciona un archivo de imagen válido');
-      return;
-    }
-
-    if (file.size > 5 * 1024 * 1024) {
-      alert('La imagen no debe superar 5MB');
-      return;
-    }
-
-    setUploadingImage(true);
-    setImageLoaded(false); // Asegurar que se muestra el loading
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const dataUrl = event.target?.result as string;
-
-      // Precargar la imagen antes de establecerla
-      const img = new Image();
-      img.onload = () => {
-        onBackgroundImageChange?.(dataUrl);
-        setUploadingImage(false);
-        // imageLoaded se pondrá en true automáticamente por el useEffect
-      };
-      img.onerror = () => {
-        alert('Error al cargar la imagen');
-        setUploadingImage(false);
-        setImageLoaded(true);
-      };
-      img.src = dataUrl;
-    };
-    reader.onerror = () => {
-      alert('Error al leer el archivo');
-      setUploadingImage(false);
-      setImageLoaded(true);
-    };
-    reader.readAsDataURL(file);
-
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
-  };
-
   const handleCreateZone = () => {
     if (!newZoneType) {
-      alert('Selecciona un tipo de zona');
+      toast.error('Selecciona un tipo de zona');
       return;
     }
 
     if (newZoneWidthCm <= 0 || newZoneHeightCm <= 0) {
-      alert('Las dimensiones deben ser mayores a 0');
+      toast.error('Las dimensiones deben ser mayores a 0');
       return;
     }
 
@@ -554,8 +492,8 @@ export const LabelTemplateEditor = ({
     setSelectedZoneId(tempId);
   };
 
-  const handleDeleteZone = (zoneId: number) => {
-    if (!confirm('¿Eliminar esta zona?')) return;
+  const handleDeleteZone = async (zoneId: number) => {
+    if (!(await confirm({ title: '¿Eliminar esta zona?', tone: 'danger' }))) return;
     const newZones = zones.filter(z => z.id !== zoneId);
     onZonesChange(newZones);
     if (selectedZoneId === zoneId) setSelectedZoneId(null);
@@ -591,322 +529,176 @@ export const LabelTemplateEditor = ({
 
   const selectedZone = zones.find(z => z.id === selectedZoneId);
 
-  const zoneTypeOptions: LabelZoneType[] = [
-    'PRODUCT_NAME',
-    'SIZE',
-    'COLOR',
-    'BARCODE',
-    'BARCODE_TEXT',
-    'SKU',
-    'PRICE',
-    'CUSTOM_TEXT',
-  ];
+  const zoneTypeOptions = Object.keys(ZONE_TYPE_LABELS) as LabelZoneType[];
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <h3 className="text-lg font-semibold flex items-center gap-2">
-          <Type className="w-5 h-5" />
-          Editor de Etiqueta
-        </h3>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-base font-semibold text-gray-900 flex items-center gap-2">
+          <Type className="w-5 h-5 text-app-600" />
+          Diseño de la etiqueta
+        </h2>
 
         <div className="flex items-center gap-2">
-          {/* Controles de Zoom */}
-          <div className="flex items-center gap-1 border border-gray-300 rounded-lg bg-white">
+          {/* Zoom */}
+          <div className="flex items-center rounded-lg border border-gray-300 bg-white">
+            <IconButton title="Alejar" onClick={() => setZoomLevel(prev => Math.max(0.5, prev - 0.25))} disabled={zoomLevel <= 0.5}>
+              <ZoomOut className="w-4 h-4" />
+            </IconButton>
+            <span className="px-1 text-sm font-medium text-gray-700 min-w-[52px] text-center tabular-nums">{Math.round(zoomLevel * 100)}%</span>
+            <IconButton title="Acercar" onClick={() => setZoomLevel(prev => Math.min(3.0, prev + 0.25))} disabled={zoomLevel >= 3.0}>
+              <ZoomIn className="w-4 h-4" />
+            </IconButton>
             <button
-              onClick={() => setZoomLevel(prev => Math.max(0.5, prev - 0.25))}
-              disabled={zoomLevel <= 0.5}
-              className="p-2 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed rounded-l-lg"
-              title="Alejar"
-            >
-              <ZoomOut className="w-4 h-4 text-gray-600" />
-            </button>
-            <span className="px-2 text-sm font-medium text-gray-700 min-w-[60px] text-center">
-              {Math.round(zoomLevel * 100)}%
-            </span>
-            <button
-              onClick={() => setZoomLevel(prev => Math.min(3.0, prev + 0.25))}
-              disabled={zoomLevel >= 3.0}
-              className="p-2 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed"
-              title="Acercar"
-            >
-              <ZoomIn className="w-4 h-4 text-gray-600" />
-            </button>
-            <button
+              type="button"
               onClick={() => setZoomLevel(1.0)}
               disabled={zoomLevel === 1.0}
-              className="px-2 py-2 text-xs font-medium text-gray-600 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed border-l border-gray-300 rounded-r-lg"
               title="Restablecer zoom"
+              className="h-9 px-2.5 text-xs font-medium text-gray-600 hover:bg-gray-100 disabled:opacity-40 border-l border-gray-300 rounded-r-lg"
             >
-              Reset
+              100%
             </button>
           </div>
 
-          {/* Mostrar/Ocultar Zonas */}
-          <button
+          <Button
+            size="sm"
+            variant={showZones ? 'outline' : 'secondary'}
+            icon={showZones ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
             onClick={() => setShowZones(!showZones)}
-            className={`p-2 rounded-lg border ${showZones ? 'bg-orange-50 border-orange-300' : 'bg-white border-gray-300'}`}
             title={showZones ? 'Ocultar zonas' : 'Mostrar zonas'}
           >
-            {showZones ? <Eye className="w-5 h-5 text-orange-600" /> : <EyeOff className="w-5 h-5 text-gray-500" />}
-          </button>
+            Zonas
+          </Button>
         </div>
       </div>
 
       <div className="grid grid-cols-12 gap-4">
-        <div className="col-span-12 lg:col-span-4 space-y-3">
-          {/* Subir imagen de fondo */}
-          <div className="border border-gray-300 rounded-lg p-3">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Imagen de Fondo
-            </label>
-            {backgroundImage ? (
-              <div className="space-y-2">
-                <img
-                  src={backgroundImage}
-                  alt="Fondo de etiqueta"
-                  className="w-full h-32 object-contain rounded border border-gray-200 bg-white"
-                />
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={uploadingImage}
-                    className="flex-1 text-xs text-orange-600 hover:text-orange-800 py-1 disabled:opacity-50"
-                  >
-                    {uploadingImage ? 'Cargando...' : 'Cambiar imagen'}
-                  </button>
-                  <button
-                    onClick={() => onBackgroundImageChange?.(null)}
-                    disabled={uploadingImage}
-                    className="p-1 text-red-500 hover:bg-red-50 rounded disabled:opacity-50"
-                    title="Eliminar imagen"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                disabled={uploadingImage}
-                className="w-full flex items-center justify-center gap-2 px-3 py-3 border-2 border-dashed border-gray-300 rounded-md text-sm text-gray-500 hover:border-orange-400 hover:text-orange-600 transition-colors bg-white disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <Upload className="w-4 h-4" />
-                {uploadingImage ? 'Cargando imagen...' : 'Subir imagen'}
-              </button>
-            )}
-            <p className="text-xs text-gray-500 mt-2">
-              Dimensiones: {pointsToCm(width)}cm × {pointsToCm(height)}cm
-            </p>
-            {backgroundImage && (
-              <p className="text-xs text-orange-600 mt-1">
-                💡 La imagen se ajustará a {pointsToCm(width)}×{pointsToCm(height)}cm manteniendo sus proporciones.
-                Si no coinciden exactamente, se recortará para llenar el área.
-              </p>
-            )}
-          </div>
+        <div className="col-span-12 lg:col-span-4 space-y-4">
+          {/* Imagen de fondo */}
+          <Field
+            label="Imagen de fondo"
+            hint={backgroundImage
+              ? `Se ajusta a ${pointsToCm(width)} × ${pointsToCm(height)} cm; si la proporción no coincide, se recorta para llenar el área.`
+              : `Opcional. Tamaño de la etiqueta: ${pointsToCm(width)} × ${pointsToCm(height)} cm.`}
+          >
+            <ImageInput
+              value={backgroundImage}
+              onChange={(v) => onBackgroundImageChange?.(v || null)}
+              ratio="landscape"
+              allowUrl={false}
+              disabled={!onBackgroundImageChange}
+            />
+          </Field>
 
-          {/* Crear nueva zona */}
-          {!isCreatingZone ? (
-            <Button
-              onClick={() => setIsCreatingZone(true)}
-              variant="admin-secondary"
-              className="w-full"
-            >
-              <Plus className="w-4 h-4 mr-1" />
-              Agregar Zona
-            </Button>
-          ) : (
-            <div className="border rounded-lg p-3 space-y-3 bg-gray-50 border-gray-300">
-              <label className="block text-xs font-medium text-gray-700">
-                Tipo de Información
-              </label>
-              <select
-                value={newZoneType}
-                onChange={(e) => setNewZoneType(e.target.value as LabelZoneType)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
-              >
-                <option value="">Seleccionar tipo...</option>
-                {zoneTypeOptions.map(type => (
-                  <option key={type} value={type}>{ZONE_TYPE_LABELS[type]}</option>
-                ))}
-              </select>
-
-              <div className="bg-white border border-gray-200 rounded-md p-2">
-                <label className="block text-xs font-medium text-gray-600 mb-2">
-                  Dimensiones (cm)
-                </label>
-                <div className="flex gap-2 items-center">
-                  <div className="flex-1">
-                    <label className="block text-xs text-gray-500 mb-1">Ancho</label>
-                    <input
-                      type="number"
-                      value={newZoneWidthCm}
-                      onChange={(e) => setNewZoneWidthCm(parseFloat(e.target.value) || 0)}
-                      min="0.5"
-                      max={pointsToCm(width)}
-                      step="0.5"
-                      className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm text-center"
-                    />
-                  </div>
-                  <span className="text-gray-400 pt-4">×</span>
-                  <div className="flex-1">
-                    <label className="block text-xs text-gray-500 mb-1">Alto</label>
-                    <input
-                      type="number"
-                      value={newZoneHeightCm}
-                      onChange={(e) => setNewZoneHeightCm(parseFloat(e.target.value) || 0)}
-                      min="0.5"
-                      max={pointsToCm(height)}
-                      step="0.5"
-                      className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm text-center"
-                    />
-                  </div>
-                  <span className="text-xs text-gray-500 pt-4">cm</span>
-                </div>
-              </div>
-
-              <div className="flex gap-2">
-                <Button onClick={() => setIsCreatingZone(false)} variant="admin-secondary" className="flex-1">
-                  Cancelar
+          {/* Zonas */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-medium text-gray-700">Zonas ({zones.length})</span>
+              {!isCreatingZone && (
+                <Button size="sm" variant="secondary" icon={<Plus className="w-4 h-4" />} onClick={() => setIsCreatingZone(true)}>
+                  Agregar zona
                 </Button>
-                <Button onClick={handleCreateZone} variant="admin-primary" className="flex-1">
-                  Crear Zona
-                </Button>
-              </div>
+              )}
             </div>
-          )}
 
-          {/* Lista de zonas */}
-          <div className="space-y-2 max-h-[400px] overflow-y-auto">
+            {isCreatingZone && (
+              <div className="rounded-lg border border-app-300 p-3 space-y-3 mb-3">
+                <Field label="Tipo de información" required>
+                  <SelectInput value={newZoneType} onChange={(e) => setNewZoneType(e.target.value as LabelZoneType)}>
+                    <option value="">Seleccionar tipo…</option>
+                    {zoneTypeOptions.map(type => (
+                      <option key={type} value={type}>{ZONE_TYPE_LABELS[type]}</option>
+                    ))}
+                  </SelectInput>
+                </Field>
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label="Ancho">
+                    <NumberInput suffix="cm" value={newZoneWidthCm} onChange={(e) => setNewZoneWidthCm(parseFloat(e.target.value) || 0)} min="0.5" max={pointsToCm(width)} step="0.5" />
+                  </Field>
+                  <Field label="Alto">
+                    <NumberInput suffix="cm" value={newZoneHeightCm} onChange={(e) => setNewZoneHeightCm(parseFloat(e.target.value) || 0)} min="0.5" max={pointsToCm(height)} step="0.5" />
+                  </Field>
+                </div>
+                <div className="flex gap-2 justify-end">
+                  <Button size="sm" variant="secondary" onClick={() => setIsCreatingZone(false)}>Cancelar</Button>
+                  <Button size="sm" onClick={handleCreateZone}>Crear zona</Button>
+                </div>
+              </div>
+            )}
+
             {zones.length === 0 ? (
-              <p className="text-sm text-gray-500 text-center py-4">
-                No hay zonas. Agrega una nueva zona.
+              <p className="rounded-lg border border-dashed border-gray-300 px-3 py-6 text-center text-sm text-gray-500">
+                Aún no hay zonas. Agrega la primera (nombre, talla, código de barras…).
               </p>
             ) : (
-              zones.map(zone => (
-                <div
-                  key={zone.id}
-                  onClick={() => setSelectedZoneId(zone.id)}
-                  className={`p-3 rounded-lg border cursor-pointer transition-all ${
-                    selectedZoneId === zone.id
-                      ? 'border-orange-500 bg-orange-50 shadow-sm'
-                      : 'border-gray-200 bg-white hover:border-gray-300'
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <div
-                        className="w-4 h-4 rounded"
-                        style={{ backgroundColor: getBorderColor(zone) }}
-                      />
-                      <span className="font-medium text-sm">{ZONE_TYPE_LABELS[zone.zoneType]}</span>
-                    </div>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handleDeleteZone(zone.id); }}
-                      className="p-1 text-red-500 hover:bg-red-50 rounded"
+              <ul className="divide-y divide-gray-100 rounded-lg border border-gray-200 max-h-[320px] overflow-y-auto">
+                {zones.map(zone => {
+                  const active = selectedZoneId === zone.id;
+                  return (
+                    <li
+                      key={zone.id}
+                      onClick={() => setSelectedZoneId(zone.id)}
+                      className={`flex items-center gap-2 px-3 py-2 cursor-pointer transition-colors ${active ? 'bg-app-50' : 'hover:bg-gray-50'}`}
                     >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                  <div className="text-xs text-gray-500">
-                    <span className="font-medium text-gray-700">
-                      {pointsToCm(zone.width)} × {pointsToCm(zone.height)} cm
-                    </span>
-                  </div>
-                </div>
-              ))
+                      <span className="w-3 h-3 rounded-sm flex-shrink-0" style={{ backgroundColor: getBorderColor(zone) }} />
+                      <span className="flex-1 min-w-0">
+                        <span className={`block text-sm truncate ${active ? 'font-medium text-app-700' : 'text-gray-800'}`}>{ZONE_TYPE_LABELS[zone.zoneType]}</span>
+                        <span className="block text-xs text-gray-500">{pointsToCm(zone.width)} × {pointsToCm(zone.height)} cm</span>
+                      </span>
+                      <IconButton title="Eliminar zona" tone="danger" onClick={(e) => { e.stopPropagation(); handleDeleteZone(zone.id); }}>
+                        <Trash2 className="w-4 h-4" />
+                      </IconButton>
+                    </li>
+                  );
+                })}
+              </ul>
             )}
           </div>
 
-          {/* Detalles de zona seleccionada */}
+          {/* Zona seleccionada */}
           {selectedZone && (
-            <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 space-y-3">
-              <div className="flex items-center justify-between">
-                <h4 className="font-medium text-sm text-gray-900">{ZONE_TYPE_LABELS[selectedZone.zoneType]}</h4>
-                <button
+            <div className="rounded-lg border border-gray-200 p-3 space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <p className="font-medium text-sm text-gray-900">{ZONE_TYPE_LABELS[selectedZone.zoneType]}</p>
+                <Button
+                  size="sm"
+                  variant={lockAspectRatio ? 'outline' : 'ghost'}
+                  icon={lockAspectRatio ? <Lock className="w-3.5 h-3.5" /> : <Unlock className="w-3.5 h-3.5" />}
                   onClick={() => setLockAspectRatio(!lockAspectRatio)}
-                  className={`flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors ${
-                    lockAspectRatio
-                      ? 'bg-orange-100 text-orange-700 border border-orange-300'
-                      : 'bg-gray-100 text-gray-600 border border-gray-300'
-                  }`}
                   title={lockAspectRatio ? 'Proporciones bloqueadas' : 'Proporciones libres'}
                 >
-                  {lockAspectRatio ? <Lock className="w-3 h-3" /> : <Unlock className="w-3 h-3" />}
-                  {lockAspectRatio ? 'Bloqueado' : 'Libre'}
-                </button>
+                  {lockAspectRatio ? 'Proporción fija' : 'Proporción libre'}
+                </Button>
               </div>
 
-              <div className="bg-white border border-gray-200 rounded-md p-2">
-                <div className="text-xs text-gray-500 mb-1">Dimensiones</div>
-                <div className="font-medium text-gray-900">
-                  {pointsToCm(selectedZone.width)} × {pointsToCm(selectedZone.height)} cm
-                </div>
-              </div>
+              <dl className="grid grid-cols-3 gap-2 text-xs">
+                <div><dt className="text-gray-500">Tamaño</dt><dd className="font-medium text-gray-900 tabular-nums">{pointsToCm(selectedZone.width)} × {pointsToCm(selectedZone.height)} cm</dd></div>
+                <div><dt className="text-gray-500">Posición X</dt><dd className="font-medium text-gray-900 tabular-nums">{pointsToCm(selectedZone.x)} cm</dd></div>
+                <div><dt className="text-gray-500">Posición Y</dt><dd className="font-medium text-gray-900 tabular-nums">{pointsToCm(selectedZone.y)} cm</dd></div>
+              </dl>
 
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                <div>
-                  <label className="text-gray-500">Posición X</label>
-                  <div className="font-mono bg-white px-2 py-1 rounded border border-gray-200">
-                    {pointsToCm(selectedZone.x)} cm
-                  </div>
-                </div>
-                <div>
-                  <label className="text-gray-500">Posición Y</label>
-                  <div className="font-mono bg-white px-2 py-1 rounded border border-gray-200">
-                    {pointsToCm(selectedZone.y)} cm
-                  </div>
-                </div>
-              </div>
-
-              {/* Toggle para mostrar/ocultar label */}
               {['SIZE', 'COLOR', 'SKU'].includes(selectedZone.zoneType) && (
-                <div className="flex items-center justify-between bg-white border border-gray-200 rounded-md p-2">
-                  <div className="text-xs">
-                    <div className="text-gray-700 font-medium">Mostrar etiqueta</div>
-                    <div className="text-gray-500">Ej: "Talla:", "Color:", "SKU:"</div>
-                  </div>
-                  <button
-                    onClick={() => {
-                      const newZones = zones.map(z =>
-                        z.id === selectedZone.id
-                          ? { ...z, showLabel: !z.showLabel }
-                          : z
-                      );
-                      onZonesChange(newZones);
-                    }}
-                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                      selectedZone.showLabel !== false ? 'bg-orange-500' : 'bg-gray-300'
-                    }`}
-                  >
-                    <span
-                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                        selectedZone.showLabel !== false ? 'translate-x-6' : 'translate-x-1'
-                      }`}
-                    />
-                  </button>
-                </div>
+                <Switch
+                  checked={selectedZone.showLabel !== false}
+                  onChange={() => {
+                    const newZones = zones.map(z => (z.id === selectedZone.id ? { ...z, showLabel: !z.showLabel } : z));
+                    onZonesChange(newZones);
+                  }}
+                  label="Mostrar etiqueta"
+                  description={'Ej: "Talla:", "Color:", "SKU:"'}
+                />
               )}
 
-              <div className="bg-blue-50 border border-blue-200 rounded p-2 text-xs text-blue-700">
-                Vista previa: <strong>
+              <p className="rounded-md bg-gray-50 px-2.5 py-2 text-xs text-gray-600">
+                Vista previa:{' '}
+                <strong className="text-gray-900">
                   {selectedZone.showLabel !== false
                     ? ZONE_SAMPLE_DATA[selectedZone.zoneType]
-                    : ZONE_SAMPLE_DATA[selectedZone.zoneType].replace(/^(Talla:|Color:|SKU:)\s*/, '')
-                  }
+                    : ZONE_SAMPLE_DATA[selectedZone.zoneType].replace(/^(Talla:|Color:|SKU:)\s*/, '')}
                 </strong>
-              </div>
+              </p>
             </div>
           )}
-
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            onChange={handleImageUpload}
-            className="hidden"
-          />
         </div>
 
         {/* Vista previa de la etiqueta */}

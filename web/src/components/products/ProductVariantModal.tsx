@@ -401,7 +401,7 @@ export const ProductVariantModal = ({
                     <span className="text-xs text-gray-400">Verificando...</span>
                   ) : availableStock !== null && (
                     <span className={`text-xs font-medium ${
-                      isOutOfStock ? 'text-red-500' : hasInsufficientStock ? 'text-orange-500' : 'text-green-600'
+                      isOutOfStock ? 'text-red-500' : hasInsufficientStock ? 'text-amber-600' : 'text-green-600'
                     }`}>
                       {isOutOfStock ? 'Sin stock' : `${availableStock} disponibles`}
                     </span>

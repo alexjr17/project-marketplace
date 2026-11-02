@@ -197,7 +197,7 @@ export const PromoBanner = ({ banner, className = '' }: PromoBannerProps) => {
 
   return (
     <div
-      className={`relative rounded-2xl overflow-hidden ${heightClasses[banner.height]} ${className}`}
+      className={`relative rounded-xl overflow-hidden ${heightClasses[banner.height]} ${className}`}
     >
       {/* Fondo */}
       <BannerBackground background={banner.background} brandColors={brandColors} />
@@ -227,7 +227,7 @@ export const PromoBanner = ({ banner, className = '' }: PromoBannerProps) => {
           {banner.buttonText && banner.buttonLink && (
             <Link
               to={banner.buttonLink}
-              className="inline-flex items-center gap-2 bg-white px-4 py-2 md:px-5 md:py-2.5 rounded-lg text-sm md:text-base font-semibold hover:bg-gray-100 transition-all hover:scale-105 shadow-lg group"
+              className="inline-flex items-center gap-2 bg-white px-4 py-2 md:px-5 md:py-2.5 rounded-lg text-sm md:text-base font-semibold hover:bg-gray-100 transition-colors shadow-sm group"
               style={{ color: brandColors.primary }}
             >
               {banner.buttonText}

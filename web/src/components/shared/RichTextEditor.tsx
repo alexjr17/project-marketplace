@@ -2,7 +2,10 @@ import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Link from '@tiptap/extension-link';
 import Underline from '@tiptap/extension-underline';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { Dialog } from '../ui/Overlay';
+import { Button } from '../ui/Button';
+import { Field, TextInput } from '../ui/Form';
 import {
   Bold,
   Italic,
@@ -34,7 +37,7 @@ export const RichTextEditor = ({ content, onChange, placeholder: _placeholder }:
       Link.configure({
         openOnClick: false,
         HTMLAttributes: {
-          class: 'text-orange-600 underline hover:text-orange-700',
+          class: 'text-app-600 underline hover:text-app-700',
         },
       }),
       Underline,
@@ -58,6 +61,9 @@ export const RichTextEditor = ({ content, onChange, placeholder: _placeholder }:
     }
   }, [content, editor]);
 
+  // URL del enlace en edición (null = diálogo cerrado). Reemplaza al window.prompt.
+  const [linkUrl, setLinkUrl] = useState<string | null>(null);
+
   if (!editor) {
     return (
       <div className="border border-gray-300 rounded-lg p-4 min-h-[350px] bg-gray-50">
@@ -66,14 +72,11 @@ export const RichTextEditor = ({ content, onChange, placeholder: _placeholder }:
     );
   }
 
-  const setLink = () => {
-    const previousUrl = editor.getAttributes('link').href;
-    const url = window.prompt('URL del enlace:', previousUrl);
+  const setLink = () => setLinkUrl(editor.getAttributes('link').href ?? '');
 
-    if (url === null) {
-      return;
-    }
-
+  const applyLink = () => {
+    const url = (linkUrl ?? '').trim();
+    setLinkUrl(null);
     if (url === '') {
       editor.chain().focus().extendMarkRange('link').unsetLink().run();
       return;
@@ -102,7 +105,7 @@ export const RichTextEditor = ({ content, onChange, placeholder: _placeholder }:
       title={title}
       className={`p-2 rounded transition-colors ${
         isActive
-          ? 'bg-orange-100 text-orange-700'
+          ? 'bg-app-100 text-app-700'
           : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
       } ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
     >
@@ -111,7 +114,7 @@ export const RichTextEditor = ({ content, onChange, placeholder: _placeholder }:
   );
 
   return (
-    <div className="border border-gray-300 rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-orange-500 focus-within:border-orange-500">
+    <div className="border border-gray-300 rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-app-500 focus-within:border-app-500">
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-1 px-2 py-2 bg-gray-50 border-b border-gray-200">
         {/* Headings */}
@@ -213,6 +216,14 @@ export const RichTextEditor = ({ content, onChange, placeholder: _placeholder }:
 
       {/* Editor content */}
       <EditorContent editor={editor} />
+
+      <Dialog open={linkUrl !== null} onClose={() => setLinkUrl(null)} title="Enlace" size="sm"
+        footer={<><Button variant="secondary" onClick={() => setLinkUrl(null)}>Cancelar</Button><Button onClick={applyLink}>Aplicar</Button></>}>
+        <Field label="URL del enlace" hint="Déjalo vacío para quitar el enlace.">
+          <TextInput autoFocus value={linkUrl ?? ''} onChange={(e) => setLinkUrl(e.target.value)} placeholder="https://…"
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); applyLink(); } }} />
+        </Field>
+      </Dialog>
     </div>
   );
 };

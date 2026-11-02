@@ -1,3 +1,4 @@
+import type { AppColors } from '../theme/appTheme';
 // Colores de marca para gradientes
 export interface BrandColors {
   primary: string;   // Color principal (ej: #7c3aed - violet-600)
@@ -78,6 +79,8 @@ export interface AppearanceSettings {
   heroBgColor?: string;
   // Usar gradiente en hero
   useGradientHero: boolean;
+  // Color de acento de cada app del panel (ver theme/appTheme.ts). La Tienda usa brandColors.primary.
+  appColors?: Partial<AppColors>;
 }
 
 // Presets de temas completos

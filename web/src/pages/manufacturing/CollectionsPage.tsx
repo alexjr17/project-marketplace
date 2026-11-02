@@ -1,14 +1,21 @@
 import { useEffect, useState } from 'react';
-import { Plus, Pencil, Trash2, CalendarRange } from 'lucide-react';
-import toast from 'react-hot-toast';
+import { Plus, CalendarRange } from 'lucide-react';
+import toast from '../../lib/toast';
 import manufacturingService from '../../services/manufacturing.service';
 import type { MfgCollection } from '../../types/manufacturing';
+import {
+  Page, PageHeader, Button, FilterBar, SearchInput, TableCard, Table, THead, TBody, Th, Tr, Td, TableMessage,
+  Dialog, Field, TextInput, NumberInput, SelectInput, Switch, FormGrid, useConfirm,
+} from '../../components/ui';
+import { ActiveBadge, RowActions, matchText } from '../../components/manufacturing/mfgUi';
 
 const empty = { name: '', year: undefined as number | undefined, semester: '', isActive: true };
 
 export default function CollectionsPage() {
+  const confirm = useConfirm();
   const [items, setItems] = useState<MfgCollection[]>([]);
   const [loading, setLoading] = useState(true);
+  const [q, setQ] = useState('');
   const [modal, setModal] = useState(false);
   const [editing, setEditing] = useState<MfgCollection | null>(null);
   const [form, setForm] = useState<Partial<MfgCollection>>(empty);
@@ -38,95 +45,67 @@ export default function CollectionsPage() {
   };
 
   const remove = async (c: MfgCollection) => {
-    if (!confirm(`¿Eliminar la colección "${c.name}"?`)) return;
-    try { await manufacturingService.deleteCollection(c.id); toast.success('Eliminada'); load(); }
+    if (!(await confirm({ title: `¿Eliminar la colección "${c.name}"?`, message: 'No se puede deshacer.', tone: 'danger' }))) return;
+    try { await manufacturingService.deleteCollection(c.id); toast.success('Colección eliminada'); load(); }
     catch { toast.error('No se pudo eliminar'); }
   };
 
+  const rows = items.filter((c) => matchText(q, c.name, c.year, c.semester));
+
   return (
-    <div>
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-orange-100 rounded-lg"><CalendarRange className="w-6 h-6 text-orange-600" /></div>
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Colecciones</h1>
-            <p className="text-sm text-gray-500">Año y semestre a los que pertenece cada referencia.</p>
-          </div>
-        </div>
-        <button onClick={openNew} className="inline-flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white font-medium px-4 py-2 rounded-lg">
-          <Plus className="w-4 h-4" /> Nueva colección
-        </button>
-      </div>
+    <Page>
+      <PageHeader
+        icon={CalendarRange}
+        title="Colecciones"
+        subtitle="Año y semestre a los que pertenece cada referencia."
+        actions={<Button icon={<Plus className="w-4 h-4" />} onClick={openNew}>Nueva colección</Button>}
+      />
 
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-50 text-gray-500 text-left">
-            <tr>
-              <th className="px-4 py-3 font-medium">Nombre</th>
-              <th className="px-4 py-3 font-medium">Año</th>
-              <th className="px-4 py-3 font-medium">Semestre</th>
-              <th className="px-4 py-3 font-medium">Estado</th>
-              <th className="px-4 py-3" />
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {loading ? (
-              <tr><td colSpan={5} className="px-4 py-8 text-center text-gray-400">Cargando…</td></tr>
-            ) : items.length === 0 ? (
-              <tr><td colSpan={5} className="px-4 py-8 text-center text-gray-400">Sin colecciones. Crea la primera.</td></tr>
-            ) : items.map((c) => (
-              <tr key={c.id} className="hover:bg-gray-50">
-                <td className="px-4 py-3 font-medium text-gray-900">{c.name}</td>
-                <td className="px-4 py-3 text-gray-600">{c.year || '—'}</td>
-                <td className="px-4 py-3 text-gray-600">{c.semester || '—'}</td>
-                <td className="px-4 py-3">
-                  <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${c.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>{c.isActive ? 'Activa' : 'Inactiva'}</span>
-                </td>
-                <td className="px-4 py-3">
-                  <div className="flex items-center justify-end gap-1">
-                    <button onClick={() => openEdit(c)} className="p-2 text-gray-500 hover:text-orange-600 hover:bg-orange-50 rounded-lg"><Pencil className="w-4 h-4" /></button>
-                    <button onClick={() => remove(c)} className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg"><Trash2 className="w-4 h-4" /></button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <FilterBar>
+        <SearchInput value={q} onChange={setQ} placeholder="Buscar por nombre o año…" />
+      </FilterBar>
 
-      {modal && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => setModal(false)}>
-          <div className="bg-white rounded-2xl w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-lg font-bold text-gray-900 mb-4">{editing ? 'Editar colección' : 'Nueva colección'}</h2>
-            <div className="space-y-3">
-              <label className="block">
-                <span className="text-sm font-medium text-gray-700">Nombre *</span>
-                <input value={form.name ?? ''} onChange={(e) => setForm({ ...form, name: e.target.value })} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2" placeholder="Verano 2026" />
-              </label>
-              <div className="grid grid-cols-2 gap-3">
-                <label className="block">
-                  <span className="text-sm font-medium text-gray-700">Año</span>
-                  <input type="number" value={form.year ?? ''} onChange={(e) => setForm({ ...form, year: e.target.value === '' ? undefined : Number(e.target.value) })} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2" placeholder="2026" />
-                </label>
-                <label className="block">
-                  <span className="text-sm font-medium text-gray-700">Semestre</span>
-                  <select value={form.semester ?? ''} onChange={(e) => setForm({ ...form, semester: e.target.value })} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2">
-                    <option value="">—</option><option value="I">I</option><option value="II">II</option>
-                  </select>
-                </label>
-              </div>
-              <label className="flex items-center gap-2">
-                <input type="checkbox" checked={form.isActive ?? true} onChange={(e) => setForm({ ...form, isActive: e.target.checked })} />
-                <span className="text-sm text-gray-700">Activa</span>
-              </label>
-            </div>
-            <div className="flex justify-end gap-2 mt-6">
-              <button onClick={() => setModal(false)} className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700">Cancelar</button>
-              <button onClick={save} disabled={saving} className="px-4 py-2 rounded-lg bg-orange-500 hover:bg-orange-600 text-white font-medium disabled:opacity-60">{saving ? 'Guardando…' : 'Guardar'}</button>
-            </div>
-          </div>
+      <TableCard>
+        <Table>
+          <THead><tr><Th>Nombre</Th><Th align="right">Año</Th><Th align="center">Semestre</Th><Th align="center">Estado</Th><Th align="right">Acciones</Th></tr></THead>
+          <TBody>
+            {loading ? <TableMessage colSpan={5}>Cargando…</TableMessage>
+              : rows.length === 0 ? <TableMessage colSpan={5}>{items.length ? 'Sin resultados para la búsqueda.' : 'Sin colecciones. Crea la primera.'}</TableMessage>
+              : rows.map((c) => (
+                <Tr key={c.id}>
+                  <Td className="font-medium text-gray-900">{c.name}</Td>
+                  <Td align="right">{c.year || '—'}</Td>
+                  <Td align="center">{c.semester || '—'}</Td>
+                  <Td align="center"><ActiveBadge active={c.isActive} female /></Td>
+                  <Td align="right"><RowActions onEdit={() => openEdit(c)} onDelete={() => remove(c)} /></Td>
+                </Tr>
+              ))}
+          </TBody>
+        </Table>
+      </TableCard>
+
+      <Dialog
+        open={modal}
+        onClose={() => setModal(false)}
+        title={editing ? 'Editar colección' : 'Nueva colección'}
+        footer={<>
+          <Button variant="secondary" onClick={() => setModal(false)}>Cancelar</Button>
+          <Button isLoading={saving} onClick={save}>Guardar</Button>
+        </>}
+      >
+        <div className="space-y-4">
+          <Field label="Nombre" required><TextInput value={form.name ?? ''} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Verano 2026" autoFocus /></Field>
+          <FormGrid>
+            <Field label="Año"><NumberInput value={form.year ?? ''} onChange={(e) => setForm({ ...form, year: e.target.value === '' ? undefined : Number(e.target.value) })} placeholder="2026" /></Field>
+            <Field label="Semestre">
+              <SelectInput value={form.semester ?? ''} onChange={(e) => setForm({ ...form, semester: e.target.value })}>
+                <option value="">—</option><option value="I">I</option><option value="II">II</option>
+              </SelectInput>
+            </Field>
+          </FormGrid>
+          <Switch label="Activa" checked={form.isActive ?? true} onChange={(v) => setForm({ ...form, isActive: v })} />
         </div>
-      )}
-    </div>
+      </Dialog>
+    </Page>
   );
 }

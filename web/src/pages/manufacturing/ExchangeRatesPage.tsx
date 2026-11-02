@@ -1,12 +1,17 @@
 import { useEffect, useState } from 'react';
-import { Plus, Trash2, DollarSign } from 'lucide-react';
-import toast from 'react-hot-toast';
+import { Plus, Trash2, DollarSign, CheckCircle2 } from 'lucide-react';
+import toast from '../../lib/toast';
 import manufacturingService from '../../services/manufacturing.service';
 import type { MfgExchangeRate } from '../../types/manufacturing';
+import {
+  Page, PageHeader, Button, IconButton, Card, CardTitle, StatCard, TableCard, Table, THead, TBody, Th, Tr, Td, TableMessage,
+  Field, MoneyInput, DateInput, Badge, useConfirm,
+} from '../../components/ui';
 
 const money = (n: number) => '$' + n.toLocaleString('es-CO', { maximumFractionDigits: 2 });
 
 export default function ExchangeRatesPage() {
+  const confirm = useConfirm();
   const [items, setItems] = useState<MfgExchangeRate[]>([]);
   const [loading, setLoading] = useState(true);
   const [rate, setRate] = useState('');
@@ -32,61 +37,55 @@ export default function ExchangeRatesPage() {
   };
 
   const remove = async (r: MfgExchangeRate) => {
-    if (!confirm('¿Eliminar esta tasa?')) return;
-    try { await manufacturingService.deleteExchangeRate(r.id); toast.success('Eliminada'); load(); }
+    if (!(await confirm({ title: '¿Eliminar esta tasa?', message: `${money(Number(r.rate))} por USD${r.effectiveDate ? ` del ${r.effectiveDate}` : ''}.`, tone: 'danger' }))) return;
+    try { await manufacturingService.deleteExchangeRate(r.id); toast.success('Tasa eliminada'); load(); }
     catch { toast.error('No se pudo eliminar'); }
   };
 
+  const current = items.find((r) => r.isActive);
+
   return (
-    <div>
-      <div className="flex items-center gap-3 mb-6">
-        <div className="p-2 bg-orange-100 rounded-lg"><DollarSign className="w-6 h-6 text-orange-600" /></div>
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Tasa de cambio</h1>
-          <p className="text-sm text-gray-500">COP por USD. La activa se usa para los precios de exportación.</p>
-        </div>
+    <Page>
+      <PageHeader icon={DollarSign} title="Tasa de cambio" subtitle="COP por USD. La activa se usa para los precios de exportación." />
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
+        <StatCard
+          icon={CheckCircle2}
+          tone={current ? 'green' : 'yellow'}
+          label="Tasa activa"
+          value={current ? money(Number(current.rate)) : 'Sin tasa'}
+          hint={current ? (current.effectiveDate ? `Vigente desde ${current.effectiveDate}` : 'COP por 1 USD') : 'Registra una para calcular precios en USD'}
+        />
+        <Card className="lg:col-span-2">
+          <CardTitle>Registrar nueva tasa</CardTitle>
+          <div className="flex flex-col sm:flex-row sm:items-end gap-3">
+            <Field label="Tasa (COP por 1 USD)" required className="sm:w-56">
+              <MoneyInput value={rate} onChange={(e) => setRate(e.target.value)} placeholder="4000" onKeyDown={(e) => { if (e.key === 'Enter') save(); }} />
+            </Field>
+            <Field label="Fecha" className="sm:w-48"><DateInput value={date} onChange={(e) => setDate(e.target.value)} /></Field>
+            <Button icon={<Plus className="w-4 h-4" />} isLoading={saving} onClick={save}>Registrar tasa</Button>
+          </div>
+          <p className="text-xs text-gray-500 mt-2">La nueva tasa queda activa y la anterior pasa a histórica.</p>
+        </Card>
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-200 p-4 mb-5 flex items-end gap-3 flex-wrap">
-        <label className="block">
-          <span className="text-sm font-medium text-gray-700">Tasa (COP por 1 USD) *</span>
-          <input type="number" step="0.01" min="0" value={rate} onChange={(e) => setRate(e.target.value)} className="mt-1 w-48 border border-gray-300 rounded-lg px-3 py-2" placeholder="4000" />
-        </label>
-        <label className="block">
-          <span className="text-sm font-medium text-gray-700">Fecha</span>
-          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="mt-1 border border-gray-300 rounded-lg px-3 py-2" />
-        </label>
-        <button onClick={save} disabled={saving} className="inline-flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white font-medium px-4 py-2 rounded-lg disabled:opacity-60"><Plus className="w-4 h-4" /> {saving ? 'Guardando…' : 'Registrar tasa'}</button>
-      </div>
-
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-50 text-gray-500 text-left">
-            <tr>
-              <th className="px-4 py-3 font-medium">Tasa (COP/USD)</th>
-              <th className="px-4 py-3 font-medium">Fecha</th>
-              <th className="px-4 py-3 font-medium">Estado</th>
-              <th className="px-4 py-3" />
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {loading ? (
-              <tr><td colSpan={4} className="px-4 py-8 text-center text-gray-400">Cargando…</td></tr>
-            ) : items.length === 0 ? (
-              <tr><td colSpan={4} className="px-4 py-8 text-center text-gray-400">Sin tasas. Registra la primera.</td></tr>
-            ) : items.map((r) => (
-              <tr key={r.id} className="hover:bg-gray-50">
-                <td className="px-4 py-3 font-semibold text-gray-900">{money(Number(r.rate))}</td>
-                <td className="px-4 py-3 text-gray-600">{r.effectiveDate ?? '—'}</td>
-                <td className="px-4 py-3">
-                  <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${r.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>{r.isActive ? 'Activa' : 'Histórica'}</span>
-                </td>
-                <td className="px-4 py-3 text-right"><button onClick={() => remove(r)} className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg"><Trash2 className="w-4 h-4" /></button></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
+      <TableCard>
+        <Table>
+          <THead><tr><Th align="right">Tasa (COP/USD)</Th><Th>Fecha</Th><Th align="center">Estado</Th><Th align="right">Acciones</Th></tr></THead>
+          <TBody>
+            {loading ? <TableMessage colSpan={4}>Cargando…</TableMessage>
+              : items.length === 0 ? <TableMessage colSpan={4}>Sin tasas. Registra la primera.</TableMessage>
+              : items.map((r) => (
+                <Tr key={r.id}>
+                  <Td align="right" className="font-semibold text-gray-900 tabular-nums">{money(Number(r.rate))}</Td>
+                  <Td>{r.effectiveDate ?? '—'}</Td>
+                  <Td align="center"><Badge tone={r.isActive ? 'green' : 'gray'}>{r.isActive ? 'Activa' : 'Histórica'}</Badge></Td>
+                  <Td align="right"><IconButton title="Eliminar" tone="danger" onClick={() => remove(r)}><Trash2 className="w-4 h-4" /></IconButton></Td>
+                </Tr>
+              ))}
+          </TBody>
+        </Table>
+      </TableCard>
+    </Page>
   );
 }

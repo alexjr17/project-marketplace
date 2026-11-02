@@ -1,9 +1,7 @@
 import { useState } from 'react';
-import { Modal } from '../shared/Modal';
-import { Button } from '../shared/Button';
-import { Input } from '../shared/Input';
+import { Alert, Button, Dialog, Field, TextInput } from '../ui';
 import { useAuth } from '../../context/AuthContext';
-import { LogIn, UserPlus, Mail, ArrowLeft, Check, Eye, EyeOff } from 'lucide-react';
+import { LogIn, UserPlus, ArrowLeft, Check, Eye, EyeOff } from 'lucide-react';
 
 interface LoginModalProps {
   isOpen: boolean;
@@ -67,106 +65,80 @@ export const LoginModal = ({ isOpen, onClose, initialMode = 'login' }: LoginModa
   };
 
   const getTitle = () => {
-    if (mode === 'login') return 'Iniciar Sesión';
-    if (mode === 'register') return 'Crear Cuenta';
-    return 'Recuperar Contraseña';
+    if (mode === 'login') return 'Iniciar sesión';
+    if (mode === 'register') return 'Crear cuenta';
+    return 'Recuperar contraseña';
   };
 
   return (
-    <Modal
-      isOpen={isOpen}
+    <Dialog
+      open={isOpen}
       onClose={handleClose}
       title={getTitle()}
+      description={mode === 'login' ? 'Accede a tu cuenta para comprar y ver tus pedidos.' : mode === 'register' ? 'Crea tu cuenta en segundos.' : undefined}
+      size="sm"
     >
-      {/* Modo: Forgot Password - Éxito */}
+      {/* Recuperar contraseña: éxito */}
       {mode === 'forgot' && forgotSuccess ? (
-        <div className="text-center py-4">
-          <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <Check className="w-8 h-8 text-green-600" />
+        <div className="text-center py-2">
+          <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3">
+            <Check className="w-6 h-6 text-green-600" />
           </div>
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">
-            Correo enviado
-          </h3>
-          <p className="text-gray-600 mb-6">
-            Hemos enviado un enlace de recuperación a <strong>{formData.email}</strong>.
-            Revisa tu bandeja de entrada.
+          <h3 className="text-base font-semibold text-gray-900 mb-1">Correo enviado</h3>
+          <p className="text-sm text-gray-600 mb-5">
+            Hemos enviado un enlace de recuperación a <strong>{formData.email}</strong>. Revisa tu bandeja de entrada.
           </p>
-          <Button onClick={() => switchMode('login')} className="w-full">
-            Volver a Iniciar Sesión
+          <Button onClick={() => switchMode('login')} fullWidth>
+            Volver a iniciar sesión
           </Button>
         </div>
       ) : mode === 'forgot' ? (
-        /* Modo: Forgot Password - Formulario */
+        /* Recuperar contraseña: formulario */
         <form onSubmit={handleSubmit} className="space-y-4">
-          <p className="text-gray-600 text-sm">
+          <p className="text-sm text-gray-600">
             Ingresa tu correo electrónico y te enviaremos un enlace para restablecer tu contraseña.
           </p>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Email
-            </label>
-            <div className="relative">
-              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-              <Input
-                type="email"
-                value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                placeholder="tu@email.com"
-                className="pl-10"
-                required
-              />
-            </div>
-          </div>
+          <Field label="Correo electrónico" required>
+            <TextInput
+              type="email"
+              value={formData.email}
+              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+              placeholder="tu@email.com"
+              autoComplete="email"
+              required
+            />
+          </Field>
 
-          {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
-              {error}
-            </div>
-          )}
+          {error && <Alert tone="error">{error}</Alert>}
 
-          <div className="flex gap-3 pt-2">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => switchMode('login')}
-              className="flex-1"
-            >
-              <ArrowLeft className="w-4 h-4 mr-2" />
+          <div className="flex flex-col-reverse sm:flex-row gap-2 pt-1">
+            <Button variant="secondary" onClick={() => switchMode('login')} icon={<ArrowLeft className="w-4 h-4" />} className="sm:flex-1">
               Volver
             </Button>
-            <Button
-              type="submit"
-              disabled={loading}
-              className="flex-1"
-            >
-              {loading ? 'Enviando...' : 'Enviar enlace'}
+            <Button type="submit" isLoading={loading} className="sm:flex-1">
+              Enviar enlace
             </Button>
           </div>
         </form>
       ) : (
-        /* Modo: Login / Register */
+        /* Iniciar sesión / registrarse */
         <form onSubmit={handleSubmit} className="space-y-4">
           {mode === 'register' && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Nombre Completo
-              </label>
-              <Input
+            <Field label="Nombre completo" required>
+              <TextInput
                 type="text"
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 placeholder="Tu nombre"
+                autoComplete="name"
                 required
               />
-            </div>
+            </Field>
           )}
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Email
-            </label>
-            <Input
+          <Field label="Correo electrónico" required>
+            <TextInput
               type="email"
               value={formData.email}
               onChange={(e) => setFormData({ ...formData, email: e.target.value })}
@@ -178,14 +150,21 @@ export const LoginModal = ({ isOpen, onClose, initialMode = 'login' }: LoginModa
               spellCheck={false}
               required
             />
-          </div>
+          </Field>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Contraseña
-            </label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-sm font-medium text-gray-700">
+                Contraseña<span className="text-red-500"> *</span>
+              </label>
+              {mode === 'login' && (
+                <button type="button" onClick={() => switchMode('forgot')} className="text-xs font-medium text-app-700 hover:underline">
+                  ¿Olvidaste tu contraseña?
+                </button>
+              )}
+            </div>
             <div className="relative">
-              <Input
+              <TextInput
                 type={showPassword ? 'text' : 'password'}
                 value={formData.password}
                 onChange={(e) => setFormData({ ...formData, password: e.target.value })}
@@ -202,73 +181,38 @@ export const LoginModal = ({ isOpen, onClose, initialMode = 'login' }: LoginModa
                 onClick={() => setShowPassword((v) => !v)}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
                 aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                title={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
                 tabIndex={-1}
               >
-                {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
             </div>
-            {mode === 'login' && (
-              <div className="text-right mt-1">
-                <button
-                  type="button"
-                  onClick={() => switchMode('forgot')}
-                  className="text-sm text-violet-600 hover:text-violet-700"
-                >
-                  ¿Olvidaste tu contraseña?
-                </button>
-              </div>
-            )}
           </div>
 
-          {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
-              {error}
-            </div>
-          )}
+          {error && <Alert tone="error">{error}</Alert>}
 
-          <div className="flex gap-3 pt-2">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={handleClose}
-              className="flex-1"
-            >
-              Cancelar
-            </Button>
-            <Button
-              type="submit"
-              disabled={loading}
-              className="flex-1"
-            >
-              {loading ? (
-                'Cargando...'
-              ) : mode === 'login' ? (
-                <>
-                  <LogIn className="w-4 h-4 mr-2" />
-                  Entrar
-                </>
-              ) : (
-                <>
-                  <UserPlus className="w-4 h-4 mr-2" />
-                  Registrar
-                </>
-              )}
-            </Button>
-          </div>
+          <Button
+            type="submit"
+            size="lg"
+            fullWidth
+            isLoading={loading}
+            icon={mode === 'login' ? <LogIn className="w-4 h-4" /> : <UserPlus className="w-4 h-4" />}
+          >
+            {mode === 'login' ? 'Entrar' : 'Crear cuenta'}
+          </Button>
 
-          <div className="text-center pt-2 border-t">
+          <p className="text-center text-sm text-gray-500 pt-3 border-t border-gray-100">
+            {mode === 'login' ? '¿No tienes cuenta?' : '¿Ya tienes cuenta?'}{' '}
             <button
               type="button"
               onClick={() => switchMode(mode === 'login' ? 'register' : 'login')}
-              className="text-sm text-violet-600 hover:text-violet-700 font-medium"
+              className="font-medium text-app-700 hover:underline"
             >
-              {mode === 'login'
-                ? '¿No tienes cuenta? Regístrate'
-                : '¿Ya tienes cuenta? Inicia sesión'}
+              {mode === 'login' ? 'Regístrate' : 'Inicia sesión'}
             </button>
-          </div>
+          </p>
         </form>
       )}
-    </Modal>
+    </Dialog>
   );
 };

@@ -543,12 +543,9 @@ export const SettingsProvider = ({ children }: { children: ReactNode }) => {
         updatedAt: new Date(),
       }));
     } catch (err) {
+      // Antes se aplicaba igual y la pantalla decía "guardado" aunque fallara.
       console.error('Error updating appearance settings:', err);
-      setSettings((prev) => ({
-        ...prev,
-        appearance: newAppearance,
-        updatedAt: new Date(),
-      }));
+      throw err;
     }
   };
 

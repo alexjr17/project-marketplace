@@ -1,27 +1,21 @@
 import { useState, useEffect } from 'react';
+import type { ReactNode } from 'react';
 import { useSettings } from '../../../context/SettingsContext';
-import { useToast } from '../../../context/ToastContext';
-import { Button } from '../../../components/shared/Button';
-import { Input } from '../../../components/shared/Input';
-import { Modal } from '../../../components/shared/Modal';
 import { ImageUploadField } from '../../../components/admin/ImageUploadField';
-import type { FeatureCard, ProductSection, HeroSettings, CTASettings, WhatsAppButtonSettings, SectionFilters, HeroCard, HeroCardBackground, PromoBanner } from '../../../types/settings';
+import type { FeatureCard, ProductSection, CTASettings, WhatsAppButtonSettings, SectionFilters, HeroCard, PromoBanner } from '../../../types/settings';
 import { FEATURE_ICONS } from '../../../types/settings';
 import { productsService } from '../../../services/products.service';
 import {
   Home,
   Save,
   Image,
-  Type,
   LayoutGrid,
   ShoppingBag,
   Sparkles,
   Plus,
-  Edit2,
+  Pencil,
   Trash2,
   GripVertical,
-  ToggleLeft,
-  ToggleRight,
   Palette,
   Package,
   Truck,
@@ -31,7 +25,6 @@ import {
   Zap,
   Gift,
   Percent,
-  MessageCircle,
   Film,
   Images,
   Layers,
@@ -42,6 +35,50 @@ import {
   AlignCenter,
   AlignRight,
 } from 'lucide-react';
+import {
+  Alert, Badge, Button, Card, CardTitle, Checkbox, ColorInput, Dialog, EmptyState, Field, FormActions, FormGrid, IconButton,
+  NumberInput, Page, PageHeader, RadioGroup, SelectInput, SettingsSection, Switch, Tabs, TextArea, TextInput, toast, useConfirm,
+} from '../../../components/ui';
+
+type HomeTab = 'hero' | 'features' | 'content' | 'cta' | 'whatsapp';
+
+/** Opción seleccionable con icono (tipo de carta, fondo, icono de la tarjeta). */
+function ChoiceButton({ active, onClick, title, children }: { active: boolean; onClick: () => void; title?: string; children: ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      aria-pressed={active}
+      className={`flex flex-col items-center justify-center gap-1 rounded-lg border p-2.5 text-xs transition-colors ${active ? 'border-app-500 bg-app-50 text-app-700 ring-1 ring-app-500' : 'border-gray-200 text-gray-600 hover:border-gray-300'}`}
+    >
+      {children}
+    </button>
+  );
+}
+
+/** Fila de una lista ordenable (carta, característica, sección o banner). */
+function ItemRow({ icon, title, tag, inactive, meta, actions, className = '', ...drag }: {
+  icon: ReactNode; title: ReactNode; tag?: ReactNode; inactive?: boolean; meta?: ReactNode; actions: ReactNode; className?: string;
+} & React.HTMLAttributes<HTMLDivElement>) {
+  return (
+    <div className={`flex items-center gap-3 rounded-lg border p-3 transition-colors ${inactive ? 'border-gray-200 bg-gray-50' : 'border-gray-200 bg-white'} ${className}`} {...drag}>
+      {icon}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 flex-wrap">
+          {tag}
+          <span className={`font-medium truncate ${inactive ? 'text-gray-500' : 'text-gray-900'}`}>{title}</span>
+          {inactive && <Badge>Inactiva</Badge>}
+        </div>
+        {meta && <div className="text-xs text-gray-500 mt-0.5 truncate">{meta}</div>}
+      </div>
+      <div className="flex items-center gap-1 flex-shrink-0">{actions}</div>
+    </div>
+  );
+}
+
+const BG_LABELS: Record<string, string> = { gradient: 'Gradiente', image: 'Imagen', video: 'Video', carousel: 'Carrusel' };
+const BG_ICONS: Record<string, typeof Palette> = { gradient: Palette, image: Image, video: Film, carousel: Images };
 
 // Map de iconos
 const iconComponents: Record<string, typeof Palette> = {
@@ -70,7 +107,13 @@ export const SettingsHomePage = () => {
     deleteProductSection,
     updateWhatsAppButton,
   } = useSettings();
-  const toast = useToast();
+  const confirm = useConfirm();
+  const [tab, setTab] = useState<HomeTab>('hero');
+  const [saving, setSaving] = useState(false);
+  const withSaving = async (fn: () => Promise<void>) => {
+    setSaving(true);
+    try { await fn(); } finally { setSaving(false); }
+  };
 
   // Database catalogs state
   const [dbCategories, setDbCategories] = useState<Array<{ id: number; name: string; slug: string }>>([]);
@@ -232,7 +275,7 @@ export const SettingsHomePage = () => {
     setIsHeroCardModalOpen(true);
   };
 
-  const handleSaveHeroCard = async () => {
+  const handleSaveHeroCard = () => withSaving(async () => {
     // Limpiar URLs vacías del carrusel antes de guardar
     const cleanedForm = {
       ...heroCardForm,
@@ -271,10 +314,10 @@ export const SettingsHomePage = () => {
       console.error('Error guardando carta:', error);
       toast.error('Error al guardar la carta. Verifica la conexión.');
     }
-  };
+  });
 
   const handleDeleteHeroCard = async (id: string) => {
-    if (confirm('¿Eliminar esta carta del hero?')) {
+    if (await confirm({ title: '¿Eliminar esta carta del hero?', message: 'Se quita de la portada.', tone: 'danger' })) {
       const newCards = heroCards.filter(c => c.id !== id);
       try {
         await updateHomeSettings({
@@ -349,7 +392,7 @@ export const SettingsHomePage = () => {
     setIsPromoBannerModalOpen(true);
   };
 
-  const handleSavePromoBanner = async () => {
+  const handleSavePromoBanner = () => withSaving(async () => {
     let newBanners: PromoBanner[];
 
     if (editingPromoBanner) {
@@ -373,10 +416,10 @@ export const SettingsHomePage = () => {
       console.error('Error guardando banner:', error);
       toast.error('Error al guardar el banner');
     }
-  };
+  });
 
   const handleDeletePromoBanner = async (id: string) => {
-    if (confirm('¿Eliminar este banner promocional?')) {
+    if (await confirm({ title: '¿Eliminar este banner promocional?', message: 'Se quita de la portada.', tone: 'danger' })) {
       const newBanners = promoBanners.filter(b => b.id !== id);
       try {
         await updateHomeSettings({ promoBanners: newBanners });
@@ -469,7 +512,7 @@ export const SettingsHomePage = () => {
     setDragOverItem(null);
   };
 
-  const handleSaveCTA = async () => {
+  const handleSaveCTA = () => withSaving(async () => {
     try {
       await updateHomeSettings({ cta: ctaForm });
       toast.success('CTA actualizado');
@@ -477,12 +520,16 @@ export const SettingsHomePage = () => {
       console.error('Error guardando CTA:', error);
       toast.error('Error al guardar el CTA');
     }
-  };
+  });
 
-  const handleSaveWhatsApp = () => {
-    updateWhatsAppButton(whatsappForm);
-    toast.success('Botón de WhatsApp actualizado');
-  };
+  const handleSaveWhatsApp = () => withSaving(async () => {
+    try {
+      await updateWhatsAppButton(whatsappForm);
+      toast.success('Botón de WhatsApp actualizado');
+    } catch {
+      toast.error('No se pudo guardar el botón de WhatsApp');
+    }
+  });
 
   const handleToggleCustomizer = async () => {
     try {
@@ -535,21 +582,29 @@ export const SettingsHomePage = () => {
     setIsFeatureModalOpen(true);
   };
 
-  const handleSaveFeature = () => {
-    if (editingFeature) {
-      updateFeature(editingFeature.id, featureForm);
-      toast.success('Característica actualizada');
-    } else {
-      addFeature(featureForm);
-      toast.success('Característica creada');
+  const handleSaveFeature = () => withSaving(async () => {
+    try {
+      if (editingFeature) {
+        await updateFeature(editingFeature.id, featureForm);
+        toast.success('Característica actualizada');
+      } else {
+        await addFeature(featureForm);
+        toast.success('Característica creada');
+      }
+      setIsFeatureModalOpen(false);
+    } catch {
+      toast.error('No se pudo guardar la característica');
     }
-    setIsFeatureModalOpen(false);
-  };
+  });
 
-  const handleDeleteFeature = (id: string) => {
-    if (confirm('¿Eliminar esta característica?')) {
-      deleteFeature(id);
-      toast.success('Característica eliminada');
+  const handleDeleteFeature = async (id: string) => {
+    if (await confirm({ title: '¿Eliminar esta característica?', tone: 'danger' })) {
+      try {
+        await deleteFeature(id);
+        toast.success('Característica eliminada');
+      } catch {
+        toast.error('No se pudo eliminar la característica');
+      }
     }
   };
 
@@ -646,1276 +701,653 @@ export const SettingsHomePage = () => {
     return parts.length > 0 ? parts.join(' • ') : 'Sin filtros';
   };
 
-  const handleSaveSection = () => {
-    if (editingSection) {
-      updateProductSection(editingSection.id, sectionForm);
-      toast.success('Sección actualizada');
-    } else {
-      addProductSection(sectionForm);
-      toast.success('Sección creada');
+  const handleSaveSection = () => withSaving(async () => {
+    try {
+      if (editingSection) {
+        await updateProductSection(editingSection.id, sectionForm);
+        toast.success('Sección actualizada');
+      } else {
+        await addProductSection(sectionForm);
+        toast.success('Sección creada');
+      }
+      setIsSectionModalOpen(false);
+    } catch {
+      toast.error('No se pudo guardar la sección');
     }
-    setIsSectionModalOpen(false);
+  });
+
+  const handleDeleteSection = async (id: string) => {
+    if (await confirm({ title: '¿Eliminar esta sección?', tone: 'danger' })) {
+      try {
+        await deleteProductSection(id);
+        toast.success('Sección eliminada');
+      } catch {
+        toast.error('No se pudo eliminar la sección');
+      }
+    }
   };
 
-  const handleDeleteSection = (id: string) => {
-    if (confirm('¿Eliminar esta sección?')) {
-      deleteProductSection(id);
-      toast.success('Sección eliminada');
-    }
+  const mainCard = heroCards.find(c => c.position === 'main');
+  const sideCards = heroCards.filter(c => c.position === 'side').sort((a, b) => a.order - b.order);
+  const activeSide = sideCards.filter(c => c.isActive);
+
+  type ContentItem =
+    | { type: 'section'; data: typeof settings.home.productSections[0] }
+    | { type: 'banner'; data: PromoBanner };
+  const contentItems: ContentItem[] = [
+    ...settings.home.productSections.map(s => ({ type: 'section' as const, data: s })),
+    ...promoBanners.map(b => ({ type: 'banner' as const, data: b })),
+  ].sort((a, b) => a.data.order - b.data.order);
+
+  const openNewMainCard = () => {
+    setEditingHeroCard(null);
+    setHeroCardForm({
+      position: 'main',
+      order: 0,
+      title: 'Diseñado por ti,',
+      titleLine2: 'hecho por Vexa',
+      subtitle: 'Personaliza camisetas, hoodies y más con tus propios diseños.',
+      showSubtitle: true,
+      showBadge: false,
+      badge: '',
+      buttons: [
+        { id: 'btn-1', text: 'Crear diseño', link: '/customizer', style: 'primary', icon: 'palette', isActive: true },
+        { id: 'btn-2', text: 'Ver catálogo', link: '/catalog', style: 'secondary', icon: 'shoppingBag', isActive: true },
+      ],
+      background: { type: 'gradient', overlayOpacity: 0 },
+      isActive: true,
+    });
+    setIsHeroCardModalOpen(true);
   };
+
+  const iconPicker = (value: string | undefined, onPick: (id: FeatureCard['icon']) => void) => (
+    <div className="grid grid-cols-6 gap-2">
+      {FEATURE_ICONS.map((iconOption) => {
+        const IconComp = iconComponents[iconOption.id as FeatureCard['icon']];
+        return (
+          <ChoiceButton key={iconOption.id} active={value === iconOption.id} onClick={() => onPick(iconOption.id as FeatureCard['icon'])} title={iconOption.label}>
+            <IconComp className="w-5 h-5" />
+          </ChoiceButton>
+        );
+      })}
+    </div>
+  );
+
+  const dialogFooter = (onCancel: () => void, onSave: () => void, isEdit: boolean) => (
+    <>
+      <Button variant="secondary" onClick={onCancel} disabled={saving}>Cancelar</Button>
+      <Button onClick={onSave} isLoading={saving} icon={<Save className="w-4 h-4" />}>{isEdit ? 'Guardar' : 'Crear'}</Button>
+    </>
+  );
 
   return (
-    <div className="p-4 md:p-8">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-bold text-gray-900 flex items-center gap-2">
-            <Home className="w-8 h-8 text-orange-500" />
-            Página de Inicio
-          </h1>
-          <p className="text-gray-600 mt-1 text-sm">
-            Personaliza el contenido de tu página principal
-          </p>
-        </div>
-      </div>
+    <Page>
+      <PageHeader icon={Home} title="Página de inicio" subtitle="Contenido de la portada de la tienda: hero, características, secciones de productos y banners" />
 
-      <div className="space-y-6">
-        {/* Toggle Personalización */}
-        <div className="bg-white rounded-lg shadow-sm p-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-lg bg-purple-100 flex items-center justify-center">
-                <Palette className="w-6 h-6 text-purple-600" />
-              </div>
-              <div>
-                <h3 className="text-lg font-bold text-gray-900">Módulo de Personalización</h3>
-                <p className="text-sm text-gray-500">
-                  {settings.home.enableCustomizer
-                    ? 'Los clientes pueden personalizar productos con sus diseños'
-                    : 'Solo tienda tradicional sin opción de personalización'}
-                </p>
-              </div>
-            </div>
-            <button
-              onClick={handleToggleCustomizer}
-              className={`relative w-16 h-8 rounded-full transition-colors ${
-                settings.home.enableCustomizer ? 'bg-purple-500' : 'bg-gray-300'
-              }`}
-            >
-              <span
-                className={`absolute top-1 w-6 h-6 bg-white rounded-full shadow transition-transform ${
-                  settings.home.enableCustomizer ? 'left-9' : 'left-1'
-                }`}
-              />
-            </button>
+      <Card>
+        <Switch
+          checked={!!settings.home.enableCustomizer}
+          onChange={handleToggleCustomizer}
+          label="Módulo de personalización"
+          description={settings.home.enableCustomizer
+            ? 'Los clientes pueden personalizar productos con sus diseños.'
+            : 'Solo tienda tradicional, sin opción de personalización.'}
+        />
+        {!settings.home.enableCustomizer && (
+          <div className="mt-3">
+            <Alert tone="warning">El botón "Personalizar" se oculta del menú y el acceso a /customize queda deshabilitado.</Alert>
           </div>
-          {!settings.home.enableCustomizer && (
-            <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-sm text-yellow-800">
-              El botón "Personalizar" se ocultará del menú y el acceso a /customize estará deshabilitado.
-            </div>
-          )}
-        </div>
+        )}
+      </Card>
 
-        {/* Hero Section - Cards */}
-        <div className="bg-white rounded-lg shadow-sm p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-              <Layers className="w-5 h-5 text-orange-500" />
-              Hero (Cartas)
-            </h3>
-            {heroCards.filter(c => c.position === 'side').length < 3 && (
-              <Button variant="admin-secondary" onClick={() => handleOpenHeroCardModal()}>
-                <Plus className="w-4 h-4 mr-2" />
-                Agregar Carta
-              </Button>
+      <Tabs<HomeTab>
+        value={tab}
+        onChange={setTab}
+        tabs={[
+          { value: 'hero', label: 'Hero', count: heroCards.length },
+          { value: 'features', label: 'Características', count: settings.home.features.length },
+          { value: 'content', label: 'Secciones y banners', count: contentItems.length },
+          { value: 'cta', label: 'Llamado a la acción' },
+          { value: 'whatsapp', label: 'WhatsApp' },
+        ]}
+      />
+
+      {/* ───────── Hero ───────── */}
+      {tab === 'hero' && (
+        <Card>
+          <CardTitle
+            icon={Layers}
+            actions={sideCards.length < 3 && (
+              <Button size="sm" variant="secondary" icon={<Plus className="w-4 h-4" />} onClick={() => handleOpenHeroCardModal()}>Carta lateral</Button>
             )}
-          </div>
+          >
+            Cartas del hero
+          </CardTitle>
 
-          {/* Preview de estructura */}
-          <div className="mb-4 p-3 bg-gray-50 rounded-lg">
-            <p className="text-xs text-gray-500 mb-2">Vista previa de la estructura:</p>
-            <div className="flex gap-2">
-              <div className="flex-[2] h-20 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg flex items-center justify-center text-white text-xs font-medium">
+          {/* Estructura */}
+          <div className="mb-4 rounded-lg border border-gray-200 p-3">
+            <p className="text-xs text-gray-500 mb-2">Estructura en la tienda</p>
+            <div className="flex gap-2 h-20">
+              <div className={`flex-[2] rounded-md flex items-center justify-center text-xs font-medium ${mainCard?.isActive ? 'bg-app-600 text-white' : 'border border-dashed border-gray-300 text-gray-400'}`}>
                 Principal
               </div>
               <div className="flex-1 flex flex-col gap-1">
-                {heroCards.filter(c => c.position === 'side' && c.isActive).slice(0, 3).map((_, i) => (
-                  <div key={i} className="flex-1 bg-gradient-to-br from-pink-500 to-amber-500 rounded-lg flex items-center justify-center text-white text-[10px] font-medium">
-                    Lateral {i + 1}
-                  </div>
+                {activeSide.slice(0, 3).map((_, i) => (
+                  <div key={i} className="flex-1 rounded-md bg-app-100 text-app-700 flex items-center justify-center text-[10px] font-medium">Lateral {i + 1}</div>
                 ))}
-                {heroCards.filter(c => c.position === 'side' && c.isActive).length === 0 && (
-                  <div className="flex-1 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center text-gray-400 text-[10px]">
-                    Sin laterales
-                  </div>
+                {activeSide.length === 0 && (
+                  <div className="flex-1 rounded-md border border-dashed border-gray-300 flex items-center justify-center text-gray-400 text-[10px]">Sin laterales</div>
                 )}
               </div>
             </div>
           </div>
 
-          {/* Lista de cartas */}
-          <div className="space-y-3">
-            {/* Carta Principal */}
-            {(() => {
-              const mainCard = heroCards.find(c => c.position === 'main');
-              if (mainCard) {
-                return (
-                  <div className={`flex items-center gap-4 p-4 border-2 rounded-lg ${mainCard.isActive ? 'border-purple-200 bg-purple-50' : 'border-gray-200 bg-gray-50'}`}>
-                    <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
-                      <Layers className="w-6 h-6 text-white" />
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded font-medium">PRINCIPAL</span>
-                        <h4 className="font-medium text-gray-900">{mainCard.title || 'Sin título'}</h4>
-                        {!mainCard.isActive && (
-                          <span className="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded">Inactiva</span>
-                        )}
-                      </div>
-                      <p className="text-sm text-gray-500">{mainCard.subtitle || 'Sin subtítulo'}</p>
-                      <div className="flex items-center gap-2 mt-1">
-                        <span className="text-xs text-gray-400">
-                          Fondo: {mainCard.background.type === 'gradient' ? 'Gradiente' : mainCard.background.type === 'image' ? 'Imagen' : mainCard.background.type === 'video' ? 'Video' : 'Carrusel'}
-                        </span>
-                        <span className="text-xs text-gray-400">•</span>
-                        <span className="text-xs text-gray-400">{mainCard.buttons.filter(b => b.isActive).length} botones</span>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => handleToggleHeroCard(mainCard.id)}
-                        className={`p-2 rounded-lg ${mainCard.isActive ? 'text-green-600 hover:bg-green-50' : 'text-gray-400 hover:bg-gray-100'}`}
-                      >
-                        {mainCard.isActive ? <ToggleRight className="w-5 h-5" /> : <ToggleLeft className="w-5 h-5" />}
-                      </button>
-                      <button
-                        onClick={() => handleOpenHeroCardModal(mainCard)}
-                        className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg"
-                      >
-                        <Edit2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                );
-              }
-              return (
-                <button
-                  onClick={() => {
-                    setEditingHeroCard(null);
-                    setHeroCardForm({
-                      position: 'main',
-                      order: 0,
-                      title: 'Diseñado por ti,',
-                      titleLine2: 'hecho por Vexa',
-                      subtitle: 'Personaliza camisetas, hoodies y más con tus propios diseños.',
-                      showSubtitle: true,
-                      showBadge: false,
-                      badge: '',
-                      buttons: [
-                        { id: 'btn-1', text: 'Crear diseño', link: '/customizer', style: 'primary', icon: 'palette', isActive: true },
-                        { id: 'btn-2', text: 'Ver catálogo', link: '/catalog', style: 'secondary', icon: 'shoppingBag', isActive: true },
-                      ],
-                      background: { type: 'gradient', overlayOpacity: 0 },
-                      isActive: true,
-                    });
-                    setIsHeroCardModalOpen(true);
-                  }}
-                  className="w-full p-4 border-2 border-dashed border-purple-300 rounded-lg text-purple-600 hover:bg-purple-50 flex items-center justify-center gap-2"
-                >
-                  <Plus className="w-5 h-5" />
-                  Crear Carta Principal
-                </button>
-              );
-            })()}
-
-            {/* Cartas Laterales */}
-            {heroCards
-              .filter(c => c.position === 'side')
-              .sort((a, b) => a.order - b.order)
-              .map((card, index) => (
-                <div
-                  key={card.id}
-                  className={`flex items-center gap-4 p-4 border rounded-lg ${card.isActive ? 'border-gray-200' : 'border-gray-100 bg-gray-50'}`}
-                >
-                  <GripVertical className="w-5 h-5 text-gray-400 cursor-move" />
-                  <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-pink-500 to-amber-500 flex items-center justify-center text-white text-xs font-bold">
-                    {index + 1}
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-medium">LATERAL</span>
-                      <h4 className="font-medium text-gray-900">{card.title || 'Sin título'}</h4>
-                      {!card.isActive && (
-                        <span className="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded">Inactiva</span>
-                      )}
-                    </div>
-                    <p className="text-sm text-gray-500">{card.subtitle || 'Sin subtítulo'}</p>
-                    <div className="flex items-center gap-2 mt-1">
-                      <span className="text-xs text-gray-400">
-                        {card.background.type === 'gradient' && <Palette className="w-3 h-3 inline mr-1" />}
-                        {card.background.type === 'image' && <Image className="w-3 h-3 inline mr-1" />}
-                        {card.background.type === 'video' && <Film className="w-3 h-3 inline mr-1" />}
-                        {card.background.type === 'carousel' && <Images className="w-3 h-3 inline mr-1" />}
-                        {card.background.type.charAt(0).toUpperCase() + card.background.type.slice(1)}
-                      </span>
-                      {card.buttons.length > 0 && (
-                        <>
-                          <span className="text-xs text-gray-400">•</span>
-                          <span className="text-xs text-gray-400">Link: {card.buttons[0]?.link}</span>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => handleToggleHeroCard(card.id)}
-                      className={`p-2 rounded-lg ${card.isActive ? 'text-green-600 hover:bg-green-50' : 'text-gray-400 hover:bg-gray-100'}`}
-                    >
-                      {card.isActive ? <ToggleRight className="w-5 h-5" /> : <ToggleLeft className="w-5 h-5" />}
-                    </button>
-                    <button
-                      onClick={() => handleOpenHeroCardModal(card)}
-                      className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg"
-                    >
-                      <Edit2 className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => handleDeleteHeroCard(card.id)}
-                      className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-              ))}
-
-            {heroCards.filter(c => c.position === 'side').length === 0 && (
-              <div className="text-center py-6 text-gray-500 border-2 border-dashed border-gray-200 rounded-lg">
-                <p className="text-sm">No hay cartas laterales</p>
-                <p className="text-xs text-gray-400 mt-1">Puedes agregar hasta 3 cartas laterales</p>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Features */}
-        <div className="bg-white rounded-lg shadow-sm p-6">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-                <LayoutGrid className="w-5 h-5 text-orange-500" />
-                Tarjetas de Características
-              </h3>
-              <button
-                onClick={handleToggleFeatures}
-                className={`p-1 rounded ${settings.home.showFeatures ? 'text-green-600' : 'text-gray-400'}`}
-                title={settings.home.showFeatures ? 'Visible' : 'Oculto'}
-              >
-                {settings.home.showFeatures ? <ToggleRight className="w-6 h-6" /> : <ToggleLeft className="w-6 h-6" />}
+          <div className="space-y-2">
+            {mainCard ? (
+              <ItemRow
+                inactive={!mainCard.isActive}
+                icon={<span className="w-10 h-10 rounded-lg bg-app-600 text-white flex items-center justify-center flex-shrink-0"><Layers className="w-5 h-5" /></span>}
+                tag={<Badge tone="app">Principal</Badge>}
+                title={mainCard.title || 'Sin título'}
+                meta={`${mainCard.subtitle || 'Sin subtítulo'} · Fondo: ${BG_LABELS[mainCard.background.type] ?? mainCard.background.type} · ${mainCard.buttons.filter(b => b.isActive).length} botones`}
+                actions={
+                  <>
+                    <Switch checked={mainCard.isActive} onChange={() => handleToggleHeroCard(mainCard.id)} />
+                    <IconButton title="Editar" tone="app" onClick={() => handleOpenHeroCardModal(mainCard)}><Pencil className="w-4 h-4" /></IconButton>
+                  </>
+                }
+              />
+            ) : (
+              <button type="button" onClick={openNewMainCard} className="w-full rounded-lg border-2 border-dashed border-gray-300 p-4 text-sm font-medium text-app-700 hover:border-app-400 hover:bg-app-50 flex items-center justify-center gap-2">
+                <Plus className="w-4 h-4" /> Crear carta principal
               </button>
-            </div>
-            <Button onClick={() => handleOpenFeatureModal()}>
-              <Plus className="w-4 h-4 mr-2" />
-              Nueva Característica
-            </Button>
-          </div>
+            )}
 
-          <div className="space-y-3">
-            {settings.home.features
-              .sort((a, b) => a.order - b.order)
-              .map((feature) => {
-                const IconComponent = iconComponents[feature.icon];
-                return (
-                  <div
-                    key={feature.id}
-                    className={`flex items-center gap-4 p-4 border rounded-lg ${
-                      feature.isActive ? 'border-gray-200' : 'border-gray-100 bg-gray-50'
-                    }`}
-                  >
-                    <GripVertical className="w-5 h-5 text-gray-400 cursor-move" />
-                    <div className="w-12 h-12 rounded-lg bg-gray-100 flex items-center justify-center">
-                      <IconComponent className="w-6 h-6 text-gray-600" />
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <h4 className="font-medium text-gray-900">{feature.title}</h4>
-                        {!feature.isActive && (
-                          <span className="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded">Inactiva</span>
-                        )}
-                      </div>
-                      <p className="text-sm text-gray-500">{feature.description}</p>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => handleOpenFeatureModal(feature)}
-                        className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg"
-                      >
-                        <Edit2 className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => handleDeleteFeature(feature.id)}
-                        className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            {settings.home.features.length === 0 && (
-              <div className="text-center py-8 text-gray-500">
-                No hay características configuradas
-              </div>
+            {sideCards.map((card, index) => {
+              const BgIcon = BG_ICONS[card.background.type] ?? Palette;
+              return (
+                <ItemRow
+                  key={card.id}
+                  inactive={!card.isActive}
+                  icon={<span className="w-10 h-10 rounded-lg bg-app-50 text-app-700 flex items-center justify-center text-sm font-semibold flex-shrink-0">{index + 1}</span>}
+                  tag={<Badge>Lateral</Badge>}
+                  title={card.title || 'Sin título'}
+                  meta={
+                    <span className="inline-flex items-center gap-1">
+                      <BgIcon className="w-3 h-3" />{BG_LABELS[card.background.type] ?? card.background.type}
+                      {card.buttons.length > 0 && <> · Enlace: {card.buttons[0]?.link}</>}
+                    </span>
+                  }
+                  actions={
+                    <>
+                      <Switch checked={card.isActive} onChange={() => handleToggleHeroCard(card.id)} />
+                      <IconButton title="Editar" tone="app" onClick={() => handleOpenHeroCardModal(card)}><Pencil className="w-4 h-4" /></IconButton>
+                      <IconButton title="Eliminar" tone="danger" onClick={() => handleDeleteHeroCard(card.id)}><Trash2 className="w-4 h-4" /></IconButton>
+                    </>
+                  }
+                />
+              );
+            })}
+
+            {sideCards.length === 0 && (
+              <p className="rounded-lg border border-dashed border-gray-300 py-5 text-center text-sm text-gray-500">
+                No hay cartas laterales. Puedes agregar hasta 3.
+              </p>
             )}
           </div>
-        </div>
+        </Card>
+      )}
 
-        {/* Secciones de Productos y Banners - Lista Unificada */}
-        <div className="bg-white rounded-lg shadow-sm p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-              <ShoppingBag className="w-5 h-5 text-orange-500" />
-              Contenido del Home
-            </h3>
-            <div className="flex gap-2">
-              <Button variant="admin-secondary" onClick={() => handleOpenPromoBannerModal()}>
-                <Megaphone className="w-4 h-4 mr-2" />
-                Agregar Banner
-              </Button>
-              <Button onClick={() => handleOpenSectionModal()}>
-                <Plus className="w-4 h-4 mr-2" />
-                Nueva Sección
-              </Button>
-            </div>
+      {/* ───────── Características ───────── */}
+      {tab === 'features' && (
+        <Card>
+          <CardTitle
+            icon={LayoutGrid}
+            actions={<Button size="sm" icon={<Plus className="w-4 h-4" />} onClick={() => handleOpenFeatureModal()}>Nueva característica</Button>}
+          >
+            Tarjetas de características
+          </CardTitle>
+          <div className="mb-4">
+            <Switch
+              checked={!!settings.home.showFeatures}
+              onChange={handleToggleFeatures}
+              label="Mostrar en la portada"
+              description="Bloque de ventajas de la tienda (calidad, envíos, garantía…)."
+            />
           </div>
-
-          <p className="text-sm text-gray-500 mb-4">
-            Organiza el orden de las secciones de productos y banners promocionales que aparecen en el home.
-          </p>
-
-          <div className="space-y-3">
-            {/* Unir secciones y banners, ordenar por order */}
-            {(() => {
-              type ContentItem =
-                | { type: 'section'; data: typeof settings.home.productSections[0] }
-                | { type: 'banner'; data: PromoBanner };
-
-              const allItems: ContentItem[] = [
-                ...settings.home.productSections.map(s => ({ type: 'section' as const, data: s })),
-                ...promoBanners.map(b => ({ type: 'banner' as const, data: b })),
-              ].sort((a, b) => a.data.order - b.data.order);
-
-              if (allItems.length === 0) {
-                return (
-                  <div className="text-center py-8 text-gray-500">
-                    No hay contenido configurado. Agrega secciones de productos o banners promocionales.
-                  </div>
-                );
-              }
-
-              return allItems.map((item, index) => {
-                if (item.type === 'section') {
-                  const section = item.data;
-                  const filterDesc = getFilterDescription(section.filters || {});
-                  const isDragging = draggedItem?.type === 'section' && draggedItem?.id === section.id;
-                  const isDragOver = dragOverItem?.type === 'section' && dragOverItem?.id === section.id;
+          {settings.home.features.length === 0 ? (
+            <EmptyState icon={LayoutGrid} title="No hay características" description="Agrega la primera para mostrar las ventajas de tu tienda." />
+          ) : (
+            <div className="space-y-2">
+              {settings.home.features
+                .sort((a, b) => a.order - b.order)
+                .map((feature) => {
+                  const IconComponent = iconComponents[feature.icon] ?? Sparkles;
                   return (
-                    <div
-                      key={`section-${section.id}`}
-                      draggable
-                      onDragStart={() => handleDragStart('section', section.id)}
-                      onDragOver={(e) => handleDragOver(e, 'section', section.id)}
-                      onDragLeave={handleDragLeave}
-                      onDrop={(e) => handleDrop(e, 'section', section.id)}
-                      onDragEnd={handleDragEnd}
-                      className={`flex items-center gap-4 p-4 border rounded-lg transition-all ${
-                        isDragging ? 'opacity-50 scale-[0.98]' : ''
-                      } ${isDragOver ? 'border-blue-500 border-2 bg-blue-100/50' : ''} ${
-                        !isDragging && !isDragOver ? (section.isActive ? 'border-blue-200 bg-blue-50/30' : 'border-gray-100 bg-gray-50') : ''
-                      }`}
-                    >
-                      <GripVertical className="w-5 h-5 text-gray-400 cursor-grab active:cursor-grabbing" />
-                      <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0">
-                        <ShoppingBag className="w-5 h-5 text-blue-600" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded font-medium">SECCIÓN</span>
-                          <h4 className="font-medium text-gray-900 truncate">{section.title}</h4>
-                          <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">#{section.order}</span>
-                          {!section.isActive && (
-                            <span className="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded">Inactiva</span>
-                          )}
-                        </div>
-                        {section.subtitle && (
-                          <p className="text-sm text-gray-500 truncate">{section.subtitle}</p>
-                        )}
-                        <p className="text-xs text-orange-600 mt-1 font-medium truncate">
-                          {filterDesc}
-                        </p>
-                        <p className="text-xs text-gray-400">
-                          Máx. {section.maxProducts} productos
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-1 flex-shrink-0">
-                        <button
-                          onClick={() => handleOpenSectionModal(section)}
-                          className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg"
-                        >
-                          <Edit2 className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteSection(section.id)}
-                          className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
+                    <ItemRow
+                      key={feature.id}
+                      inactive={!feature.isActive}
+                      icon={<span className="w-10 h-10 rounded-lg bg-gray-100 text-gray-600 flex items-center justify-center flex-shrink-0"><IconComponent className="w-5 h-5" /></span>}
+                      title={feature.title}
+                      meta={feature.description}
+                      actions={
+                        <>
+                          <IconButton title="Editar" tone="app" onClick={() => handleOpenFeatureModal(feature)}><Pencil className="w-4 h-4" /></IconButton>
+                          <IconButton title="Eliminar" tone="danger" onClick={() => handleDeleteFeature(feature.id)}><Trash2 className="w-4 h-4" /></IconButton>
+                        </>
+                      }
+                    />
                   );
-                } else {
-                  const banner = item.data;
-                  const isDragging = draggedItem?.type === 'banner' && draggedItem?.id === banner.id;
-                  const isDragOver = dragOverItem?.type === 'banner' && dragOverItem?.id === banner.id;
+                })}
+            </div>
+          )}
+        </Card>
+      )}
+
+      {/* ───────── Secciones y banners ───────── */}
+      {tab === 'content' && (
+        <Card>
+          <CardTitle
+            icon={ShoppingBag}
+            actions={
+              <div className="flex gap-2">
+                <Button size="sm" variant="secondary" icon={<Megaphone className="w-4 h-4" />} onClick={() => handleOpenPromoBannerModal()}>Banner</Button>
+                <Button size="sm" icon={<Plus className="w-4 h-4" />} onClick={() => handleOpenSectionModal()}>Sección</Button>
+              </div>
+            }
+          >
+            Contenido de la portada
+          </CardTitle>
+          <p className="text-sm text-gray-500 -mt-2 mb-4">Arrastra para cambiar el orden en que aparecen las secciones de productos y los banners.</p>
+
+          {contentItems.length === 0 ? (
+            <EmptyState icon={ShoppingBag} title="No hay contenido" description="Agrega secciones de productos o banners promocionales." />
+          ) : (
+            <div className="space-y-2">
+              {contentItems.map((item) => {
+                const isSection = item.type === 'section';
+                const id = item.data.id;
+                const isDragging = draggedItem?.type === item.type && draggedItem?.id === id;
+                const isDragOver = dragOverItem?.type === item.type && dragOverItem?.id === id;
+                const dragProps = {
+                  draggable: true,
+                  onDragStart: () => handleDragStart(item.type, id),
+                  onDragOver: (e: React.DragEvent) => handleDragOver(e, item.type, id),
+                  onDragLeave: handleDragLeave,
+                  onDrop: (e: React.DragEvent) => handleDrop(e, item.type, id),
+                  onDragEnd: handleDragEnd,
+                };
+                const stateCls = `${isDragging ? 'opacity-50' : ''} ${isDragOver ? '!border-app-500 ring-1 ring-app-500' : ''}`;
+                const grip = <GripVertical className="w-4 h-4 text-gray-400 cursor-grab active:cursor-grabbing flex-shrink-0" />;
+
+                if (isSection) {
+                  const section = item.data;
                   return (
-                    <div
-                      key={`banner-${banner.id}`}
-                      draggable
-                      onDragStart={() => handleDragStart('banner', banner.id)}
-                      onDragOver={(e) => handleDragOver(e, 'banner', banner.id)}
-                      onDragLeave={handleDragLeave}
-                      onDrop={(e) => handleDrop(e, 'banner', banner.id)}
-                      onDragEnd={handleDragEnd}
-                      className={`flex items-center gap-4 p-4 border rounded-lg transition-all ${
-                        isDragging ? 'opacity-50 scale-[0.98]' : ''
-                      } ${isDragOver ? 'border-orange-500 border-2 bg-orange-100/50' : ''} ${
-                        !isDragging && !isDragOver ? (banner.isActive ? 'border-orange-200 bg-orange-50/30' : 'border-gray-100 bg-gray-50') : ''
-                      }`}
-                    >
-                      <GripVertical className="w-5 h-5 text-gray-400 cursor-grab active:cursor-grabbing" />
-                      <div className="w-10 h-10 rounded-lg bg-orange-100 flex items-center justify-center flex-shrink-0">
-                        <Megaphone className="w-5 h-5 text-orange-600" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded font-medium">BANNER</span>
-                          <h4 className="font-medium text-gray-900 truncate">{banner.title}</h4>
-                          <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">#{banner.order}</span>
-                          <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded capitalize">
-                            {banner.height === 'small' ? 'Pequeño' : banner.height === 'medium' ? 'Mediano' : 'Grande'}
-                          </span>
-                          {!banner.isActive && (
-                            <span className="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded">Inactivo</span>
-                          )}
-                        </div>
-                        {banner.subtitle && (
-                          <p className="text-sm text-gray-500 truncate">{banner.subtitle}</p>
-                        )}
-                        {banner.buttonText && (
-                          <p className="text-xs text-gray-400">
-                            Botón: {banner.buttonText} → {banner.buttonLink}
-                          </p>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-1 flex-shrink-0">
-                        <button
-                          onClick={() => handleTogglePromoBanner(banner.id)}
-                          className={`p-2 rounded-lg ${banner.isActive ? 'text-green-600 hover:bg-green-50' : 'text-gray-400 hover:bg-gray-100'}`}
-                        >
-                          {banner.isActive ? <ToggleRight className="w-5 h-5" /> : <ToggleLeft className="w-5 h-5" />}
-                        </button>
-                        <button
-                          onClick={() => handleOpenPromoBannerModal(banner)}
-                          className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg"
-                        >
-                          <Edit2 className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDeletePromoBanner(banner.id)}
-                          className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
+                    <ItemRow
+                      key={`section-${section.id}`}
+                      {...dragProps}
+                      className={stateCls}
+                      inactive={!section.isActive}
+                      icon={<>{grip}<span className="w-9 h-9 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center flex-shrink-0"><ShoppingBag className="w-4 h-4" /></span></>}
+                      tag={<><Badge tone="blue">Sección</Badge><Badge>#{section.order}</Badge></>}
+                      title={section.title}
+                      meta={<>{section.subtitle ? `${section.subtitle} · ` : ''}<span className="text-gray-700">{getFilterDescription(section.filters || {})}</span> · Máx. {section.maxProducts} productos</>}
+                      actions={
+                        <>
+                          <IconButton title="Editar" tone="app" onClick={() => handleOpenSectionModal(section)}><Pencil className="w-4 h-4" /></IconButton>
+                          <IconButton title="Eliminar" tone="danger" onClick={() => handleDeleteSection(section.id)}><Trash2 className="w-4 h-4" /></IconButton>
+                        </>
+                      }
+                    />
                   );
                 }
-              });
-            })()}
-          </div>
-        </div>
-
-        {/* CTA Section */}
-        <div className="bg-white rounded-lg shadow-sm p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-              <Type className="w-5 h-5 text-orange-500" />
-              CTA Final (Llamada a la Acción)
-            </h3>
-            <button
-              onClick={handleToggleCTA}
-              className={`p-1 rounded ${settings.home.cta.isActive ? 'text-green-600' : 'text-gray-400'}`}
-              title={settings.home.cta.isActive ? 'Visible' : 'Oculto'}
-            >
-              {settings.home.cta.isActive ? <ToggleRight className="w-6 h-6" /> : <ToggleLeft className="w-6 h-6" />}
-            </button>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Badge */}
-            <div className="md:col-span-2">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-semibold text-gray-700">Badge</span>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={ctaForm.showBadge ?? true}
-                    onChange={(e) => setCtaForm({ ...ctaForm, showBadge: e.target.checked })}
-                    className="w-4 h-4 text-orange-600 border-gray-300 rounded"
-                  />
-                  <span className="text-sm text-gray-600">Mostrar</span>
-                </label>
-              </div>
-              <Input
-                value={ctaForm.badge}
-                onChange={(e) => setCtaForm({ ...ctaForm, badge: e.target.value })}
-                placeholder="Ej: Crea sin límites"
-                disabled={!(ctaForm.showBadge ?? true)}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Título
-              </label>
-              <Input
-                value={ctaForm.title}
-                onChange={(e) => setCtaForm({ ...ctaForm, title: e.target.value })}
-                placeholder="Ej: ¿Listo para crear algo único?"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Subtítulo
-              </label>
-              <Input
-                value={ctaForm.subtitle}
-                onChange={(e) => setCtaForm({ ...ctaForm, subtitle: e.target.value })}
-                placeholder="Descripción del CTA"
-              />
-            </div>
-
-            {/* Botón CTA */}
-            <div className="md:col-span-2 border-t pt-4 mt-2">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-semibold text-gray-700">Botón</span>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={ctaForm.showButton ?? true}
-                    onChange={(e) => setCtaForm({ ...ctaForm, showButton: e.target.checked })}
-                    className="w-4 h-4 text-orange-600 border-gray-300 rounded"
-                  />
-                  <span className="text-sm text-gray-600">Mostrar</span>
-                </label>
-              </div>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Texto del botón
-              </label>
-              <Input
-                value={ctaForm.buttonText}
-                onChange={(e) => setCtaForm({ ...ctaForm, buttonText: e.target.value })}
-                placeholder="Ej: Personalizar Ahora"
-                disabled={!(ctaForm.showButton ?? true)}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Link del botón
-              </label>
-              <Input
-                value={ctaForm.buttonLink}
-                onChange={(e) => setCtaForm({ ...ctaForm, buttonLink: e.target.value })}
-                placeholder="/customize"
-                disabled={!(ctaForm.showButton ?? true)}
-              />
-            </div>
-          </div>
-
-          <div className="flex justify-end mt-4">
-            <Button onClick={handleSaveCTA}>
-              <Save className="w-4 h-4 mr-2" />
-              Guardar CTA
-            </Button>
-          </div>
-        </div>
-      </div>
-
-      {/* WhatsApp Button Section */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-green-100 rounded-lg">
-              <MessageCircle className="w-5 h-5 text-green-600" />
-            </div>
-            <div>
-              <h2 className="text-lg font-semibold text-gray-900">Botón de WhatsApp</h2>
-              <p className="text-sm text-gray-500">Configura el botón flotante de contacto</p>
-            </div>
-          </div>
-          <button
-            onClick={() => setWhatsappForm({ ...whatsappForm, isActive: !whatsappForm.isActive })}
-            className={`p-1 rounded ${whatsappForm.isActive ? 'text-green-600' : 'text-gray-400'}`}
-            title={whatsappForm.isActive ? 'Visible' : 'Oculto'}
-          >
-            {whatsappForm.isActive ? <ToggleRight className="w-6 h-6" /> : <ToggleLeft className="w-6 h-6" />}
-          </button>
-        </div>
-
-        <div className="p-6 space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Número de WhatsApp *
-              </label>
-              <Input
-                value={whatsappForm.phoneNumber}
-                onChange={(e) => setWhatsappForm({ ...whatsappForm, phoneNumber: e.target.value })}
-                placeholder="573001234567"
-              />
-              <p className="text-xs text-gray-500 mt-1">Sin + ni espacios (ej: 573001234567)</p>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Color del botón
-              </label>
-              <div className="flex gap-2">
-                <input
-                  type="color"
-                  value={whatsappForm.buttonColor}
-                  onChange={(e) => setWhatsappForm({ ...whatsappForm, buttonColor: e.target.value })}
-                  className="w-12 h-10 rounded border border-gray-300 cursor-pointer"
-                />
-                <Input
-                  value={whatsappForm.buttonColor}
-                  onChange={(e) => setWhatsappForm({ ...whatsappForm, buttonColor: e.target.value })}
-                  placeholder="#25D366"
-                  className="flex-1"
-                />
-              </div>
-            </div>
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Mensaje predeterminado
-              </label>
-              <textarea
-                value={whatsappForm.defaultMessage}
-                onChange={(e) => setWhatsappForm({ ...whatsappForm, defaultMessage: e.target.value })}
-                rows={2}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500"
-                placeholder="¡Hola! Me interesa obtener más información..."
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Posición
-              </label>
-              <select
-                value={whatsappForm.position}
-                onChange={(e) => setWhatsappForm({ ...whatsappForm, position: e.target.value as 'bottom-right' | 'bottom-left' })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500"
-              >
-                <option value="bottom-right">Abajo a la derecha</option>
-                <option value="bottom-left">Abajo a la izquierda</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Texto del tooltip
-              </label>
-              <Input
-                value={whatsappForm.tooltipText}
-                onChange={(e) => setWhatsappForm({ ...whatsappForm, tooltipText: e.target.value })}
-                placeholder="¿Necesitas ayuda?"
-                disabled={!whatsappForm.showTooltip}
-              />
-            </div>
-          </div>
-
-          {/* Toggles */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-4 border-t">
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={whatsappForm.showOnMobile}
-                onChange={(e) => setWhatsappForm({ ...whatsappForm, showOnMobile: e.target.checked })}
-                className="w-4 h-4 text-green-600 border-gray-300 rounded"
-              />
-              <span className="text-sm text-gray-700">Mostrar en móvil</span>
-            </label>
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={whatsappForm.showOnDesktop}
-                onChange={(e) => setWhatsappForm({ ...whatsappForm, showOnDesktop: e.target.checked })}
-                className="w-4 h-4 text-green-600 border-gray-300 rounded"
-              />
-              <span className="text-sm text-gray-700">Mostrar en desktop</span>
-            </label>
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={whatsappForm.pulseAnimation}
-                onChange={(e) => setWhatsappForm({ ...whatsappForm, pulseAnimation: e.target.checked })}
-                className="w-4 h-4 text-green-600 border-gray-300 rounded"
-              />
-              <span className="text-sm text-gray-700">Animación pulse</span>
-            </label>
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={whatsappForm.showTooltip}
-                onChange={(e) => setWhatsappForm({ ...whatsappForm, showTooltip: e.target.checked })}
-                className="w-4 h-4 text-green-600 border-gray-300 rounded"
-              />
-              <span className="text-sm text-gray-700">Mostrar tooltip</span>
-            </label>
-          </div>
-
-          <div className="flex justify-end mt-4">
-            <Button onClick={handleSaveWhatsApp}>
-              <Save className="w-4 h-4 mr-2" />
-              Guardar WhatsApp
-            </Button>
-          </div>
-        </div>
-      </div>
-
-      {/* Feature Modal */}
-      <Modal
-        isOpen={isFeatureModalOpen}
-        onClose={() => setIsFeatureModalOpen(false)}
-        title={editingFeature ? 'Editar Característica' : 'Nueva Característica'}
-      >
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Icono</label>
-            <div className="grid grid-cols-5 gap-2">
-              {FEATURE_ICONS.map((iconOption) => {
-                const IconComp = iconComponents[iconOption.id as FeatureCard['icon']];
+                const banner = item.data;
                 return (
-                  <button
-                    key={iconOption.id}
-                    type="button"
-                    onClick={() => setFeatureForm({ ...featureForm, icon: iconOption.id as FeatureCard['icon'] })}
-                    className={`p-3 rounded-lg border-2 transition-all ${
-                      featureForm.icon === iconOption.id
-                        ? 'border-orange-500 bg-orange-50'
-                        : 'border-gray-200 hover:border-gray-300'
-                    }`}
-                    title={iconOption.label}
-                  >
-                    <IconComp className="w-6 h-6 mx-auto text-gray-600" />
-                  </button>
+                  <ItemRow
+                    key={`banner-${banner.id}`}
+                    {...dragProps}
+                    className={stateCls}
+                    inactive={!banner.isActive}
+                    icon={<>{grip}<span className="w-9 h-9 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center flex-shrink-0"><Megaphone className="w-4 h-4" /></span></>}
+                    tag={<><Badge tone="yellow">Banner</Badge><Badge>#{banner.order}</Badge><Badge>{banner.height === 'small' ? 'Pequeño' : banner.height === 'medium' ? 'Mediano' : 'Grande'}</Badge></>}
+                    title={banner.title}
+                    meta={[banner.subtitle, banner.buttonText && `Botón: ${banner.buttonText} → ${banner.buttonLink}`].filter(Boolean).join(' · ') || undefined}
+                    actions={
+                      <>
+                        <Switch checked={banner.isActive} onChange={() => handleTogglePromoBanner(banner.id)} />
+                        <IconButton title="Editar" tone="app" onClick={() => handleOpenPromoBannerModal(banner)}><Pencil className="w-4 h-4" /></IconButton>
+                        <IconButton title="Eliminar" tone="danger" onClick={() => handleDeletePromoBanner(banner.id)}><Trash2 className="w-4 h-4" /></IconButton>
+                      </>
+                    }
+                  />
                 );
               })}
             </div>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Título *</label>
-            <Input
-              value={featureForm.title}
-              onChange={(e) => setFeatureForm({ ...featureForm, title: e.target.value })}
-              placeholder="Ej: Alta Calidad"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Descripción *</label>
-            <textarea
-              value={featureForm.description}
-              onChange={(e) => setFeatureForm({ ...featureForm, description: e.target.value })}
-              rows={2}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500"
-              placeholder="Descripción de la característica"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Orden</label>
-            <Input
-              type="number"
-              min="1"
-              value={featureForm.order}
-              onChange={(e) => setFeatureForm({ ...featureForm, order: parseInt(e.target.value) || 1 })}
-            />
-          </div>
-          <div>
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={featureForm.isActive}
-                onChange={(e) => setFeatureForm({ ...featureForm, isActive: e.target.checked })}
-                className="w-4 h-4 text-orange-600 border-gray-300 rounded"
-              />
-              <span className="text-sm text-gray-700">Característica activa</span>
-            </label>
-          </div>
-          <div className="flex gap-3 pt-4">
-            <Button variant="admin-secondary" onClick={() => setIsFeatureModalOpen(false)} className="flex-1">
-              Cancelar
-            </Button>
-            <Button onClick={handleSaveFeature} className="flex-1">
-              {editingFeature ? 'Guardar' : 'Crear'}
-            </Button>
-          </div>
-        </div>
-      </Modal>
+          )}
+        </Card>
+      )}
 
-      {/* Section Modal */}
-      <Modal
-        isOpen={isSectionModalOpen}
+      {/* ───────── CTA ───────── */}
+      {tab === 'cta' && (
+        <>
+          <div>
+            <SettingsSection title="Visibilidad" description="El bloque final de la portada que invita a comprar o personalizar.">
+              <Switch
+                checked={!!settings.home.cta.isActive}
+                onChange={handleToggleCTA}
+                label="Mostrar llamado a la acción"
+                description="Se guarda al instante."
+              />
+            </SettingsSection>
+            <SettingsSection title="Contenido" description="Etiqueta, título y subtítulo del bloque.">
+              <Field label="Etiqueta (badge)">
+                <TextInput value={ctaForm.badge} onChange={(e) => setCtaForm({ ...ctaForm, badge: e.target.value })} placeholder="Ej: Crea sin límites" disabled={!(ctaForm.showBadge ?? true)} />
+              </Field>
+              <Checkbox label="Mostrar la etiqueta" checked={ctaForm.showBadge ?? true} onChange={(e) => setCtaForm({ ...ctaForm, showBadge: e.target.checked })} />
+              <FormGrid>
+                <Field label="Título">
+                  <TextInput value={ctaForm.title} onChange={(e) => setCtaForm({ ...ctaForm, title: e.target.value })} placeholder="Ej: ¿Listo para crear algo único?" />
+                </Field>
+                <Field label="Subtítulo">
+                  <TextInput value={ctaForm.subtitle} onChange={(e) => setCtaForm({ ...ctaForm, subtitle: e.target.value })} placeholder="Descripción del CTA" />
+                </Field>
+              </FormGrid>
+            </SettingsSection>
+            <SettingsSection title="Botón" description="A dónde lleva al cliente.">
+              <Switch checked={ctaForm.showButton ?? true} onChange={(v) => setCtaForm({ ...ctaForm, showButton: v })} label="Mostrar botón" />
+              <FormGrid>
+                <Field label="Texto del botón">
+                  <TextInput value={ctaForm.buttonText} onChange={(e) => setCtaForm({ ...ctaForm, buttonText: e.target.value })} placeholder="Ej: Personalizar ahora" disabled={!(ctaForm.showButton ?? true)} />
+                </Field>
+                <Field label="Enlace del botón">
+                  <TextInput value={ctaForm.buttonLink} onChange={(e) => setCtaForm({ ...ctaForm, buttonLink: e.target.value })} placeholder="/customize" disabled={!(ctaForm.showButton ?? true)} />
+                </Field>
+              </FormGrid>
+            </SettingsSection>
+          </div>
+          <FormActions sticky>
+            <Button onClick={handleSaveCTA} isLoading={saving} icon={<Save className="w-4 h-4" />}>Guardar llamado a la acción</Button>
+          </FormActions>
+        </>
+      )}
+
+      {/* ───────── WhatsApp ───────── */}
+      {tab === 'whatsapp' && (
+        <>
+          <div>
+            <SettingsSection title="Botón flotante" description="Botón de contacto por WhatsApp que aparece en todas las páginas de la tienda.">
+              <Switch checked={whatsappForm.isActive} onChange={(v) => setWhatsappForm({ ...whatsappForm, isActive: v })} label="Mostrar botón de WhatsApp" />
+              <FormGrid>
+                <Field label="Número de WhatsApp" required hint="Sin + ni espacios (ej: 573001234567).">
+                  <TextInput value={whatsappForm.phoneNumber} onChange={(e) => setWhatsappForm({ ...whatsappForm, phoneNumber: e.target.value })} placeholder="573001234567" />
+                </Field>
+                <Field label="Color del botón">
+                  <ColorInput value={whatsappForm.buttonColor} onChange={(v) => setWhatsappForm({ ...whatsappForm, buttonColor: v })} />
+                </Field>
+                <Field label="Mensaje predeterminado" className="md:col-span-2">
+                  <TextArea rows={2} value={whatsappForm.defaultMessage} onChange={(e) => setWhatsappForm({ ...whatsappForm, defaultMessage: e.target.value })} placeholder="¡Hola! Me interesa obtener más información..." />
+                </Field>
+                <Field label="Posición">
+                  <SelectInput value={whatsappForm.position} onChange={(e) => setWhatsappForm({ ...whatsappForm, position: e.target.value as 'bottom-right' | 'bottom-left' })}>
+                    <option value="bottom-right">Abajo a la derecha</option>
+                    <option value="bottom-left">Abajo a la izquierda</option>
+                  </SelectInput>
+                </Field>
+                <Field label="Texto del tooltip">
+                  <TextInput value={whatsappForm.tooltipText} onChange={(e) => setWhatsappForm({ ...whatsappForm, tooltipText: e.target.value })} placeholder="¿Necesitas ayuda?" disabled={!whatsappForm.showTooltip} />
+                </Field>
+              </FormGrid>
+            </SettingsSection>
+            <SettingsSection title="Comportamiento" description="Dónde y cómo se muestra el botón.">
+              <Switch checked={whatsappForm.showOnMobile} onChange={(v) => setWhatsappForm({ ...whatsappForm, showOnMobile: v })} label="Mostrar en celular" />
+              <Switch checked={whatsappForm.showOnDesktop} onChange={(v) => setWhatsappForm({ ...whatsappForm, showOnDesktop: v })} label="Mostrar en computador" />
+              <Switch checked={whatsappForm.pulseAnimation} onChange={(v) => setWhatsappForm({ ...whatsappForm, pulseAnimation: v })} label="Animación de pulso" />
+              <Switch checked={whatsappForm.showTooltip} onChange={(v) => setWhatsappForm({ ...whatsappForm, showTooltip: v })} label="Mostrar tooltip" />
+            </SettingsSection>
+          </div>
+          <FormActions sticky>
+            <Button onClick={handleSaveWhatsApp} isLoading={saving} icon={<Save className="w-4 h-4" />}>Guardar WhatsApp</Button>
+          </FormActions>
+        </>
+      )}
+
+      {/* ───────── Característica ───────── */}
+      <Dialog
+        open={isFeatureModalOpen}
+        onClose={() => setIsFeatureModalOpen(false)}
+        title={editingFeature ? 'Editar característica' : 'Nueva característica'}
+        footer={dialogFooter(() => setIsFeatureModalOpen(false), handleSaveFeature, !!editingFeature)}
+      >
+        <div className="space-y-4">
+          <Field label="Icono">{iconPicker(featureForm.icon, (icon) => setFeatureForm({ ...featureForm, icon }))}</Field>
+          <Field label="Título" required>
+            <TextInput value={featureForm.title} onChange={(e) => setFeatureForm({ ...featureForm, title: e.target.value })} placeholder="Ej: Alta calidad" />
+          </Field>
+          <Field label="Descripción" required>
+            <TextArea rows={2} value={featureForm.description} onChange={(e) => setFeatureForm({ ...featureForm, description: e.target.value })} placeholder="Descripción de la característica" />
+          </Field>
+          <FormGrid>
+            <Field label="Orden">
+              <NumberInput min="1" value={featureForm.order} onChange={(e) => setFeatureForm({ ...featureForm, order: parseInt(e.target.value) || 1 })} />
+            </Field>
+            <div className="md:pt-7"><Switch checked={featureForm.isActive} onChange={(v) => setFeatureForm({ ...featureForm, isActive: v })} label="Activa" /></div>
+          </FormGrid>
+        </div>
+      </Dialog>
+
+      {/* ───────── Sección de productos ───────── */}
+      <Dialog
+        open={isSectionModalOpen}
         onClose={() => setIsSectionModalOpen(false)}
-        title={editingSection ? 'Editar Sección' : 'Nueva Sección de Productos'}
+        title={editingSection ? 'Editar sección' : 'Nueva sección de productos'}
+        size="lg"
+        footer={dialogFooter(() => setIsSectionModalOpen(false), handleSaveSection, !!editingSection)}
       >
-        <div className="space-y-4 max-h-[70vh] overflow-y-auto">
-          {/* Título y Subtítulo */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Título *</label>
-            <Input
-              value={sectionForm.title}
-              onChange={(e) => setSectionForm({ ...sectionForm, title: e.target.value })}
-              placeholder="Ej: Productos Destacados"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Subtítulo</label>
-            <Input
-              value={sectionForm.subtitle || ''}
-              onChange={(e) => setSectionForm({ ...sectionForm, subtitle: e.target.value })}
-              placeholder="Descripción opcional"
-            />
-            <label className="flex items-center gap-2 mt-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={sectionForm.showSubtitle ?? true}
-                onChange={(e) => setSectionForm({ ...sectionForm, showSubtitle: e.target.checked })}
-                className="w-4 h-4 text-orange-600 border-gray-300 rounded"
-              />
-              <span className="text-sm text-gray-600">Mostrar subtítulo</span>
-            </label>
-          </div>
+        <div className="space-y-4">
+          <FormGrid>
+            <Field label="Título" required>
+              <TextInput value={sectionForm.title} onChange={(e) => setSectionForm({ ...sectionForm, title: e.target.value })} placeholder="Ej: Productos destacados" />
+            </Field>
+            <Field label="Subtítulo">
+              <TextInput value={sectionForm.subtitle || ''} onChange={(e) => setSectionForm({ ...sectionForm, subtitle: e.target.value })} placeholder="Descripción opcional" />
+            </Field>
+          </FormGrid>
+          <Checkbox label="Mostrar subtítulo" checked={sectionForm.showSubtitle ?? true} onChange={(e) => setSectionForm({ ...sectionForm, showSubtitle: e.target.checked })} />
 
-          {/* Filtros de selección */}
-          <div className="border-t pt-4">
-            <label className="block text-sm font-semibold text-gray-900 mb-3">
-              Filtros de Productos
-            </label>
-            <div className="grid grid-cols-2 gap-3">
-              <label className="flex items-center gap-2 cursor-pointer p-2 border rounded-lg hover:bg-gray-50">
-                <input
-                  type="checkbox"
-                  checked={sectionForm.filters?.featured || false}
-                  onChange={(e) => updateSectionFilter('featured', e.target.checked)}
-                  className="w-4 h-4 text-orange-600 border-gray-300 rounded"
-                />
-                <span className="text-sm text-gray-700">Destacados</span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer p-2 border rounded-lg hover:bg-gray-50">
-                <input
-                  type="checkbox"
-                  checked={sectionForm.filters?.bestsellers || false}
-                  onChange={(e) => updateSectionFilter('bestsellers', e.target.checked)}
-                  className="w-4 h-4 text-orange-600 border-gray-300 rounded"
-                />
-                <span className="text-sm text-gray-700">Más vendidos</span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer p-2 border rounded-lg hover:bg-gray-50">
-                <input
-                  type="checkbox"
-                  checked={sectionForm.filters?.newArrivals || false}
-                  onChange={(e) => updateSectionFilter('newArrivals', e.target.checked)}
-                  className="w-4 h-4 text-orange-600 border-gray-300 rounded"
-                />
-                <span className="text-sm text-gray-700">Nuevos</span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer p-2 border rounded-lg hover:bg-gray-50">
-                <input
-                  type="checkbox"
-                  checked={sectionForm.filters?.inStock || false}
-                  onChange={(e) => updateSectionFilter('inStock', e.target.checked)}
-                  className="w-4 h-4 text-orange-600 border-gray-300 rounded"
-                />
-                <span className="text-sm text-gray-700">En stock</span>
-              </label>
+          <Field label="Filtros de productos">
+            <div className="grid grid-cols-2 gap-2 pt-1">
+              <Checkbox label="Destacados" checked={sectionForm.filters?.featured || false} onChange={(e) => updateSectionFilter('featured', e.target.checked)} />
+              <Checkbox label="Más vendidos" checked={sectionForm.filters?.bestsellers || false} onChange={(e) => updateSectionFilter('bestsellers', e.target.checked)} />
+              <Checkbox label="Nuevos" checked={sectionForm.filters?.newArrivals || false} onChange={(e) => updateSectionFilter('newArrivals', e.target.checked)} />
+              <Checkbox label="En stock" checked={sectionForm.filters?.inStock || false} onChange={(e) => updateSectionFilter('inStock', e.target.checked)} />
             </div>
-          </div>
+          </Field>
 
-          {/* Filtro por Categoría */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Categoría</label>
-            <select
-              value={sectionForm.filters?.category || ''}
-              onChange={(e) => {
-                const categorySlug = e.target.value;
-                // Construir el viewAllLink basado en los filtros
-                let link = '/catalog';
-                const params: string[] = [];
+          <FormGrid cols={3}>
+            <Field label="Categoría">
+              <SelectInput
+                value={sectionForm.filters?.category || ''}
+                onChange={(e) => {
+                  const categorySlug = e.target.value;
+                  // Construir el viewAllLink basado en los filtros
+                  let link = '/catalog';
+                  const params: string[] = [];
+                  if (categorySlug) params.push(`category=${categorySlug}`);
+                  if (sectionForm.filters?.featured) params.push('featured=true');
+                  if (sectionForm.filters?.bestsellers) params.push('bestsellers=true');
+                  if (sectionForm.filters?.newArrivals) params.push('newArrivals=true');
+                  if (sectionForm.filters?.inStock) params.push('inStock=true');
+                  if (sectionForm.filters?.sortBy) params.push(`sort=${sectionForm.filters.sortBy}`);
+                  if (params.length > 0) link += '?' + params.join('&');
+                  // Al cambiar categoría, limpiar el tipo de producto y actualizar link
+                  setSectionForm({
+                    ...sectionForm,
+                    filters: { ...sectionForm.filters, category: categorySlug || undefined, type: undefined },
+                    viewAllLink: link,
+                  });
+                }}
+              >
+                <option value="">Todas las categorías</option>
+                {dbCategories.map((cat) => <option key={cat.id} value={cat.slug}>{cat.name}</option>)}
+              </SelectInput>
+            </Field>
+            <Field label="Tipo de producto" hint={!sectionForm.filters?.category ? 'Elige una categoría primero.' : undefined}>
+              <SelectInput
+                value={sectionForm.filters?.type || ''}
+                disabled={!sectionForm.filters?.category}
+                onChange={(e) => {
+                  const typeSlug = e.target.value;
+                  let link = '/catalog';
+                  const params: string[] = [];
+                  if (sectionForm.filters?.category) params.push(`category=${sectionForm.filters.category}`);
+                  if (typeSlug) params.push(`type=${typeSlug}`);
+                  if (sectionForm.filters?.featured) params.push('featured=true');
+                  if (sectionForm.filters?.bestsellers) params.push('bestsellers=true');
+                  if (sectionForm.filters?.newArrivals) params.push('newArrivals=true');
+                  if (sectionForm.filters?.inStock) params.push('inStock=true');
+                  if (sectionForm.filters?.sortBy) params.push(`sort=${sectionForm.filters.sortBy}`);
+                  if (params.length > 0) link += '?' + params.join('&');
+                  setSectionForm({ ...sectionForm, filters: { ...sectionForm.filters, type: typeSlug || undefined }, viewAllLink: link });
+                }}
+              >
+                <option value="">{sectionForm.filters?.category ? 'Todos los tipos' : 'Sin categoría'}</option>
+                {sectionForm.filters?.category &&
+                  dbTypes.filter(t => t.categorySlug === sectionForm.filters?.category).map((type) => <option key={type.id} value={type.slug}>{type.name}</option>)}
+              </SelectInput>
+            </Field>
+            <Field label="Ordenar por">
+              <SelectInput value={sectionForm.filters?.sortBy || ''} onChange={(e) => updateSectionFilter('sortBy', e.target.value)}>
+                <option value="">Por defecto</option>
+                <option value="price">Por precio</option>
+                <option value="newest">Más recientes</option>
+                <option value="rating">Mejor valorados</option>
+                <option value="reviewsCount">Más reseñas</option>
+              </SelectInput>
+            </Field>
+          </FormGrid>
 
-                if (categorySlug) params.push(`category=${categorySlug}`);
-                if (sectionForm.filters?.featured) params.push('featured=true');
-                if (sectionForm.filters?.bestsellers) params.push('bestsellers=true');
-                if (sectionForm.filters?.newArrivals) params.push('newArrivals=true');
-                if (sectionForm.filters?.inStock) params.push('inStock=true');
-                if (sectionForm.filters?.sortBy) params.push(`sort=${sectionForm.filters.sortBy}`);
+          <FormGrid>
+            <Field label="Máximo de productos">
+              <NumberInput min="1" max="20" value={sectionForm.maxProducts} onChange={(e) => setSectionForm({ ...sectionForm, maxProducts: parseInt(e.target.value) || 5 })} />
+            </Field>
+            <Field label="Orden">
+              <NumberInput min="1" value={sectionForm.order} onChange={(e) => setSectionForm({ ...sectionForm, order: parseInt(e.target.value) || 1 })} />
+            </Field>
+          </FormGrid>
 
-                if (params.length > 0) link += '?' + params.join('&');
-
-                // Al cambiar categoría, limpiar el tipo de producto y actualizar link
-                setSectionForm({
-                  ...sectionForm,
-                  filters: {
-                    ...sectionForm.filters,
-                    category: categorySlug || undefined,
-                    type: undefined, // Reset tipo cuando cambia categoría
-                  },
-                  viewAllLink: link,
-                });
-              }}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500"
-            >
-              <option value="">Todas las categorías</option>
-              {dbCategories.map((cat) => (
-                <option key={cat.id} value={cat.slug}>{cat.name}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Filtro por Tipo de Producto - Solo si hay categoría seleccionada */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de Producto</label>
-            <select
-              value={sectionForm.filters?.type || ''}
-              onChange={(e) => {
-                const typeSlug = e.target.value;
-                // Construir el viewAllLink basado en los filtros
-                let link = '/catalog';
-                const params: string[] = [];
-
-                if (sectionForm.filters?.category) params.push(`category=${sectionForm.filters.category}`);
-                if (typeSlug) params.push(`type=${typeSlug}`);
-                if (sectionForm.filters?.featured) params.push('featured=true');
-                if (sectionForm.filters?.bestsellers) params.push('bestsellers=true');
-                if (sectionForm.filters?.newArrivals) params.push('newArrivals=true');
-                if (sectionForm.filters?.inStock) params.push('inStock=true');
-                if (sectionForm.filters?.sortBy) params.push(`sort=${sectionForm.filters.sortBy}`);
-
-                if (params.length > 0) link += '?' + params.join('&');
-
-                setSectionForm({
-                  ...sectionForm,
-                  filters: {
-                    ...sectionForm.filters,
-                    type: typeSlug || undefined,
-                  },
-                  viewAllLink: link,
-                });
-              }}
-              disabled={!sectionForm.filters?.category}
-              className={`w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 ${
-                !sectionForm.filters?.category ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''
-              }`}
-            >
-              <option value="">
-                {sectionForm.filters?.category ? 'Todos los tipos' : 'Selecciona una categoría primero'}
-              </option>
-              {sectionForm.filters?.category &&
-                dbTypes
-                  .filter(t => t.categorySlug === sectionForm.filters?.category)
-                  .map((type) => (
-                    <option key={type.id} value={type.slug}>{type.name}</option>
-                  ))
-              }
-            </select>
-            {!sectionForm.filters?.category && (
-              <p className="text-xs text-gray-500 mt-1">Selecciona una categoría para ver los tipos disponibles</p>
-            )}
-          </div>
-
-          {/* Ordenamiento */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Ordenar por</label>
-            <select
-              value={sectionForm.filters?.sortBy || ''}
-              onChange={(e) => updateSectionFilter('sortBy', e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500"
-            >
-              <option value="">Por defecto</option>
-              <option value="price">Por precio</option>
-              <option value="newest">Más recientes</option>
-              <option value="rating">Mejor valorados</option>
-              <option value="reviewsCount">Más reseñas</option>
-            </select>
-          </div>
-
-          {/* Configuración */}
-          <div className="border-t pt-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Máximo de productos</label>
-                <Input
-                  type="number"
-                  min="1"
-                  max="20"
-                  value={sectionForm.maxProducts}
-                  onChange={(e) => setSectionForm({ ...sectionForm, maxProducts: parseInt(e.target.value) || 5 })}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Orden</label>
-                <Input
-                  type="number"
-                  min="1"
-                  value={sectionForm.order}
-                  onChange={(e) => setSectionForm({ ...sectionForm, order: parseInt(e.target.value) || 1 })}
-                />
-              </div>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-4">
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={sectionForm.showViewAll}
-                onChange={(e) => setSectionForm({ ...sectionForm, showViewAll: e.target.checked })}
-                className="w-4 h-4 text-orange-600 border-gray-300 rounded"
-              />
-              <span className="text-sm text-gray-700">Mostrar "Ver todo"</span>
-            </label>
-          </div>
+          <Switch checked={sectionForm.showViewAll} onChange={(v) => setSectionForm({ ...sectionForm, showViewAll: v })} label='Mostrar "Ver todo"' />
           {sectionForm.showViewAll && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Link "Ver todo"</label>
-              <Input
-                value={sectionForm.viewAllLink || ''}
-                onChange={(e) => setSectionForm({ ...sectionForm, viewAllLink: e.target.value })}
-                placeholder="/catalog"
-              />
-            </div>
+            <Field label='Enlace de "Ver todo"' hint="Se arma solo con los filtros; puedes cambiarlo.">
+              <TextInput value={sectionForm.viewAllLink || ''} onChange={(e) => setSectionForm({ ...sectionForm, viewAllLink: e.target.value })} placeholder="/catalog" />
+            </Field>
           )}
-          <div>
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={sectionForm.isActive}
-                onChange={(e) => setSectionForm({ ...sectionForm, isActive: e.target.checked })}
-                className="w-4 h-4 text-orange-600 border-gray-300 rounded"
-              />
-              <span className="text-sm text-gray-700">Sección activa</span>
-            </label>
-          </div>
-          <div className="flex gap-3 pt-4">
-            <Button variant="admin-secondary" onClick={() => setIsSectionModalOpen(false)} className="flex-1">
-              Cancelar
-            </Button>
-            <Button onClick={handleSaveSection} className="flex-1">
-              {editingSection ? 'Guardar' : 'Crear'}
-            </Button>
-          </div>
+          <Switch checked={sectionForm.isActive} onChange={(v) => setSectionForm({ ...sectionForm, isActive: v })} label="Sección activa" />
         </div>
-      </Modal>
+      </Dialog>
 
-      {/* Hero Card Modal */}
-      <Modal
-        isOpen={isHeroCardModalOpen}
+      {/* ───────── Carta del hero ───────── */}
+      <Dialog
+        open={isHeroCardModalOpen}
         onClose={() => setIsHeroCardModalOpen(false)}
-        title={editingHeroCard ? 'Editar Carta' : 'Nueva Carta'}
+        title={editingHeroCard ? 'Editar carta' : 'Nueva carta'}
+        size="lg"
+        footer={dialogFooter(() => setIsHeroCardModalOpen(false), handleSaveHeroCard, !!editingHeroCard)}
       >
-        <div className="space-y-4 max-h-[70vh] overflow-y-auto">
-          {/* Tipo de carta */}
+        <div className="space-y-5">
           {!editingHeroCard && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Tipo de Carta</label>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => setHeroCardForm({ ...heroCardForm, position: 'main' })}
-                  className={`p-3 border-2 rounded-lg text-center transition-all ${
-                    heroCardForm.position === 'main'
-                      ? 'border-purple-500 bg-purple-50'
-                      : 'border-gray-200 hover:border-gray-300'
-                  }`}
-                >
-                  <Layers className="w-6 h-6 mx-auto mb-1 text-purple-600" />
-                  <span className="text-sm font-medium">Principal</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setHeroCardForm({ ...heroCardForm, position: 'side' })}
-                  className={`p-3 border-2 rounded-lg text-center transition-all ${
-                    heroCardForm.position === 'side'
-                      ? 'border-orange-500 bg-orange-50'
-                      : 'border-gray-200 hover:border-gray-300'
-                  }`}
-                >
-                  <LayoutGrid className="w-6 h-6 mx-auto mb-1 text-orange-600" />
-                  <span className="text-sm font-medium">Lateral</span>
-                </button>
-              </div>
-            </div>
+            <Field label="Tipo de carta">
+              <RadioGroup
+                variant="cards"
+                value={heroCardForm.position}
+                onChange={(position) => setHeroCardForm({ ...heroCardForm, position })}
+                options={[
+                  { value: 'main', label: 'Principal', description: 'La carta grande del hero, con botones.' },
+                  { value: 'side', label: 'Lateral', description: 'Cartas pequeñas a la derecha (máx. 3).' },
+                ]}
+              />
+            </Field>
           )}
 
-          {/* Contenido */}
-          <div className="border-t pt-4">
-            <label className="block text-sm font-semibold text-gray-900 mb-3">Contenido</label>
-            <div className="space-y-3">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Título *</label>
-                <Input
-                  value={heroCardForm.title}
-                  onChange={(e) => setHeroCardForm({ ...heroCardForm, title: e.target.value })}
-                  placeholder={heroCardForm.position === 'main' ? 'Ej: Diseñado por ti,' : 'Ej: Personaliza'}
-                />
-              </div>
-              {heroCardForm.position === 'main' && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Segunda línea del título</label>
-                  <Input
-                    value={heroCardForm.titleLine2 || ''}
-                    onChange={(e) => setHeroCardForm({ ...heroCardForm, titleLine2: e.target.value })}
-                    placeholder="Ej: hecho por Vexa"
-                  />
-                </div>
-              )}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Subtítulo</label>
-                <Input
-                  value={heroCardForm.subtitle || ''}
-                  onChange={(e) => setHeroCardForm({ ...heroCardForm, subtitle: e.target.value })}
-                  placeholder={heroCardForm.position === 'main' ? 'Descripción del hero' : 'Ej: Tu creatividad'}
-                />
-                <label className="flex items-center gap-2 mt-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={heroCardForm.showSubtitle}
-                    onChange={(e) => setHeroCardForm({ ...heroCardForm, showSubtitle: e.target.checked })}
-                    className="w-4 h-4 text-orange-600 border-gray-300 rounded"
-                  />
-                  <span className="text-sm text-gray-600">Mostrar subtítulo</span>
-                </label>
-              </div>
-            </div>
+          <div className="space-y-3">
+            <Field label="Título" required>
+              <TextInput value={heroCardForm.title} onChange={(e) => setHeroCardForm({ ...heroCardForm, title: e.target.value })} placeholder={heroCardForm.position === 'main' ? 'Ej: Diseñado por ti,' : 'Ej: Personaliza'} />
+            </Field>
+            {heroCardForm.position === 'main' && (
+              <Field label="Segunda línea del título">
+                <TextInput value={heroCardForm.titleLine2 || ''} onChange={(e) => setHeroCardForm({ ...heroCardForm, titleLine2: e.target.value })} placeholder="Ej: hecho por Vexa" />
+              </Field>
+            )}
+            <Field label="Subtítulo">
+              <TextInput value={heroCardForm.subtitle || ''} onChange={(e) => setHeroCardForm({ ...heroCardForm, subtitle: e.target.value })} placeholder={heroCardForm.position === 'main' ? 'Descripción del hero' : 'Ej: Tu creatividad'} />
+            </Field>
+            <Checkbox label="Mostrar subtítulo" checked={heroCardForm.showSubtitle} onChange={(e) => setHeroCardForm({ ...heroCardForm, showSubtitle: e.target.checked })} />
           </div>
 
-          {/* Tipo de fondo */}
-          <div className="border-t pt-4">
-            <label className="block text-sm font-semibold text-gray-900 mb-3">Fondo</label>
-            <div className="grid grid-cols-4 gap-2 mb-3">
-              {[
-                { type: 'gradient', icon: Palette, label: 'Gradiente' },
-                { type: 'image', icon: Image, label: 'Imagen' },
-                { type: 'video', icon: Film, label: 'Video' },
-                { type: 'carousel', icon: Images, label: 'Carrusel' },
-              ].map(({ type, icon: Icon, label }) => (
-                <button
-                  key={type}
-                  type="button"
-                  onClick={() => setHeroCardForm({
-                    ...heroCardForm,
-                    background: { ...heroCardForm.background, type: type as any }
-                  })}
-                  className={`p-2 border-2 rounded-lg text-center transition-all ${
-                    heroCardForm.background.type === type
-                      ? 'border-orange-500 bg-orange-50'
-                      : 'border-gray-200 hover:border-gray-300'
-                  }`}
-                >
-                  <Icon className="w-5 h-5 mx-auto mb-0.5" />
-                  <span className="text-xs">{label}</span>
-                </button>
-              ))}
-            </div>
-
-            {/* Configuración según tipo de fondo */}
-            {heroCardForm.background.type === 'image' && (
-              <div>
-                <ImageUploadField
-                  label="Imagen de fondo"
-                  value={heroCardForm.background.imageUrl || ''}
-                  onChange={(newUrl) => setHeroCardForm({
-                    ...heroCardForm,
-                    background: { ...heroCardForm.background, imageUrl: newUrl }
-                  })}
-                  placeholder="https://imagen.jpg"
-                />
+          <div className="space-y-3 border-t border-gray-100 pt-4">
+            <Field label="Fondo">
+              <div className="grid grid-cols-4 gap-2">
+                {(['gradient', 'image', 'video', 'carousel'] as const).map((type) => {
+                  const Icon = BG_ICONS[type];
+                  return (
+                    <ChoiceButton key={type} active={heroCardForm.background.type === type} onClick={() => setHeroCardForm({ ...heroCardForm, background: { ...heroCardForm.background, type: type as any } })}>
+                      <Icon className="w-5 h-5" />{BG_LABELS[type]}
+                    </ChoiceButton>
+                  );
+                })}
               </div>
+            </Field>
+
+            {heroCardForm.background.type === 'image' && (
+              <ImageUploadField
+                label="Imagen de fondo"
+                value={heroCardForm.background.imageUrl || ''}
+                onChange={(newUrl) => setHeroCardForm({ ...heroCardForm, background: { ...heroCardForm.background, imageUrl: newUrl } })}
+                placeholder="https://imagen.jpg"
+              />
             )}
 
             {heroCardForm.background.type === 'video' && (
-              <div className="space-y-3">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">URL del video</label>
-                  <Input
-                    value={heroCardForm.background.videoUrl || ''}
-                    onChange={(e) => setHeroCardForm({
-                      ...heroCardForm,
-                      background: { ...heroCardForm.background, videoUrl: e.target.value }
-                    })}
-                    placeholder="https://...mp4"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Imagen de poster (opcional)</label>
-                  <Input
-                    value={heroCardForm.background.videoPoster || ''}
-                    onChange={(e) => setHeroCardForm({
-                      ...heroCardForm,
-                      background: { ...heroCardForm.background, videoPoster: e.target.value }
-                    })}
-                    placeholder="https://..."
-                  />
-                </div>
-              </div>
+              <FormGrid>
+                <Field label="URL del video">
+                  <TextInput value={heroCardForm.background.videoUrl || ''} onChange={(e) => setHeroCardForm({ ...heroCardForm, background: { ...heroCardForm.background, videoUrl: e.target.value } })} placeholder="https://...mp4" />
+                </Field>
+                <Field label="Imagen de póster (opcional)">
+                  <TextInput value={heroCardForm.background.videoPoster || ''} onChange={(e) => setHeroCardForm({ ...heroCardForm, background: { ...heroCardForm.background, videoPoster: e.target.value } })} placeholder="https://..." />
+                </Field>
+              </FormGrid>
             )}
 
             {heroCardForm.background.type === 'carousel' && (
               <div className="space-y-3">
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <label className="block text-sm font-medium text-gray-700">Imágenes del carrusel</label>
-                    <button
-                      type="button"
-                      onClick={() => setHeroCardForm({
-                        ...heroCardForm,
-                        background: {
-                          ...heroCardForm.background,
-                          carouselImages: [...(heroCardForm.background.carouselImages || []), '']
-                        }
-                      })}
-                      className="text-xs text-orange-600 hover:text-orange-700 font-medium flex items-center gap-1"
-                    >
-                      <Plus className="w-3 h-3" /> Agregar imagen
-                    </button>
-                  </div>
-                  <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-gray-700">Imágenes del carrusel</span>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    icon={<Plus className="w-4 h-4" />}
+                    onClick={() => setHeroCardForm({ ...heroCardForm, background: { ...heroCardForm.background, carouselImages: [...(heroCardForm.background.carouselImages || []), ''] } })}
+                  >
+                    Agregar imagen
+                  </Button>
+                </div>
+                {(heroCardForm.background.carouselImages || []).length === 0 ? (
+                  <p className="text-sm text-gray-400 text-center py-3">No hay imágenes. Agrega al menos una.</p>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {(heroCardForm.background.carouselImages || []).map((url, idx) => (
-                      <div key={idx} className="relative p-3 bg-gray-50 rounded-lg">
+                      <div key={idx} className="rounded-lg border border-gray-200 p-3">
                         <div className="flex items-center justify-between mb-2">
                           <span className="text-xs font-medium text-gray-600">Imagen {idx + 1}</span>
-                          <button
-                            type="button"
+                          <IconButton
+                            title="Quitar imagen"
+                            tone="danger"
                             onClick={() => {
                               const newImages = (heroCardForm.background.carouselImages || []).filter((_, i) => i !== idx);
-                              setHeroCardForm({
-                                ...heroCardForm,
-                                background: { ...heroCardForm.background, carouselImages: newImages }
-                              });
+                              setHeroCardForm({ ...heroCardForm, background: { ...heroCardForm.background, carouselImages: newImages } });
                             }}
-                            className="p-1 text-red-500 hover:bg-red-100 rounded"
-                            title="Eliminar imagen"
                           >
                             <Trash2 className="w-4 h-4" />
-                          </button>
+                          </IconButton>
                         </div>
                         <ImageUploadField
                           label=""
@@ -1923,383 +1355,209 @@ export const SettingsHomePage = () => {
                           onChange={(newUrl) => {
                             const newImages = [...(heroCardForm.background.carouselImages || [])];
                             newImages[idx] = newUrl;
-                            setHeroCardForm({
-                              ...heroCardForm,
-                              background: { ...heroCardForm.background, carouselImages: newImages }
-                            });
+                            setHeroCardForm({ ...heroCardForm, background: { ...heroCardForm.background, carouselImages: newImages } });
                           }}
                           placeholder="https://imagen.jpg"
                         />
                       </div>
                     ))}
-                    {(heroCardForm.background.carouselImages || []).length === 0 && (
-                      <p className="text-sm text-gray-400 italic text-center py-4">No hay imágenes. Agrega al menos una.</p>
-                    )}
                   </div>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Intervalo (segundos)</label>
-                  <Input
-                    type="number"
+                )}
+                <Field label="Intervalo">
+                  <NumberInput
                     min="1"
                     max="30"
+                    suffix="seg"
                     value={(heroCardForm.background.carouselInterval || 5000) / 1000}
-                    onChange={(e) => setHeroCardForm({
-                      ...heroCardForm,
-                      background: {
-                        ...heroCardForm.background,
-                        carouselInterval: (parseInt(e.target.value) || 5) * 1000
-                      }
-                    })}
+                    onChange={(e) => setHeroCardForm({ ...heroCardForm, background: { ...heroCardForm.background, carouselInterval: (parseInt(e.target.value) || 5) * 1000 } })}
                   />
-                </div>
+                </Field>
               </div>
             )}
 
-            {/* Overlay */}
-            <div className="mt-3">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Overlay oscuro: {heroCardForm.background.overlayOpacity || 0}%
-              </label>
+            <Field label={`Oscurecer fondo: ${heroCardForm.background.overlayOpacity || 0}%`}>
               <input
                 type="range"
                 min="0"
                 max="80"
                 value={heroCardForm.background.overlayOpacity || 0}
-                onChange={(e) => setHeroCardForm({
-                  ...heroCardForm,
-                  background: { ...heroCardForm.background, overlayOpacity: parseInt(e.target.value) }
-                })}
-                className="w-full"
+                onChange={(e) => setHeroCardForm({ ...heroCardForm, background: { ...heroCardForm.background, overlayOpacity: parseInt(e.target.value) } })}
+                className="w-full accent-app-600"
               />
-            </div>
+            </Field>
           </div>
 
-          {/* Icono (solo para cartas laterales) */}
           {heroCardForm.position === 'side' && (
-            <div className="border-t pt-4">
-              <label className="block text-sm font-semibold text-gray-900 mb-3">Icono</label>
-              <div className="grid grid-cols-5 gap-2">
-                {FEATURE_ICONS.map((iconOption) => {
-                  const IconComp = iconComponents[iconOption.id as FeatureCard['icon']];
-                  return (
-                    <button
-                      key={iconOption.id}
-                      type="button"
-                      onClick={() => setHeroCardForm({ ...heroCardForm, icon: iconOption.id })}
-                      className={`p-3 rounded-lg border-2 transition-all ${
-                        heroCardForm.icon === iconOption.id
-                          ? 'border-orange-500 bg-orange-50'
-                          : 'border-gray-200 hover:border-gray-300'
-                      }`}
-                      title={iconOption.label}
-                    >
-                      <IconComp className="w-6 h-6 mx-auto text-gray-600" />
-                    </button>
-                  );
-                })}
-              </div>
+            <div className="space-y-3 border-t border-gray-100 pt-4">
+              <Field label="Icono">{iconPicker(heroCardForm.icon, (icon) => setHeroCardForm({ ...heroCardForm, icon }))}</Field>
+              <Field label="Enlace al hacer clic">
+                <TextInput
+                  value={heroCardForm.buttons[0]?.link || ''}
+                  onChange={(e) => {
+                    const newButtons = heroCardForm.buttons.length > 0
+                      ? [{ ...heroCardForm.buttons[0], link: e.target.value }]
+                      : [{ id: `btn-${Date.now()}`, text: 'Ver más', link: e.target.value, style: 'primary' as const, isActive: true }];
+                    setHeroCardForm({ ...heroCardForm, buttons: newButtons });
+                  }}
+                  placeholder="/catalog"
+                />
+              </Field>
             </div>
           )}
 
-          {/* Botones (solo para carta principal) */}
           {heroCardForm.position === 'main' && (
-            <div className="border-t pt-4">
-              <label className="block text-sm font-semibold text-gray-900 mb-3">Botones</label>
-              <div className="space-y-3">
-                {heroCardForm.buttons.map((btn, idx) => (
-                  <div key={btn.id} className="flex items-center gap-2 p-3 bg-gray-50 rounded-lg">
-                    <div className="flex-1 grid grid-cols-2 gap-2">
-                      <Input
-                        value={btn.text}
-                        onChange={(e) => {
-                          const newButtons = [...heroCardForm.buttons];
-                          newButtons[idx] = { ...btn, text: e.target.value };
-                          setHeroCardForm({ ...heroCardForm, buttons: newButtons });
-                        }}
-                        placeholder="Texto"
-                      />
-                      <Input
-                        value={btn.link}
-                        onChange={(e) => {
-                          const newButtons = [...heroCardForm.buttons];
-                          newButtons[idx] = { ...btn, link: e.target.value };
-                          setHeroCardForm({ ...heroCardForm, buttons: newButtons });
-                        }}
-                        placeholder="/link"
-                      />
-                    </div>
-                    <select
+            <div className="space-y-2 border-t border-gray-100 pt-4">
+              <span className="block text-sm font-medium text-gray-700">Botones</span>
+              {heroCardForm.buttons.map((btn, idx) => (
+                <div key={btn.id} className="flex items-center gap-2">
+                  <div className="flex-1 grid grid-cols-1 sm:grid-cols-[1fr_1fr_9rem] gap-2">
+                    <TextInput
+                      aria-label="Texto del botón"
+                      value={btn.text}
+                      onChange={(e) => {
+                        const newButtons = [...heroCardForm.buttons];
+                        newButtons[idx] = { ...btn, text: e.target.value };
+                        setHeroCardForm({ ...heroCardForm, buttons: newButtons });
+                      }}
+                      placeholder="Texto"
+                    />
+                    <TextInput
+                      aria-label="Enlace del botón"
+                      value={btn.link}
+                      onChange={(e) => {
+                        const newButtons = [...heroCardForm.buttons];
+                        newButtons[idx] = { ...btn, link: e.target.value };
+                        setHeroCardForm({ ...heroCardForm, buttons: newButtons });
+                      }}
+                      placeholder="/link"
+                    />
+                    <SelectInput
+                      aria-label="Estilo del botón"
                       value={btn.style}
                       onChange={(e) => {
                         const newButtons = [...heroCardForm.buttons];
                         newButtons[idx] = { ...btn, style: e.target.value as 'primary' | 'secondary' };
                         setHeroCardForm({ ...heroCardForm, buttons: newButtons });
                       }}
-                      className="px-2 py-1 border border-gray-300 rounded text-sm"
                     >
                       <option value="primary">Primario</option>
                       <option value="secondary">Secundario</option>
-                    </select>
-                    <button
-                      onClick={() => {
-                        const newButtons = heroCardForm.buttons.filter((_, i) => i !== idx);
-                        setHeroCardForm({ ...heroCardForm, buttons: newButtons });
-                      }}
-                      className="p-1 text-red-500 hover:bg-red-50 rounded"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
+                    </SelectInput>
                   </div>
-                ))}
-                {heroCardForm.buttons.length < 2 && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const newButton = {
-                        id: `btn-${Date.now()}`,
-                        text: '',
-                        link: '',
-                        style: 'secondary' as const,
-                        isActive: true,
-                      };
-                      setHeroCardForm({ ...heroCardForm, buttons: [...heroCardForm.buttons, newButton] });
-                    }}
-                    className="w-full p-2 border-2 border-dashed border-gray-300 rounded-lg text-gray-500 hover:border-gray-400 hover:text-gray-600"
+                  <IconButton
+                    title="Quitar botón"
+                    tone="danger"
+                    onClick={() => setHeroCardForm({ ...heroCardForm, buttons: heroCardForm.buttons.filter((_, i) => i !== idx) })}
                   >
-                    <Plus className="w-4 h-4 inline mr-1" />
-                    Agregar botón
-                  </button>
-                )}
-              </div>
+                    <X className="w-4 h-4" />
+                  </IconButton>
+                </div>
+              ))}
+              {heroCardForm.buttons.length < 2 && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  icon={<Plus className="w-4 h-4" />}
+                  onClick={() => {
+                    const newButton = { id: `btn-${Date.now()}`, text: '', link: '', style: 'secondary' as const, isActive: true };
+                    setHeroCardForm({ ...heroCardForm, buttons: [...heroCardForm.buttons, newButton] });
+                  }}
+                >
+                  Agregar botón
+                </Button>
+              )}
             </div>
           )}
 
-          {/* Link para carta lateral */}
-          {heroCardForm.position === 'side' && (
-            <div className="border-t pt-4">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Link al hacer clic</label>
-              <Input
-                value={heroCardForm.buttons[0]?.link || ''}
-                onChange={(e) => {
-                  const newButtons = heroCardForm.buttons.length > 0
-                    ? [{ ...heroCardForm.buttons[0], link: e.target.value }]
-                    : [{ id: `btn-${Date.now()}`, text: 'Ver más', link: e.target.value, style: 'primary' as const, isActive: true }];
-                  setHeroCardForm({ ...heroCardForm, buttons: newButtons });
-                }}
-                placeholder="/catalog"
-              />
-            </div>
-          )}
-
-          {/* Estado */}
-          <div className="border-t pt-4">
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={heroCardForm.isActive}
-                onChange={(e) => setHeroCardForm({ ...heroCardForm, isActive: e.target.checked })}
-                className="w-4 h-4 text-orange-600 border-gray-300 rounded"
-              />
-              <span className="text-sm text-gray-700">Carta activa</span>
-            </label>
-          </div>
-
-          {/* Botones del modal */}
-          <div className="flex gap-3 pt-4">
-            <Button variant="admin-secondary" onClick={() => setIsHeroCardModalOpen(false)} className="flex-1">
-              Cancelar
-            </Button>
-            <Button onClick={handleSaveHeroCard} className="flex-1">
-              {editingHeroCard ? 'Guardar' : 'Crear'}
-            </Button>
+          <div className="border-t border-gray-100 pt-4">
+            <Switch checked={heroCardForm.isActive} onChange={(v) => setHeroCardForm({ ...heroCardForm, isActive: v })} label="Carta activa" />
           </div>
         </div>
-      </Modal>
+      </Dialog>
 
-      {/* Modal para Promo Banner */}
-      <Modal
-        isOpen={isPromoBannerModalOpen}
+      {/* ───────── Banner promocional ───────── */}
+      <Dialog
+        open={isPromoBannerModalOpen}
         onClose={() => setIsPromoBannerModalOpen(false)}
-        title={editingPromoBanner ? 'Editar Banner' : 'Nuevo Banner Promocional'}
+        title={editingPromoBanner ? 'Editar banner' : 'Nuevo banner promocional'}
         size="lg"
+        footer={dialogFooter(() => setIsPromoBannerModalOpen(false), handleSavePromoBanner, !!editingPromoBanner)}
       >
         <div className="space-y-4">
-          {/* Título */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Título *</label>
-            <Input
-              value={promoBannerForm.title}
-              onChange={(e) => setPromoBannerForm({ ...promoBannerForm, title: e.target.value })}
-              placeholder="Ej: ¡Descuento del 20%!"
-            />
-          </div>
-
-          {/* Subtítulo */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Subtítulo</label>
-            <Input
-              value={promoBannerForm.subtitle || ''}
-              onChange={(e) => setPromoBannerForm({ ...promoBannerForm, subtitle: e.target.value })}
-              placeholder="Ej: Solo por tiempo limitado"
-            />
-          </div>
-
-          {/* Botón */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Texto del botón</label>
-              <Input
-                value={promoBannerForm.buttonText || ''}
-                onChange={(e) => setPromoBannerForm({ ...promoBannerForm, buttonText: e.target.value })}
-                placeholder="Ej: Ver ofertas"
+          <FormGrid>
+            <Field label="Título" required>
+              <TextInput value={promoBannerForm.title} onChange={(e) => setPromoBannerForm({ ...promoBannerForm, title: e.target.value })} placeholder="Ej: ¡Descuento del 20%!" />
+            </Field>
+            <Field label="Subtítulo">
+              <TextInput value={promoBannerForm.subtitle || ''} onChange={(e) => setPromoBannerForm({ ...promoBannerForm, subtitle: e.target.value })} placeholder="Ej: Solo por tiempo limitado" />
+            </Field>
+            <Field label="Texto del botón">
+              <TextInput value={promoBannerForm.buttonText || ''} onChange={(e) => setPromoBannerForm({ ...promoBannerForm, buttonText: e.target.value })} placeholder="Ej: Ver ofertas" />
+            </Field>
+            <Field label="Enlace del botón">
+              <TextInput value={promoBannerForm.buttonLink || ''} onChange={(e) => setPromoBannerForm({ ...promoBannerForm, buttonLink: e.target.value })} placeholder="/catalog?discount=true" />
+            </Field>
+            <Field label="Orden" hint="Posición en la portada.">
+              <NumberInput min="1" value={promoBannerForm.order} onChange={(e) => setPromoBannerForm({ ...promoBannerForm, order: parseInt(e.target.value) || 1 })} />
+            </Field>
+            <Field label="Altura">
+              <RadioGroup
+                variant="segmented"
+                value={promoBannerForm.height}
+                onChange={(height) => setPromoBannerForm({ ...promoBannerForm, height })}
+                options={[{ value: 'small', label: 'Pequeño' }, { value: 'medium', label: 'Mediano' }, { value: 'large', label: 'Grande' }]}
               />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Link del botón</label>
-              <Input
-                value={promoBannerForm.buttonLink || ''}
-                onChange={(e) => setPromoBannerForm({ ...promoBannerForm, buttonLink: e.target.value })}
-                placeholder="/catalog?discount=true"
-              />
-            </div>
-          </div>
+            </Field>
+          </FormGrid>
 
-          {/* Orden y Altura */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Orden</label>
-              <Input
-                type="number"
-                min="1"
-                value={promoBannerForm.order}
-                onChange={(e) => setPromoBannerForm({ ...promoBannerForm, order: parseInt(e.target.value) || 1 })}
-              />
-              <p className="text-xs text-gray-500 mt-1">Define la posición en el home</p>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Altura</label>
-              <div className="flex gap-2">
-                {(['small', 'medium', 'large'] as const).map((h) => (
-                  <button
-                    key={h}
-                    type="button"
-                    onClick={() => setPromoBannerForm({ ...promoBannerForm, height: h })}
-                    className={`flex-1 py-2 px-3 rounded-lg border-2 text-sm font-medium transition-all ${
-                      promoBannerForm.height === h
-                        ? 'border-orange-500 bg-orange-50 text-orange-700'
-                        : 'border-gray-200 hover:border-gray-300'
-                    }`}
-                  >
-                    {h === 'small' ? 'S' : h === 'medium' ? 'M' : 'L'}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Alineación del contenido */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Alineación del contenido</label>
-            <div className="flex gap-2">
+          <Field label="Alineación del contenido">
+            <div className="grid grid-cols-3 gap-2">
               {([
                 { id: 'left', Icon: AlignLeft, label: 'Izquierda' },
                 { id: 'center', Icon: AlignCenter, label: 'Centro' },
                 { id: 'right', Icon: AlignRight, label: 'Derecha' },
               ] as const).map(({ id, Icon, label }) => (
-                <button
-                  key={id}
-                  type="button"
-                  onClick={() => setPromoBannerForm({ ...promoBannerForm, contentAlign: id })}
-                  className={`flex-1 py-2 px-3 rounded-lg border-2 transition-all flex items-center justify-center gap-2 ${
-                    promoBannerForm.contentAlign === id
-                      ? 'border-orange-500 bg-orange-50'
-                      : 'border-gray-200 hover:border-gray-300'
-                  }`}
-                >
-                  <Icon className="w-4 h-4" />
-                  <span className="text-sm">{label}</span>
-                </button>
+                <ChoiceButton key={id} active={promoBannerForm.contentAlign === id} onClick={() => setPromoBannerForm({ ...promoBannerForm, contentAlign: id })}>
+                  <Icon className="w-4 h-4" />{label}
+                </ChoiceButton>
               ))}
             </div>
-          </div>
+          </Field>
 
-          {/* Tipo de fondo */}
-          <div>
-            <label className="block text-sm font-semibold text-gray-900 mb-2">Fondo</label>
-            <div className="flex gap-2 mb-3">
-              {[
-                { type: 'gradient' as const, label: 'Gradiente', Icon: Palette },
-                { type: 'image' as const, label: 'Imagen', Icon: Image },
-              ].map(({ type, label, Icon }) => (
-                <button
-                  key={type}
-                  type="button"
-                  onClick={() => setPromoBannerForm({
-                    ...promoBannerForm,
-                    background: { ...promoBannerForm.background, type }
-                  })}
-                  className={`flex-1 flex flex-col items-center gap-1 p-3 rounded-lg border-2 transition-all ${
-                    promoBannerForm.background.type === type
-                      ? 'border-orange-500 bg-orange-50'
-                      : 'border-gray-200 hover:border-gray-300'
-                  }`}
-                >
-                  <Icon className="w-5 h-5" />
-                  <span className="text-xs">{label}</span>
-                </button>
-              ))}
+          <Field label="Fondo">
+            <div className="grid grid-cols-2 gap-2">
+              {(['gradient', 'image'] as const).map((type) => {
+                const Icon = BG_ICONS[type];
+                return (
+                  <ChoiceButton key={type} active={promoBannerForm.background.type === type} onClick={() => setPromoBannerForm({ ...promoBannerForm, background: { ...promoBannerForm.background, type } })}>
+                    <Icon className="w-5 h-5" />{BG_LABELS[type]}
+                  </ChoiceButton>
+                );
+              })}
             </div>
+          </Field>
 
-            {/* Configuración según tipo */}
-            {promoBannerForm.background.type === 'image' && (
-              <div>
-                <ImageUploadField
-                  label="Imagen de fondo"
-                  value={promoBannerForm.background.imageUrl || ''}
-                  onChange={(newUrl) => setPromoBannerForm({
-                    ...promoBannerForm,
-                    background: { ...promoBannerForm.background, imageUrl: newUrl }
-                  })}
-                  placeholder="https://imagen.jpg"
-                />
-              </div>
-            )}
+          {promoBannerForm.background.type === 'image' && (
+            <ImageUploadField
+              label="Imagen de fondo"
+              value={promoBannerForm.background.imageUrl || ''}
+              onChange={(newUrl) => setPromoBannerForm({ ...promoBannerForm, background: { ...promoBannerForm.background, imageUrl: newUrl } })}
+              placeholder="https://imagen.jpg"
+            />
+          )}
 
-            {/* Overlay */}
-            <div className="mt-3">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Overlay oscuro: {promoBannerForm.background.overlayOpacity ?? 20}%
-              </label>
-              <input
-                type="range"
-                min="0"
-                max="80"
-                value={promoBannerForm.background.overlayOpacity ?? 20}
-                onChange={(e) => setPromoBannerForm({
-                  ...promoBannerForm,
-                  background: { ...promoBannerForm.background, overlayOpacity: parseInt(e.target.value) }
-                })}
-                className="w-full"
-              />
-            </div>
-          </div>
-
-          {/* Botones del modal */}
-          <div className="flex gap-3 pt-4 border-t">
-            <Button
-              variant="outline"
-              onClick={() => setIsPromoBannerModalOpen(false)}
-              className="flex-1"
-            >
-              Cancelar
-            </Button>
-            <Button onClick={handleSavePromoBanner} className="flex-1">
-              {editingPromoBanner ? 'Guardar' : 'Crear'}
-            </Button>
-          </div>
+          <Field label={`Oscurecer fondo: ${promoBannerForm.background.overlayOpacity ?? 20}%`}>
+            <input
+              type="range"
+              min="0"
+              max="80"
+              value={promoBannerForm.background.overlayOpacity ?? 20}
+              onChange={(e) => setPromoBannerForm({ ...promoBannerForm, background: { ...promoBannerForm.background, overlayOpacity: parseInt(e.target.value) } })}
+              className="w-full accent-app-600"
+            />
+          </Field>
         </div>
-      </Modal>
-    </div>
+      </Dialog>
+    </Page>
   );
 };

@@ -1,8 +1,6 @@
-import { Link } from 'react-router-dom';
-import { Sparkles, Palette, ShoppingBag, ChevronRight, Flame } from 'lucide-react';
 import { HeroCard } from './HeroCard';
 import { useSettings } from '../../context/SettingsContext';
-import type { HeroCard as HeroCardType, HeroSettings } from '../../types/settings';
+import type { HeroCard as HeroCardType } from '../../types/settings';
 
 // Valores por defecto para el hero
 const getDefaultHeroCards = (brandColors: { primary: string; secondary: string; accent: string }): HeroCardType[] => [
@@ -165,7 +163,7 @@ export const HeroSection = ({ className = '' }: HeroSectionProps) => {
                 <HeroCard
                   key={card.id}
                   card={card}
-                  className="flex-1 hover:scale-[1.02] transition-transform"
+                  className="flex-1"
                 />
               ))}
             </div>

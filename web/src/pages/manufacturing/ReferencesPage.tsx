@@ -1,11 +1,18 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { Plus, Pencil, Trash2, Shirt, Search } from 'lucide-react';
-import toast from 'react-hot-toast';
+import { useNavigate } from 'react-router-dom';
+import { Plus, Pencil, Trash2, Shirt } from 'lucide-react';
+import toast from '../../lib/toast';
 import manufacturingService from '../../services/manufacturing.service';
 import type { MfgReference } from '../../types/manufacturing';
+import {
+  Page, PageHeader, Button, IconButton, FilterBar, SearchInput, TableCard, Table, THead, TBody, Th, Tr, Td, TableMessage,
+  Thumb, useConfirm,
+} from '../../components/ui';
+import { ActiveBadge } from '../../components/manufacturing/mfgUi';
 
 export default function ReferencesPage() {
+  const confirm = useConfirm();
+  const navigate = useNavigate();
   const [items, setItems] = useState<MfgReference[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -26,82 +33,64 @@ export default function ReferencesPage() {
   }, [search]);
 
   const remove = async (r: MfgReference) => {
-    if (!confirm(`¿Eliminar la referencia "${r.code} — ${r.name}"?\nSe borrará también su ficha técnica.`)) return;
+    if (!(await confirm({ title: `¿Eliminar la referencia "${r.code} — ${r.name}"?`, message: 'Se borrará también su ficha técnica.', tone: 'danger' }))) return;
     try { await manufacturingService.deleteReference(r.id); toast.success('Referencia eliminada'); load(search.trim() || undefined); }
     catch { toast.error('No se pudo eliminar'); }
   };
 
+  const edit = (r: MfgReference) => navigate(`/manufacturing/references/${r.id}`);
+
   return (
-    <div>
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-orange-100 rounded-lg"><Shirt className="w-6 h-6 text-orange-600" /></div>
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Referencias</h1>
-            <p className="text-sm text-gray-500">Modelos que se producen, con su ficha técnica (colores, tallas y materiales).</p>
-          </div>
-        </div>
-        <Link to="/manufacturing/references/new" className="inline-flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white font-medium px-4 py-2 rounded-lg">
-          <Plus className="w-4 h-4" /> Nueva referencia
-        </Link>
-      </div>
+    <Page>
+      <PageHeader
+        icon={Shirt}
+        title="Referencias"
+        subtitle="Modelos que se producen, con su ficha técnica (colores, tallas y materiales)."
+        actions={<Button icon={<Plus className="w-4 h-4" />} onClick={() => navigate('/manufacturing/references/new')}>Nueva referencia</Button>}
+      />
 
-      <div className="relative mb-4 max-w-sm">
-        <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
-        <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar por código o nombre…" className="w-full border border-gray-300 rounded-lg pl-9 pr-3 py-2 text-sm" />
-      </div>
+      <FilterBar>
+        <SearchInput value={search} onChange={setSearch} placeholder="Buscar por código o nombre…" />
+      </FilterBar>
 
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-50 text-gray-500 text-left">
-            <tr>
-              <th className="px-4 py-3 font-medium">Código</th>
-              <th className="px-4 py-3 font-medium">Nombre</th>
-              <th className="px-4 py-3 font-medium">Tipo</th>
-              <th className="px-4 py-3 font-medium">Colores</th>
-              <th className="px-4 py-3 font-medium">Tallas</th>
-              <th className="px-4 py-3 font-medium">Materiales</th>
-              <th className="px-4 py-3 font-medium">Estado</th>
-              <th className="px-4 py-3" />
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {loading ? (
-              <tr><td colSpan={8} className="px-4 py-8 text-center text-gray-400">Cargando…</td></tr>
-            ) : items.length === 0 ? (
-              <tr><td colSpan={8} className="px-4 py-8 text-center text-gray-400">Sin referencias. Crea la primera.</td></tr>
-            ) : items.map((r) => (
-              <tr key={r.id} className="hover:bg-gray-50">
-                <td className="px-4 py-3 font-mono text-gray-700">{r.code}</td>
-                <td className="px-4 py-3 font-medium text-gray-900">{r.name}</td>
-                <td className="px-4 py-3 text-gray-600">{r.garmentType?.name || '—'}</td>
-                <td className="px-4 py-3">
-                  <div className="flex items-center gap-1">
-                    {r.colors.slice(0, 5).map((c) => (
-                      <span key={c.id} title={c.color?.name} className="w-4 h-4 rounded-full border border-gray-200" style={{ backgroundColor: c.color?.hexCode }} />
-                    ))}
-                    {r.colors.length > 5 && <span className="text-xs text-gray-400">+{r.colors.length - 5}</span>}
-                    {r.colors.length === 0 && <span className="text-gray-400">—</span>}
-                  </div>
-                </td>
-                <td className="px-4 py-3 text-gray-600">{r.sizes.map((s) => s.size?.abbreviation).filter(Boolean).join(', ') || '—'}</td>
-                <td className="px-4 py-3 text-gray-600">{r.materials.length}</td>
-                <td className="px-4 py-3">
-                  <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${r.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
-                    {r.isActive ? 'Activa' : 'Inactiva'}
-                  </span>
-                </td>
-                <td className="px-4 py-3">
-                  <div className="flex items-center justify-end gap-1">
-                    <Link to={`/manufacturing/references/${r.id}`} className="p-2 text-gray-500 hover:text-orange-600 hover:bg-orange-50 rounded-lg"><Pencil className="w-4 h-4" /></Link>
-                    <button onClick={() => remove(r)} className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg"><Trash2 className="w-4 h-4" /></button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
+      <TableCard>
+        <Table>
+          <THead><tr><Th>Referencia</Th><Th>Tipo</Th><Th>Colores</Th><Th>Tallas</Th><Th align="right">Materiales</Th><Th align="center">Estado</Th><Th align="right">Acciones</Th></tr></THead>
+          <TBody>
+            {loading ? <TableMessage colSpan={7}>Cargando…</TableMessage>
+              : items.length === 0 ? <TableMessage colSpan={7}>{search ? 'Sin resultados para la búsqueda.' : 'Sin referencias. Crea la primera.'}</TableMessage>
+              : items.map((r) => (
+                <Tr key={r.id} onClick={() => edit(r)}>
+                  <Td>
+                    <span className="flex items-center gap-3 min-w-0">
+                      <Thumb src={r.imagePath} alt={r.name} size="sm" />
+                      <span className="min-w-0"><span className="block font-mono text-xs text-gray-500">{r.code}</span><span className="block truncate font-medium text-gray-900">{r.name}</span></span>
+                    </span>
+                  </Td>
+                  <Td>{r.garmentType?.name || '—'}</Td>
+                  <Td>
+                    <div className="flex items-center gap-1">
+                      {r.colors.slice(0, 5).map((c) => (
+                        <span key={c.id} title={c.color?.name} className="w-4 h-4 rounded-full border border-gray-200" style={{ backgroundColor: c.color?.hexCode }} />
+                      ))}
+                      {r.colors.length > 5 && <span className="text-xs text-gray-400">+{r.colors.length - 5}</span>}
+                      {r.colors.length === 0 && <span className="text-gray-400">—</span>}
+                    </div>
+                  </Td>
+                  <Td className="text-gray-600">{r.sizes.map((s) => s.size?.abbreviation).filter(Boolean).join(', ') || '—'}</Td>
+                  <Td align="right" className="tabular-nums">{r.materials.length}</Td>
+                  <Td align="center"><ActiveBadge active={r.isActive} female /></Td>
+                  <Td align="right">
+                    <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+                      <IconButton title="Editar" tone="app" onClick={() => edit(r)}><Pencil className="w-4 h-4" /></IconButton>
+                      <IconButton title="Eliminar" tone="danger" onClick={() => remove(r)}><Trash2 className="w-4 h-4" /></IconButton>
+                    </div>
+                  </Td>
+                </Tr>
+              ))}
+          </TBody>
+        </Table>
+      </TableCard>
+    </Page>
   );
 }

@@ -10,6 +10,8 @@ import { ProductsProvider } from './context/ProductsContext';
 import { CatalogsProvider } from './context/CatalogsContext';
 import { CartProvider } from './context/CartContext';
 import { ToastProvider } from './context/ToastContext';
+import { ConfirmProvider } from './components/ui/Confirm';
+import { AppTheme } from './components/ui/AppTheme';
 import { UsersProvider } from './context/UsersContext';
 import { OrdersProvider } from './context/OrdersContext';
 import { PaymentsProvider } from './context/PaymentsContext';
@@ -80,6 +82,8 @@ const ReviewsPage = lazy(() => import('./pages/admin/ReviewsPage'));
 const AnnouncementsPage = lazy(() => import('./pages/admin/AnnouncementsPage'));
 const DiscountsPage = lazy(() => import('./pages/admin/DiscountsPage'));
 const SettingsGeneralPage = lazy(() => import('./pages/admin/settings').then(m => ({ default: m.SettingsGeneralPage })));
+const SettingsHubPage = lazy(() => import('./pages/admin/settings/SettingsHubPage').then(m => ({ default: m.SettingsHubPage })));
+const DesignSystemPage = lazy(() => import('./pages/admin/settings/DesignSystemPage').then(m => ({ default: m.DesignSystemPage })));
 const SettingsAppearancePage = lazy(() => import('./pages/admin/settings').then(m => ({ default: m.SettingsAppearancePage })));
 const SettingsShippingPage = lazy(() => import('./pages/admin/settings').then(m => ({ default: m.SettingsShippingPage })));
 const SettingsPaymentPage = lazy(() => import('./pages/admin/settings').then(m => ({ default: m.SettingsPaymentPage })));
@@ -240,6 +244,7 @@ function App() {
       <AuthProvider>
         <RolesProvider>
           <ToastProvider>
+          <ConfirmProvider>
             <ProductsProvider>
               <CatalogsProvider>
                 <UsersProvider>
@@ -256,7 +261,7 @@ function App() {
                               path="/messaging/*"
                               element={
                                 <MessagingRoute>
-                                  <MessagingLayout>
+                                  <AppTheme app="messaging"><MessagingLayout>
                                     <Routes>
                                       <Route path="/" element={<MessagingHome />} />
                                       <Route path="/inbox" element={<PermissionRoute permission="messaging.inbox" fallback={<MessagingHome />}><MessagingInboxPage /></PermissionRoute>} />
@@ -266,7 +271,7 @@ function App() {
                                       <Route path="/channels" element={<PermissionRoute permission="messaging.channels" fallback={<MessagingHome />}><MessagingChannelsPage /></PermissionRoute>} />
                                       <Route path="*" element={<MessagingHome />} />
                                     </Routes>
-                                  </MessagingLayout>
+                                  </MessagingLayout></AppTheme>
                                 </MessagingRoute>
                               }
                             />
@@ -276,7 +281,7 @@ function App() {
                               path="/pos/*"
                               element={
                                 <POSRoute>
-                                  <POSLayout>
+                                  <AppTheme app="pos"><POSLayout>
                                     <Routes>
                                       <Route path="/" element={<Navigate to="/pos/sale" replace />} />
                                       <Route path="/sale" element={<NewSalePage />} />
@@ -286,7 +291,7 @@ function App() {
                                       <Route path="/cash" element={<CashRegisterPage />} />
                                       <Route path="*" element={<Navigate to="/pos/sale" replace />} />
                                     </Routes>
-                                  </POSLayout>
+                                  </POSLayout></AppTheme>
                                 </POSRoute>
                               }
                             />
@@ -296,7 +301,7 @@ function App() {
                               path="/manufacturing/*"
                               element={
                                 <ManufacturingRoute>
-                                  <ManufacturingLayout>
+                                  <AppTheme app="manufacturing"><ManufacturingLayout>
                                     <Routes>
                                       <Route path="/" element={<Navigate to="/manufacturing/orders" replace />} />
                                       <Route path="/orders" element={<ProductionOrdersPage />} />
@@ -326,7 +331,7 @@ function App() {
                                       <Route path="/warehouses" element={<WarehousesPage />} />
                                       <Route path="*" element={<Navigate to="/manufacturing/orders" replace />} />
                                     </Routes>
-                                  </ManufacturingLayout>
+                                  </ManufacturingLayout></AppTheme>
                                 </ManufacturingRoute>
                               }
                             />
@@ -336,7 +341,7 @@ function App() {
                               path="/admin-panel/*"
                               element={
                               <AdminRoute>
-                                <AdminLayout>
+                                <AppTheme app="admin"><AdminLayout>
                                   <Routes>
                                     {/* Dashboard */}
                                     <Route
@@ -735,7 +740,15 @@ function App() {
                                     {/* Configuración */}
                                     <Route
                                       path="/settings"
-                                      element={<Navigate to="/admin-panel/settings/general" replace />}
+                                      element={<SettingsHubPage />}
+                                    />
+                                    <Route
+                                      path="/settings/design-system"
+                                      element={
+                                        <PermissionRoute permission="settings.appearance">
+                                          <DesignSystemPage />
+                                        </PermissionRoute>
+                                      }
                                     />
                                     <Route
                                       path="/settings/general"
@@ -829,7 +842,7 @@ function App() {
 
                                     <Route path="*" element={<NotFoundPage />} />
                                   </Routes>
-                                </AdminLayout>
+                                </AdminLayout></AppTheme>
                               </AdminRoute>
                             }
                           />
@@ -861,7 +874,7 @@ function App() {
                           <Route
                             path="/*"
                             element={
-                              <Layout>
+                              <AppTheme app="store"><Layout>
                                 <Routes>
                                   <Route path="/" element={<HomeOrSelector />} />
                                   <Route path="/catalog" element={<CatalogPage />} />
@@ -876,7 +889,7 @@ function App() {
                                   <Route path="/legal/:slug" element={<LegalPage />} />
                                   <Route path="*" element={<NotFoundPage />} />
                                 </Routes>
-                              </Layout>
+                              </Layout></AppTheme>
                             }
                           />
                         </Routes>
@@ -890,6 +903,7 @@ function App() {
                 </UsersProvider>
               </CatalogsProvider>
             </ProductsProvider>
+            </ConfirmProvider>
           </ToastProvider>
         </RolesProvider>
       </AuthProvider>

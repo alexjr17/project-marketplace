@@ -1,16 +1,23 @@
 import { useEffect, useState } from 'react';
-import { Plus, Pencil, Trash2, Building2 } from 'lucide-react';
-import toast from 'react-hot-toast';
+import { Plus, Building2 } from 'lucide-react';
+import toast from '../../lib/toast';
 import manufacturingService from '../../services/manufacturing.service';
 import MultiSelect from '../../components/manufacturing/MultiSelect';
 import type { MfgWorkshop, MfgProcess } from '../../types/manufacturing';
+import {
+  Page, PageHeader, Button, FilterBar, SearchInput, TableCard, Table, THead, TBody, Th, Tr, Td, TableMessage,
+  Drawer, Field, TextInput, TextArea, RadioGroup, Switch, Badge, useConfirm,
+} from '../../components/ui';
+import { ActiveBadge, RowActions, matchText } from '../../components/manufacturing/mfgUi';
 
 const empty = { name: '', code: '', type: 'EXTERNAL' as const, contactName: '', phone: '', notes: '', isActive: true };
 
 export default function WorkshopsPage() {
+  const confirm = useConfirm();
   const [items, setItems] = useState<MfgWorkshop[]>([]);
   const [allProcesses, setAllProcesses] = useState<MfgProcess[]>([]);
   const [loading, setLoading] = useState(true);
+  const [q, setQ] = useState('');
   const [modal, setModal] = useState(false);
   const [editing, setEditing] = useState<MfgWorkshop | null>(null);
   const [form, setForm] = useState<Partial<MfgWorkshop>>(empty);
@@ -41,132 +48,86 @@ export default function WorkshopsPage() {
   };
 
   const remove = async (w: MfgWorkshop) => {
-    if (!confirm(`¿Eliminar el taller "${w.name}"?`)) return;
+    if (!(await confirm({ title: `¿Eliminar el taller "${w.name}"?`, message: 'No se puede deshacer.', tone: 'danger' }))) return;
     try { await manufacturingService.deleteWorkshop(w.id); toast.success('Taller eliminado'); load(); }
     catch { toast.error('No se pudo eliminar'); }
   };
 
+  const rows = items.filter((w) => matchText(q, w.name, w.code, w.contactName, w.phone, ...(w.processes ?? []).map((p) => p.name)));
+
   return (
-    <div>
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-orange-100 rounded-lg"><Building2 className="w-6 h-6 text-orange-600" /></div>
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Talleres</h1>
-            <p className="text-sm text-gray-500">Talleres internos y satélites (producción tercerizada).</p>
-          </div>
-        </div>
-        <button onClick={openNew} className="inline-flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white font-medium px-4 py-2 rounded-lg">
-          <Plus className="w-4 h-4" /> Nuevo taller
-        </button>
-      </div>
+    <Page>
+      <PageHeader
+        icon={Building2}
+        title="Talleres"
+        subtitle="Talleres internos y satélites (producción tercerizada)."
+        actions={<Button icon={<Plus className="w-4 h-4" />} onClick={openNew}>Nuevo taller</Button>}
+      />
 
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-50 text-gray-500 text-left">
-            <tr>
-              <th className="px-4 py-3 font-medium">Nombre</th>
-              <th className="px-4 py-3 font-medium">Tipo</th>
-              <th className="px-4 py-3 font-medium">Procesos</th>
-              <th className="px-4 py-3 font-medium">Contacto</th>
-              <th className="px-4 py-3 font-medium">Teléfono</th>
-              <th className="px-4 py-3 font-medium">Estado</th>
-              <th className="px-4 py-3" />
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {loading ? (
-              <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-400">Cargando…</td></tr>
-            ) : items.length === 0 ? (
-              <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-400">Sin talleres. Crea el primero.</td></tr>
-            ) : items.map((w) => (
-              <tr key={w.id} className="hover:bg-gray-50">
-                <td className="px-4 py-3 font-medium text-gray-900">{w.name}</td>
-                <td className="px-4 py-3">
-                  <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${w.type === 'EXTERNAL' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
-                    {w.type === 'EXTERNAL' ? 'Satélite' : 'Interno'}
-                  </span>
-                </td>
-                <td className="px-4 py-3">
-                  <div className="flex flex-wrap gap-1">
-                    {w.processes && w.processes.length > 0 ? w.processes.map((p) => <span key={p.id} className="px-2 py-0.5 rounded bg-gray-100 text-gray-600 text-xs">{p.name}</span>) : <span className="text-gray-400">—</span>}
-                  </div>
-                </td>
-                <td className="px-4 py-3 text-gray-600">{w.contactName || '—'}</td>
-                <td className="px-4 py-3 text-gray-600">{w.phone || '—'}</td>
-                <td className="px-4 py-3">
-                  <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${w.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
-                    {w.isActive ? 'Activo' : 'Inactivo'}
-                  </span>
-                </td>
-                <td className="px-4 py-3">
-                  <div className="flex items-center justify-end gap-1">
-                    <button onClick={() => openEdit(w)} className="p-2 text-gray-500 hover:text-orange-600 hover:bg-orange-50 rounded-lg"><Pencil className="w-4 h-4" /></button>
-                    <button onClick={() => remove(w)} className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg"><Trash2 className="w-4 h-4" /></button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <FilterBar>
+        <SearchInput value={q} onChange={setQ} placeholder="Buscar taller o proceso…" />
+      </FilterBar>
 
-      {modal && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => setModal(false)}>
-          <div className="bg-white rounded-2xl w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-lg font-bold text-gray-900 mb-4">{editing ? 'Editar taller' : 'Nuevo taller'}</h2>
-            <div className="space-y-3">
-              <label className="block">
-                <span className="text-sm font-medium text-gray-700">Nombre *</span>
-                <input value={form.name ?? ''} onChange={(e) => setForm({ ...form, name: e.target.value })} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2" />
-              </label>
-              <div className="grid grid-cols-2 gap-3">
-                <label className="block">
-                  <span className="text-sm font-medium text-gray-700">Código</span>
-                  <input value={form.code ?? ''} onChange={(e) => setForm({ ...form, code: e.target.value })} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2" />
-                </label>
-                <label className="block">
-                  <span className="text-sm font-medium text-gray-700">Tipo</span>
-                  <select value={form.type ?? 'EXTERNAL'} onChange={(e) => setForm({ ...form, type: e.target.value as MfgWorkshop['type'] })} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2">
-                    <option value="EXTERNAL">Satélite (externo)</option>
-                    <option value="INTERNAL">Interno</option>
-                  </select>
-                </label>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <label className="block">
-                  <span className="text-sm font-medium text-gray-700">Contacto</span>
-                  <input value={form.contactName ?? ''} onChange={(e) => setForm({ ...form, contactName: e.target.value })} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2" />
-                </label>
-                <label className="block">
-                  <span className="text-sm font-medium text-gray-700">Teléfono</span>
-                  <input value={form.phone ?? ''} onChange={(e) => setForm({ ...form, phone: e.target.value })} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2" />
-                </label>
-              </div>
-              <div className="block">
-                <span className="text-sm font-medium text-gray-700">Procesos que hace</span>
-                <p className="text-xs text-gray-400 mb-1">El taller aparecerá al asignar estos procesos en una orden.</p>
-                <MultiSelect placeholder="Buscar procesos…" value={processIds} onChange={setProcessIds}
-                  options={allProcesses.map((p) => ({ id: p.id, label: p.name }))} />
-              </div>
-              <label className="block">
-                <span className="text-sm font-medium text-gray-700">Notas</span>
-                <textarea value={form.notes ?? ''} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={2} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2" />
-              </label>
-              <label className="block">
-                <span className="text-sm font-medium text-gray-700">Estado</span>
-                <select value={(form.isActive ?? true) ? '1' : '0'} onChange={(e) => setForm({ ...form, isActive: e.target.value === '1' })} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2">
-                  <option value="1">Activo</option><option value="0">Inactivo</option>
-                </select>
-              </label>
-            </div>
-            <div className="flex justify-end gap-2 mt-6">
-              <button onClick={() => setModal(false)} className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700">Cancelar</button>
-              <button onClick={save} disabled={saving} className="px-4 py-2 rounded-lg bg-orange-500 hover:bg-orange-600 text-white font-medium disabled:opacity-60">{saving ? 'Guardando…' : 'Guardar'}</button>
-            </div>
+      <TableCard>
+        <Table>
+          <THead><tr><Th>Nombre</Th><Th align="center">Tipo</Th><Th>Procesos</Th><Th>Contacto</Th><Th>Teléfono</Th><Th align="center">Estado</Th><Th align="right">Acciones</Th></tr></THead>
+          <TBody>
+            {loading ? <TableMessage colSpan={7}>Cargando…</TableMessage>
+              : rows.length === 0 ? <TableMessage colSpan={7}>{items.length ? 'Sin resultados para la búsqueda.' : 'Sin talleres. Crea el primero.'}</TableMessage>
+              : rows.map((w) => (
+                <Tr key={w.id}>
+                  <Td className="font-medium text-gray-900">{w.name}{w.code && <span className="block text-xs font-normal font-mono text-gray-400">{w.code}</span>}</Td>
+                  <Td align="center"><Badge tone={w.type === 'EXTERNAL' ? 'purple' : 'blue'}>{w.type === 'EXTERNAL' ? 'Satélite' : 'Interno'}</Badge></Td>
+                  <Td>
+                    <div className="flex flex-wrap gap-1">
+                      {w.processes && w.processes.length > 0 ? w.processes.map((p) => <Badge key={p.id}>{p.name}</Badge>) : <span className="text-gray-400">—</span>}
+                    </div>
+                  </Td>
+                  <Td>{w.contactName || '—'}</Td>
+                  <Td className="whitespace-nowrap">{w.phone || '—'}</Td>
+                  <Td align="center"><ActiveBadge active={w.isActive} /></Td>
+                  <Td align="right"><RowActions onEdit={() => openEdit(w)} onDelete={() => remove(w)} /></Td>
+                </Tr>
+              ))}
+          </TBody>
+        </Table>
+      </TableCard>
+
+      <Drawer
+        open={modal}
+        onClose={() => setModal(false)}
+        title={editing ? 'Editar taller' : 'Nuevo taller'}
+        footer={<>
+          <Button variant="secondary" onClick={() => setModal(false)}>Cancelar</Button>
+          <Button isLoading={saving} onClick={save}>Guardar</Button>
+        </>}
+      >
+        <div className="space-y-4">
+          <Field label="Nombre" required><TextInput value={form.name ?? ''} onChange={(e) => setForm({ ...form, name: e.target.value })} autoFocus /></Field>
+          <Field label="Código"><TextInput value={form.code ?? ''} onChange={(e) => setForm({ ...form, code: e.target.value })} /></Field>
+          <Field label="Tipo">
+            <RadioGroup
+              variant="cards"
+              value={form.type ?? 'EXTERNAL'}
+              onChange={(v) => setForm({ ...form, type: v as MfgWorkshop['type'] })}
+              options={[
+                { value: 'EXTERNAL', label: 'Satélite', description: 'Taller externo (tercerizado)' },
+                { value: 'INTERNAL', label: 'Interno', description: 'Planta propia' },
+              ]}
+            />
+          </Field>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Field label="Contacto"><TextInput value={form.contactName ?? ''} onChange={(e) => setForm({ ...form, contactName: e.target.value })} /></Field>
+            <Field label="Teléfono"><TextInput value={form.phone ?? ''} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></Field>
           </div>
+          <Field label="Procesos que hace" hint="El taller aparecerá al asignar estos procesos en una orden.">
+            <MultiSelect placeholder="Buscar procesos…" value={processIds} onChange={setProcessIds}
+              options={allProcesses.map((p) => ({ id: p.id, label: p.name }))} />
+          </Field>
+          <Field label="Notas"><TextArea rows={2} value={form.notes ?? ''} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></Field>
+          <Switch label="Activo" checked={form.isActive ?? true} onChange={(v) => setForm({ ...form, isActive: v })} />
         </div>
-      )}
-    </div>
+      </Drawer>
+    </Page>
   );
 }

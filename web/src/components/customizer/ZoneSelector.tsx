@@ -21,7 +21,7 @@ const getZoneColor = (zoneId: string) => {
   if (zoneId.includes('front')) return 'bg-blue-50 border-blue-300 text-blue-700';
   if (zoneId.includes('back')) return 'bg-green-50 border-green-300 text-green-700';
   if (zoneId.includes('sleeve')) return 'bg-amber-50 border-amber-300 text-amber-700';
-  return 'bg-purple-50 border-purple-300 text-purple-700';
+  return 'bg-app-50 border-app-300 text-app-700';
 };
 
 export const ZoneSelector = ({ zones, selectedZone, onZoneChange }: ZoneSelectorProps) => {
@@ -40,7 +40,7 @@ export const ZoneSelector = ({ zones, selectedZone, onZoneChange }: ZoneSelector
               onClick={() => onZoneChange(zone.id)}
               className={`w-full flex items-center gap-3 p-3 rounded-lg border-2 transition-all hover:shadow-md ${
                 isSelected
-                  ? 'border-purple-600 bg-purple-50 shadow-md'
+                  ? 'border-app-600 bg-app-50 shadow-md'
                   : 'border-gray-200 hover:border-gray-300'
               }`}
             >
@@ -54,7 +54,7 @@ export const ZoneSelector = ({ zones, selectedZone, onZoneChange }: ZoneSelector
                 </div>
               </div>
               {isSelected && (
-                <div className="w-2 h-2 rounded-full bg-purple-600"></div>
+                <div className="w-2 h-2 rounded-full bg-app-600"></div>
               )}
             </button>
           );

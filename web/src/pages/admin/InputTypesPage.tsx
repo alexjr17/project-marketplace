@@ -1,7 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Plus, Pencil, Tags } from 'lucide-react';
 import { inputTypesService, type InputType } from '../../services/input-types.service';
-import { Plus, Settings, Check, X } from 'lucide-react';
+import {
+  Page, PageHeader, Button, IconButton, Badge, Alert, TableCard, Table, THead, TBody, Th, Tr, Td, TableMessage,
+} from '../../components/ui';
 
 export default function InputTypesPage() {
   const navigate = useNavigate();
@@ -28,127 +31,56 @@ export default function InputTypesPage() {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="flex justify-center items-center min-h-[400px]">
-        <div className="text-lg text-gray-600">Cargando tipos de insumo...</div>
-      </div>
-    );
-  }
+  const open = (t: InputType) => navigate(`/admin-panel/input-types/${t.id}`);
 
   return (
-    <div className="p-6">
-      {/* Header */}
-      <div className="mb-6">
-        <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Tipos de Insumo</h1>
-            <p className="text-sm text-gray-500 mt-1">
-              Administra las categorías de insumos del inventario
-            </p>
-          </div>
-          <button
-            onClick={() => navigate('/admin-panel/input-types/new')}
-            className="inline-flex items-center gap-2 bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-lg transition-colors"
-          >
-            <Plus className="w-4 h-4" />
-            Nuevo Tipo de Insumo
-          </button>
-        </div>
-      </div>
+    <Page>
+      <PageHeader
+        icon={Tags}
+        title="Tipos de insumo"
+        subtitle="Categorías para agrupar los insumos del inventario"
+        actions={<Button icon={<Plus className="w-4 h-4" />} onClick={() => navigate('/admin-panel/input-types/new')}>Nuevo tipo</Button>}
+      />
 
-      {/* Error message */}
-      {error && (
-        <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
-          {error}
-        </div>
-      )}
+      {error && <Alert tone="error">{error}</Alert>}
 
-      {/* Table */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  ID
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Nombre
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Descripción
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Orden
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Estado
-                </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Acciones
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {inputTypes.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center">
-                    <p className="text-gray-500">No hay tipos de insumo registrados</p>
-                  </td>
-                </tr>
-              ) : (
-                inputTypes.map((inputType) => (
-                  <tr key={inputType.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {inputType.id}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                      {inputType.name}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-500 max-w-xs truncate">
-                      {inputType.description || '-'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {inputType.sortOrder}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span
-                        className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium ${
-                          inputType.isActive
-                            ? 'bg-green-100 text-green-800'
-                            : 'bg-red-100 text-red-800'
-                        }`}
-                      >
-                        {inputType.isActive ? (
-                          <>
-                            <Check className="w-3 h-3" />
-                            Activo
-                          </>
-                        ) : (
-                          <>
-                            <X className="w-3 h-3" />
-                            Inactivo
-                          </>
-                        )}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <button
-                        onClick={() => navigate(`/admin-panel/input-types/${inputType.id}`)}
-                        className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                        title="Editar"
-                      >
-                        <Settings className="w-4 h-4" />
-                      </button>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
+      <TableCard>
+        <Table>
+          <THead>
+            <tr>
+              <Th>Nombre</Th>
+              <Th>Descripción</Th>
+              <Th align="right">Orden</Th>
+              <Th align="center">Estado</Th>
+              <Th align="right">Acciones</Th>
+            </tr>
+          </THead>
+          <TBody>
+            {loading ? (
+              <TableMessage colSpan={5}>Cargando tipos de insumo…</TableMessage>
+            ) : inputTypes.length === 0 ? (
+              <TableMessage colSpan={5}>No hay tipos de insumo registrados.</TableMessage>
+            ) : (
+              inputTypes.map((t) => (
+                <Tr key={t.id} onClick={() => open(t)}>
+                  <Td className="whitespace-nowrap">
+                    <p className="font-medium text-gray-900">{t.name}</p>
+                    <p className="text-xs text-gray-400">#{t.id}</p>
+                  </Td>
+                  <Td className="max-w-xs truncate text-gray-500">{t.description || '—'}</Td>
+                  <Td align="right" className="tabular-nums">{t.sortOrder}</Td>
+                  <Td align="center"><Badge tone={t.isActive ? 'green' : 'gray'}>{t.isActive ? 'Activo' : 'Inactivo'}</Badge></Td>
+                  <Td align="right">
+                    <IconButton title="Editar" tone="app" onClick={(e) => { e.stopPropagation(); open(t); }}>
+                      <Pencil className="w-4 h-4" />
+                    </IconButton>
+                  </Td>
+                </Tr>
+              ))
+            )}
+          </TBody>
+        </Table>
+      </TableCard>
+    </Page>
   );
 }

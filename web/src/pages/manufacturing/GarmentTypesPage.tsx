@@ -1,15 +1,22 @@
 import { useEffect, useState } from 'react';
-import { Plus, Pencil, Trash2, Tag } from 'lucide-react';
-import toast from 'react-hot-toast';
+import { Plus, Tag } from 'lucide-react';
+import toast from '../../lib/toast';
 import manufacturingService from '../../services/manufacturing.service';
 import type { MfgGarmentType, MfgSize, MfgBrand } from '../../types/manufacturing';
+import {
+  Page, PageHeader, Button, FilterBar, SearchInput, TableCard, Table, THead, TBody, Th, Tr, Td, TableMessage,
+  Drawer, Field, TextInput, MoneyInput, NumberInput, SelectInput, Switch, Badge, CardTitle, useConfirm,
+} from '../../components/ui';
+import { ActiveBadge, MarketBadge, RowActions, matchText } from '../../components/manufacturing/mfgUi';
 
 const empty = { code: '', name: '', composition: 'SUPERIOR' as const, brandId: null as number | null, fixedCost: 0, factor: 1, factorExport: 1, isActive: true };
 
 const COMPOSITION_LABEL: Record<string, string> = { SUPERIOR: 'Superior', INFERIOR: 'Inferior', SET: 'Conjunto' };
 
 export default function GarmentTypesPage() {
+  const confirm = useConfirm();
   const [items, setItems] = useState<MfgGarmentType[]>([]);
+  const [q, setQ] = useState('');
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState(false);
   const [editing, setEditing] = useState<MfgGarmentType | null>(null);
@@ -53,150 +60,117 @@ export default function GarmentTypesPage() {
   };
 
   const remove = async (g: MfgGarmentType) => {
-    if (!confirm(`¿Eliminar el tipo de prenda "${g.name}"?`)) return;
-    try { await manufacturingService.deleteGarmentType(g.id); toast.success('Eliminado'); load(); }
+    if (!(await confirm({ title: `¿Eliminar el tipo de prenda "${g.name}"?`, message: 'No se puede deshacer.', tone: 'danger' }))) return;
+    try { await manufacturingService.deleteGarmentType(g.id); toast.success('Tipo de prenda eliminado'); load(); }
     catch { toast.error('No se pudo eliminar'); }
   };
 
+  const rows = items.filter((g) => matchText(q, g.code, g.name, g.brand?.name));
+  const nationalSizes = sortedSizes.filter((s) => s.market !== 'EXPORT');
+  const exportSizes = sortedSizes.filter((s) => s.market === 'EXPORT');
+  const fmtFactor = (v: unknown) => (v === undefined || v === null || v === '' ? '—' : `${Number(v).toLocaleString('es-CO', { maximumFractionDigits: 4 })}x`);
+
+  const sizeChips = (list: MfgSize[], selected: number[], onToggle: (id: number) => void, emptyText: string) => (
+    <div className="flex flex-wrap gap-1.5">
+      {list.map((s) => (
+        <button key={s.id} type="button" aria-pressed={selected.includes(s.id)} onClick={() => onToggle(s.id)}
+          className={`min-w-[2.5rem] h-8 px-2.5 rounded-lg border text-sm font-medium transition-colors ${selected.includes(s.id) ? 'border-app-500 bg-app-50 text-app-700' : 'border-gray-300 text-gray-600 hover:bg-gray-50'}`}>{s.abbreviation}</button>
+      ))}
+      {list.length === 0 && <span className="text-xs text-gray-400">{emptyText}</span>}
+    </div>
+  );
+
   return (
-    <div>
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-orange-100 rounded-lg"><Tag className="w-6 h-6 text-orange-600" /></div>
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Tipos de prenda</h1>
-            <p className="text-sm text-gray-500">Su código prefija el de la referencia (ej. CAM → CAM-0001).</p>
-          </div>
-        </div>
-        <button onClick={openNew} className="inline-flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white font-medium px-4 py-2 rounded-lg">
-          <Plus className="w-4 h-4" /> Nuevo tipo
-        </button>
-      </div>
+    <Page>
+      <PageHeader
+        icon={Tag}
+        title="Tipos de prenda"
+        subtitle="Su código prefija el de la referencia (ej. CAM → CAM-0001)."
+        actions={<Button icon={<Plus className="w-4 h-4" />} onClick={openNew}>Nuevo tipo</Button>}
+      />
 
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-50 text-gray-500 text-left">
-            <tr>
-              <th className="px-4 py-3 font-medium">Código</th>
-              <th className="px-4 py-3 font-medium">Nombre</th>
-              <th className="px-4 py-3 font-medium">Composición</th>
-              <th className="px-4 py-3 font-medium">Estado</th>
-              <th className="px-4 py-3" />
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {loading ? (
-              <tr><td colSpan={5} className="px-4 py-8 text-center text-gray-400">Cargando…</td></tr>
-            ) : items.length === 0 ? (
-              <tr><td colSpan={5} className="px-4 py-8 text-center text-gray-400">Sin tipos de prenda. Crea el primero.</td></tr>
-            ) : items.map((g) => (
-              <tr key={g.id} className="hover:bg-gray-50">
-                <td className="px-4 py-3 font-mono font-semibold text-gray-800">{g.code}</td>
-                <td className="px-4 py-3 font-medium text-gray-900">{g.name}</td>
-                <td className="px-4 py-3">
-                  <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${g.composition === 'SET' ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-600'}`}>{COMPOSITION_LABEL[g.composition] ?? 'Superior'}</span>
-                </td>
-                <td className="px-4 py-3">
-                  <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${g.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>{g.isActive ? 'Activo' : 'Inactivo'}</span>
-                </td>
-                <td className="px-4 py-3">
-                  <div className="flex items-center justify-end gap-1">
-                    <button onClick={() => openEdit(g)} className="p-2 text-gray-500 hover:text-orange-600 hover:bg-orange-50 rounded-lg"><Pencil className="w-4 h-4" /></button>
-                    <button onClick={() => remove(g)} className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg"><Trash2 className="w-4 h-4" /></button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <FilterBar>
+        <SearchInput value={q} onChange={setQ} placeholder="Buscar tipo de prenda…" />
+      </FilterBar>
 
-      {modal && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => setModal(false)}>
-          <div className="bg-white rounded-2xl w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-lg font-bold text-gray-900 mb-4">{editing ? 'Editar tipo de prenda' : 'Nuevo tipo de prenda'}</h2>
-            <div className="space-y-3">
-              <label className="block">
-                <span className="text-sm font-medium text-gray-700">Código *</span>
-                <input value={form.code ?? ''} onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })} maxLength={10} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 font-mono uppercase" placeholder="CAM" />
-              </label>
-              <label className="block">
-                <span className="text-sm font-medium text-gray-700">Nombre *</span>
-                <input value={form.name ?? ''} onChange={(e) => setForm({ ...form, name: e.target.value })} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2" placeholder="Camiseta" />
-              </label>
-              <label className="block">
-                <span className="text-sm font-medium text-gray-700">Composición</span>
-                <select value={form.composition ?? 'SUPERIOR'} onChange={(e) => setForm({ ...form, composition: e.target.value as MfgGarmentType['composition'] })} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2">
+      <TableCard>
+        <Table>
+          <THead><tr><Th>Código</Th><Th>Nombre</Th><Th align="center">Composición</Th><Th>Marca</Th><Th align="right">Factor nac.</Th><Th align="right">Factor exp.</Th><Th align="center">Estado</Th><Th align="right">Acciones</Th></tr></THead>
+          <TBody>
+            {loading ? <TableMessage colSpan={8}>Cargando…</TableMessage>
+              : rows.length === 0 ? <TableMessage colSpan={8}>{items.length ? 'Sin resultados para la búsqueda.' : 'Sin tipos de prenda. Crea el primero.'}</TableMessage>
+              : rows.map((g) => (
+                <Tr key={g.id}>
+                  <Td className="font-mono font-semibold text-gray-900">{g.code}</Td>
+                  <Td className="font-medium text-gray-900">{g.name}</Td>
+                  <Td align="center"><Badge tone={g.composition === 'SET' ? 'purple' : 'gray'}>{COMPOSITION_LABEL[g.composition] ?? 'Superior'}</Badge></Td>
+                  <Td>{g.brand?.name || '—'}</Td>
+                  <Td align="right" className="tabular-nums">{fmtFactor(g.factor)}</Td>
+                  <Td align="right" className="tabular-nums">{fmtFactor(g.factorExport)}</Td>
+                  <Td align="center"><ActiveBadge active={g.isActive} /></Td>
+                  <Td align="right"><RowActions onEdit={() => openEdit(g)} onDelete={() => remove(g)} /></Td>
+                </Tr>
+              ))}
+          </TBody>
+        </Table>
+      </TableCard>
+
+      <Drawer
+        open={modal}
+        onClose={() => setModal(false)}
+        title={editing ? 'Editar tipo de prenda' : 'Nuevo tipo de prenda'}
+        width="lg"
+        footer={<>
+          <Button variant="secondary" onClick={() => setModal(false)}>Cancelar</Button>
+          <Button isLoading={saving} onClick={save}>Guardar</Button>
+        </>}
+      >
+        <div className="space-y-6">
+          <section className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <Field label="Código" required><TextInput value={form.code ?? ''} onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })} maxLength={10} className="font-mono uppercase" placeholder="CAM" autoFocus /></Field>
+              <Field label="Nombre" required className="sm:col-span-2"><TextInput value={form.name ?? ''} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Camiseta" /></Field>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Field label="Composición" hint="Define qué componentes lleva la referencia de este tipo.">
+                <SelectInput value={form.composition ?? 'SUPERIOR'} onChange={(e) => setForm({ ...form, composition: e.target.value as MfgGarmentType['composition'] })}>
                   <option value="SUPERIOR">Superior (individual)</option>
                   <option value="INFERIOR">Inferior (individual)</option>
                   <option value="SET">Conjunto (superior + inferior)</option>
-                </select>
-                <span className="text-xs text-gray-400">Define qué componentes lleva la referencia de este tipo.</span>
-              </label>
-              <label className="block">
-                <span className="text-sm font-medium text-gray-700">Marca</span>
-                <select value={form.brandId ?? ''} onChange={(e) => setForm({ ...form, brandId: e.target.value === '' ? null : Number(e.target.value) })} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2">
+                </SelectInput>
+              </Field>
+              <Field label="Marca" hint="La referencia de este tipo hereda esta marca.">
+                <SelectInput value={form.brandId ?? ''} onChange={(e) => setForm({ ...form, brandId: e.target.value === '' ? null : Number(e.target.value) })}>
                   <option value="">— Sin marca —</option>
                   {brands.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
-                </select>
-                <span className="text-xs text-gray-400">La referencia de este tipo hereda esta marca.</span>
-              </label>
-              <div className="grid grid-cols-3 gap-3">
-                <label className="block">
-                  <span className="text-sm font-medium text-gray-700">Costo fijo</span>
-                  <input type="number" step="0.01" min="0" value={form.fixedCost ?? 0} onChange={(e) => setForm({ ...form, fixedCost: e.target.value === '' ? 0 : Number(e.target.value) })} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2" />
-                </label>
-                <label className="block">
-                  <span className="text-sm font-medium text-gray-700">Factor nacional</span>
-                  <input type="number" step="0.0001" min="0" value={form.factor ?? 1} onChange={(e) => setForm({ ...form, factor: e.target.value === '' ? 1 : Number(e.target.value) })} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2" />
-                </label>
-                <label className="block">
-                  <span className="text-sm font-medium text-gray-700">Factor exportación</span>
-                  <input type="number" step="0.0001" min="0" value={form.factorExport ?? 1} onChange={(e) => setForm({ ...form, factorExport: e.target.value === '' ? 1 : Number(e.target.value) })} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2" />
-                </label>
-              </div>
-              <p className="text-xs text-gray-400 -mt-1">Se sugieren al crear la referencia y sus grupos de precio por mercado.</p>
-              <div className="block">
-                <span className="text-sm font-medium text-gray-700">Tallas del tipo</span>
-                <p className="text-xs text-gray-400 mb-2">Se traen a la referencia según el mercado.</p>
-                {sortedSizes.length === 0 ? <span className="text-sm text-gray-400">Crea tallas en Catálogos → Tallas.</span> : (
-                  <div className="space-y-2">
-                    <div>
-                      <p className="text-xs text-gray-500 mb-1">Nacional</p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {sortedSizes.filter((s) => s.market !== 'EXPORT').map((s) => (
-                          <button key={s.id} type="button" onClick={() => toggle(nationalIds, setNationalIds, s.id)} className={`px-2.5 py-1 rounded-lg border text-sm font-medium ${nationalIds.includes(s.id) ? 'border-orange-500 bg-orange-50 text-orange-800' : 'border-gray-300 text-gray-600 hover:bg-gray-50'}`}>{s.abbreviation}</button>
-                        ))}
-                        {sortedSizes.filter((s) => s.market !== 'EXPORT').length === 0 && <span className="text-xs text-gray-400">Sin tallas nacionales.</span>}
-                      </div>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-500 mb-1">Exportación</p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {sortedSizes.filter((s) => s.market === 'EXPORT').map((s) => (
-                          <button key={s.id} type="button" onClick={() => toggle(exportIds, setExportIds, s.id)} className={`px-2.5 py-1 rounded-lg border text-sm font-medium ${exportIds.includes(s.id) ? 'border-blue-500 bg-blue-50 text-blue-800' : 'border-gray-300 text-gray-600 hover:bg-gray-50'}`}>{s.abbreviation}</button>
-                        ))}
-                        {sortedSizes.filter((s) => s.market === 'EXPORT').length === 0 && <span className="text-xs text-gray-400">Sin tallas de exportación.</span>}
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-              <label className="block">
-                <span className="text-sm font-medium text-gray-700">Estado</span>
-                <select value={(form.isActive ?? true) ? '1' : '0'} onChange={(e) => setForm({ ...form, isActive: e.target.value === '1' })} className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2">
-                  <option value="1">Activo</option>
-                  <option value="0">Inactivo</option>
-                </select>
-              </label>
+                </SelectInput>
+              </Field>
             </div>
-            <div className="flex justify-end gap-2 mt-6">
-              <button onClick={() => setModal(false)} className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700">Cancelar</button>
-              <button onClick={save} disabled={saving} className="px-4 py-2 rounded-lg bg-orange-500 hover:bg-orange-600 text-white font-medium disabled:opacity-60">{saving ? 'Guardando…' : 'Guardar'}</button>
+            <Switch label="Activo" checked={form.isActive ?? true} onChange={(v) => setForm({ ...form, isActive: v })} />
+          </section>
+
+          <section className="border-t border-gray-100 pt-5">
+            <CardTitle>Costo y factores sugeridos</CardTitle>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <Field label="Costo fijo"><MoneyInput value={form.fixedCost ?? 0} onChange={(e) => setForm({ ...form, fixedCost: e.target.value === '' ? 0 : Number(e.target.value) })} /></Field>
+              <Field label="Factor nacional"><NumberInput step="0.0001" min="0" suffix="x" value={form.factor ?? 1} onChange={(e) => setForm({ ...form, factor: e.target.value === '' ? 1 : Number(e.target.value) })} /></Field>
+              <Field label="Factor exportación"><NumberInput step="0.0001" min="0" suffix="x" value={form.factorExport ?? 1} onChange={(e) => setForm({ ...form, factorExport: e.target.value === '' ? 1 : Number(e.target.value) })} /></Field>
             </div>
-          </div>
+            <p className="text-xs text-gray-500 mt-2">Se sugieren al crear la referencia y sus grupos de precio por mercado.</p>
+          </section>
+
+          <section className="border-t border-gray-100 pt-5">
+            <CardTitle>Tallas del tipo</CardTitle>
+            <p className="text-xs text-gray-500 -mt-2 mb-3">Se traen a la referencia según el mercado.</p>
+            {sortedSizes.length === 0 ? <p className="text-sm text-gray-400">Crea tallas en Catálogos → Tallas.</p> : (
+              <div className="space-y-4">
+                <div className="space-y-2"><MarketBadge market="NATIONAL" />{sizeChips(nationalSizes, nationalIds, (id) => toggle(nationalIds, setNationalIds, id), 'Sin tallas nacionales.')}</div>
+                <div className="space-y-2"><MarketBadge market="EXPORT" />{sizeChips(exportSizes, exportIds, (id) => toggle(exportIds, setExportIds, id), 'Sin tallas de exportación.')}</div>
+              </div>
+            )}
+          </section>
         </div>
-      )}
-    </div>
+      </Drawer>
+    </Page>
   );
 }

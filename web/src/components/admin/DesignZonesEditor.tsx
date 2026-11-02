@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { Button } from '../shared/Button';
+import { Button, toast, useConfirm } from '../ui';
 import {
   Plus,
   Trash2,
@@ -40,6 +40,7 @@ export const DesignZonesEditor = ({
   onDesignZonesChange,
   currentViewType = 'front'
 }: DesignZonesEditorProps) => {
+  const confirm = useConfirm();
   const containerRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
 
@@ -319,7 +320,7 @@ export const DesignZonesEditor = ({
 
   const handleCreateZone = () => {
     if (!newZoneName.trim()) {
-      alert('Ingresa un nombre para la zona');
+      toast.error('Ingresa un nombre para la zona');
       return;
     }
 
@@ -353,10 +354,10 @@ export const DesignZonesEditor = ({
     setSelectedZoneId(newZone.id);
   };
 
-  const handleDeleteZone = (zoneId: string) => {
+  const handleDeleteZone = async (zoneId: string) => {
     const zone = currentZones.find(z => z.id === zoneId);
     const typeText = zone?.type === 'allowed' ? 'habilitada' : 'bloqueada';
-    if (!confirm(`¿Eliminar esta zona ${typeText}?`)) return;
+    if (!(await confirm({ title: `¿Eliminar esta zona ${typeText}?`, tone: 'danger' }))) return;
 
     const newZones = currentZones.filter(z => z.id !== zoneId);
     updateZones(newZones);
@@ -402,10 +403,10 @@ export const DesignZonesEditor = ({
         <div className="flex items-center gap-2">
           <button
             onClick={() => setShowZones(!showZones)}
-            className={`p-2 rounded-lg border ${showZones ? 'bg-purple-50 border-purple-300' : 'bg-white border-gray-300'}`}
+            className={`p-2 rounded-lg border ${showZones ? 'bg-app-50 border-app-300' : 'bg-white border-gray-300'}`}
             title={showZones ? 'Ocultar zonas' : 'Mostrar zonas'}
           >
-            {showZones ? <Eye className="w-5 h-5 text-purple-600" /> : <EyeOff className="w-5 h-5 text-gray-500" />}
+            {showZones ? <Eye className="w-5 h-5 text-app-600" /> : <EyeOff className="w-5 h-5 text-gray-500" />}
           </button>
         </div>
       </div>
@@ -421,7 +422,7 @@ export const DesignZonesEditor = ({
           {!isCreating ? (
             <Button
               onClick={() => setIsCreating(true)}
-              variant="admin-secondary"
+              variant="secondary"
               className="w-full"
             >
               <Plus className="w-4 h-4 mr-1" />
@@ -513,7 +514,7 @@ export const DesignZonesEditor = ({
 
               <Button
                 onClick={handleCreateZone}
-                variant={newZoneType === 'allowed' ? 'admin-primary' : 'admin-danger'}
+                variant={newZoneType === 'allowed' ? 'primary' : 'danger'}
                 className="w-full"
               >
                 Crear Zona {newZoneType === 'allowed' ? 'Habilitada' : 'Bloqueada'}

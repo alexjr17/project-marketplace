@@ -1,29 +1,18 @@
-import { useState, useMemo } from 'react';
-import {
-  useReactTable,
-  getCoreRowModel,
-  getFilteredRowModel,
-  getPaginationRowModel,
-  getSortedRowModel,
-  flexRender,
-  createColumnHelper,
-  type SortingState,
-  type ColumnFiltersState,
-} from '@tanstack/react-table';
-import { useProducts } from '../../context/ProductsContext';
-import { useToast } from '../../context/ToastContext';
-import { ProductForm } from '../../components/admin/ProductForm';
-import { Modal } from '../../components/shared/Modal';
-import { Button } from '../../components/shared/Button';
-import { Input } from '../../components/shared/Input';
-import type { Product } from '../../types/product';
-import { Settings, Plus, Package, ArrowLeft, Search, ChevronLeft, ChevronRight, ArrowUpDown, Grid3x3, Printer } from 'lucide-react';
-import * as variantsService from '../../services/variants.service';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { AlertTriangle, ArrowDown, ArrowLeft, ArrowUp, ArrowUpDown, Grid3x3, Package, PackageX, Pencil, Plus, Printer, Star, Trash2 } from 'lucide-react';
+import { useProducts } from '../../context/ProductsContext';
+import { ProductForm } from '../../components/admin/ProductForm';
+import {
+  ActionMenu, Badge, Button, Dialog, EmptyState, FilterBar, IconButton, Page, PageHeader, Pager, SearchInput,
+  SelectInput, StatCard, Table, TableCard, TableMessage, TBody, Td, Th, THead, Thumb, Tr, toast, useConfirm,
+} from '../../components/ui';
+import type { Product } from '../../types/product';
+import * as variantsService from '../../services/variants.service';
 
 type ViewMode = 'list' | 'add' | 'edit';
-
-const columnHelper = createColumnHelper<Product>();
+type SortKey = 'name' | 'basePrice' | 'stock';
+type StockFilter = 'all' | 'available' | 'low' | 'out';
 
 // Helper para obtener la primera imagen del producto
 function getFirstImage(images: any): string {
@@ -33,185 +22,112 @@ function getFirstImage(images: any): string {
   return '';
 }
 
+const text = (v: unknown) => (typeof v === 'string' ? v : '');
+const money = (n: number) => '$' + Number(n || 0).toLocaleString('es-CO', { maximumFractionDigits: 2 });
+const LOW_STOCK = 20;
+// Nombre de la categoría (la API manda categoryName; `category` es el slug)
+const catName = (p: Product) => (p as Product & { categoryName?: string }).categoryName || text(p.category);
+
 export const ProductsPage = () => {
-  const { products, addProduct, updateProduct, deleteProduct } = useProducts();
-  const toast = useToast();
+  const { products, isLoading, addProduct, updateProduct, deleteProduct } = useProducts();
+  const confirm = useConfirm();
   const navigate = useNavigate();
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
-  const [sorting, setSorting] = useState<SortingState>([]);
-  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
-  const [globalFilter, setGlobalFilter] = useState('');
+  const [saving, setSaving] = useState(false);
   const [generatingVariantsFor, setGeneratingVariantsFor] = useState<Product | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [productsWithVariants, setProductsWithVariants] = useState<Set<string>>(new Set());
 
-  // Definir columnas
-  const columns = useMemo(
-    () => [
-      columnHelper.accessor('name', {
-        header: ({ column }) => (
-          <button
-            onClick={() => column.toggleSorting()}
-            className="flex items-center gap-1 hover:text-gray-900"
-          >
-            Producto
-            <ArrowUpDown className="w-4 h-4" />
-          </button>
-        ),
-        cell: (info) => (
-          <div className="flex items-center">
-            <img
-              src={getFirstImage(info.row.original.images)}
-              alt={info.getValue()}
-              className="w-12 h-12 rounded-lg object-cover"
-            />
-            <div className="ml-4">
-              <div className="text-sm font-medium text-gray-900">{info.getValue()}</div>
-              <div className="text-sm text-gray-500">{info.row.original.category}</div>
-            </div>
-          </div>
-        ),
-      }),
-      columnHelper.accessor('type', {
-        header: 'Tipo',
-        cell: (info) => (
-          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-            {info.getValue()}
-          </span>
-        ),
-      }),
-      columnHelper.accessor('basePrice', {
-        header: ({ column }) => (
-          <button
-            onClick={() => column.toggleSorting()}
-            className="flex items-center gap-1 hover:text-gray-900"
-          >
-            Precio
-            <ArrowUpDown className="w-4 h-4" />
-          </button>
-        ),
-        cell: (info) => `$${info.getValue().toFixed(2)}`,
-      }),
-      columnHelper.accessor('stock', {
-        header: ({ column }) => (
-          <button
-            onClick={() => column.toggleSorting()}
-            className="flex items-center gap-1 hover:text-gray-900"
-          >
-            Stock
-            <ArrowUpDown className="w-4 h-4" />
-          </button>
-        ),
-        cell: (info) => {
-          const stock = info.getValue();
-          return (
-            <span className={stock === 0 ? 'text-red-600 font-medium' : stock < 20 ? 'text-amber-600 font-medium' : 'text-gray-900'}>
-              {stock}
-            </span>
-          );
-        },
-      }),
-      columnHelper.display({
-        id: 'status',
-        header: 'Estado',
-        cell: (info) => (
-          <div className="flex flex-col gap-1">
-            {info.row.original.featured && (
-              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800">
-                Destacado
-              </span>
-            )}
-            <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
-              info.row.original.stock > 0 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-            }`}>
-              {info.row.original.stock > 0 ? 'Disponible' : 'Agotado'}
-            </span>
-          </div>
-        ),
-      }),
-      columnHelper.display({
-        id: 'actions',
-        header: () => <div className="text-right">Acciones</div>,
-        cell: (info) => {
-          const product = info.row.original;
-          const hasVariants = productsWithVariants.has(product.id);
+  // Filtros, orden y paginación del listado
+  const [q, setQ] = useState('');
+  const [category, setCategory] = useState('');
+  const [stockFilter, setStockFilter] = useState<StockFilter>('all');
+  const [sortKey, setSortKey] = useState<SortKey | null>(null);
+  const [desc, setDesc] = useState(false);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
-          return (
-            <div className="flex justify-end gap-2">
-              {hasVariants ? (
-                <button
-                  onClick={() => handlePrintBarcodes(product)}
-                  className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
-                  title="Imprimir Códigos de Barras"
-                >
-                  <Printer className="w-4 h-4" />
-                </button>
-              ) : (
-                <button
-                  onClick={() => setGeneratingVariantsFor(product)}
-                  className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
-                  title="Generar Variantes"
-                >
-                  <Grid3x3 className="w-4 h-4" />
-                </button>
-              )}
-              <button
-                onClick={() => startEdit(product)}
-                className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                title="Editar"
-              >
-                <Settings className="w-4 h-4" />
-              </button>
-            </div>
-          );
-        },
-      }),
-    ],
-    [productsWithVariants]
+  const categories = useMemo(
+    () => Array.from(new Set(products.map((p) => catName(p)).filter(Boolean))).sort(),
+    [products],
   );
 
-  const table = useReactTable({
-    data: products,
-    columns,
-    state: {
-      sorting,
-      columnFilters,
-      globalFilter,
-    },
-    onSortingChange: setSorting,
-    onColumnFiltersChange: setColumnFilters,
-    onGlobalFilterChange: setGlobalFilter,
-    getCoreRowModel: getCoreRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
-    initialState: {
-      pagination: {
-        pageSize: 10,
-      },
-    },
-  });
+  const filtered = useMemo(() => {
+    const t = q.trim().toLowerCase();
+    let list = products.filter((p) => {
+      if (category && catName(p) !== category) return false;
+      if (stockFilter === 'available' && p.stock <= 0) return false;
+      if (stockFilter === 'out' && p.stock > 0) return false;
+      if (stockFilter === 'low' && (p.stock <= 0 || p.stock >= LOW_STOCK)) return false;
+      if (!t) return true;
+      return `${p.name} ${p.sku ?? ''} ${catName(p)} ${p.typeName ?? text(p.type)} ${(p.tags ?? []).join(' ')}`.toLowerCase().includes(t);
+    });
+    if (sortKey) {
+      list = [...list].sort((a, b) => {
+        const r = sortKey === 'name' ? a.name.localeCompare(b.name, 'es') : (a[sortKey] as number) - (b[sortKey] as number);
+        return desc ? -r : r;
+      });
+    }
+    return list;
+  }, [products, q, category, stockFilter, sortKey, desc]);
 
-  const handleAddProduct = (productData: Omit<Product, 'id' | 'createdAt' | 'updatedAt'>) => {
-    addProduct(productData);
-    toast.success('Producto creado correctamente');
+  const pageRows = filtered.slice((page - 1) * pageSize, page * pageSize);
+  const stats = useMemo(() => ({
+    total: products.length,
+    featured: products.filter((p) => p.featured).length,
+    out: products.filter((p) => p.stock === 0).length,
+    low: products.filter((p) => p.stock > 0 && p.stock < LOW_STOCK).length,
+  }), [products]);
+
+  const toggleSort = (k: SortKey) => {
+    if (sortKey === k) setDesc((d) => !d); else { setSortKey(k); setDesc(false); }
   };
+  const SortTh = ({ k, children, align }: { k: SortKey; children: string; align?: 'right' }) => (
+    <Th align={align}>
+      <button type="button" onClick={() => toggleSort(k)} className={`inline-flex items-center gap-1 uppercase hover:text-gray-900 ${sortKey === k ? 'text-gray-900' : ''}`}>
+        {children}
+        {sortKey === k ? (desc ? <ArrowDown className="w-3.5 h-3.5" /> : <ArrowUp className="w-3.5 h-3.5" />) : <ArrowUpDown className="w-3.5 h-3.5 opacity-50" />}
+      </button>
+    </Th>
+  );
 
-  const handleEditProduct = (productData: Omit<Product, 'id' | 'createdAt' | 'updatedAt'>) => {
-    if (selectedProduct) {
-      updateProduct(selectedProduct.id, productData);
-      toast.success('Producto actualizado correctamente');
+  const handleAddProduct = async (productData: Omit<Product, 'id' | 'createdAt' | 'updatedAt'>) => {
+    try {
+      setSaving(true);
+      await addProduct(productData);
+      toast.success('Producto creado correctamente');
+      setViewMode('list');
+    } catch (error: any) {
+      toast.error('No se pudo crear el producto: ' + (error?.response?.data?.message || error?.message || 'error desconocido'));
+    } finally {
+      setSaving(false);
     }
   };
 
-  const handleDeleteProduct = (id: string) => {
-    deleteProduct(id);
-    toast.success('Producto eliminado correctamente');
-    setDeleteConfirmId(null);
-    setSelectedProduct(null);
-    setViewMode('list');
+  const handleEditProduct = async (productData: Omit<Product, 'id' | 'createdAt' | 'updatedAt'>) => {
+    if (!selectedProduct) return;
+    try {
+      setSaving(true);
+      await updateProduct(String(selectedProduct.id), productData);
+      toast.success('Producto actualizado correctamente');
+    } catch (error: any) {
+      toast.error('No se pudo actualizar el producto: ' + (error?.response?.data?.message || error?.message || 'error desconocido'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteProduct = async (product: Product) => {
+    if (!(await confirm({ title: `¿Eliminar "${product.name}"?`, message: 'Se elimina el producto del catálogo. Esta acción no se puede deshacer.', tone: 'danger' }))) return;
+    try {
+      await deleteProduct(String(product.id));
+      toast.success('Producto eliminado correctamente');
+      setSelectedProduct(null);
+      setViewMode('list');
+    } catch (error: any) {
+      toast.error('No se pudo eliminar el producto: ' + (error?.response?.data?.message || error?.message || 'error desconocido'));
+    }
   };
 
   const startEdit = (product: Product) => {
@@ -229,9 +145,9 @@ export const ProductsPage = () => {
     const productIds = new Set<string>();
     for (const product of products) {
       try {
-        const variants = await variantsService.getVariants({ productId: parseInt(product.id) });
+        const variants = await variantsService.getVariants({ productId: parseInt(String(product.id)) });
         if (variants.length > 0) {
-          productIds.add(product.id);
+          productIds.add(String(product.id));
         }
       } catch (error) {
         console.error(`Error checking variants for product ${product.id}:`, error);
@@ -241,10 +157,11 @@ export const ProductsPage = () => {
   };
 
   // Cargar información de variantes al montar o cuando cambian los productos
-  useMemo(() => {
+  useEffect(() => {
     if (products.length > 0 && viewMode === 'list') {
       checkProductVariants();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [products, viewMode]);
 
   const handleGenerateVariants = async () => {
@@ -253,14 +170,17 @@ export const ProductsPage = () => {
     try {
       setIsGenerating(true);
       const result = await variantsService.generateVariantsForProduct(
-        parseInt(generatingVariantsFor.id),
+        parseInt(String(generatingVariantsFor.id)),
         0 // Stock inicial
       );
 
-      if (result.created > 0) {
-        toast.success(`${result.created} variantes creadas exitosamente`);
-        // Actualizar lista de productos con variantes
-        setProductsWithVariants(prev => new Set(prev).add(generatingVariantsFor.id));
+      // La API devuelve la lista de variantes creadas.
+      const created = Array.isArray(result.created) ? result.created.length : Number(result.created) || 0;
+      if (created > 0) {
+        toast.success(`${created} variantes creadas exitosamente`);
+        setProductsWithVariants(prev => new Set(prev).add(String(generatingVariantsFor.id)));
+      } else if (!result.errors?.length) {
+        toast.info('No había variantes nuevas para crear');
       }
 
       if (result.errors && result.errors.length > 0) {
@@ -281,311 +201,144 @@ export const ProductsPage = () => {
 
   if (viewMode === 'add') {
     return (
-      <div className="p-6">
-        {/* Header con botón volver */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Agregar Nuevo Producto</h1>
-            <p className="text-gray-600 mt-1 text-sm">Completa la información del producto</p>
-          </div>
-          <button
-            onClick={cancelEdit}
-            className="inline-flex items-center gap-2 px-4 py-2 text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 rounded-lg transition-colors"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Volver a Productos
-          </button>
-        </div>
-
-        <div className="bg-white rounded-lg shadow-sm p-6 md:p-8">
-          <ProductForm onSubmit={handleAddProduct} />
-        </div>
-      </div>
+      <Page>
+        <PageHeader icon={Package} title="Nuevo producto" subtitle="Completa la información del producto"
+          actions={<Button variant="secondary" icon={<ArrowLeft className="w-4 h-4" />} onClick={cancelEdit}>Volver a productos</Button>} />
+        <ProductForm onSubmit={handleAddProduct} onCancel={cancelEdit} saving={saving} />
+      </Page>
     );
   }
 
   if (viewMode === 'edit' && selectedProduct) {
     return (
-      <div className="p-6">
-        {/* Header con botón volver */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Editar Producto</h1>
-            <p className="text-gray-600 mt-1 text-sm">Actualiza la información del producto</p>
-          </div>
-          <button
-            onClick={cancelEdit}
-            className="inline-flex items-center gap-2 px-4 py-2 text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 rounded-lg transition-colors"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Volver a Productos
-          </button>
-        </div>
-
-        <div className="bg-white rounded-lg shadow-sm p-6 md:p-8">
-          <ProductForm
-            product={selectedProduct}
-            onSubmit={handleEditProduct}
-            onDelete={() => setDeleteConfirmId(selectedProduct.id)}
-          />
-        </div>
-
-        {/* Delete Confirmation Modal */}
-        {deleteConfirmId && (
-          <Modal
-            isOpen={true}
-            onClose={() => setDeleteConfirmId(null)}
-            title="Confirmar Eliminación"
-          >
-            <div className="space-y-4">
-              <p className="text-gray-600">
-                ¿Estás seguro de que deseas eliminar este producto? Esta acción no se puede deshacer.
-              </p>
-              <div className="flex justify-end gap-3">
-                <Button
-                  variant="admin-secondary"
-                  onClick={() => setDeleteConfirmId(null)}
-                >
-                  Cancelar
-                </Button>
-                <Button
-                  variant="admin-danger"
-                  onClick={() => handleDeleteProduct(deleteConfirmId)}
-                >
-                  Eliminar
-                </Button>
-              </div>
-            </div>
-          </Modal>
-        )}
-      </div>
+      <Page>
+        <PageHeader icon={Package} title={selectedProduct.name} subtitle="Editar producto"
+          actions={<Button variant="secondary" icon={<ArrowLeft className="w-4 h-4" />} onClick={cancelEdit}>Volver a productos</Button>} />
+        <ProductForm
+          key={String(selectedProduct.id)}
+          product={selectedProduct}
+          onSubmit={handleEditProduct}
+          onCancel={cancelEdit}
+          onDelete={() => handleDeleteProduct(selectedProduct)}
+          saving={saving}
+        />
+      </Page>
     );
   }
 
+  const hasFilters = !!(q || category || stockFilter !== 'all');
+
   return (
-    <div className="p-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Productos</h1>
-          <p className="text-gray-600 mt-1 text-sm">Gestiona tu catálogo de productos</p>
-        </div>
-        <Button onClick={() => setViewMode('add')} variant="admin-orange" size="sm">
-          <Plus className="w-4 h-4" />
-          Agregar Producto
-        </Button>
+    <Page>
+      <PageHeader
+        icon={Package}
+        title="Productos"
+        subtitle="Gestiona tu catálogo de productos"
+        actions={<Button icon={<Plus className="w-4 h-4" />} onClick={() => setViewMode('add')}>Nuevo producto</Button>}
+      />
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <StatCard icon={Package} label="Productos" value={stats.total} />
+        <StatCard icon={Star} tone="blue" label="Destacados" value={stats.featured} />
+        <StatCard icon={AlertTriangle} tone="yellow" label="Stock bajo" value={stats.low} hint={`Menos de ${LOW_STOCK} unidades`} />
+        <StatCard icon={PackageX} tone="red" label="Agotados" value={stats.out} />
       </div>
 
-      {/* Search Bar */}
-      <div className="bg-white rounded-lg shadow-sm p-4 mb-4">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-          <Input
-            type="text"
-            placeholder="Buscar productos..."
-            value={globalFilter ?? ''}
-            onChange={(e) => setGlobalFilter(e.target.value)}
-            className="pl-10"
-          />
-        </div>
-      </div>
+      <FilterBar>
+        <div className="sm:col-span-2"><SearchInput value={q} onChange={(v) => { setQ(v); setPage(1); }} placeholder="Buscar por nombre, SKU, tipo o etiqueta…" /></div>
+        <SelectInput value={category} onChange={(e) => { setCategory(e.target.value); setPage(1); }} aria-label="Categoría">
+          <option value="">Todas las categorías</option>
+          {categories.map((c) => <option key={c} value={c}>{c}</option>)}
+        </SelectInput>
+        <SelectInput value={stockFilter} onChange={(e) => { setStockFilter(e.target.value as StockFilter); setPage(1); }} aria-label="Stock">
+          <option value="all">Todo el stock</option>
+          <option value="available">Disponibles</option>
+          <option value="low">Stock bajo</option>
+          <option value="out">Agotados</option>
+        </SelectInput>
+      </FilterBar>
 
-      {/* Products Table */}
-      <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50 border-b border-gray-200">
-              {table.getHeaderGroups().map((headerGroup) => (
-                <tr key={headerGroup.id}>
-                  {headerGroup.headers.map((header) => (
-                    <th
-                      key={header.id}
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                    >
-                      {header.isPlaceholder
-                        ? null
-                        : flexRender(header.column.columnDef.header, header.getContext())}
-                    </th>
-                  ))}
-                </tr>
-              ))}
-            </thead>
-            <tbody className="divide-y divide-gray-200">
-              {table.getRowModel().rows.length > 0 ? (
-                table.getRowModel().rows.map((row) => (
-                  <tr key={row.id} className="hover:bg-gray-50">
-                    {row.getVisibleCells().map((cell) => (
-                      <td key={cell.id} className="px-6 py-4 text-sm">
-                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                      </td>
-                    ))}
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={columns.length} className="text-center py-12">
-                    <Package className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                    <h3 className="text-lg font-medium text-gray-900 mb-2">
-                      {globalFilter ? 'No se encontraron productos' : 'No hay productos'}
-                    </h3>
-                    <p className="text-gray-500 mb-4">
-                      {globalFilter
-                        ? 'Intenta con otra búsqueda'
-                        : 'Comienza agregando tu primer producto al catálogo'}
-                    </p>
-                    {!globalFilter && (
-                      <Button onClick={() => setViewMode('add')} variant="admin-orange" size="sm">
-                        <Plus className="w-4 h-4" />
-                        Agregar Producto
-                      </Button>
-                    )}
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+      <TableCard footer={filtered.length > 0 && (
+        <Pager page={page} pageSize={pageSize} total={filtered.length} onPage={setPage} onPageSize={(s) => { setPageSize(s); setPage(1); }} />
+      )}>
+        <Table>
+          <THead>
+            <tr>
+              <SortTh k="name">Producto</SortTh>
+              <Th>Tipo</Th>
+              <SortTh k="basePrice" align="right">Precio</SortTh>
+              <SortTh k="stock" align="right">Stock</SortTh>
+              <Th align="center">Estado</Th>
+              <Th align="right">Acciones</Th>
+            </tr>
+          </THead>
+          <TBody>
+            {isLoading && products.length === 0 ? <TableMessage colSpan={6}>Cargando productos…</TableMessage>
+              : filtered.length === 0 ? (
+                <tr><td colSpan={6}>
+                  {hasFilters
+                    ? <EmptyState icon={Package} title="No se encontraron productos" description="Prueba con otra búsqueda o quita los filtros." />
+                    : <EmptyState icon={Package} title="No hay productos" description="Comienza agregando tu primer producto al catálogo."
+                        action={<Button size="sm" icon={<Plus className="w-4 h-4" />} onClick={() => setViewMode('add')}>Nuevo producto</Button>} />}
+                </td></tr>
+              ) : pageRows.map((product) => {
+                const hasVariants = productsWithVariants.has(String(product.id));
+                return (
+                  <Tr key={product.id} onClick={() => startEdit(product)}>
+                    <Td>
+                      <div className="flex items-center gap-3 min-w-[14rem]">
+                        <Thumb src={getFirstImage(product.images)} alt={product.name} size="lg" />
+                        <div className="min-w-0">
+                          <p className="font-medium text-gray-900 truncate">{product.name}</p>
+                          <p className="text-xs text-gray-500 truncate">{catName(product) || '—'}{product.sku ? ` · ${product.sku}` : ''}</p>
+                        </div>
+                      </div>
+                    </Td>
+                    <Td className="whitespace-nowrap">{product.typeName || text(product.type) || '—'}</Td>
+                    <Td align="right" className="tabular-nums whitespace-nowrap font-medium text-gray-900">{money(product.basePrice)}</Td>
+                    <Td align="right" className={`tabular-nums ${product.stock === 0 ? 'text-red-600 font-medium' : product.stock < LOW_STOCK ? 'text-amber-600 font-medium' : ''}`}>{product.stock}</Td>
+                    <Td align="center">
+                      <div className="flex flex-wrap justify-center gap-1">
+                        <Badge tone={product.stock > 0 ? 'green' : 'red'}>{product.stock > 0 ? 'Disponible' : 'Agotado'}</Badge>
+                        {product.featured && <Badge tone="blue">Destacado</Badge>}
+                      </div>
+                    </Td>
+                    <Td align="right" className="whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                      <IconButton title="Editar" tone="app" onClick={() => startEdit(product)}><Pencil className="w-4 h-4" /></IconButton>
+                      <ActionMenu items={[
+                        { label: 'Imprimir códigos de barras', icon: <Printer className="w-4 h-4" />, onClick: () => handlePrintBarcodes(product), hidden: !hasVariants },
+                        { label: 'Generar variantes', icon: <Grid3x3 className="w-4 h-4" />, onClick: () => setGeneratingVariantsFor(product), hidden: hasVariants },
+                        { label: 'Eliminar', icon: <Trash2 className="w-4 h-4" />, onClick: () => handleDeleteProduct(product), danger: true },
+                      ]} />
+                    </Td>
+                  </Tr>
+                );
+              })}
+          </TBody>
+        </Table>
+      </TableCard>
 
-        {/* Pagination Controls */}
-        {table.getRowModel().rows.length > 0 && (
-          <div className="px-6 py-4 border-t border-gray-200 flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="text-sm text-gray-700">
-              Mostrando{' '}
-              <span className="font-medium">
-                {table.getState().pagination.pageIndex * table.getState().pagination.pageSize + 1}
-              </span>{' '}
-              a{' '}
-              <span className="font-medium">
-                {Math.min(
-                  (table.getState().pagination.pageIndex + 1) * table.getState().pagination.pageSize,
-                  table.getFilteredRowModel().rows.length
-                )}
-              </span>{' '}
-              de <span className="font-medium">{table.getFilteredRowModel().rows.length}</span> productos
-            </div>
-
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => table.previousPage()}
-                disabled={!table.getCanPreviousPage()}
-                className="p-2 rounded-lg border border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                <ChevronLeft className="w-5 h-5" />
-              </button>
-
-              <div className="flex gap-1">
-                {Array.from({ length: table.getPageCount() }, (_, i) => i + 1).map((page) => (
-                  <button
-                    key={page}
-                    onClick={() => table.setPageIndex(page - 1)}
-                    className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
-                      table.getState().pagination.pageIndex === page - 1
-                        ? 'bg-orange-500 text-white'
-                        : 'text-gray-700 hover:bg-gray-100'
-                    }`}
-                  >
-                    {page}
-                  </button>
-                ))}
-              </div>
-
-              <button
-                onClick={() => table.nextPage()}
-                disabled={!table.getCanNextPage()}
-                className="p-2 rounded-lg border border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                <ChevronRight className="w-5 h-5" />
-              </button>
-            </div>
-          </div>
+      <Dialog
+        open={!!generatingVariantsFor}
+        onClose={() => !isGenerating && setGeneratingVariantsFor(null)}
+        title="Generar variantes"
+        description={generatingVariantsFor?.name}
+        footer={(
+          <>
+            <Button variant="secondary" onClick={() => setGeneratingVariantsFor(null)} disabled={isGenerating}>Cancelar</Button>
+            <Button onClick={handleGenerateVariants} isLoading={isGenerating} icon={<Grid3x3 className="w-4 h-4" />}>Generar variantes</Button>
+          </>
         )}
-      </div>
-
-      {/* Delete Confirmation Modal */}
-      {deleteConfirmId && (
-        <Modal
-          isOpen={true}
-          onClose={() => setDeleteConfirmId(null)}
-          title="Confirmar Eliminación"
-        >
-          <div className="space-y-4">
-            <p className="text-gray-600">
-              ¿Estás seguro de que deseas eliminar este producto? Esta acción no se puede deshacer.
-            </p>
-            <div className="flex justify-end gap-3">
-              <Button
-                variant="admin-secondary"
-                onClick={() => setDeleteConfirmId(null)}
-              >
-                Cancelar
-              </Button>
-              <Button
-                variant="admin-danger"
-                onClick={() => handleDeleteProduct(deleteConfirmId)}
-              >
-                Eliminar
-              </Button>
-            </div>
-          </div>
-        </Modal>
-      )}
-
-      {/* Generate Variants Modal */}
-      {generatingVariantsFor && (
-        <Modal
-          isOpen={true}
-          onClose={() => !isGenerating && setGeneratingVariantsFor(null)}
-          title="Generar Variantes"
-        >
-          <div className="space-y-4">
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <div className="flex items-start gap-3">
-                <Grid3x3 className="w-5 h-5 text-blue-600 mt-0.5" />
-                <div className="flex-1">
-                  <h4 className="font-medium text-blue-900 mb-1">
-                    {generatingVariantsFor.name}
-                  </h4>
-                  <p className="text-sm text-blue-700">
-                    Se generarán todas las combinaciones de colores y tallas configuradas para este producto con códigos de barras únicos.
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-2 text-sm text-gray-600">
-              <p className="flex items-center gap-2">
-                <span className="font-medium">•</span>
-                Cada variante tendrá un código de barras EAN-13 único
-              </p>
-              <p className="flex items-center gap-2">
-                <span className="font-medium">•</span>
-                El stock inicial será 0 (puedes ajustarlo después)
-              </p>
-              <p className="flex items-center gap-2">
-                <span className="font-medium">•</span>
-                Las variantes existentes no se duplicarán
-              </p>
-            </div>
-
-            <div className="flex justify-end gap-3">
-              <Button
-                variant="admin-secondary"
-                onClick={() => setGeneratingVariantsFor(null)}
-                disabled={isGenerating}
-              >
-                Cancelar
-              </Button>
-              <Button
-                variant="admin-primary"
-                onClick={handleGenerateVariants}
-                disabled={isGenerating}
-              >
-                {isGenerating ? 'Generando...' : 'Generar Variantes'}
-              </Button>
-            </div>
-          </div>
-        </Modal>
-      )}
-    </div>
+      >
+        <div className="space-y-3 text-sm text-gray-600">
+          <p>Se generarán todas las combinaciones de colores y tallas configuradas para este producto, con códigos de barras únicos.</p>
+          <ul className="list-disc pl-5 space-y-1">
+            <li>Cada variante tendrá un código de barras EAN-13 único.</li>
+            <li>El stock inicial será 0 (puedes ajustarlo después).</li>
+            <li>Las variantes existentes no se duplicarán.</li>
+          </ul>
+        </div>
+      </Dialog>
+    </Page>
   );
 };

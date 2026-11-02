@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { Heart, Loader2 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Heart } from 'lucide-react';
+import { PageHeader } from '../components/shared/PageHeader';
+import { Button, EmptyState, Skeleton } from '../components/ui';
 import { useFavorites } from '../context/FavoritesContext';
 import { productsService } from '../services';
 import type { Product } from '../types/product';
@@ -9,6 +11,7 @@ import { Seo } from '../components/seo/Seo';
 
 export default function FavoritesPage() {
   const { favorites } = useFavorites();
+  const navigate = useNavigate();
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -29,35 +32,35 @@ export default function FavoritesPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       <Seo title="Favoritos" description="Tus productos guardados." />
+      <PageHeader
+        title="Mis favoritos"
+        subtitle={`${favorites.length} producto${favorites.length !== 1 ? 's' : ''} guardado${favorites.length !== 1 ? 's' : ''}`}
+        backLabel="Inicio"
+        backTo="/"
+      />
 
       <div className="max-w-7xl mx-auto px-4 py-8">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center">
-            <Heart className="w-6 h-6 text-red-500 fill-red-500" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Mis Favoritos</h1>
-            <p className="text-gray-600 text-sm">{favorites.length} producto{favorites.length !== 1 ? 's' : ''} guardado{favorites.length !== 1 ? 's' : ''}</p>
-          </div>
-        </div>
-
         {loading && favorites.length > 0 ? (
-          <div className="flex justify-center py-24 text-gray-400">
-            <Loader2 className="w-8 h-8 animate-spin" />
+          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-5">
+            {favorites.slice(0, 8).map((id) => (
+              <div key={id} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                <Skeleton className="aspect-square w-full rounded-none" />
+                <div className="p-4 space-y-2">
+                  <Skeleton className="h-3 w-1/3" />
+                  <Skeleton className="h-4 w-3/4" />
+                  <Skeleton className="h-4 w-1/4" />
+                </div>
+              </div>
+            ))}
           </div>
         ) : favorites.length === 0 ? (
-          <div className="bg-white rounded-xl border border-gray-100 p-12 text-center">
-            <Heart className="w-16 h-16 mx-auto mb-4 text-gray-200" />
-            <p className="text-gray-700 font-medium">Aún no tienes favoritos</p>
-            <p className="text-sm text-gray-500 mt-1 mb-6">
-              Toca el corazón en cualquier producto para guardarlo aquí.
-            </p>
-            <Link
-              to="/catalog"
-              className="inline-flex items-center px-5 py-2.5 bg-gray-900 text-white rounded-lg text-sm font-medium hover:bg-gray-800"
-            >
-              Explorar productos
-            </Link>
+          <div className="bg-white rounded-xl border border-gray-200">
+            <EmptyState
+              icon={Heart}
+              title="Aún no tienes favoritos"
+              description="Toca el corazón en cualquier producto para guardarlo aquí."
+              action={<Button onClick={() => navigate('/catalog')}>Explorar productos</Button>}
+            />
           </div>
         ) : (
           <ProductGrid products={products} />

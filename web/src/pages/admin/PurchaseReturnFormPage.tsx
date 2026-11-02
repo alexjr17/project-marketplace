@@ -1,16 +1,19 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Loader2, Save, RotateCcw } from 'lucide-react';
-import { Button } from '../../components/shared/Button';
-import { useToast } from '../../context/ToastContext';
+import { RotateCcw, Save } from 'lucide-react';
+import {
+  Page, PageHeader, Button, Combobox, Field, TextInput, FormActions, Spinner, EmptyState, useConfirm, toast,
+} from '../../components/ui';
 import * as returnsService from '../../services/purchase-returns.service';
 import type { ReturnableOrder, ReturnableItem } from '../../services/purchase-returns.service';
 import * as purchaseOrdersService from '../../services/purchase-orders.service';
 import type { PurchaseOrder } from '../../services/purchase-orders.service';
+import { StepCard } from './InventoryStepCard';
 
-const money = (n: number) => '$' + Number(n || 0).toLocaleString('es-CO');
+const LIST = '/admin-panel/purchase-returns';
+const money = (n: number) => '$' + Math.round(Number(n || 0)).toLocaleString('es-CO');
 
-/** Agrupa los ítems devolubles por insumo/producto para la vista matriz. */
+/** Ítems devolubles agrupados por insumo/producto para la vista matriz. */
 interface ItemGroup {
   name: string;
   items: ReturnableItem[];
@@ -19,9 +22,11 @@ interface ItemGroup {
   sizes: string[];
 }
 
+const qtyInput = 'h-9 rounded-lg border border-gray-300 text-center text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-app-200 focus:border-app-500';
+
 export default function PurchaseReturnFormPage() {
   const navigate = useNavigate();
-  const { showToast } = useToast();
+  const confirm = useConfirm();
 
   const [orders, setOrders] = useState<PurchaseOrder[]>([]);
   const [selectedOrderId, setSelectedOrderId] = useState<number | ''>('');
@@ -38,13 +43,13 @@ export default function PurchaseReturnFormPage() {
         const all = await purchaseOrdersService.getPurchaseOrders();
         setOrders(all.filter((o) => ['RECEIVED', 'PARTIAL'].includes(o.status)));
       } catch (error: any) {
-        showToast(error.message || 'Error al cargar órdenes', 'error');
+        toast.error(error.message || 'Error al cargar órdenes');
       }
     })();
   }, []);
 
   const onSelectOrder = async (id: number) => {
-    setSelectedOrderId(id);
+    setSelectedOrderId(id || '');
     setReturnable(null);
     setQuantities({});
     if (!id) return;
@@ -54,13 +59,13 @@ export default function PurchaseReturnFormPage() {
       setReturnable(data);
       setQuantities(Object.fromEntries(data.items.map((i) => [i.purchaseOrderItemId, 0])));
     } catch (error: any) {
-      showToast(error.message || 'Error al cargar ítems devolubles', 'error');
+      toast.error(error.message || 'Error al cargar ítems devolubles');
     } finally {
       setLoadingItems(false);
     }
   };
 
-  // Agrupar ítems por insumo/producto. Si tienen color y talla → matriz.
+  // Agrupar por insumo/producto. Si tienen color y talla → matriz.
   const groups = useMemo<ItemGroup[]>(() => {
     if (!returnable) return [];
     const map = new Map<string, ReturnableItem[]>();
@@ -90,31 +95,40 @@ export default function PurchaseReturnFormPage() {
     setQuantities(Object.fromEntries(returnable.items.map((i) => [i.purchaseOrderItemId, i.returnable])));
   };
 
+  const clearAll = () => {
+    if (!returnable) return;
+    setQuantities(Object.fromEntries(returnable.items.map((i) => [i.purchaseOrderItemId, 0])));
+  };
+
   const totalToReturn = useMemo(
-    () =>
-      (returnable?.items ?? []).reduce(
-        (sum, i) => sum + (quantities[i.purchaseOrderItemId] || 0) * i.unitCost,
-        0
-      ),
+    () => (returnable?.items ?? []).reduce((sum, i) => sum + (quantities[i.purchaseOrderItemId] || 0) * i.unitCost, 0),
     [returnable, quantities]
   );
+  const unitsToReturn = Object.values(quantities).reduce((s, q) => s + (q || 0), 0);
 
   const submit = async () => {
     if (!selectedOrderId) {
-      showToast('Selecciona una orden de compra', 'error');
+      toast.error('Selecciona una orden de compra');
       return;
     }
     if (!reason.trim()) {
-      showToast('Indica el motivo de la devolución', 'error');
+      toast.error('Indica el motivo de la devolución');
       return;
     }
     const items = Object.entries(quantities)
       .filter(([, q]) => q > 0)
       .map(([poItemId, q]) => ({ purchaseOrderItemId: Number(poItemId), quantity: q }));
     if (items.length === 0) {
-      showToast('Indica al menos una cantidad a devolver', 'error');
+      toast.error('Indica al menos una cantidad a devolver');
       return;
     }
+
+    const ok = await confirm({
+      title: '¿Registrar la devolución?',
+      message: `Se devolverán ${unitsToReturn} unidades (${money(totalToReturn)}) y se descontarán del stock.`,
+      confirmText: 'Registrar',
+    });
+    if (!ok) return;
 
     setSaving(true);
     try {
@@ -124,162 +138,104 @@ export default function PurchaseReturnFormPage() {
         notes: notes.trim() || undefined,
         items,
       });
-      showToast('Devolución registrada y stock revertido', 'success');
-      navigate('/admin-panel/purchase-returns');
+      toast.success('Devolución registrada y stock revertido');
+      navigate(LIST);
     } catch (error: any) {
-      showToast(error.message || 'Error al registrar la devolución', 'error');
+      toast.error(error.message || 'Error al registrar la devolución');
     } finally {
       setSaving(false);
     }
   };
 
-  /** Celda de la matriz: input de cantidad a devolver para un color × talla. */
-  const matrixCell = (group: ItemGroup, color: string, size: string) => {
-    const item = group.items.find((i) => i.colorName === color && i.sizeName === size);
-    if (!item || item.returnable <= 0) {
-      return (
-        <td key={size} className="p-2 text-center border-b border-gray-100">
-          <span className="text-gray-300">—</span>
-        </td>
-      );
-    }
-    return (
-      <td key={size} className="p-2 border-b border-gray-100">
-        <div className="flex flex-col items-center gap-0.5">
-          <input
-            type="number"
-            min={0}
-            max={item.returnable}
-            value={quantities[item.purchaseOrderItemId] ?? 0}
-            onChange={(e) => setQty(item.purchaseOrderItemId, Number(e.target.value), item.returnable)}
-            className="w-16 px-2 py-1 text-center border border-gray-300 rounded text-sm"
-          />
-          <span className="text-[10px] text-gray-400">de {item.returnable}</span>
-        </div>
-      </td>
-    );
-  };
+  const orderOptions = orders.map((o) => ({ value: o.id, label: o.orderNumber, hint: o.supplier?.name ?? '' }));
 
   return (
-    <div className="p-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-        <div className="flex items-center gap-3">
-          <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
-            <RotateCcw className="w-6 h-6 text-orange-600" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Nueva Devolución</h1>
-            <p className="text-gray-600 text-sm">Devuelve al proveedor el stock recibido en una orden de compra</p>
-          </div>
-        </div>
-        <button
-          onClick={() => navigate('/admin-panel/purchase-returns')}
-          className="inline-flex items-center gap-2 px-4 py-2 text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 rounded-lg transition-colors"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          Volver
-        </button>
-      </div>
+    <Page>
+      <PageHeader icon={RotateCcw} backTo={LIST} title="Nueva devolución" subtitle="Devuelve al proveedor el stock recibido en una orden de compra" />
 
-      <div className="bg-white rounded-lg border border-gray-200 p-6 space-y-6">
-        {/* Orden de compra */}
-        <div className="max-w-xl">
-          <label className="block text-sm font-medium text-gray-700 mb-1">Orden de compra *</label>
-          <select
-            value={selectedOrderId}
-            onChange={(e) => onSelectOrder(Number(e.target.value))}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500"
-          >
-            <option value="">Selecciona una orden recibida...</option>
-            {orders.map((o) => (
-              <option key={o.id} value={o.id}>
-                {o.orderNumber} — {o.supplier?.name ?? ''}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {loadingItems && (
-          <div className="flex items-center justify-center py-12">
-            <Loader2 className="w-7 h-7 animate-spin text-orange-600" />
+      <div className="space-y-4">
+        <StepCard step={1} done={!!selectedOrderId} title="Orden de compra" description="Solo aparecen las órdenes recibidas total o parcialmente.">
+          <div className="max-w-md">
+            <Combobox
+              options={orderOptions}
+              value={selectedOrderId === '' ? null : selectedOrderId}
+              onChange={(v) => onSelectOrder(Number(v || 0))}
+              placeholder="Selecciona una orden recibida…"
+              emptyText="No hay órdenes recibidas"
+            />
           </div>
-        )}
+        </StepCard>
 
-        {/* Matriz de ítems devolubles */}
-        {returnable && !loadingItems && (
-          <>
-            <div className="flex items-center justify-between">
-              <p className="text-sm text-gray-600">
-                Indica cuánto devolver de cada ítem — puede ser total o parcial.
-              </p>
-              <button type="button" onClick={fillAll} className="text-sm text-orange-600 hover:underline">
-                Devolver todo
-              </button>
+        <StepCard
+          step={2}
+          done={unitsToReturn > 0}
+          disabled={!selectedOrderId}
+          title="Qué devolver"
+          description="Indica cuánto devolver de cada ítem: puede ser total o parcial."
+          actions={returnable && groups.length > 0 ? (
+            <div className="flex gap-1">
+              {unitsToReturn > 0 && <Button size="sm" variant="ghost" onClick={clearAll}>Limpiar</Button>}
+              <Button size="sm" variant="outline" onClick={fillAll}>Devolver todo</Button>
             </div>
-
-            {groups.length === 0 && (
-              <p className="text-sm text-gray-500">Esta orden no tiene ítems devolubles.</p>
-            )}
-
-            <div className="space-y-4">
+          ) : undefined}
+        >
+          {loadingItems ? (
+            <Spinner label="Cargando ítems…" />
+          ) : returnable && groups.length === 0 ? (
+            <EmptyState title="Esta orden no tiene ítems devolubles" />
+          ) : (
+            <div className="space-y-3">
               {groups.map((group) => (
-                <div key={group.name} className="border border-gray-200 rounded-lg overflow-hidden">
-                  <div className="px-4 py-3 bg-gray-50 border-b border-gray-200">
-                    <span className="font-medium text-gray-900">{group.name}</span>
-                  </div>
-
+                <div key={group.name} className="rounded-xl border border-gray-200 overflow-hidden">
+                  <div className="px-4 py-2.5 border-b border-gray-200 font-medium text-gray-900">{group.name}</div>
                   {group.isMatrix ? (
-                    <div className="p-4 overflow-x-auto">
-                      <table className="w-full text-sm border-collapse">
-                        <thead>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead className="bg-gray-50 border-b border-gray-200">
                           <tr>
-                            <th className="p-3 text-left text-xs font-semibold text-gray-700 bg-gray-100 sticky left-0 border-b-2 border-gray-200">
-                              Color / Talla
-                            </th>
-                            {group.sizes.map((size) => (
-                              <th
-                                key={size}
-                                className="p-3 text-center text-xs font-semibold text-gray-700 bg-gray-100 min-w-[90px] border-b-2 border-gray-200"
-                              >
-                                {size}
-                              </th>
-                            ))}
+                            <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky left-0 bg-gray-50">Color / talla</th>
+                            {group.sizes.map((size) => <th key={size} className="px-2 py-2.5 text-center text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[84px]">{size}</th>)}
                           </tr>
                         </thead>
-                        <tbody>
-                          {group.colors.map((color, idx) => (
-                            <tr key={color} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}>
-                              <td className="p-3 border-b border-gray-100 sticky left-0 bg-inherit font-medium text-gray-800">
-                                {color}
-                              </td>
-                              {group.sizes.map((size) => matrixCell(group, color, size))}
+                        <tbody className="divide-y divide-gray-100">
+                          {group.colors.map((color) => (
+                            <tr key={color}>
+                              <td className="px-4 py-2 font-medium text-gray-800 sticky left-0 bg-white whitespace-nowrap">{color}</td>
+                              {group.sizes.map((size) => {
+                                const item = group.items.find((i) => i.colorName === color && i.sizeName === size);
+                                if (!item || item.returnable <= 0) return <td key={size} className="px-2 py-2 text-center text-gray-300">—</td>;
+                                return (
+                                  <td key={size} className="px-2 py-2 text-center">
+                                    <input
+                                      type="number" min={0} max={item.returnable}
+                                      aria-label={`Devolver ${color} ${size}`}
+                                      value={quantities[item.purchaseOrderItemId] ?? 0}
+                                      onChange={(e) => setQty(item.purchaseOrderItemId, Number(e.target.value), item.returnable)}
+                                      className={`w-16 ${qtyInput}`}
+                                    />
+                                    <span className="block text-[11px] text-gray-400 mt-0.5">de {item.returnable}</span>
+                                  </td>
+                                );
+                              })}
                             </tr>
                           ))}
                         </tbody>
                       </table>
                     </div>
                   ) : (
-                    // Ítem sin variantes (consumible): fila simple
-                    <div className="p-4">
+                    <div className="divide-y divide-gray-100">
                       {group.items.map((item) => (
-                        <div key={item.purchaseOrderItemId} className="flex items-center justify-between gap-4">
-                          <div className="text-sm text-gray-600">
-                            Recibido: {item.quantityReceived} · Devolvible: {item.returnable}
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm text-gray-500">Devolver:</span>
+                        <div key={item.purchaseOrderItemId} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+                          <span className="text-sm text-gray-600">Recibido {item.quantityReceived} · Devolvible {item.returnable}</span>
+                          <label className="flex items-center gap-2 text-sm text-gray-500">
+                            Devolver
                             <input
-                              type="number"
-                              min={0}
-                              max={item.returnable}
+                              type="number" min={0} max={item.returnable}
                               value={quantities[item.purchaseOrderItemId] ?? 0}
-                              onChange={(e) =>
-                                setQty(item.purchaseOrderItemId, Number(e.target.value), item.returnable)
-                              }
-                              className="w-24 px-2 py-1 text-center border border-gray-300 rounded text-sm"
+                              onChange={(e) => setQty(item.purchaseOrderItemId, Number(e.target.value), item.returnable)}
+                              className={`w-24 ${qtyInput}`}
                             />
-                          </div>
+                          </label>
                         </div>
                       ))}
                     </div>
@@ -287,48 +243,29 @@ export default function PurchaseReturnFormPage() {
                 </div>
               ))}
             </div>
-          </>
-        )}
+          )}
+        </StepCard>
 
-        {/* Motivo y notas */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Motivo *</label>
-            <input
-              type="text"
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              placeholder="Ej: Mercancía defectuosa, error en el pedido..."
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500"
-            />
+        <StepCard step={3} done={!!reason.trim()} title="Motivo">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Field label="Motivo" required>
+              <TextInput value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Ej: Mercancía defectuosa, error en el pedido…" />
+            </Field>
+            <Field label="Notas">
+              <TextInput value={notes} onChange={(e) => setNotes(e.target.value)} />
+            </Field>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Notas</label>
-            <input
-              type="text"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500"
-            />
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div className="flex items-center justify-between pt-4 border-t">
-          <span className="text-sm text-gray-600">
-            Total a devolver: <strong className="text-gray-900">{money(totalToReturn)}</strong>
-          </span>
-          <div className="flex gap-3">
-            <Button variant="admin-secondary" onClick={() => navigate('/admin-panel/purchase-returns')}>
-              Cancelar
-            </Button>
-            <Button variant="admin-primary" onClick={submit} disabled={saving}>
-              <Save className="w-4 h-4 mr-2" />
-              {saving ? 'Procesando...' : 'Registrar devolución'}
-            </Button>
-          </div>
-        </div>
+        </StepCard>
       </div>
-    </div>
+
+      <FormActions sticky>
+        <span className="sm:mr-auto self-center text-sm text-gray-500">
+          Total a devolver <b className="ml-1 text-base text-gray-900 tabular-nums">{money(totalToReturn)}</b>
+          {unitsToReturn > 0 && <span className="ml-2">· {unitsToReturn} unid.</span>}
+        </span>
+        <Button variant="secondary" onClick={() => navigate(LIST)}>Cancelar</Button>
+        <Button icon={<Save className="w-4 h-4" />} isLoading={saving} onClick={submit}>Registrar devolución</Button>
+      </FormActions>
+    </Page>
   );
 }

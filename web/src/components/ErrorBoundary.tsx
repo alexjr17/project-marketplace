@@ -56,7 +56,7 @@ export class ErrorBoundary extends Component<Props, State> {
           <div className="flex flex-col gap-2">
             <button
               onClick={this.handleReset}
-              className="w-full bg-violet-600 hover:bg-violet-700 text-white font-medium py-2 px-4 rounded-xl transition-colors"
+              className="w-full bg-app-600 hover:bg-app-700 text-white font-medium py-2 px-4 rounded-xl transition-colors"
             >
               Borrar datos y recargar
             </button>

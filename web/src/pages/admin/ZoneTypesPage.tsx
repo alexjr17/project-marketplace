@@ -1,13 +1,18 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { zoneTypesService, type ZoneType } from '../../services/zone-types.service';
-import { Plus, Settings, Check, X } from 'lucide-react';
+import { Pencil, Plus, Scissors } from 'lucide-react';
+import {
+  Alert, Badge, Button, EmptyState, FilterBar, IconButton, Page, PageHeader, SearchInput,
+  Table, TableCard, TableMessage, TBody, Td, Th, THead, Tr,
+} from '../../components/ui';
 
 export default function ZoneTypesPage() {
   const navigate = useNavigate();
   const [zoneTypes, setZoneTypes] = useState<ZoneType[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [q, setQ] = useState('');
 
   useEffect(() => {
     loadZoneTypes();
@@ -28,133 +33,63 @@ export default function ZoneTypesPage() {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="flex justify-center items-center min-h-[400px]">
-        <div className="text-lg text-gray-600">Cargando tipos de zona...</div>
-      </div>
-    );
-  }
+  const rows = useMemo(() => {
+    const t = q.trim().toLowerCase();
+    return t ? zoneTypes.filter((z) => `${z.name} ${z.slug} ${z.description ?? ''}`.toLowerCase().includes(t)) : zoneTypes;
+  }, [zoneTypes, q]);
+
+  const goNew = () => navigate('/admin-panel/zone-types/new');
 
   return (
-    <div className="p-6">
-      {/* Header */}
-      <div className="mb-6">
-        <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Tipos de Zona</h1>
-            <p className="text-sm text-gray-500 mt-1">
-              Administra los tipos de zonas para las plantillas
-            </p>
-          </div>
-          <button
-            onClick={() => navigate('/admin-panel/zone-types/new')}
-            className="inline-flex items-center gap-2 bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-lg transition-colors"
-          >
-            <Plus className="w-4 h-4" />
-            Nuevo Tipo de Zona
-          </button>
-        </div>
-      </div>
+    <Page>
+      <PageHeader
+        icon={Scissors}
+        title="Tipos de zona"
+        subtitle="Zonas de personalización que usan las plantillas (frente, espalda, mangas…)"
+        actions={<Button icon={<Plus className="w-4 h-4" />} onClick={goNew}>Nuevo tipo de zona</Button>}
+      />
 
-      {/* Error message */}
-      {error && (
-        <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
-          {error}
-        </div>
-      )}
+      {error && <Alert tone="error" action={<Button size="sm" variant="secondary" onClick={loadZoneTypes}>Reintentar</Button>}>{error}</Alert>}
 
-      {/* Table */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  ID
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Nombre
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Slug
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Descripción
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Orden
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Estado
-                </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Acciones
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {zoneTypes.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center">
-                    <p className="text-gray-500">No hay tipos de zona registrados</p>
-                  </td>
-                </tr>
-              ) : (
-                zoneTypes.map((zoneType) => (
-                  <tr key={zoneType.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {zoneType.id}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                      {zoneType.name}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-mono">
-                      {zoneType.slug}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-500 max-w-xs truncate">
-                      {zoneType.description || '-'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {zoneType.sortOrder}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span
-                        className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium ${
-                          zoneType.isActive
-                            ? 'bg-green-100 text-green-800'
-                            : 'bg-red-100 text-red-800'
-                        }`}
-                      >
-                        {zoneType.isActive ? (
-                          <>
-                            <Check className="w-3 h-3" />
-                            Activo
-                          </>
-                        ) : (
-                          <>
-                            <X className="w-3 h-3" />
-                            Inactivo
-                          </>
-                        )}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <button
-                        onClick={() => navigate(`/admin-panel/zone-types/${zoneType.id}`)}
-                        className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                        title="Editar"
-                      >
-                        <Settings className="w-4 h-4" />
-                      </button>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
+      <FilterBar>
+        <div className="sm:col-span-2"><SearchInput value={q} onChange={setQ} placeholder="Buscar por nombre o slug…" /></div>
+      </FilterBar>
+
+      <TableCard>
+        <Table>
+          <THead>
+            <tr>
+              <Th align="right">Orden</Th>
+              <Th>Nombre</Th>
+              <Th>Slug</Th>
+              <Th>Descripción</Th>
+              <Th align="center">Estado</Th>
+              <Th align="right">Acciones</Th>
+            </tr>
+          </THead>
+          <TBody>
+            {loading ? <TableMessage colSpan={6}>Cargando tipos de zona…</TableMessage>
+              : rows.length === 0 ? (
+                <tr><td colSpan={6}>
+                  {zoneTypes.length === 0
+                    ? <EmptyState title="No hay tipos de zona" description="Crea el primero para usarlo en las plantillas." action={<Button size="sm" icon={<Plus className="w-4 h-4" />} onClick={goNew}>Nuevo tipo de zona</Button>} />
+                    : <EmptyState title="Sin resultados" description="Prueba con otra búsqueda." />}
+                </td></tr>
+              ) : rows.map((z) => (
+                <Tr key={z.id} onClick={() => navigate(`/admin-panel/zone-types/${z.id}`)}>
+                  <Td align="right" className="tabular-nums w-20">{z.sortOrder}</Td>
+                  <Td className="font-medium text-gray-900 whitespace-nowrap">{z.name}</Td>
+                  <Td className="font-mono text-xs text-gray-500">{z.slug}</Td>
+                  <Td className="text-gray-500 max-w-xs truncate">{z.description || '—'}</Td>
+                  <Td align="center"><Badge tone={z.isActive ? 'green' : 'gray'}>{z.isActive ? 'Activo' : 'Inactivo'}</Badge></Td>
+                  <Td align="right" onClick={(e) => e.stopPropagation()}>
+                    <IconButton title="Editar" tone="app" onClick={() => navigate(`/admin-panel/zone-types/${z.id}`)}><Pencil className="w-4 h-4" /></IconButton>
+                  </Td>
+                </Tr>
+              ))}
+          </TBody>
+        </Table>
+      </TableCard>
+    </Page>
   );
 }

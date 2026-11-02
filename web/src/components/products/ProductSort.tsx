@@ -1,5 +1,5 @@
-import { ArrowUpDown } from 'lucide-react';
 import type { ProductSortOption } from '../../types/product';
+import { SelectInput } from '../ui';
 
 interface ProductSortProps {
   value: ProductSortOption;
@@ -18,22 +18,20 @@ export const ProductSort = ({ value, onChange }: ProductSortProps) => {
   ];
 
   return (
-    <div className="flex items-center gap-3">
-      <label className="flex items-center gap-2 text-sm font-semibold text-gray-700">
-        <ArrowUpDown className="w-4 h-4" />
-        Ordenar:
-      </label>
-      <select
+    <div className="flex items-center gap-2">
+      <label htmlFor="product-sort" className="text-sm text-gray-500 whitespace-nowrap">Ordenar por</label>
+      <SelectInput
+        id="product-sort"
         value={value}
         onChange={(e) => onChange(e.target.value as ProductSortOption)}
-        className="px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-colors cursor-pointer"
+        className="sm:w-56 cursor-pointer"
       >
         {sortOptions.map((option) => (
           <option key={option.value} value={option.value}>
             {option.label}
           </option>
         ))}
-      </select>
+      </SelectInput>
     </div>
   );
 };

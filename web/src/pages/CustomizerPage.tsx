@@ -19,6 +19,7 @@ import { exportDesignsToZip } from '../utils/designExporter';
 import { detectPngBounds, clampPositionToBounds, type PngBounds } from '../utils/pngBoundsDetector';
 import type { ProductType, PrintZone } from '../types/product';
 import type { Design, CustomizedProduct } from '../types/design';
+import toast from '../lib/toast';
 
 export const CustomizerPage = () => {
   const [searchParams] = useSearchParams();
@@ -40,7 +41,6 @@ export const CustomizerPage = () => {
     secondary: '#ec4899',
     accent: '#f59e0b',
   };
-  const gradientStyle = `linear-gradient(to right, ${brandColors.primary}, ${brandColors.secondary}, ${brandColors.accent})`;
 
   // State principal
   const [templates, setTemplates] = useState<Template[]>([]);
@@ -884,7 +884,7 @@ export const CustomizerPage = () => {
 
     // Modo admin: hay que elegir primero la zona de impresión destino.
     if (isAdmin && activeZoneId == null) {
-      alert('Selecciona una zona de impresión (haz clic en una guía) antes de subir la imagen.');
+      toast.warning('Selecciona una zona de impresión (haz clic en una guía) antes de subir la imagen.');
       return;
     }
 
@@ -1268,19 +1268,19 @@ export const CustomizerPage = () => {
 
   const handleAddToCart = async () => {
     if (!selectedTemplate) {
-      alert('Por favor selecciona un modelo');
+      toast.warning('Selecciona un modelo');
       return;
     }
 
     // Validar stock disponible
     if (availableStock !== null && availableStock < quantity) {
-      alert(`Stock insuficiente. Solo hay ${availableStock} unidades disponibles.`);
+      toast.error(`Stock insuficiente. Solo hay ${availableStock} unidades disponibles.`);
       return;
     }
 
     const previewImage = await generatePreviewImage();
     if (!previewImage) {
-      alert('Error al generar vista previa');
+      toast.error('Error al generar la vista previa');
       return;
     }
 
@@ -1337,10 +1337,10 @@ export const CustomizerPage = () => {
 
     if (isEditMode && editingCartItemId) {
       updateCustomizedProduct(editingCartItemId, customizedProduct);
-      alert('¡Diseño actualizado exitosamente!');
+      toast.success('Diseño actualizado');
     } else {
       addCustomizedProduct(customizedProduct, quantity);
-      alert(`¡${quantity} producto(s) agregado(s) al carrito!`);
+      toast.success(`${quantity} producto(s) agregado(s) al carrito`);
     }
 
     navigate('/cart');
@@ -1349,7 +1349,7 @@ export const CustomizerPage = () => {
   // Exportar diseños como ZIP
   const handleExportDesigns = async () => {
     if (designs.size === 0) {
-      alert('No hay diseños para exportar');
+      toast.warning('No hay diseños para exportar');
       return;
     }
 
@@ -1429,7 +1429,7 @@ export const CustomizerPage = () => {
       });
     } catch (error) {
       console.error('Error al exportar:', error);
-      alert('Error al exportar los diseños');
+      toast.error('Error al exportar los diseños');
     } finally {
       setIsExporting(false);
     }
@@ -1450,7 +1450,7 @@ export const CustomizerPage = () => {
           {/* Left: Selección de Modelo - order-1 en móvil */}
           <aside className="lg:col-span-3 space-y-4 lg:space-y-6 order-1">
             {/* Selector de Modelos */}
-            <div className="bg-white rounded-xl shadow-md p-4 lg:p-6">
+            <div className="bg-white rounded-xl border border-gray-200 p-4 lg:p-6">
               <h3 className="text-base lg:text-lg font-bold text-gray-900 mb-3 lg:mb-4">Selecciona un Modelo</h3>
 
               {loadingTemplates ? (
@@ -1507,7 +1507,7 @@ export const CustomizerPage = () => {
 
             {/* Opciones del producto */}
             {selectedTemplate && (
-              <div className="bg-white rounded-xl shadow-md p-4 lg:p-6 space-y-4">
+              <div className="bg-white rounded-xl border border-gray-200 p-4 lg:p-6 space-y-4">
                 {/* Color */}
                 <div>
                   <ColorPicker
@@ -1588,7 +1588,7 @@ export const CustomizerPage = () => {
 
           {/* Center: Canvas - order-2 en móvil */}
           <main className="lg:col-span-6 order-2">
-            <div className="bg-white rounded-xl shadow-md p-4 lg:p-6">
+            <div className="bg-white rounded-xl border border-gray-200 p-4 lg:p-6">
               {selectedTemplate && (
                 <div
                   className="mb-3 lg:mb-4 p-2 lg:p-3 rounded-lg"
@@ -2113,7 +2113,7 @@ export const CustomizerPage = () => {
 
           {/* Right: Controles de Diseño - order-3 en móvil para estar cerca del canvas */}
           <aside className="lg:col-span-3 space-y-4 lg:space-y-6 order-3">
-            <div className="bg-white rounded-xl shadow-md p-4 lg:p-6">
+            <div className="bg-white rounded-xl border border-gray-200 p-4 lg:p-6">
               <h3 className="text-base lg:text-lg font-bold text-gray-900 mb-3 lg:mb-4">Tu Diseño</h3>
 
               {selectedTemplate && currentZoneType ? (

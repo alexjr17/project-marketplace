@@ -1,14 +1,13 @@
 import { useEffect, useState } from 'react';
-import { MapPin, Plus, Star, Edit2, Trash2, Save, X, Loader2, Home, CheckCircle2 } from 'lucide-react';
+import { MapPin, Plus, Star, Edit2, Trash2, Save, Home, CheckCircle2 } from 'lucide-react';
 import { addressesService, type Address, type AddressInput } from '../../services/addresses.service';
 import { CitySelect, CountrySelect } from '../shared/CitySelect';
-import { Button } from '../shared/Button';
-import { Input } from '../shared/Input';
+import { Badge, Button, CardTitle, Checkbox, Dialog, EmptyState, Field, IconButton, Spinner, TextInput, useConfirm } from '../ui';
 import { useToast } from '../../context/ToastContext';
 
 interface AddressesSectionProps {
-  /** Color de marca para acentos. */
-  brandColor: string;
+  /** Obsoleto: el acento sale del color de la app (`app-*`). Se acepta por compatibilidad. */
+  brandColor?: string;
 }
 
 const emptyForm: AddressInput = {
@@ -21,8 +20,9 @@ const emptyForm: AddressInput = {
   isDefault: false,
 };
 
-export const AddressesSection = ({ brandColor }: AddressesSectionProps) => {
+export const AddressesSection = (_props: AddressesSectionProps) => {
   const toast = useToast();
+  const confirm = useConfirm();
   const [addresses, setAddresses] = useState<Address[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -108,7 +108,7 @@ export const AddressesSection = ({ brandColor }: AddressesSectionProps) => {
   };
 
   const handleDelete = async (id: number) => {
-    if (!window.confirm('¿Eliminar esta dirección?')) return;
+    if (!(await confirm({ title: '¿Eliminar esta dirección?', message: 'No se puede deshacer.', tone: 'danger' }))) return;
     setBusyId(id);
     try {
       await addressesService.remove(id);
@@ -122,189 +122,107 @@ export const AddressesSection = ({ brandColor }: AddressesSectionProps) => {
   };
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-16">
-        <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
-      </div>
-    );
+    return <Spinner label="Cargando direcciones…" />;
   }
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-6">
-        <h3 className="text-lg font-bold text-gray-900">Mis Direcciones</h3>
-        {editingId === null && (
-          <Button onClick={openNew} variant="outline" className="flex items-center gap-2">
-            <Plus className="w-4 h-4" />
+      <CardTitle
+        icon={MapPin}
+        actions={
+          <Button size="sm" variant="outline" onClick={openNew} icon={<Plus className="w-4 h-4" />}>
             Agregar dirección
           </Button>
-        )}
-      </div>
+        }
+      >
+        Mis direcciones
+      </CardTitle>
 
-      {/* Formulario crear / editar */}
-      {editingId !== null && (
-        <form
-          onSubmit={handleSave}
-          className="mb-6 p-5 border-2 border-gray-200 rounded-xl bg-gray-50 space-y-4"
-        >
-          <h4 className="font-semibold text-gray-900">
-            {editingId > 0 ? 'Editar dirección' : 'Nueva dirección'}
-          </h4>
-
-          <Input
-            label="Etiqueta *"
-            value={form.label}
-            onChange={(e) => setForm({ ...form, label: e.target.value })}
-            placeholder="Casa, Trabajo, etc."
-          />
-          <Input
-            label="Dirección *"
-            value={form.address}
-            onChange={(e) => setForm({ ...form, address: e.target.value })}
-            placeholder="Calle 123 #45-67, Apto 301"
-          />
-          <CitySelect
-            city={form.city}
-            onChange={(city, department) => setForm({ ...form, city, department })}
-            required
-          />
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Input
-              label="Código postal"
-              value={form.postalCode || ''}
-              onChange={(e) => setForm({ ...form, postalCode: e.target.value })}
-              placeholder="110111"
-            />
-            <CountrySelect value={form.country || 'Colombia'} onChange={(country) => setForm({ ...form, country })} />
-          </div>
-
-          <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={!!form.isDefault}
-              onChange={(e) => setForm({ ...form, isDefault: e.target.checked })}
-              className="w-4 h-4 rounded"
-            />
-            Usar como dirección predeterminada
-          </label>
-
-          <div className="flex gap-3 pt-2">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={closeForm}
-              disabled={isSaving}
-              className="flex-1 flex items-center justify-center gap-2"
-            >
-              <X className="w-4 h-4" />
-              Cancelar
-            </Button>
-            <Button
-              type="submit"
-              disabled={isSaving}
-              className="flex-1 flex items-center justify-center gap-2"
-            >
-              {isSaving ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Guardando...
-                </>
-              ) : (
-                <>
-                  <Save className="w-4 h-4" />
-                  Guardar
-                </>
-              )}
-            </Button>
-          </div>
-        </form>
-      )}
-
-      {/* Lista de direcciones */}
-      {addresses.length === 0 && editingId === null ? (
-        <div className="text-center py-12">
-          <MapPin className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-          <p className="text-gray-500">Aún no tienes direcciones guardadas</p>
-          <p className="text-sm text-gray-400 mt-1">
-            Agrega una para agilizar tus compras en el checkout
-          </p>
-        </div>
+      {addresses.length === 0 ? (
+        <EmptyState
+          icon={MapPin}
+          title="Aún no tienes direcciones guardadas"
+          description="Agrega una para agilizar tus compras."
+          action={<Button onClick={openNew} icon={<Plus className="w-4 h-4" />}>Agregar dirección</Button>}
+        />
       ) : (
-        <div className="space-y-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {addresses.map((a) => (
             <div
               key={a.id}
-              className="p-4 rounded-xl border-2 transition-colors"
-              style={{ borderColor: a.isDefault ? brandColor : '#e5e7eb' }}
+              className={`rounded-lg border p-4 flex flex-col ${a.isDefault ? 'border-app-300 bg-app-50/40' : 'border-gray-200 bg-white'}`}
             >
               <div className="flex items-start gap-3">
-                <div
-                  className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0"
-                  style={{ backgroundColor: `${brandColor}15` }}
-                >
-                  <Home className="w-5 h-5" style={{ color: brandColor }} />
-                </div>
+                <Home className={`w-5 h-5 flex-shrink-0 mt-0.5 ${a.isDefault ? 'text-app-600' : 'text-gray-400'}`} />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <p className="font-semibold text-gray-900">{a.label}</p>
-                    {a.isDefault && (
-                      <span
-                        className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full"
-                        style={{ backgroundColor: `${brandColor}15`, color: brandColor }}
-                      >
-                        <CheckCircle2 className="w-3 h-3" />
-                        Predeterminada
-                      </span>
-                    )}
+                    <p className="text-sm font-semibold text-gray-900">{a.label}</p>
+                    {a.isDefault && <Badge tone="app"><CheckCircle2 className="w-3 h-3" />Predeterminada</Badge>}
                   </div>
                   <p className="text-sm text-gray-600 mt-1">{a.address}</p>
-                  <p className="text-sm text-gray-600">
+                  <p className="text-xs text-gray-500 mt-0.5">
                     {a.city}
                     {a.department && `, ${a.department}`}
                     {a.postalCode && ` · ${a.postalCode}`}
                     {a.country && ` · ${a.country}`}
                   </p>
-
-                  <div className="flex items-center gap-3 mt-3">
-                    {!a.isDefault && (
-                      <button
-                        type="button"
-                        onClick={() => handleSetDefault(a.id)}
-                        disabled={busyId === a.id}
-                        className="text-sm font-medium flex items-center gap-1 hover:underline disabled:opacity-50"
-                        style={{ color: brandColor }}
-                      >
-                        <Star className="w-4 h-4" />
-                        Predeterminada
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => openEdit(a)}
-                      disabled={busyId === a.id || editingId !== null}
-                      className="text-sm font-medium text-gray-600 flex items-center gap-1 hover:underline disabled:opacity-50"
-                    >
-                      <Edit2 className="w-4 h-4" />
-                      Editar
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleDelete(a.id)}
-                      disabled={busyId === a.id}
-                      className="text-sm font-medium text-red-600 flex items-center gap-1 hover:underline disabled:opacity-50"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                      Eliminar
-                    </button>
-                  </div>
                 </div>
+              </div>
+              <div className="flex items-center justify-end gap-1 mt-3 pt-3 border-t border-gray-100">
+                {!a.isDefault && (
+                  <Button size="sm" variant="ghost" onClick={() => handleSetDefault(a.id)} disabled={busyId === a.id} icon={<Star className="w-4 h-4" />} className="mr-auto">
+                    Usar por defecto
+                  </Button>
+                )}
+                <IconButton title="Editar dirección" tone="app" onClick={() => openEdit(a)} disabled={busyId === a.id}>
+                  <Edit2 className="w-4 h-4" />
+                </IconButton>
+                <IconButton title="Eliminar dirección" tone="danger" onClick={() => handleDelete(a.id)} disabled={busyId === a.id}>
+                  <Trash2 className="w-4 h-4" />
+                </IconButton>
               </div>
             </div>
           ))}
         </div>
       )}
+
+      {/* Crear / editar dirección */}
+      <Dialog
+        open={editingId !== null}
+        onClose={closeForm}
+        title={editingId && editingId > 0 ? 'Editar dirección' : 'Nueva dirección'}
+        footer={
+          <>
+            <Button variant="secondary" onClick={closeForm} disabled={isSaving}>Cancelar</Button>
+            <Button type="submit" form="address-form" isLoading={isSaving} icon={<Save className="w-4 h-4" />}>Guardar</Button>
+          </>
+        }
+      >
+        <form id="address-form" onSubmit={handleSave} className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Field label="Etiqueta" required>
+              <TextInput value={form.label} onChange={(e) => setForm({ ...form, label: e.target.value })} placeholder="Casa, Trabajo, etc." />
+            </Field>
+            <Field label="Código postal">
+              <TextInput value={form.postalCode || ''} onChange={(e) => setForm({ ...form, postalCode: e.target.value })} placeholder="110111" />
+            </Field>
+            <Field label="Dirección" required className="sm:col-span-2">
+              <TextInput value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} placeholder="Calle 123 #45-67, Apto 301" />
+            </Field>
+            <div className="sm:col-span-2">
+              <CitySelect city={form.city} onChange={(city, department) => setForm({ ...form, city, department })} required />
+            </div>
+            <div className="sm:col-span-2">
+              <CountrySelect value={form.country || 'Colombia'} onChange={(country) => setForm({ ...form, country })} />
+            </div>
+          </div>
+          <Checkbox
+            label="Usar como dirección predeterminada"
+            checked={!!form.isDefault}
+            onChange={(e) => setForm({ ...form, isDefault: e.target.checked })}
+          />
+        </form>
+      </Dialog>
     </div>
   );
 };
-
-export default AddressesSection;

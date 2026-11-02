@@ -231,7 +231,7 @@ export const HeroCard = ({ card, isMain = false, className = '' }: HeroCardProps
 
   return (
     <div
-      className={`relative rounded-2xl overflow-hidden group ${className}`}
+      className={`relative rounded-xl overflow-hidden group ${className}`}
     >
       {/* Fondo */}
       <CardBackground background={card.background} brandColors={brandColors} />
@@ -310,7 +310,7 @@ export const HeroCard = ({ card, isMain = false, className = '' }: HeroCardProps
                   <Link
                     key={button.id}
                     to={button.link}
-                    className="bg-white px-4 py-2.5 md:px-5 md:py-3 rounded-lg md:rounded-xl text-sm md:text-base font-bold hover:bg-gray-100 inline-flex items-center gap-1.5 md:gap-2 transition-all hover:scale-105 shadow-lg group/btn"
+                    className="bg-white px-4 py-2.5 md:px-5 md:py-3 rounded-lg md:rounded-xl text-sm md:text-base font-bold hover:bg-gray-100 inline-flex items-center gap-1.5 md:gap-2 transition-colors shadow-sm group/btn"
                     style={{ color: brandColors.primary }}
                   >
                     {IconComponent && <IconComponent className="w-4 h-4 md:w-5 md:h-5 group-hover/btn:rotate-12 transition-transform" />}

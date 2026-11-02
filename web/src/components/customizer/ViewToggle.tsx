@@ -12,7 +12,7 @@ export const ViewToggle = ({ currentView, onViewChange }: ViewToggleProps) => {
         onClick={() => onViewChange('front')}
         className={`flex-1 px-4 py-2 rounded-md font-semibold text-sm transition-all ${
           currentView === 'front'
-            ? 'bg-white text-purple-600 shadow-sm'
+            ? 'bg-white text-app-600 shadow-sm'
             : 'text-gray-600 hover:text-gray-900'
         }`}
       >
@@ -22,7 +22,7 @@ export const ViewToggle = ({ currentView, onViewChange }: ViewToggleProps) => {
         onClick={() => onViewChange('back')}
         className={`flex-1 px-4 py-2 rounded-md font-semibold text-sm transition-all ${
           currentView === 'back'
-            ? 'bg-white text-purple-600 shadow-sm'
+            ? 'bg-white text-app-600 shadow-sm'
             : 'text-gray-600 hover:text-gray-900'
         }`}
       >
@@ -30,7 +30,7 @@ export const ViewToggle = ({ currentView, onViewChange }: ViewToggleProps) => {
       </button>
       <button
         onClick={() => onViewChange(currentView === 'front' ? 'back' : 'front')}
-        className="p-2 text-gray-600 hover:text-purple-600 hover:bg-white rounded-md transition-all"
+        className="p-2 text-gray-600 hover:text-app-600 hover:bg-white rounded-md transition-all"
         title="Rotar vista"
       >
         <RotateCw className="w-5 h-5" />

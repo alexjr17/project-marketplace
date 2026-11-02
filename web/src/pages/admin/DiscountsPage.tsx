@@ -1,7 +1,6 @@
-import { useEffect, useState } from 'react';
-import { Ticket, Plus, Pencil, Trash2, Loader2, X, Search } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Check, Pencil, Plus, Search, Ticket, Trash2, X, Zap } from 'lucide-react';
 import { useToast } from '../../context/ToastContext';
-import { Button } from '../../components/shared/Button';
 import {
   listDiscounts,
   createDiscount,
@@ -12,6 +11,11 @@ import {
 } from '../../services/discounts.service';
 import { productsService } from '../../services/products.service';
 import { usersService } from '../../services/users.service';
+import {
+  Page, PageHeader, Button, IconButton, StatCard, FilterBar, SearchInput, Dialog, Field, FormGrid, TextInput,
+  NumberInput, MoneyInput, SelectInput, RadioGroup, Switch, TableCard, Table, THead, TBody, Th, Tr, Td,
+  Badge, EmptyState, Spinner, fieldClass, useConfirm,
+} from '../../components/ui';
 
 const TYPE_LABELS: Record<string, string> = {
   percent: 'Porcentaje (%)',
@@ -57,13 +61,18 @@ function toLocalInput(v?: string | null) {
 const fmtValue = (d: Discount | DiscountInput) =>
   d.type === 'percent' ? `${d.value}%` : `$${Number(d.value).toLocaleString('es-CO')}`;
 
+const fmtShort = (v?: string | null) => (v ? new Date(v).toLocaleDateString('es-CO', { day: '2-digit', month: 'short' }) : null);
+
+/** Cupones con código y descuentos automáticos para la tienda y el POS. */
 export default function DiscountsPage() {
   const { showToast } = useToast();
+  const confirm = useConfirm();
   const [items, setItems] = useState<Discount[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<Discount | 'new' | null>(null);
   const [form, setForm] = useState<DiscountInput>(EMPTY);
   const [saving, setSaving] = useState(false);
+  const [q, setQ] = useState('');
   const [categories, setCategories] = useState<Array<{ id: number; name: string }>>([]);
   // Etiquetas id -> nombre para mostrar los chips de producto/usuario seleccionados.
   const [labels, setLabels] = useState<Record<number, string>>({});
@@ -138,7 +147,7 @@ export default function DiscountsPage() {
   };
 
   const remove = async (d: Discount) => {
-    if (!window.confirm(`¿Eliminar "${d.code || d.name || 'este descuento'}"?`)) return;
+    if (!(await confirm({ title: `¿Eliminar "${d.code || d.name || 'este descuento'}"?`, message: 'Los clientes ya no podrán usarlo. No se puede deshacer.', tone: 'danger' }))) return;
     try {
       await deleteDiscount(d.id);
       showToast('Cupón eliminado', 'success');
@@ -168,231 +177,214 @@ export default function DiscountsPage() {
     }
   };
 
+  const setMode = (auto: boolean) => {
+    if (auto) {
+      set('isAuto', true);
+      if (form.appliesTo !== 'product' && form.appliesTo !== 'category') { set('appliesTo', 'product'); set('targetIds', []); setLabels({}); }
+    } else {
+      set('isAuto', false);
+    }
+  };
+
+  const rows = useMemo(() => {
+    const t = q.trim().toLowerCase();
+    return t ? items.filter((d) => [d.code, d.name].some((v) => v?.toLowerCase().includes(t))) : items;
+  }, [items, q]);
+
+  const stats = {
+    total: items.length,
+    active: items.filter((d) => d.isActive).length,
+    auto: items.filter((d) => d.isAuto).length,
+    uses: items.reduce((a, d) => a + (d.usedCount || 0), 0),
+  };
+
   return (
-    <div className="p-6 max-w-5xl mx-auto">
-      <div className="flex items-center justify-between gap-4 mb-6">
-        <div className="flex items-center gap-3">
-          <div className="p-3 bg-emerald-100 rounded-xl"><Ticket className="w-7 h-7 text-emerald-600" /></div>
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Cupones / Descuentos</h1>
-            <p className="text-gray-600 text-sm mt-0.5">Cupones por producto, categoría o usuario, para tienda y/o POS</p>
-          </div>
-        </div>
-        <Button variant="admin-primary" onClick={openNew}><Plus className="w-4 h-4 mr-1" /> Nuevo cupón</Button>
-      </div>
+    <Page>
+      <PageHeader
+        icon={Ticket}
+        title="Cupones"
+        subtitle="Cupones con código y descuentos automáticos para la tienda y el POS"
+        actions={<Button icon={<Plus className="w-4 h-4" />} onClick={openNew}>Nuevo cupón</Button>}
+      />
 
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-        {loading ? (
-          <div className="flex justify-center py-16 text-gray-400"><Loader2 className="w-8 h-8 animate-spin" /></div>
-        ) : items.length === 0 ? (
-          <div className="p-12 text-center text-gray-500">
-            <Ticket className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-            Aún no hay cupones. Crea el primero con “Nuevo cupón”.
+      {loading ? <Spinner label="Cargando cupones…" /> : items.length === 0 ? (
+        <div className="bg-white rounded-xl border border-gray-200">
+          <EmptyState icon={Ticket} title="Aún no hay cupones" description="Crea un cupón con código o un descuento automático por producto o categoría."
+            action={<Button icon={<Plus className="w-4 h-4" />} onClick={openNew}>Nuevo cupón</Button>} />
+        </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <StatCard icon={Ticket} label="Cupones" value={stats.total} />
+            <StatCard icon={Check} tone="green" label="Activos" value={stats.active} hint={`${stats.total - stats.active} inactivos`} />
+            <StatCard icon={Zap} tone="blue" label="Automáticos" value={stats.auto} hint="Sin código" />
+            <StatCard icon={Ticket} tone="gray" label="Usos totales" value={stats.uses.toLocaleString('es-CO')} />
           </div>
-        ) : (
-          <table className="min-w-full divide-y divide-gray-200 text-sm">
-            <thead className="bg-gray-50 text-xs text-gray-500 uppercase">
-              <tr>
-                <th className="px-4 py-3 text-left">Código</th>
-                <th className="px-4 py-3 text-left">Descuento</th>
-                <th className="px-4 py-3 text-left">Alcance</th>
-                <th className="px-4 py-3 text-left">Canal</th>
-                <th className="px-4 py-3 text-center">Usos</th>
-                <th className="px-4 py-3 text-center">Activo</th>
-                <th className="px-4 py-3 text-right">Acciones</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {items.map((d) => (
-                <tr key={d.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-3">
-                    {d.isAuto ? (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 text-xs font-semibold">Automático</span>
-                    ) : (
-                      <span className="font-mono font-bold text-emerald-700">{d.code}</span>
-                    )}
-                    {d.name && <p className="text-xs text-gray-500">{d.name}</p>}
-                  </td>
-                  <td className="px-4 py-3 font-semibold text-gray-900">{fmtValue(d)}</td>
-                  <td className="px-4 py-3 text-gray-600">{APPLIES_LABELS[d.appliesTo] || d.appliesTo}</td>
-                  <td className="px-4 py-3 text-gray-600">{CHANNEL_LABELS[d.channel] || d.channel}</td>
-                  <td className="px-4 py-3 text-center text-gray-600">
-                    {d.usedCount}{d.maxUses ? ` / ${d.maxUses}` : ''}
-                  </td>
-                  <td className="px-4 py-3 text-center">
-                    <button onClick={() => toggleActive(d)} className={`px-2 py-0.5 rounded-full text-xs font-semibold ${d.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
-                      {d.isActive ? 'Sí' : 'No'}
-                    </button>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex justify-end gap-1">
-                      <button onClick={() => openEdit(d)} className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded"><Pencil className="w-4 h-4" /></button>
-                      <button onClick={() => remove(d)} className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded"><Trash2 className="w-4 h-4" /></button>
-                    </div>
-                  </td>
+
+          <FilterBar>
+            <div className="sm:col-span-2"><SearchInput value={q} onChange={setQ} placeholder="Buscar por código o nombre…" /></div>
+          </FilterBar>
+
+          <TableCard>
+            <Table>
+              <THead>
+                <tr>
+                  <Th>Código</Th><Th align="right">Descuento</Th><Th>Alcance</Th><Th>Canal</Th><Th>Vigencia</Th>
+                  <Th align="right">Usos</Th><Th align="center">Activo</Th><Th align="right">Acciones</Th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
-
-      {/* Formulario */}
-      {editing && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/50" onClick={() => setEditing(null)} />
-          <div className="relative bg-white rounded-xl shadow-2xl max-w-lg w-full max-h-[92vh] flex flex-col overflow-hidden">
-            <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-gray-900">{editing === 'new' ? 'Nuevo cupón' : 'Editar cupón'}</h2>
-              <button onClick={() => setEditing(null)} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button>
-            </div>
-
-            <div className="p-5 space-y-3 overflow-y-auto">
-              {/* Modo: automático (sin código) o con código (canjeable al pagar) */}
-              <div className="flex gap-2 p-1 bg-gray-100 rounded-lg">
-                <button
-                  type="button"
-                  onClick={() => { set('isAuto', true); if (form.appliesTo !== 'product' && form.appliesTo !== 'category') { set('appliesTo', 'product'); set('targetIds', []); setLabels({}); } }}
-                  className={`flex-1 px-3 py-2 rounded-md text-sm font-semibold transition-colors ${form.isAuto ? 'bg-white shadow text-emerald-700' : 'text-gray-500'}`}
-                >
-                  Automático (sin código)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => set('isAuto', false)}
-                  className={`flex-1 px-3 py-2 rounded-md text-sm font-semibold transition-colors ${!form.isAuto ? 'bg-white shadow text-emerald-700' : 'text-gray-500'}`}
-                >
-                  Con código
-                </button>
-              </div>
-              <p className="text-xs text-gray-500 -mt-1">
-                {form.isAuto
-                  ? 'Se aplica solo al producto o categoría que elijas (sin que el cliente escriba nada) y se muestra el precio rebajado en toda la tienda.'
-                  : 'El cliente escribe el código al momento de pagar para canjearlo.'}
-              </p>
-
-              <div className="grid grid-cols-2 gap-3">
-                {!form.isAuto && (
-                  <Field label="Código del cupón">
-                    <input value={form.code || ''} onChange={(e) => set('code', e.target.value.toUpperCase())} placeholder="BIENVENIDA10" className="inp font-mono uppercase" />
-                  </Field>
-                )}
-                <Field label="Nombre interno (opcional)">
-                  <input value={form.name || ''} onChange={(e) => set('name', e.target.value)} placeholder="Promo bienvenida" className="inp" />
-                </Field>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="Tipo de descuento">
-                  <select value={form.type} onChange={(e) => set('type', e.target.value as DiscountInput['type'])} className="sel">
-                    {Object.entries(TYPE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                  </select>
-                </Field>
-                <Field label={form.type === 'percent' ? 'Porcentaje (%)' : 'Monto ($)'}>
-                  <input type="number" min={0} value={form.value} onChange={(e) => set('value', Number(e.target.value))} className="inp" />
-                </Field>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="Aplica a">
-                  <select value={form.appliesTo} onChange={(e) => { set('appliesTo', e.target.value as DiscountInput['appliesTo']); set('targetIds', []); setLabels({}); }} className="sel">
-                    {Object.entries(APPLIES_LABELS)
-                      // Automático: solo Producto y Categoría. Con código: todas.
-                      .filter(([k]) => !form.isAuto || k === 'product' || k === 'category')
-                      .map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                  </select>
-                </Field>
-                <Field label="Canal">
-                  <select value={form.channel} onChange={(e) => set('channel', e.target.value as DiscountInput['channel'])} className="sel">
-                    {Object.entries(CHANNEL_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                  </select>
-                </Field>
-              </div>
-
-              {/* Selector de objetivos según el alcance */}
-              {form.appliesTo === 'category' && (
-                <Field label="Categorías incluidas">
-                  <div className="flex flex-wrap gap-2">
-                    {categories.map((c) => {
-                      const on = (form.targetIds ?? []).includes(c.id);
-                      return (
-                        <button key={c.id} type="button" onClick={() => toggleTarget(c.id)}
-                          className={`px-3 py-1 rounded-full text-xs font-medium border ${on ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-gray-600 border-gray-300 hover:border-emerald-400'}`}>
-                          {c.name}
-                        </button>
-                      );
-                    })}
-                    {categories.length === 0 && <span className="text-xs text-gray-400">Sin categorías</span>}
-                  </div>
-                </Field>
-              )}
-
-              {form.appliesTo === 'product' && (
-                <Field label="Productos incluidos">
-                  <SearchPicker
-                    placeholder="Buscar producto…"
-                    selected={form.targetIds ?? []}
-                    labels={labels}
-                    onToggle={toggleTarget}
-                    search={async (q) => {
-                      const list = await productsService.search(q, 8);
-                      return list.map((p) => ({ id: Number(p.id), label: p.name }));
-                    }}
-                  />
-                </Field>
-              )}
-
-              {form.appliesTo === 'user' && (
-                <Field label="Usuarios habilitados">
-                  <SearchPicker
-                    placeholder="Buscar usuario por nombre o correo…"
-                    selected={form.targetIds ?? []}
-                    labels={labels}
-                    onToggle={toggleTarget}
-                    search={async (q) => {
-                      const res = await usersService.getAll({ search: q, limit: 8 });
-                      return res.data.map((u) => ({ id: u.id, label: `${u.name} (${u.email})` }));
-                    }}
-                  />
-                </Field>
-              )}
-
-              <div className="grid grid-cols-3 gap-3">
-                <Field label="Mínimo de compra ($)"><input type="number" min={0} value={form.minSubtotal ?? ''} onChange={(e) => set('minSubtotal', e.target.value ? Number(e.target.value) : null)} placeholder="—" className="inp" /></Field>
-                <Field label="Usos máximos (total)"><input type="number" min={1} value={form.maxUses ?? ''} onChange={(e) => set('maxUses', e.target.value ? Number(e.target.value) : null)} placeholder="∞" className="inp" /></Field>
-                <Field label="Usos por usuario"><input type="number" min={1} value={form.maxUsesPerUser ?? ''} onChange={(e) => set('maxUsesPerUser', e.target.value ? Number(e.target.value) : null)} placeholder="∞" className="inp" /></Field>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="Desde (opcional)"><input type="datetime-local" value={toLocalInput(form.startsAt)} onChange={(e) => set('startsAt', e.target.value || null)} className="inp" /></Field>
-                <Field label="Hasta (opcional)"><input type="datetime-local" value={toLocalInput(form.endsAt)} onChange={(e) => set('endsAt', e.target.value || null)} className="inp" /></Field>
-              </div>
-
-              <label className="flex items-center gap-2 text-sm text-gray-700"><input type="checkbox" checked={form.isActive} onChange={(e) => set('isActive', e.target.checked)} /> Activo</label>
-            </div>
-
-            <div className="px-5 py-4 border-t border-gray-200 flex justify-end gap-3">
-              <Button variant="admin-secondary" onClick={() => setEditing(null)} disabled={saving}>Cancelar</Button>
-              <Button variant="admin-primary" onClick={save} isLoading={saving}>Guardar</Button>
-            </div>
-          </div>
-        </div>
+              </THead>
+              <TBody>
+                {rows.length === 0 ? (
+                  <tr><td colSpan={8} className="px-4 py-10 text-center text-gray-400">Ningún cupón coincide con la búsqueda.</td></tr>
+                ) : rows.map((d) => (
+                  <Tr key={d.id}>
+                    <Td>
+                      {d.isAuto ? <Badge tone="blue"><Zap className="w-3 h-3" />Automático</Badge> : <span className="font-mono font-semibold text-gray-900">{d.code}</span>}
+                      {d.name && <span className="block text-xs text-gray-500">{d.name}</span>}
+                    </Td>
+                    <Td align="right" className="font-semibold text-gray-900">{fmtValue(d)}</Td>
+                    <Td>{APPLIES_LABELS[d.appliesTo] || d.appliesTo}{(d.targetIds?.length ?? 0) > 0 && <span className="text-gray-400"> · {d.targetIds!.length}</span>}</Td>
+                    <Td>{CHANNEL_LABELS[d.channel] || d.channel}</Td>
+                    <Td className="whitespace-nowrap text-gray-500">
+                      {d.startsAt || d.endsAt ? `${fmtShort(d.startsAt) ?? 'Hoy'} – ${fmtShort(d.endsAt) ?? 'sin fin'}` : 'Siempre'}
+                    </Td>
+                    <Td align="right">{d.usedCount}{d.maxUses ? ` / ${d.maxUses}` : ''}</Td>
+                    <Td align="center"><span className="inline-flex"><Switch checked={d.isActive} onChange={() => toggleActive(d)} /></span></Td>
+                    <Td align="right" className="whitespace-nowrap">
+                      <IconButton title="Editar" tone="app" onClick={() => openEdit(d)}><Pencil className="w-4 h-4" /></IconButton>
+                      <IconButton title="Eliminar" tone="danger" onClick={() => remove(d)}><Trash2 className="w-4 h-4" /></IconButton>
+                    </Td>
+                  </Tr>
+                ))}
+              </TBody>
+            </Table>
+          </TableCard>
+        </>
       )}
 
-      <style>{`
-        .inp { width:100%; padding:.5rem .75rem; border:1px solid #d1d5db; border-radius:.5rem; font-size:.875rem; }
-        .sel { width:100%; padding:.5rem .5rem; border:1px solid #d1d5db; border-radius:.5rem; font-size:.875rem; background:#fff; }
-      `}</style>
-    </div>
-  );
-}
+      <Dialog
+        open={!!editing}
+        onClose={() => setEditing(null)}
+        size="lg"
+        title={editing === 'new' ? 'Nuevo cupón' : 'Editar cupón'}
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setEditing(null)} disabled={saving}>Cancelar</Button>
+            <Button onClick={save} isLoading={saving}>Guardar</Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <Field
+            label="Tipo de cupón"
+            hint={form.isAuto
+              ? 'Se aplica solo al producto o categoría que elijas (sin que el cliente escriba nada) y se muestra el precio rebajado en toda la tienda.'
+              : 'El cliente escribe el código al momento de pagar para canjearlo.'}
+          >
+            <RadioGroup<'code' | 'auto'>
+              variant="segmented"
+              value={form.isAuto ? 'auto' : 'code'}
+              onChange={(v) => setMode(v === 'auto')}
+              options={[{ value: 'code', label: 'Con código' }, { value: 'auto', label: 'Automático (sin código)' }]}
+            />
+          </Field>
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <label className="block text-xs font-medium text-gray-600 mb-1">{label}</label>
-      {children}
-    </div>
+          <FormGrid>
+            {!form.isAuto && (
+              <Field label="Código del cupón" required>
+                <TextInput value={form.code || ''} onChange={(e) => set('code', e.target.value.toUpperCase())} placeholder="BIENVENIDA10" className="font-mono uppercase" />
+              </Field>
+            )}
+            <Field label="Nombre interno" hint="Opcional, solo lo ve el equipo.">
+              <TextInput value={form.name || ''} onChange={(e) => set('name', e.target.value)} placeholder="Promo bienvenida" />
+            </Field>
+            <Field label="Tipo de descuento">
+              <SelectInput value={form.type} onChange={(e) => set('type', e.target.value as DiscountInput['type'])}>
+                {Object.entries(TYPE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+              </SelectInput>
+            </Field>
+            <Field label={form.type === 'percent' ? 'Porcentaje' : 'Monto'} required>
+              {form.type === 'percent'
+                ? <NumberInput min={0} suffix="%" value={form.value} onChange={(e) => set('value', Number(e.target.value))} />
+                : <MoneyInput step="1" value={form.value} onChange={(e) => set('value', Number(e.target.value))} />}
+            </Field>
+            <Field label="Aplica a">
+              <SelectInput value={form.appliesTo} onChange={(e) => { set('appliesTo', e.target.value as DiscountInput['appliesTo']); set('targetIds', []); setLabels({}); }}>
+                {Object.entries(APPLIES_LABELS)
+                  // Automático: solo Producto y Categoría. Con código: todas.
+                  .filter(([k]) => !form.isAuto || k === 'product' || k === 'category')
+                  .map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+              </SelectInput>
+            </Field>
+            <Field label="Canal">
+              <SelectInput value={form.channel} onChange={(e) => set('channel', e.target.value as DiscountInput['channel'])}>
+                {Object.entries(CHANNEL_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+              </SelectInput>
+            </Field>
+          </FormGrid>
+
+          {form.appliesTo === 'category' && (
+            <Field label="Categorías incluidas" required>
+              <div className="flex flex-wrap gap-2">
+                {categories.map((c) => {
+                  const on = (form.targetIds ?? []).includes(c.id);
+                  return (
+                    <button key={c.id} type="button" onClick={() => toggleTarget(c.id)} aria-pressed={on}
+                      className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium border transition-colors ${on ? 'bg-app-600 text-white border-app-600' : 'bg-white text-gray-600 border-gray-300 hover:border-app-400'}`}>
+                      {on && <Check className="w-3 h-3" />}{c.name}
+                    </button>
+                  );
+                })}
+                {categories.length === 0 && <span className="text-xs text-gray-400">Sin categorías</span>}
+              </div>
+            </Field>
+          )}
+
+          {form.appliesTo === 'product' && (
+            <Field label="Productos incluidos" required>
+              <SearchPicker
+                placeholder="Buscar producto…"
+                selected={form.targetIds ?? []}
+                labels={labels}
+                onToggle={toggleTarget}
+                search={async (term) => {
+                  const list = await productsService.search(term, 8);
+                  return list.map((p) => ({ id: Number(p.id), label: p.name }));
+                }}
+              />
+            </Field>
+          )}
+
+          {form.appliesTo === 'user' && (
+            <Field label="Usuarios habilitados" required>
+              <SearchPicker
+                placeholder="Buscar usuario por nombre o correo…"
+                selected={form.targetIds ?? []}
+                labels={labels}
+                onToggle={toggleTarget}
+                search={async (term) => {
+                  const res = await usersService.getAll({ search: term, limit: 8 });
+                  return res.data.map((u) => ({ id: u.id, label: `${u.name} (${u.email})` }));
+                }}
+              />
+            </Field>
+          )}
+
+          <FormGrid cols={3}>
+            <Field label="Compra mínima"><MoneyInput step="1" value={form.minSubtotal ?? ''} onChange={(e) => set('minSubtotal', e.target.value ? Number(e.target.value) : null)} placeholder="Sin mínimo" /></Field>
+            <Field label="Usos máximos (total)"><NumberInput min={1} value={form.maxUses ?? ''} onChange={(e) => set('maxUses', e.target.value ? Number(e.target.value) : null)} placeholder="Ilimitado" /></Field>
+            <Field label="Usos por usuario"><NumberInput min={1} value={form.maxUsesPerUser ?? ''} onChange={(e) => set('maxUsesPerUser', e.target.value ? Number(e.target.value) : null)} placeholder="Ilimitado" /></Field>
+          </FormGrid>
+
+          <FormGrid>
+            <Field label="Desde" hint="Opcional"><TextInput type="datetime-local" value={toLocalInput(form.startsAt)} onChange={(e) => set('startsAt', e.target.value || null)} /></Field>
+            <Field label="Hasta" hint="Opcional"><TextInput type="datetime-local" value={toLocalInput(form.endsAt)} onChange={(e) => set('endsAt', e.target.value || null)} /></Field>
+          </FormGrid>
+
+          <Switch checked={form.isActive} onChange={(v) => set('isActive', v)} label="Activo" description="Los cupones inactivos no se pueden usar." />
+        </div>
+      </Dialog>
+    </Page>
   );
 }
 
@@ -428,16 +420,16 @@ function SearchPicker({
       {selected.length > 0 && (
         <div className="flex flex-wrap gap-1.5 mb-2">
           {selected.map((id) => (
-            <span key={id} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-xs font-medium">
+            <span key={id} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-app-50 text-app-700 text-xs font-medium">
               {labels[id] || `#${id}`}
-              <button type="button" onClick={() => onToggle(id)} className="hover:text-emerald-900"><X className="w-3 h-3" /></button>
+              <button type="button" title="Quitar" onClick={() => onToggle(id)} className="hover:text-app-900"><X className="w-3 h-3" /></button>
             </span>
           ))}
         </div>
       )}
       <div className="relative">
-        <Search className="w-4 h-4 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
-        <input value={q} onChange={(e) => run(e.target.value)} placeholder={placeholder} className="inp pl-8" />
+        <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+        <input value={q} onChange={(e) => run(e.target.value)} placeholder={placeholder} className={`${fieldClass()} pl-9`} />
       </div>
       {busy && <p className="text-xs text-gray-400 mt-1">Buscando…</p>}
       {results.length > 0 && (
@@ -446,9 +438,9 @@ function SearchPicker({
             const on = selected.includes(r.id);
             return (
               <button key={r.id} type="button" onClick={() => onToggle(r.id, r.label)}
-                className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center justify-between ${on ? 'text-emerald-700 font-medium' : 'text-gray-700'}`}>
+                className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center justify-between ${on ? 'text-app-700 font-medium' : 'text-gray-700'}`}>
                 <span className="truncate">{r.label}</span>
-                {on && <span className="text-xs">✓</span>}
+                {on && <Check className="w-4 h-4" />}
               </button>
             );
           })}

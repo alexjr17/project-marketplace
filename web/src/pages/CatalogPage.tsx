@@ -1,9 +1,9 @@
 import { useState, useMemo, useEffect } from 'react';
-import { Search } from 'lucide-react';
+import { SearchInput, Spinner } from '../components/ui';
 import { PageHeader } from '../components/shared/PageHeader';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { useProducts } from '../context/ProductsContext';
-import { useSettings } from '../context/SettingsContext';
+
 import { ProductGrid } from '../components/products/ProductGrid';
 import { Seo } from '../components/seo/Seo';
 import { ProductFilters, type FilterValues } from '../components/products/ProductFilters';
@@ -12,10 +12,8 @@ import { Pagination } from '../components/common/Pagination';
 import type { ProductCategory, ProductType } from '../types/product';
 
 export const CatalogPage = () => {
-  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { filteredProducts, setFilters, sortOption, setSortOption, isLoading } = useProducts();
-  const { settings } = useSettings();
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(12);
@@ -65,13 +63,6 @@ export const CatalogPage = () => {
     }
   }, [searchParams]);
 
-  // Colores de marca dinámicos
-  const brandColors = settings.appearance?.brandColors || settings.general.brandColors || {
-    primary: '#7c3aed',
-    secondary: '#ec4899',
-    accent: '#f59e0b',
-  };
-  const gradientStyle = `linear-gradient(to right, ${brandColors.primary}, ${brandColors.secondary}, ${brandColors.accent})`;
 
   // Filter by search query
   const searchFilteredProducts = useMemo(() => {
@@ -96,8 +87,8 @@ export const CatalogPage = () => {
     setCurrentPage(1); // Reset to first page when filters change
   };
 
-  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setSearchQuery(e.target.value);
+  const handleSearchChange = (value: string) => {
+    setSearchQuery(value);
     setCurrentPage(1); // Reset to first page when search changes
   };
 
@@ -125,8 +116,8 @@ export const CatalogPage = () => {
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 py-8">
         {/* Toolbar: contador + buscador + ordenar */}
-        <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
-          <div className="text-sm text-gray-600 order-2 sm:order-1 w-full sm:w-auto">
+        <div className="bg-white rounded-xl border border-gray-200 p-3 flex items-center justify-between mb-6 flex-wrap gap-3">
+          <div className="text-sm text-gray-500 order-2 sm:order-1 w-full sm:w-auto px-1">
             {isLoading ? (
               <span>Cargando productos...</span>
             ) : (
@@ -136,17 +127,8 @@ export const CatalogPage = () => {
               </span>
             )}
           </div>
-          <div className="flex items-center gap-3 order-1 sm:order-2 w-full sm:w-auto">
-            <div className="relative flex-1 sm:w-64">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-              <input
-                type="text"
-                placeholder="Buscar productos..."
-                value={searchQuery}
-                onChange={handleSearchChange}
-                className="w-full pl-9 pr-3 py-2 bg-white border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-300 focus:border-transparent shadow-sm"
-              />
-            </div>
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 order-1 sm:order-2 w-full sm:w-auto">
+            <SearchInput value={searchQuery} onChange={handleSearchChange} placeholder="Buscar productos…" className="flex-1 sm:w-64" />
             <ProductSort value={sortOption} onChange={setSortOption} />
           </div>
         </div>
@@ -161,9 +143,7 @@ export const CatalogPage = () => {
           {/* Products Grid */}
           <main className="lg:col-span-3">
             {isLoading ? (
-              <div className="flex items-center justify-center py-20">
-                <div className="animate-spin rounded-full h-12 w-12 border-4 border-gray-600 border-t-transparent"></div>
-              </div>
+              <Spinner label="Cargando productos…" className="py-20" />
             ) : (
               <>
                 <ProductGrid products={paginatedProducts} />

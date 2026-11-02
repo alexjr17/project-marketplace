@@ -25,7 +25,7 @@ export const ColorPicker = ({ colors, selectedColor, onColorChange, label = 'Col
           <button
             key={color}
             onClick={() => onColorChange(color)}
-            className={`w-9 h-9 rounded-lg border-2 transition-all hover:scale-105 flex-shrink-0 ${
+            className={`w-9 h-9 rounded-lg border-2 transition-all flex-shrink-0 ${
               selectedColor === color
                 ? ''
                 : 'border-gray-300 hover:border-gray-400'

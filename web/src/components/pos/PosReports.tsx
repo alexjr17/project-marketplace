@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import * as posService from '../../services/pos.service';
 import type { PosStats } from '../../services/pos.service';
-import { DollarSign, TrendingUp, Package, Download, Loader2, BarChart3, ShoppingCart } from 'lucide-react';
+import { DollarSign, TrendingUp, Package, Download, BarChart3, ShoppingCart } from 'lucide-react';
+import { Button, Card, CardTitle, RadioGroup, Spinner, StatCard } from '../ui';
 
 type Range = 'today' | '7d' | '30d';
 
@@ -10,7 +11,7 @@ const METHOD_LABELS: Record<string, string> = {
   cash: 'Efectivo', card: 'Tarjeta', transfer: 'Transferencia', mixed: 'Mixto', debe: 'Fiado',
 };
 const METHOD_COLORS: Record<string, string> = {
-  cash: 'bg-green-500', card: 'bg-blue-500', transfer: 'bg-purple-500', mixed: 'bg-orange-500', debe: 'bg-amber-500',
+  cash: 'bg-green-500', card: 'bg-blue-500', transfer: 'bg-cyan-500', mixed: 'bg-gray-500', debe: 'bg-amber-500',
 };
 
 /** Bloque de gráficas y reporte del POS (se usa dentro de la vista de Caja). */
@@ -63,75 +64,40 @@ export default function PosReports() {
     URL.revokeObjectURL(url);
   };
 
-  const kpis = [
-    { label: 'Ventas', value: totals?.salesCount ?? 0, icon: ShoppingCart, iconBg: 'bg-indigo-100', iconText: 'text-indigo-600' },
-    { label: 'Total vendido', value: `$${(totals?.totalSold ?? 0).toLocaleString()}`, icon: DollarSign, iconBg: 'bg-green-100', iconText: 'text-green-600' },
-    { label: 'Ticket promedio', value: `$${(totals?.avgTicket ?? 0).toLocaleString()}`, icon: TrendingUp, iconBg: 'bg-blue-100', iconText: 'text-blue-600' },
-    { label: 'Productos vendidos', value: totals?.itemsSold ?? 0, icon: Package, iconBg: 'bg-purple-100', iconText: 'text-purple-600' },
-  ];
-
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-          <BarChart3 className="w-5 h-5 text-indigo-500" /> Reportes de ventas
+        <h2 className="text-base font-semibold text-gray-900 flex items-center gap-2">
+          <BarChart3 className="w-5 h-5 text-app-600" /> Reportes de ventas
         </h2>
         <div className="flex items-center gap-2">
-          <div className="flex bg-gray-100 rounded-lg p-1">
-            {(['today', '7d', '30d'] as Range[]).map((r) => (
-              <button
-                key={r}
-                onClick={() => setRange(r)}
-                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                  range === r ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                {RANGE_LABELS[r]}
-              </button>
-            ))}
-          </div>
-          <button
-            onClick={exportCsv}
-            disabled={!stats || stats.totals.salesCount === 0}
-            className="inline-flex items-center gap-2 px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-            title="Exportar a CSV"
-          >
-            <Download className="w-4 h-4" /> CSV
-          </button>
+          <RadioGroup
+            variant="segmented"
+            value={range}
+            onChange={setRange}
+            options={(['today', '7d', '30d'] as Range[]).map((r) => ({ value: r, label: RANGE_LABELS[r] }))}
+          />
+          <Button variant="secondary" size="sm" icon={<Download className="w-4 h-4" />} onClick={exportCsv} disabled={!stats || stats.totals.salesCount === 0} title="Exportar a CSV">
+            CSV
+          </Button>
         </div>
       </div>
 
-      {/* KPIs */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {kpis.map((kpi) => {
-          const Icon = kpi.icon;
-          return (
-            <div key={kpi.label} className="bg-white rounded-lg shadow-sm p-4">
-              <div className="flex items-center justify-between">
-                <div className="min-w-0">
-                  <p className="text-xs font-medium text-gray-500">{kpi.label}</p>
-                  <p className="text-xl lg:text-2xl font-bold text-gray-900 mt-1 truncate">{loading ? '—' : kpi.value}</p>
-                </div>
-                <div className={`w-10 h-10 ${kpi.iconBg} rounded-lg flex items-center justify-center flex-shrink-0`}>
-                  <Icon className={`w-5 h-5 ${kpi.iconText}`} />
-                </div>
-              </div>
-            </div>
-          );
-        })}
+      {/* Indicadores */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <StatCard icon={ShoppingCart} label="Ventas" value={loading ? '—' : totals?.salesCount ?? 0} />
+        <StatCard icon={DollarSign} tone="green" label="Total vendido" value={loading ? '—' : `$${(totals?.totalSold ?? 0).toLocaleString()}`} />
+        <StatCard icon={TrendingUp} tone="blue" label="Ticket promedio" value={loading ? '—' : `$${(totals?.avgTicket ?? 0).toLocaleString()}`} />
+        <StatCard icon={Package} tone="gray" label="Productos vendidos" value={loading ? '—' : totals?.itemsSold ?? 0} />
       </div>
 
       {loading ? (
-        <div className="flex justify-center py-12 text-gray-400">
-          <Loader2 className="w-8 h-8 animate-spin" />
-        </div>
+        <Spinner label="Cargando reporte…" />
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {/* Por método */}
-          <div className="bg-white rounded-lg shadow-sm p-5">
-            <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
-              <DollarSign className="w-4 h-4 text-gray-400" /> Ventas por método
-            </h3>
+          <Card>
+            <CardTitle icon={DollarSign}>Ventas por método</CardTitle>
             {(stats?.byMethod.length ?? 0) === 0 ? (
               <p className="text-sm text-gray-400">Sin ventas en este periodo.</p>
             ) : (
@@ -149,13 +115,11 @@ export default function PosReports() {
                 ))}
               </div>
             )}
-          </div>
+          </Card>
 
           {/* Más vendidos */}
-          <div className="bg-white rounded-lg shadow-sm p-5">
-            <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
-              <Package className="w-4 h-4 text-gray-400" /> Más vendidos
-            </h3>
+          <Card>
+            <CardTitle icon={Package}>Más vendidos</CardTitle>
             {(stats?.topProducts.length ?? 0) === 0 ? (
               <p className="text-sm text-gray-400">Sin productos vendidos.</p>
             ) : (
@@ -169,32 +133,32 @@ export default function PosReports() {
                         <span className="font-medium text-gray-900 ml-2 whitespace-nowrap">{p.qty} u · ${p.total.toLocaleString()}</span>
                       </div>
                       <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden mt-1">
-                        <div className="h-full bg-indigo-500 rounded-full" style={{ width: `${(p.qty / maxProductQty) * 100}%` }} />
+                        <div className="h-full bg-app-500 rounded-full" style={{ width: `${(p.qty / maxProductQty) * 100}%` }} />
                       </div>
                     </div>
                   </div>
                 ))}
               </div>
             )}
-          </div>
+          </Card>
 
           {/* Por hora */}
-          <div className="bg-white rounded-lg shadow-sm p-5 lg:col-span-2">
-            <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
-              <BarChart3 className="w-4 h-4 text-gray-400" /> Ventas por hora
-            </h3>
-            {activeHours.length === 0 ? (
-              <p className="text-sm text-gray-400">Sin ventas en este periodo.</p>
-            ) : (
-              <div className="flex items-end gap-1.5 h-40">
-                {activeHours.map((h) => (
-                  <div key={h.hour} className="flex-1 flex flex-col items-center justify-end gap-1 group" title={`${h.hour}:00 — $${h.total.toLocaleString()} (${h.count})`}>
-                    <div className="w-full bg-indigo-500 rounded-t group-hover:bg-indigo-600 transition-colors" style={{ height: `${Math.max(4, (h.total / maxHourTotal) * 100)}%` }} />
-                    <span className="text-[10px] text-gray-400">{h.hour}h</span>
-                  </div>
-                ))}
-              </div>
-            )}
+          <div className="lg:col-span-2">
+            <Card>
+              <CardTitle icon={BarChart3}>Ventas por hora</CardTitle>
+              {activeHours.length === 0 ? (
+                <p className="text-sm text-gray-400">Sin ventas en este periodo.</p>
+              ) : (
+                <div className="flex items-end gap-1.5 h-40">
+                  {activeHours.map((h) => (
+                    <div key={h.hour} className="flex-1 h-full flex flex-col items-center justify-end gap-1 group" title={`${h.hour}:00 — $${h.total.toLocaleString()} (${h.count})`}>
+                      <div className="w-full bg-app-500 rounded-t group-hover:bg-app-600 transition-colors" style={{ height: `${Math.max(4, (h.total / maxHourTotal) * 100)}%` }} />
+                      <span className="text-[10px] text-gray-400">{h.hour}h</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Card>
           </div>
         </div>
       )}

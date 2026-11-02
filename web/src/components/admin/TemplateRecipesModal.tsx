@@ -1,11 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Modal } from '../shared/Modal';
-import { Button } from '../shared/Button';
 import { Package, AlertCircle, Check } from 'lucide-react';
 import * as variantsService from '../../services/variants.service';
 import { templateRecipesService } from '../../services/template-recipes.service';
 import { inputsService, type InputVariant } from '../../services/inputs.service';
-import { useToast } from '../../context/ToastContext';
+import { Button, toast } from '../ui';
 
 interface TemplateRecipesModalProps {
   isOpen: boolean;
@@ -29,7 +28,7 @@ export function TemplateRecipesModal({
   templateId,
   templateName,
 }: TemplateRecipesModalProps) {
-  const { showToast } = useToast();
+
   const [variants, setVariants] = useState<VariantWithRecipe[]>([]);
   const [inputVariants, setInputVariants] = useState<(InputVariant & { input: { id: number; code: string; name: string; unitOfMeasure: string; isActive: boolean } })[]>([]);
   const [loading, setLoading] = useState(true);
@@ -74,7 +73,7 @@ export function TemplateRecipesModal({
       setInputVariants(allInputVariants.filter((iv) => iv.input.isActive));
     } catch (error: any) {
       console.error('Error loading data:', error);
-      showToast('Error al cargar datos', 'error');
+      toast.error('Error al cargar datos');
     } finally {
       setLoading(false);
     }
@@ -85,7 +84,7 @@ export function TemplateRecipesModal({
       if (inputVariantId === null) {
         // Eliminar asociación
         await templateRecipesService.deleteRecipe(variantId);
-        showToast('Asociación eliminada', 'success');
+        toast.success('Asociación eliminada');
       } else {
         // Crear o actualizar asociación
         await templateRecipesService.createRecipe({
@@ -93,14 +92,14 @@ export function TemplateRecipesModal({
           inputVariantId,
           quantity: 1,
         });
-        showToast('Insumo asociado correctamente', 'success');
+        toast.success('Insumo asociado correctamente');
       }
 
       // Recargar datos
       await loadData();
     } catch (error: any) {
       console.error('Error assigning input:', error);
-      showToast('Error al asociar insumo', 'error');
+      toast.error('Error al asociar insumo');
     }
   };
 
@@ -161,7 +160,7 @@ export function TemplateRecipesModal({
                             const value = e.target.value ? parseInt(e.target.value) : null;
                             handleAssignInput(variant.variantId, value);
                           }}
-                          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-app-200 focus:border-app-500"
                         >
                           <option value="">Sin asociar</option>
                           {inputVariants.map((iv) => (
@@ -195,7 +194,7 @@ export function TemplateRecipesModal({
 
         {/* Actions */}
         <div className="flex justify-end gap-3 pt-4 border-t">
-          <Button variant="admin-secondary" onClick={onClose}>
+          <Button variant="secondary" onClick={onClose}>
             Cerrar
           </Button>
         </div>

@@ -14,7 +14,7 @@ export const SizeSelector = ({ sizes, selectedSize, onSizeChange, onShowSizeGuid
         <h3 className="text-sm font-semibold text-gray-900">Talla</h3>
         <button
           onClick={onShowSizeGuide}
-          className="flex items-center gap-1 text-xs text-purple-600 hover:text-purple-700 hover:underline transition-colors"
+          className="flex items-center gap-1 text-xs text-app-600 hover:text-app-700 hover:underline transition-colors"
         >
           <Info className="w-3.5 h-3.5" />
           Guía de tallas
@@ -30,8 +30,8 @@ export const SizeSelector = ({ sizes, selectedSize, onSizeChange, onShowSizeGuid
               px-4 py-2.5 rounded-lg border-2 font-semibold text-sm transition-all
               ${
                 selectedSize === size
-                  ? 'border-purple-600 bg-purple-50 text-purple-700'
-                  : 'border-gray-300 bg-white text-gray-700 hover:border-purple-300 hover:bg-purple-50/50'
+                  ? 'border-app-600 bg-app-50 text-app-700'
+                  : 'border-gray-300 bg-white text-gray-700 hover:border-app-300 hover:bg-app-50/50'
               }
             `}
           >

@@ -86,9 +86,9 @@ export const ProductSelector = ({
             <button
               key={type}
               onClick={() => onTypeChange(type)}
-              className={`flex flex-col items-center gap-2 p-4 rounded-lg border-2 transition-all hover:scale-105 ${
+              className={`flex flex-col items-center gap-2 p-4 rounded-lg border-2 transition-all ${
                 selectedType === type
-                  ? 'border-purple-600 bg-purple-50 text-purple-600'
+                  ? 'border-app-600 bg-app-50 text-app-600'
                   : 'border-gray-300 hover:border-gray-400 text-gray-700'
               }`}
             >

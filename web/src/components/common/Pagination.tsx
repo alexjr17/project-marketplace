@@ -1,4 +1,5 @@
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
+import { fieldClass } from '../ui';
 
 interface PaginationProps {
   currentPage: number;
@@ -60,96 +61,66 @@ export const Pagination = ({
     return null;
   }
 
+  const navBtn = 'w-9 h-9 inline-flex items-center justify-center rounded-lg text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors';
+
   return (
-    <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-8 p-4 bg-white rounded-xl shadow-md">
-      {/* Items info */}
-      <div className="text-sm text-gray-600">
-        Mostrando <span className="font-semibold text-gray-900">{startItem}</span> -{' '}
-        <span className="font-semibold text-gray-900">{endItem}</span> de{' '}
-        <span className="font-semibold text-gray-900">{totalItems}</span> productos
+    <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-6 px-4 py-3 bg-white rounded-xl border border-gray-200">
+      {/* Rango mostrado */}
+      <div className="text-sm text-gray-500">
+        <span className="font-medium text-gray-900">{startItem}</span>–<span className="font-medium text-gray-900">{endItem}</span> de{' '}
+        <span className="font-medium text-gray-900">{totalItems}</span> productos
       </div>
 
-      {/* Pagination controls */}
+      {/* Páginas */}
       <div className="flex items-center gap-1">
-        {/* First page */}
-        <button
-          onClick={() => onPageChange(1)}
-          disabled={currentPage === 1}
-          className="p-2 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          aria-label="Primera página"
-        >
+        <button type="button" onClick={() => onPageChange(1)} disabled={currentPage === 1} className={`${navBtn} hidden sm:inline-flex`} aria-label="Primera página" title="Primera página">
           <ChevronsLeft className="w-4 h-4" />
         </button>
-
-        {/* Previous page */}
-        <button
-          onClick={() => onPageChange(currentPage - 1)}
-          disabled={currentPage === 1}
-          className="p-2 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          aria-label="Página anterior"
-        >
+        <button type="button" onClick={() => onPageChange(currentPage - 1)} disabled={currentPage === 1} className={navBtn} aria-label="Página anterior" title="Página anterior">
           <ChevronLeft className="w-4 h-4" />
         </button>
 
-        {/* Page numbers */}
-        <div className="flex items-center gap-1 mx-2">
-          {getPageNumbers().map((page, index) =>
-            page === '...' ? (
-              <span key={`ellipsis-${index}`} className="px-2 text-gray-400">
-                ...
-              </span>
-            ) : (
-              <button
-                key={page}
-                onClick={() => onPageChange(page as number)}
-                className={`min-w-[36px] h-9 rounded-lg font-medium transition-colors ${
-                  currentPage === page
-                    ? 'bg-gray-800 text-white'
-                    : 'hover:bg-gray-100 text-gray-700'
-                }`}
-              >
-                {page}
-              </button>
-            )
-          )}
-        </div>
+        {getPageNumbers().map((page, index) =>
+          page === '...' ? (
+            <span key={`ellipsis-${index}`} className="px-1 text-gray-400">…</span>
+          ) : (
+            <button
+              type="button"
+              key={page}
+              onClick={() => onPageChange(page as number)}
+              aria-current={currentPage === page ? 'page' : undefined}
+              className={`min-w-[36px] h-9 px-2 rounded-lg text-sm font-medium transition-colors ${
+                currentPage === page ? 'bg-app-600 text-white' : 'text-gray-700 hover:bg-gray-100'
+              }`}
+            >
+              {page}
+            </button>
+          ),
+        )}
 
-        {/* Next page */}
-        <button
-          onClick={() => onPageChange(currentPage + 1)}
-          disabled={currentPage === totalPages}
-          className="p-2 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          aria-label="Página siguiente"
-        >
+        <button type="button" onClick={() => onPageChange(currentPage + 1)} disabled={currentPage === totalPages} className={navBtn} aria-label="Página siguiente" title="Página siguiente">
           <ChevronRight className="w-4 h-4" />
         </button>
-
-        {/* Last page */}
-        <button
-          onClick={() => onPageChange(totalPages)}
-          disabled={currentPage === totalPages}
-          className="p-2 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          aria-label="Última página"
-        >
+        <button type="button" onClick={() => onPageChange(totalPages)} disabled={currentPage === totalPages} className={`${navBtn} hidden sm:inline-flex`} aria-label="Última página" title="Última página">
           <ChevronsRight className="w-4 h-4" />
         </button>
       </div>
 
-      {/* Items per page selector */}
+      {/* Por página */}
       {onItemsPerPageChange && (
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-gray-600">Por página:</span>
+        <label className="flex items-center gap-2 text-sm text-gray-500">
+          Por página
           <select
             value={itemsPerPage}
             onChange={(e) => onItemsPerPageChange(Number(e.target.value))}
-            className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-gray-400 focus:border-transparent"
+            className={`${fieldClass()} h-9 w-20`}
           >
             <option value={8}>8</option>
             <option value={12}>12</option>
             <option value={16}>16</option>
             <option value={24}>24</option>
           </select>
-        </div>
+        </label>
       )}
     </div>
   );

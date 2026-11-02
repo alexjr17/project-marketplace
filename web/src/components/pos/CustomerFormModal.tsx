@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { X, UserPlus, Save } from 'lucide-react';
+import { Save } from 'lucide-react';
 import type { SelectedCustomer } from './CustomerSelect';
+import { Button, Dialog, Field, TextInput } from '../ui';
 
 interface Props {
   isOpen: boolean;
@@ -33,8 +34,6 @@ export default function CustomerFormModal({ isOpen, initial, onClose, onSave }: 
     setError('');
   }, [isOpen, initial]);
 
-  if (!isOpen) return null;
-
   const isEditing = !!initial?.id;
 
   const handleSave = () => {
@@ -51,97 +50,45 @@ export default function CustomerFormModal({ isOpen, initial, onClose, onSave }: 
     });
   };
 
+  const onEnter = (e: React.KeyboardEvent) => { if (e.key === 'Enter') handleSave(); };
+
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden">
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 bg-gradient-to-r from-blue-600 to-blue-700">
-          <div className="flex items-center gap-2.5">
-            <div className="bg-white/20 rounded-full p-2">
-              <UserPlus className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <h2 className="text-base font-bold text-white leading-tight">
-                {isEditing ? 'Editar cliente' : 'Registrar cliente'}
-              </h2>
-              <p className="text-white/80 text-xs">Datos completos para la venta</p>
-            </div>
-          </div>
-          <button onClick={onClose} className="p-1.5 hover:bg-white/20 rounded-lg transition-colors">
-            <X className="w-5 h-5 text-white" />
-          </button>
+    <Dialog
+      open={isOpen}
+      onClose={onClose}
+      size="sm"
+      title={isEditing ? 'Editar cliente' : 'Registrar cliente'}
+      description="Datos completos para la venta"
+      footer={
+        <>
+          <Button variant="secondary" size="lg" onClick={onClose}>Cancelar</Button>
+          <Button size="lg" icon={<Save className="w-4 h-4" />} onClick={handleSave}>{isEditing ? 'Guardar' : 'Registrar'}</Button>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        <Field label="Nombre" required error={error || undefined}>
+          <TextInput
+            autoFocus
+            value={name}
+            onChange={(e) => { setName(e.target.value); setError(''); }}
+            onKeyDown={onEnter}
+            placeholder="Nombre del cliente"
+            error={!!error}
+          />
+        </Field>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Cédula / NIT">
+            <TextInput value={cedula} onChange={(e) => setCedula(e.target.value)} onKeyDown={onEnter} placeholder="123456789" />
+          </Field>
+          <Field label="Teléfono">
+            <TextInput type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} onKeyDown={onEnter} placeholder="3001234567" />
+          </Field>
         </div>
-
-        {/* Form */}
-        <div className="p-5 space-y-3">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Nombre *</label>
-            <input
-              autoFocus
-              type="text"
-              value={name}
-              onChange={(e) => { setName(e.target.value); setError(''); }}
-              onKeyDown={(e) => e.key === 'Enter' && handleSave()}
-              placeholder="Nombre del cliente"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Cédula / NIT</label>
-              <input
-                type="text"
-                value={cedula}
-                onChange={(e) => setCedula(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleSave()}
-                placeholder="123456789"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Teléfono</label>
-              <input
-                type="tel"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleSave()}
-                placeholder="3001234567"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-            </div>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleSave()}
-              placeholder="cliente@email.com"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-          </div>
-
-          {error && <p className="text-xs text-red-600">{error}</p>}
-
-          <div className="flex gap-3 pt-2">
-            <button
-              onClick={onClose}
-              className="flex-1 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 text-sm font-medium transition-colors"
-            >
-              Cancelar
-            </button>
-            <button
-              onClick={handleSave}
-              className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium flex items-center justify-center gap-2 transition-colors"
-            >
-              <Save className="w-4 h-4" />
-              {isEditing ? 'Guardar' : 'Registrar'}
-            </button>
-          </div>
-        </div>
+        <Field label="Email">
+          <TextInput type="email" value={email} onChange={(e) => setEmail(e.target.value)} onKeyDown={onEnter} placeholder="cliente@email.com" />
+        </Field>
       </div>
-    </div>
+    </Dialog>
   );
 }

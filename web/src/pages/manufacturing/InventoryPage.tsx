@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Boxes, ChevronDown } from 'lucide-react';
-import toast from 'react-hot-toast';
+import { Boxes, ChevronDown, Shirt } from 'lucide-react';
+import toast from '../../lib/toast';
 import manufacturingService from '../../services/manufacturing.service';
 import type { MfgWarehouseStock, MfgWarehouse as MfgWh } from '../../types/manufacturing';
+import { Page, PageHeader, Card, StatCard, FilterBar, SearchInput, SelectInput, EmptyState, Spinner } from '../../components/ui';
+import QtyMatrix from '../../components/manufacturing/QtyMatrix';
+import { matchText } from '../../components/manufacturing/mfgUi';
 
 interface RefGroup {
   id: number;
@@ -20,6 +23,7 @@ export default function InventoryPage() {
   const [whId, setWhId] = useState<number | ''>('');
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
+  const [q, setQ] = useState('');
 
   const load = async () => {
     setLoading(true);
@@ -56,70 +60,52 @@ export default function InventoryPage() {
     });
   };
 
-  const colTotal = (ref: RefGroup, colorId: number) => ref.sizes.reduce((t, s) => t + (ref.cell[`${s.id}-${colorId}`] ?? 0), 0);
-  const rowTotal = (ref: RefGroup, sizeId: number) => ref.colors.reduce((t, c) => t + (ref.cell[`${sizeId}-${c.id}`] ?? 0), 0);
+
+  const shown = byReference.filter((r) => matchText(q, r.code, r.name));
+  const totalUnits = byReference.reduce((t, r) => t + r.total, 0);
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-orange-100 rounded-lg"><Boxes className="w-6 h-6 text-orange-600" /></div>
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Inventario</h1>
-            <p className="text-sm text-gray-500">Producto terminado por referencia. Haz clic en una referencia para ver su matriz de cantidades.</p>
-          </div>
-        </div>
-        <select value={whId} onChange={(e) => setWhId(e.target.value === '' ? '' : Number(e.target.value))} className="border border-gray-300 rounded-lg px-3 py-2 text-sm">
-          <option value="">Todas las bodegas</option>
-          {warehouses.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
-        </select>
+    <Page>
+      <PageHeader icon={Boxes} title="Inventario" subtitle="Producto terminado por referencia. Abre una referencia para ver su matriz talla × color." />
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <StatCard icon={Shirt} label="Referencias con stock" value={byReference.length.toLocaleString('es-CO')} />
+        <StatCard icon={Boxes} tone="green" label="Unidades" value={totalUnits.toLocaleString('es-CO')} hint={whId === '' ? 'Todas las bodegas' : warehouses.find((w) => w.id === whId)?.name} />
       </div>
 
-      {loading ? <div className="py-16 text-center text-gray-400">Cargando…</div>
-        : byReference.length === 0 ? <div className="py-16 text-center text-gray-400">Sin existencias. Se llenan al completar órdenes de producción.</div>
+      <FilterBar>
+        <SearchInput value={q} onChange={setQ} placeholder="Buscar referencia…" />
+        <SelectInput value={whId} onChange={(e) => setWhId(e.target.value === '' ? '' : Number(e.target.value))} aria-label="Bodega">
+          <option value="">Todas las bodegas</option>
+          {warehouses.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
+        </SelectInput>
+      </FilterBar>
+
+      {loading ? <Card><Spinner label="Cargando…" /></Card>
+        : byReference.length === 0 ? <Card><EmptyState icon={Boxes} title="Sin existencias" description="Se llenan al completar órdenes de producción." /></Card>
+        : shown.length === 0 ? <Card><EmptyState title="Sin resultados para la búsqueda" /></Card>
         : (
-          <div className="space-y-3">
-            {byReference.map((ref) => {
+          <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100 overflow-hidden">
+            {shown.map((ref) => {
               const open = expanded.has(ref.id);
               return (
-                <div key={ref.id} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-                  <button onClick={() => toggle(ref.id)} className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-50">
+                <div key={ref.id}>
+                  <button type="button" onClick={() => toggle(ref.id)} aria-expanded={open} className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-50">
                     <ChevronDown className={`w-5 h-5 text-gray-400 transition-transform flex-shrink-0 ${open ? 'rotate-180' : ''}`} />
                     <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-gray-900 truncate"><span className="font-mono text-gray-500">{ref.code}</span> {ref.name}</p>
+                      <p className="font-medium text-gray-900 truncate"><span className="font-mono text-gray-500 mr-1">{ref.code}</span>{ref.name}</p>
                       <p className="text-xs text-gray-500">{ref.sizes.length} talla{ref.sizes.length !== 1 ? 's' : ''} · {ref.colors.length} color{ref.colors.length !== 1 ? 'es' : ''}</p>
                     </div>
-                    <span className="text-sm text-gray-600 flex-shrink-0">Total: <b className="text-gray-900">{ref.total}</b> und</span>
+                    <span className="text-sm text-gray-500 flex-shrink-0 tabular-nums"><b className="text-gray-900">{ref.total.toLocaleString('es-CO')}</b> und</span>
                   </button>
-
                   {open && (
-                    <div className="border-t border-gray-100 p-4 overflow-x-auto">
-                      <table className="text-sm w-full">
-                        <thead><tr className="bg-gray-50">
-                          <th className="p-2 text-left text-gray-500 font-medium sticky left-0 bg-gray-50">Talla \ Color</th>
-                          {ref.colors.map((c) => (
-                            <th key={c.id} className="p-2 text-center font-medium text-gray-700 min-w-[72px]"><span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full border border-gray-200" style={{ backgroundColor: c.hex }} />{c.name}</span></th>
-                          ))}
-                          <th className="p-2 text-center font-medium text-gray-700">Total</th>
-                        </tr></thead>
-                        <tbody>
-                          {ref.sizes.map((s) => (
-                            <tr key={s.id} className="border-t border-gray-100">
-                              <td className="p-2 font-semibold text-gray-800 sticky left-0 bg-white">{s.abbr}</td>
-                              {ref.colors.map((c) => {
-                                const q = ref.cell[`${s.id}-${c.id}`] ?? 0;
-                                return <td key={c.id} className={`p-2 text-center ${q ? 'text-gray-700' : 'text-gray-300'}`}>{q || '—'}</td>;
-                              })}
-                              <td className="p-2 text-center font-semibold text-gray-800 bg-gray-50">{rowTotal(ref, s.id)}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                        <tfoot><tr className="border-t border-gray-200 bg-gray-50">
-                          <td className="p-2 text-left text-xs font-medium text-gray-600">Total</td>
-                          {ref.colors.map((c) => <td key={c.id} className="p-2 text-center text-sm font-semibold text-gray-800">{colTotal(ref, c.id)}</td>)}
-                          <td className="p-2 text-center text-sm font-bold text-gray-900">{ref.total}</td>
-                        </tr></tfoot>
-                      </table>
+                    <div className="px-4 pb-4">
+                      <QtyMatrix
+                        totals
+                        sizes={ref.sizes.map((s) => ({ id: s.id, label: s.abbr }))}
+                        colors={ref.colors.map((c) => ({ id: c.id, name: c.name, hex: c.hex }))}
+                        get={(sid, cid) => ref.cell[`${sid}-${cid}`] ?? 0}
+                      />
                     </div>
                   )}
                 </div>
@@ -127,6 +113,6 @@ export default function InventoryPage() {
             })}
           </div>
         )}
-    </div>
+    </Page>
   );
 }

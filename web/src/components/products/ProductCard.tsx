@@ -3,6 +3,7 @@ import { Star } from 'lucide-react';
 import { useCurrency } from '../../hooks/useCurrency';
 import type { Product } from '../../types/product';
 import { FavoriteButton } from './FavoriteButton';
+import { Badge } from '../ui';
 
 interface ProductCardProps {
   product: Product;
@@ -24,16 +25,20 @@ function sizedImage(url: string | undefined, w: number): string {
   return url + (url.includes('?') ? '&' : '?') + 'w=' + w;
 }
 
+/** Tarjeta de producto de la tienda: blanca, borde gris, imagen cuadrada y solo sombra al pasar. */
 export const ProductCard = ({ product, priority = false }: ProductCardProps) => {
   const { format } = useCurrency();
+  const inStock = (product.stock ?? 0) > 0;
+  const onSale = product.hasDiscount && product.salePrice != null;
+  const sizes = product.sizes.map((size) => (typeof size === 'string' ? size : size.abbreviation));
 
   return (
     <Link
       to={`/product/${product.id}`}
-      className="group bg-white rounded-xl hover:shadow-md transition-all duration-200 overflow-hidden flex flex-col"
+      className="group bg-white rounded-xl border border-gray-200 hover:shadow-md transition-shadow overflow-hidden flex flex-col focus:outline-none focus-visible:ring-2 focus-visible:ring-app-500"
     >
-      {/* Image */}
-      <div className="relative overflow-hidden aspect-square bg-gray-100">
+      {/* Imagen (proporción fija) */}
+      <div className="relative aspect-square bg-gray-100">
         <img
           src={sizedImage(product.images.front, 400)}
           alt={product.name}
@@ -43,107 +48,74 @@ export const ProductCard = ({ product, priority = false }: ProductCardProps) => 
           decoding="async"
           width={400}
           height={400}
-          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+          className={`w-full h-full object-cover ${inStock ? '' : 'opacity-60'}`}
         />
-        {product.featured && (
-          <span className="absolute top-2 left-2 bg-gray-900 text-white text-[10px] font-bold px-2 py-0.5 rounded">
-            DESTACADO
-          </span>
-        )}
-        {/* Disponibilidad (un solo lugar: sobre la imagen) */}
-        {(product.stock ?? 0) > 0 ? (
-          <span className="absolute top-2 right-2 bg-green-600 text-white text-[10px] font-bold px-2 py-0.5 rounded">
-            {product.stock} disp.
-          </span>
-        ) : (
-          <span className="absolute top-2 right-2 bg-red-600 text-white text-[10px] font-bold px-2 py-0.5 rounded">
-            AGOTADO
-          </span>
-        )}
+        <div className="absolute top-2 left-2 flex flex-col items-start gap-1">
+          {onSale && (
+            <Badge tone="green" className="shadow-sm">
+              {product.discountType === 'percent' && product.discountValue ? `-${Math.round(product.discountValue)}%` : 'Oferta'}
+            </Badge>
+          )}
+          {product.featured && <Badge tone="app" className="shadow-sm">Destacado</Badge>}
+          {!inStock && <Badge tone="red" className="shadow-sm">Agotado</Badge>}
+        </div>
         <FavoriteButton
           productId={Number(product.id)}
-          size={18}
-          className="absolute bottom-2 right-2 w-8 h-8 bg-white/90 hover:bg-white shadow-sm"
+          size={16}
+          className="absolute top-2 right-2 w-8 h-8 bg-white/95 hover:bg-white border border-gray-200"
         />
       </div>
 
-      {/* Info */}
-      <div className="p-3 flex flex-col gap-1">
-        {/* Categoría */}
-        <span className="text-xs text-gray-500 uppercase">
+      {/* Datos */}
+      <div className="p-3 sm:p-4 flex flex-col gap-1.5 flex-1">
+        <span className="text-[11px] font-medium tracking-wide text-gray-500 uppercase truncate">
           {categoryLabels[product.category] || product.category}
         </span>
 
-        {/* Nombre */}
-        <h3 className="font-semibold text-gray-900 text-sm line-clamp-2">
+        <h3 className="font-medium text-gray-900 text-sm leading-snug line-clamp-2 min-h-[2.5rem]">
           {product.name}
         </h3>
 
-        {/* Rating */}
-        <div className="flex items-center gap-1">
-          <div className="flex gap-0.5">
-            {Array.from({ length: 5 }).map((_, index) => (
-              <Star
-                key={index}
-                className={`w-3 h-3 ${
-                  index < Math.round(product.rating || 0)
-                    ? 'fill-yellow-400 text-yellow-400'
-                    : 'fill-gray-200 text-gray-200'
-                }`}
-              />
-            ))}
-          </div>
-          <span className="text-xs text-gray-500">
-            ({product.reviewsCount || 0})
-          </span>
+        <div className="flex items-center gap-1 text-xs text-gray-500">
+          <Star className={`w-3.5 h-3.5 ${(product.rating || 0) > 0 ? 'fill-amber-400 text-amber-400' : 'fill-gray-200 text-gray-200'}`} />
+          <span className="font-medium text-gray-700">{Number(product.rating || 0).toFixed(1)}</span>
+          <span>({product.reviewsCount || 0})</span>
+          {inStock && <span className="ml-auto text-green-700 whitespace-nowrap">{product.stock} disp.</span>}
         </div>
 
-        {/* Colores */}
-        <div className="flex items-center gap-1">
-          {product.colors.slice(0, 4).map((color, idx) => (
-            <div
-              key={idx}
-              className="w-4 h-4 rounded-full border border-gray-200"
-              style={{ backgroundColor: color.hexCode }}
-              title={color.name}
-            />
-          ))}
-          {product.colors.length > 4 && (
-            <span className="text-xs text-gray-400">+{product.colors.length - 4}</span>
-          )}
-        </div>
-
-        {/* Tallas */}
-        <div className="flex items-center gap-1 flex-wrap">
-          {product.sizes.slice(0, 5).map((size, idx) => {
-            const sizeValue = typeof size === 'string' ? size : size.abbreviation;
-            return (
-              <span key={idx} className="text-xs text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">
-                {sizeValue}
+        {(product.colors.length > 0 || sizes.length > 0) && (
+          <div className="flex items-center gap-2 min-w-0">
+            {product.colors.length > 0 && (
+              <div className="flex items-center -space-x-1 flex-shrink-0">
+                {product.colors.slice(0, 4).map((color, idx) => (
+                  <span
+                    key={idx}
+                    className="w-4 h-4 rounded-full border-2 border-white ring-1 ring-gray-200"
+                    style={{ backgroundColor: color.hexCode }}
+                    title={color.name}
+                  />
+                ))}
+              </div>
+            )}
+            {product.colors.length > 4 && <span className="text-xs text-gray-400">+{product.colors.length - 4}</span>}
+            {sizes.length > 0 && (
+              <span className="text-xs text-gray-400 truncate">
+                {sizes.slice(0, 5).join(' · ')}{sizes.length > 5 ? ` +${sizes.length - 5}` : ''}
               </span>
-            );
-          })}
-          {product.sizes.length > 5 && (
-            <span className="text-xs text-gray-400">+{product.sizes.length - 5}</span>
+            )}
+          </div>
+        )}
+
+        <div className="mt-auto pt-1 flex items-baseline gap-2 flex-wrap">
+          {onSale ? (
+            <>
+              <span className="text-base font-semibold text-gray-900">{format(product.salePrice!)}</span>
+              <span className="text-xs text-gray-400 line-through">{format(product.basePrice)}</span>
+            </>
+          ) : (
+            <span className="text-base font-semibold text-gray-900">{format(product.basePrice)}</span>
           )}
         </div>
-
-        {/* Precio (con oferta si aplica) */}
-        {product.hasDiscount && product.salePrice != null ? (
-          <div className="flex items-baseline gap-2 mt-1 flex-wrap">
-            <span className="text-base font-bold text-emerald-600">{format(product.salePrice)}</span>
-            <span className="text-xs text-gray-400 line-through">{format(product.basePrice)}</span>
-            <span className="bg-emerald-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded">
-              {product.discountType === 'percent' && product.discountValue
-                ? `-${Math.round(product.discountValue)}%`
-                : 'OFERTA'}
-            </span>
-          </div>
-        ) : (
-          <span className="text-base font-bold text-gray-900 mt-1">
-            {format(product.basePrice)}
-          </span>
-        )}
       </div>
     </Link>
   );

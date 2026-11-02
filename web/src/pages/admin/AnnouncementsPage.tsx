@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Megaphone, Plus, Pencil, Trash2, Loader2, X } from 'lucide-react';
+import { Eye, Megaphone, Pencil, Plus, Trash2 } from 'lucide-react';
 import { useToast } from '../../context/ToastContext';
-import { Button } from '../../components/shared/Button';
 import {
   listAnnouncements,
   createAnnouncement,
@@ -10,6 +9,11 @@ import {
   type Announcement,
   type AnnouncementInput,
 } from '../../services/announcements.service';
+import {
+  Page, PageHeader, Button, IconButton, StatCard, Dialog, Field, FormGrid, TextInput, TextArea, NumberInput,
+  SelectInput, ColorInput, Switch, ImageInput, Alert, TableCard, Table, THead, TBody, Th, Tr, Td, Badge,
+  EmptyState, Spinner, Thumb, useConfirm,
+} from '../../components/ui';
 
 const TYPE_LABELS: Record<string, string> = {
   bar: 'Barra (alert)',
@@ -22,6 +26,8 @@ const TYPE_LABELS: Record<string, string> = {
 const VARIANT_LABELS: Record<string, string> = {
   info: 'Info (azul)', promo: 'Promo (degradado)', warning: 'Alerta (ámbar)', success: 'Éxito (verde)', dark: 'Oscuro',
 };
+const TARGET_LABELS: Record<string, string> = { all: 'Toda la web', home: 'Solo inicio', catalog: 'Solo catálogo' };
+const FREQ_LABELS: Record<string, string> = { always: 'Siempre', session: '1 vez por sesión', daily: '1 vez por día' };
 
 const EMPTY: AnnouncementInput = {
   type: 'bar',
@@ -53,8 +59,10 @@ function toLocalInput(v?: string | null) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+/** Anuncios de la tienda: barras, popups, marquesinas, flotantes, cuentas regresivas y notificaciones. */
 export default function AnnouncementsPage() {
   const { showToast } = useToast();
+  const confirm = useConfirm();
   const [items, setItems] = useState<Announcement[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<Announcement | 'new' | null>(null);
@@ -74,14 +82,6 @@ export default function AnnouncementsPage() {
   };
 
   const set = <K extends keyof AnnouncementInput>(k: K, v: AnnouncementInput[K]) => setForm((p) => ({ ...p, [k]: v }));
-
-  const onImage = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0];
-    if (!f) return;
-    const reader = new FileReader();
-    reader.onload = () => set('imageUrl', String(reader.result || ''));
-    reader.readAsDataURL(f);
-  };
 
   const save = async () => {
     if (!form.title && !form.message && !form.imageUrl) {
@@ -109,7 +109,7 @@ export default function AnnouncementsPage() {
   };
 
   const remove = async (a: Announcement) => {
-    if (!window.confirm('¿Eliminar este anuncio?')) return;
+    if (!(await confirm({ title: '¿Eliminar este anuncio?', message: a.title ? `"${a.title}" dejará de mostrarse en la tienda.` : 'Dejará de mostrarse en la tienda.', tone: 'danger' }))) return;
     try {
       await deleteAnnouncement(a.id);
       showToast('Anuncio eliminado', 'success');
@@ -128,206 +128,169 @@ export default function AnnouncementsPage() {
     }
   };
 
+  const active = items.filter((a) => a.isActive).length;
+  const withImage = ['popup', 'floating', 'toast'].includes(form.type);
+
   return (
-    <div className="p-6 max-w-5xl mx-auto">
-      <div className="flex items-center justify-between gap-4 mb-6">
-        <div className="flex items-center gap-3">
-          <div className="p-3 bg-pink-100 rounded-xl"><Megaphone className="w-7 h-7 text-pink-600" /></div>
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Publicidad / Anuncios</h1>
-            <p className="text-gray-600 text-sm mt-0.5">Barras, popups, marquesinas y tarjetas flotantes en la tienda</p>
-          </div>
+    <Page>
+      <PageHeader
+        icon={Megaphone}
+        title="Anuncios"
+        subtitle="Barras, popups, marquesinas y tarjetas flotantes en la tienda"
+        actions={<Button icon={<Plus className="w-4 h-4" />} onClick={openNew}>Nuevo anuncio</Button>}
+      />
+
+      {loading ? <Spinner label="Cargando anuncios…" /> : items.length === 0 ? (
+        <div className="bg-white rounded-xl border border-gray-200">
+          <EmptyState icon={Megaphone} title="Aún no hay anuncios" description="Crea una barra, un popup o una cuenta regresiva para destacar promociones en la tienda."
+            action={<Button icon={<Plus className="w-4 h-4" />} onClick={openNew}>Nuevo anuncio</Button>} />
         </div>
-        <Button variant="admin-primary" onClick={openNew}><Plus className="w-4 h-4 mr-1" /> Nuevo anuncio</Button>
-      </div>
-
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-        {loading ? (
-          <div className="flex justify-center py-16 text-gray-400"><Loader2 className="w-8 h-8 animate-spin" /></div>
-        ) : items.length === 0 ? (
-          <div className="p-12 text-center text-gray-500">
-            <Megaphone className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-            Aún no hay anuncios. Crea el primero con “Nuevo anuncio”.
+      ) : (
+        <>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <StatCard icon={Megaphone} label="Anuncios" value={items.length} />
+            <StatCard icon={Eye} tone="green" label="Activos" value={active} hint={`${items.length - active} inactivos`} />
           </div>
-        ) : (
-          <table className="min-w-full divide-y divide-gray-200 text-sm">
-            <thead className="bg-gray-50 text-xs text-gray-500 uppercase">
-              <tr>
-                <th className="px-4 py-3 text-left">Tipo</th>
-                <th className="px-4 py-3 text-left">Título / Mensaje</th>
-                <th className="px-4 py-3 text-left">Dónde</th>
-                <th className="px-4 py-3 text-center">Activo</th>
-                <th className="px-4 py-3 text-right">Acciones</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {items.map((a) => (
-                <tr key={a.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-3"><span className="px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 text-xs font-medium">{TYPE_LABELS[a.type] || a.type}</span></td>
-                  <td className="px-4 py-3">
-                    <p className="font-medium text-gray-900 truncate max-w-xs">{a.title || '—'}</p>
-                    <p className="text-gray-500 truncate max-w-xs">{a.message}</p>
-                    {a.couponCode && <span className="text-xs text-pink-600 font-semibold">Cupón: {a.couponCode}</span>}
-                  </td>
-                  <td className="px-4 py-3 text-gray-600 capitalize">{a.target}</td>
-                  <td className="px-4 py-3 text-center">
-                    <button onClick={() => toggleActive(a)} className={`px-2 py-0.5 rounded-full text-xs font-semibold ${a.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
-                      {a.isActive ? 'Sí' : 'No'}
-                    </button>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex justify-end gap-1">
-                      <button onClick={() => openEdit(a)} className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded"><Pencil className="w-4 h-4" /></button>
-                      <button onClick={() => remove(a)} className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded"><Trash2 className="w-4 h-4" /></button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
 
-      {/* Formulario */}
-      {editing && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/50" onClick={() => setEditing(null)} />
-          <div className="relative bg-white rounded-xl shadow-2xl max-w-lg w-full max-h-[92vh] flex flex-col overflow-hidden">
-            <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-gray-900">{editing === 'new' ? 'Nuevo anuncio' : 'Editar anuncio'}</h2>
-              <button onClick={() => setEditing(null)} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button>
-            </div>
-
-            <div className="p-5 space-y-3 overflow-y-auto">
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="Tipo">
-                  <select value={form.type} onChange={(e) => set('type', e.target.value as AnnouncementInput['type'])} className="sel">
-                    {Object.entries(TYPE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                  </select>
-                </Field>
-                <Field label="Estilo (preset)">
-                  <select value={form.variant} onChange={(e) => set('variant', e.target.value as AnnouncementInput['variant'])} className="sel">
-                    {Object.entries(VARIANT_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                  </select>
-                </Field>
-              </div>
-
-              <Field label="Color propio (opcional — vacío usa el preset/marca)">
-                <div className="flex items-center gap-3">
-                  <label className="flex items-center gap-1.5 text-xs text-gray-600">
-                    Fondo
-                    <input type="color" value={form.bgColor || '#7c3aed'} onChange={(e) => set('bgColor', e.target.value)} className="w-9 h-8 rounded border cursor-pointer" />
-                  </label>
-                  <label className="flex items-center gap-1.5 text-xs text-gray-600">
-                    Texto
-                    <input type="color" value={form.textColor || '#ffffff'} onChange={(e) => set('textColor', e.target.value)} className="w-9 h-8 rounded border cursor-pointer" />
-                  </label>
-                  {(form.bgColor || form.textColor) && (
-                    <button type="button" onClick={() => { set('bgColor', ''); set('textColor', ''); }} className="text-xs text-gray-500 hover:text-red-600 underline">
-                      Quitar (usar marca)
-                    </button>
-                  )}
-                </div>
-              </Field>
-
-              <Field label="Título">
-                <input value={form.title || ''} onChange={(e) => set('title', e.target.value)} placeholder="Ej: ¡Envío gratis hoy!" className="inp" />
-              </Field>
-              <Field label="Mensaje">
-                <textarea value={form.message || ''} onChange={(e) => set('message', e.target.value)} rows={2} placeholder="Texto del anuncio" className="inp" />
-              </Field>
-
-              {form.type === 'popup' && (
-                <div className="grid grid-cols-2 gap-3">
-                  <Field label="Diseño del popup">
-                    <select value={form.layout || 'standard'} onChange={(e) => set('layout', e.target.value as AnnouncementInput['layout'])} className="sel">
-                      <option value="standard">Estándar (imagen + texto)</option>
-                      <option value="image">Solo imagen (botón encima)</option>
-                      <option value="overlay">Imagen con texto encima</option>
-                    </select>
-                  </Field>
-                  <Field label="Tamaño del modal">
-                    <select value={form.size || 'md'} onChange={(e) => set('size', e.target.value as AnnouncementInput['size'])} className="sel">
-                      <option value="sm">Pequeño</option>
-                      <option value="md">Mediano</option>
-                      <option value="lg">Grande</option>
-                      <option value="xl">Extra grande</option>
-                    </select>
-                  </Field>
-                </div>
-              )}
-
-              {form.type === 'countdown' && (
-                <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-                  ⏳ La fecha <b>«Hasta»</b> (más abajo) se usa como meta del contador. Cuando llega a 0, el anuncio deja de mostrarse.
-                </p>
-              )}
-
-              {['popup', 'floating', 'toast'].includes(form.type) && (
-                <Field label="Imagen (opcional)">
-                  <div className="flex items-center gap-2">
-                    <input type="file" accept="image/*" onChange={onImage} className="text-sm file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-blue-50 file:text-blue-700" />
-                    {form.imageUrl && <img src={form.imageUrl} alt="" className="w-10 h-10 object-cover rounded border" />}
-                  </div>
-                </Field>
-              )}
-
-              <div className="grid grid-cols-3 gap-3">
-                <Field label="Texto del botón"><input value={form.ctaText || ''} onChange={(e) => set('ctaText', e.target.value)} placeholder="Ver ofertas" className="inp" /></Field>
-                <Field label="Enlace del botón"><input value={form.ctaUrl || ''} onChange={(e) => set('ctaUrl', e.target.value)} placeholder="/catalog o https://" className="inp" /></Field>
-                <Field label="Cupón (opcional)"><input value={form.couponCode || ''} onChange={(e) => set('couponCode', e.target.value)} placeholder="BIENVENIDA10" className="inp" /></Field>
-              </div>
-
-              <div className="grid grid-cols-3 gap-3">
-                <Field label="Dónde mostrar">
-                  <select value={form.target} onChange={(e) => set('target', e.target.value as AnnouncementInput['target'])} className="sel">
-                    <option value="all">Toda la web</option>
-                    <option value="home">Solo inicio</option>
-                    <option value="catalog">Solo catálogo</option>
-                  </select>
-                </Field>
-                <Field label="Frecuencia">
-                  <select value={form.frequency} onChange={(e) => set('frequency', e.target.value as AnnouncementInput['frequency'])} className="sel">
-                    <option value="always">Siempre</option>
-                    <option value="session">1 vez por sesión</option>
-                    <option value="daily">1 vez por día</option>
-                  </select>
-                </Field>
-                <Field label="Prioridad"><input type="number" value={form.priority} onChange={(e) => set('priority', Number(e.target.value))} className="inp" /></Field>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="Desde (opcional)"><input type="datetime-local" value={toLocalInput(form.startsAt)} onChange={(e) => set('startsAt', e.target.value || null)} className="inp" /></Field>
-                <Field label="Hasta (opcional)"><input type="datetime-local" value={toLocalInput(form.endsAt)} onChange={(e) => set('endsAt', e.target.value || null)} className="inp" /></Field>
-              </div>
-
-              <div className="flex items-center gap-6">
-                <label className="flex items-center gap-2 text-sm text-gray-700"><input type="checkbox" checked={form.isActive} onChange={(e) => set('isActive', e.target.checked)} /> Activo</label>
-                <label className="flex items-center gap-2 text-sm text-gray-700"><input type="checkbox" checked={form.dismissible} onChange={(e) => set('dismissible', e.target.checked)} /> Se puede cerrar (✕)</label>
-              </div>
-            </div>
-
-            <div className="px-5 py-4 border-t border-gray-200 flex justify-end gap-3">
-              <Button variant="admin-secondary" onClick={() => setEditing(null)} disabled={saving}>Cancelar</Button>
-              <Button variant="admin-primary" onClick={save} isLoading={saving}>Guardar</Button>
-            </div>
-          </div>
-        </div>
+          <TableCard>
+            <Table>
+              <THead>
+                <tr><Th>Anuncio</Th><Th>Tipo</Th><Th>Dónde</Th><Th align="right">Prioridad</Th><Th align="center">Activo</Th><Th align="right">Acciones</Th></tr>
+              </THead>
+              <TBody>
+                {items.map((a) => (
+                  <Tr key={a.id}>
+                    <Td>
+                      <span className="flex items-center gap-3">
+                        {a.imageUrl && <Thumb src={a.imageUrl} size="sm" />}
+                        <span className="min-w-0">
+                          <span className="block font-medium text-gray-900 truncate max-w-xs">{a.title || '—'}</span>
+                          {a.message && <span className="block text-gray-500 truncate max-w-xs">{a.message}</span>}
+                          {a.couponCode && <span className="block text-xs text-gray-500">Cupón: <span className="font-mono font-semibold text-gray-700">{a.couponCode}</span></span>}
+                        </span>
+                      </span>
+                    </Td>
+                    <Td><Badge tone="gray">{TYPE_LABELS[a.type] || a.type}</Badge></Td>
+                    <Td>{TARGET_LABELS[a.target] || a.target}<span className="block text-xs text-gray-500">{FREQ_LABELS[a.frequency] || a.frequency}</span></Td>
+                    <Td align="right">{a.priority ?? 0}</Td>
+                    <Td align="center"><span className="inline-flex"><Switch checked={a.isActive} onChange={() => toggleActive(a)} /></span></Td>
+                    <Td align="right" className="whitespace-nowrap">
+                      <IconButton title="Editar" tone="app" onClick={() => openEdit(a)}><Pencil className="w-4 h-4" /></IconButton>
+                      <IconButton title="Eliminar" tone="danger" onClick={() => remove(a)}><Trash2 className="w-4 h-4" /></IconButton>
+                    </Td>
+                  </Tr>
+                ))}
+              </TBody>
+            </Table>
+          </TableCard>
+        </>
       )}
 
-      <style>{`
-        .inp { width:100%; padding:.5rem .75rem; border:1px solid #d1d5db; border-radius:.5rem; font-size:.875rem; }
-        .sel { width:100%; padding:.5rem .5rem; border:1px solid #d1d5db; border-radius:.5rem; font-size:.875rem; background:#fff; }
-      `}</style>
-    </div>
-  );
-}
+      <Dialog
+        open={!!editing}
+        onClose={() => setEditing(null)}
+        size="lg"
+        title={editing === 'new' ? 'Nuevo anuncio' : 'Editar anuncio'}
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setEditing(null)} disabled={saving}>Cancelar</Button>
+            <Button onClick={save} isLoading={saving}>Guardar</Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <FormGrid>
+            <Field label="Tipo">
+              <SelectInput value={form.type} onChange={(e) => set('type', e.target.value as AnnouncementInput['type'])}>
+                {Object.entries(TYPE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+              </SelectInput>
+            </Field>
+            <Field label="Estilo">
+              <SelectInput value={form.variant} onChange={(e) => set('variant', e.target.value as AnnouncementInput['variant'])}>
+                {Object.entries(VARIANT_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+              </SelectInput>
+            </Field>
+          </FormGrid>
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <label className="block text-xs font-medium text-gray-600 mb-1">{label}</label>
-      {children}
-    </div>
+          <Field label="Título">
+            <TextInput value={form.title || ''} onChange={(e) => set('title', e.target.value)} placeholder="Ej: ¡Envío gratis hoy!" />
+          </Field>
+          <Field label="Mensaje">
+            <TextArea value={form.message || ''} onChange={(e) => set('message', e.target.value)} rows={2} placeholder="Texto del anuncio" />
+          </Field>
+
+          {form.type === 'popup' && (
+            <FormGrid>
+              <Field label="Diseño del popup">
+                <SelectInput value={form.layout || 'standard'} onChange={(e) => set('layout', e.target.value as AnnouncementInput['layout'])}>
+                  <option value="standard">Estándar (imagen + texto)</option>
+                  <option value="image">Solo imagen (botón encima)</option>
+                  <option value="overlay">Imagen con texto encima</option>
+                </SelectInput>
+              </Field>
+              <Field label="Tamaño del modal">
+                <SelectInput value={form.size || 'md'} onChange={(e) => set('size', e.target.value as AnnouncementInput['size'])}>
+                  <option value="sm">Pequeño</option>
+                  <option value="md">Mediano</option>
+                  <option value="lg">Grande</option>
+                  <option value="xl">Extra grande</option>
+                </SelectInput>
+              </Field>
+            </FormGrid>
+          )}
+
+          {form.type === 'countdown' && (
+            <Alert tone="warning">La fecha <b>«Hasta»</b> se usa como meta del contador. Cuando llega a 0, el anuncio deja de mostrarse.</Alert>
+          )}
+
+          {withImage && (
+            <Field label="Imagen" hint="Opcional.">
+              <ImageInput value={form.imageUrl} onChange={(v) => set('imageUrl', v)} ratio="landscape" />
+            </Field>
+          )}
+
+          <FormGrid cols={3}>
+            <Field label="Texto del botón"><TextInput value={form.ctaText || ''} onChange={(e) => set('ctaText', e.target.value)} placeholder="Ver ofertas" /></Field>
+            <Field label="Enlace del botón"><TextInput value={form.ctaUrl || ''} onChange={(e) => set('ctaUrl', e.target.value)} placeholder="/catalog o https://" /></Field>
+            <Field label="Cupón"><TextInput value={form.couponCode || ''} onChange={(e) => set('couponCode', e.target.value)} placeholder="BIENVENIDA10" className="font-mono" /></Field>
+          </FormGrid>
+
+          <FormGrid>
+            <Field label="Color de fondo" hint="Vacío: usa el estilo elegido o el color de marca.">
+              <ColorInput value={form.bgColor || ''} onChange={(v) => set('bgColor', v)} />
+            </Field>
+            <Field label="Color del texto" hint={(form.bgColor || form.textColor)
+              ? <button type="button" onClick={() => { set('bgColor', ''); set('textColor', ''); }} className="text-app-700 hover:underline">Quitar colores propios</button>
+              : 'Vacío: blanco o el del estilo.'}>
+              <ColorInput value={form.textColor || ''} onChange={(v) => set('textColor', v)} />
+            </Field>
+          </FormGrid>
+
+          <FormGrid cols={3}>
+            <Field label="Dónde mostrar">
+              <SelectInput value={form.target} onChange={(e) => set('target', e.target.value as AnnouncementInput['target'])}>
+                {Object.entries(TARGET_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+              </SelectInput>
+            </Field>
+            <Field label="Frecuencia">
+              <SelectInput value={form.frequency} onChange={(e) => set('frequency', e.target.value as AnnouncementInput['frequency'])}>
+                {Object.entries(FREQ_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+              </SelectInput>
+            </Field>
+            <Field label="Prioridad" hint="Mayor se muestra primero."><NumberInput value={form.priority} onChange={(e) => set('priority', Number(e.target.value))} /></Field>
+          </FormGrid>
+
+          <FormGrid>
+            <Field label="Desde" hint="Opcional"><TextInput type="datetime-local" value={toLocalInput(form.startsAt)} onChange={(e) => set('startsAt', e.target.value || null)} /></Field>
+            <Field label="Hasta" hint={form.type === 'countdown' ? 'Meta del contador' : 'Opcional'}><TextInput type="datetime-local" value={toLocalInput(form.endsAt)} onChange={(e) => set('endsAt', e.target.value || null)} /></Field>
+          </FormGrid>
+
+          <div className="space-y-3 pt-1">
+            <Switch checked={form.isActive} onChange={(v) => set('isActive', v)} label="Activo" description="Solo los anuncios activos se muestran en la tienda." />
+            <Switch checked={form.dismissible} onChange={(v) => set('dismissible', v)} label="Se puede cerrar" description="Muestra la ✕ para que el cliente lo oculte." />
+          </div>
+        </div>
+      </Dialog>
+    </Page>
   );
 }

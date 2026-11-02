@@ -1,17 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import {
-  FileText,
-  Inbox,
-  LogOut,
-  MessageSquare,
-  Plug,
-  Share2,
-  Sparkles,
-} from 'lucide-react';
+import { ChevronDown, FileText, Inbox, LogOut, MessageSquare, Plug, Share2, Sparkles, User } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useSettings } from '../../context/SettingsContext';
 import AppSwitcher from '../common/AppSwitcher';
+import { Avatar } from '../ui/Media';
 import type { Permission } from '../../types/roles';
 
 const TABS: { path: string; label: string; icon: typeof Inbox; permission: Permission }[] = [
@@ -27,115 +20,112 @@ interface MessagingLayoutProps {
 }
 
 /**
- * Layout propio de la app "Mensajería" — vive en /messaging/*.
- * No comparte el sidebar pesado de admin: barra superior con AppSwitcher,
- * marca y perfil, y debajo el contenido a pantalla completa.
+ * Armazón de la app Social Media (/messaging/*): barra superior con la marca de la app,
+ * los módulos (según permisos), el selector de app y el menú del usuario.
+ * En celular los módulos bajan a una segunda fila. El contenido ocupa el resto de la
+ * altura: la bandeja usa toda la pantalla y las demás pantallas van en <Page>.
  */
 export default function MessagingLayout({ children }: MessagingLayoutProps) {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, logout, hasPermission } = useAuth();
+  const { user, role, logout, hasPermission } = useAuth();
   const { settings } = useSettings();
   const [profileOpen, setProfileOpen] = useState(false);
 
+  useEffect(() => { setProfileOpen(false); }, [location.pathname]);
+
   const isTabActive = (path: string) => location.pathname.startsWith(path);
-
-  // Solo las pestañas (módulos) a las que el rol tiene permiso
+  // Solo los módulos a los que el rol tiene permiso
   const visibleTabs = TABS.filter((t) => hasPermission(t.permission));
-
-  const brandColors = settings.appearance?.brandColors || settings.general.brandColors || {
-    primary: '#7c3aed',
-    secondary: '#ec4899',
-    accent: '#f59e0b',
-  };
-  const gradient = `linear-gradient(135deg, ${brandColors.primary}, ${brandColors.secondary})`;
+  const siteName = settings.general?.siteName || 'Mi tienda';
 
   const handleLogout = () => {
     logout();
     navigate('/');
   };
 
+  const tabLink = (tab: (typeof TABS)[number], mobile: boolean) => {
+    const active = isTabActive(tab.path);
+    const Icon = tab.icon;
+    return (
+      <Link
+        key={tab.path}
+        to={tab.path}
+        aria-current={active ? 'page' : undefined}
+        className={
+          mobile
+            ? `flex-1 min-w-[4.5rem] flex flex-col items-center justify-center gap-0.5 h-14 text-[11px] font-medium border-b-2 transition-colors ${
+                active ? 'border-app-600 text-app-700' : 'border-transparent text-gray-500 hover:text-gray-900'
+              }`
+            : `flex items-center gap-2 h-10 px-3 rounded-lg text-sm font-medium transition-colors ${
+                active ? 'bg-app-50 text-app-700' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+              }`
+        }
+      >
+        <Icon className={`${mobile ? 'w-5 h-5' : 'w-[18px] h-[18px]'} ${active ? 'text-app-600' : 'text-gray-400'}`} />
+        <span className="whitespace-nowrap">{tab.label}</span>
+      </Link>
+    );
+  };
+
   return (
-    <div className="min-h-screen flex flex-col bg-gray-100">
-      {/* Topbar */}
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-30">
-        <div className="flex items-center justify-between px-4 py-2.5">
-          <div className="flex items-center gap-3 min-w-0">
-            <AppSwitcher />
-            <div className="hidden sm:flex items-center gap-2 pl-2 border-l border-gray-200">
-              <div
-                className="w-8 h-8 rounded-lg flex items-center justify-center text-white"
-                style={{ background: gradient }}
-              >
-                <MessageSquare className="w-4 h-4" />
-              </div>
-              <div className="leading-tight">
-                <p className="text-sm font-semibold text-gray-900">Social Media</p>
-              </div>
-            </div>
+    <div className="h-screen flex flex-col overflow-hidden bg-gray-50">
+      {/* Barra superior */}
+      <header className="flex-shrink-0 bg-white border-b border-gray-200">
+        <div className="flex h-16 items-center gap-3 px-3 md:px-4">
+          <Link to="/messaging" className="flex items-center gap-2.5 min-w-0 flex-shrink-0">
+            {settings.general?.logo
+              ? <img src={settings.general.logo} alt="" className="w-9 h-9 rounded-lg object-contain flex-shrink-0" />
+              : <span className="w-9 h-9 rounded-lg bg-app-600 text-white flex items-center justify-center flex-shrink-0"><MessageSquare className="w-5 h-5" /></span>}
+            <span className="hidden sm:block min-w-0">
+              <span className="block truncate text-sm font-semibold text-gray-900 max-w-[10rem]">{siteName}</span>
+              <span className="block text-xs text-gray-500">Social Media</span>
+            </span>
+          </Link>
 
-            {/* Tabs internos */}
-            <nav className="flex items-center gap-1 ml-2">
-              {visibleTabs.map((tab) => {
-                const active = isTabActive(tab.path);
-                const Icon = tab.icon;
-                return (
-                  <Link
-                    key={tab.path}
-                    to={tab.path}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                      active ? 'text-white' : 'text-gray-600 hover:bg-gray-100'
-                    }`}
-                    style={active ? { background: gradient } : undefined}
-                  >
-                    <Icon className="w-4 h-4" />
-                    <span className="hidden sm:inline">{tab.label}</span>
-                  </Link>
-                );
-              })}
-            </nav>
-          </div>
+          {/* Módulos (escritorio) */}
+          <nav className="hidden md:flex items-center gap-1 ml-2 pl-3 border-l border-gray-200 min-w-0 overflow-x-auto" aria-label="Menú de Social Media">
+            {visibleTabs.map((tab) => tabLink(tab, false))}
+          </nav>
 
+          <div className="flex-1" />
+
+          <div className="hidden xl:block"><AppSwitcher /></div>
+
+          {/* Usuario */}
           <div className="relative">
-            <button
-              onClick={() => setProfileOpen(!profileOpen)}
-              className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-gray-100 transition-colors"
-            >
-              <div
-                className="w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-semibold"
-                style={{ background: gradient }}
-              >
-                {user?.name.charAt(0).toUpperCase()}
-              </div>
-              <span className="hidden md:inline text-sm font-medium text-gray-700 truncate max-w-[140px]">
-                {user?.name}
-              </span>
+            <button type="button" onClick={() => setProfileOpen((o) => !o)} aria-expanded={profileOpen} title="Mi cuenta" className="flex items-center gap-1.5 rounded-lg p-1 hover:bg-gray-100">
+              <Avatar name={user?.name} size="sm" />
+              <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${profileOpen ? 'rotate-180' : ''}`} />
             </button>
-
             {profileOpen && (
               <>
                 <div className="fixed inset-0 z-10" onClick={() => setProfileOpen(false)} />
-                <div className="absolute right-0 mt-2 w-52 bg-white rounded-lg shadow-xl border border-gray-200 py-2 z-20">
-                  <div className="px-4 py-2 border-b border-gray-100">
-                    <p className="text-sm font-medium text-gray-900 truncate">{user?.name}</p>
-                    <p className="text-xs text-gray-500 truncate">{user?.email}</p>
+                <div className="absolute right-0 z-20 mt-2 w-64 rounded-xl border border-gray-200 bg-white py-1 shadow-xl">
+                  <div className="px-4 py-3 border-b border-gray-100">
+                    <p className="truncate text-sm font-medium text-gray-900">{user?.name}</p>
+                    <p className="truncate text-xs text-gray-500">{user?.email}</p>
+                    <span className="mt-2 inline-block rounded-full bg-app-100 px-2 py-0.5 text-xs font-medium text-app-700">{role?.name || 'Usuario'}</span>
                   </div>
-                  <button
-                    onClick={handleLogout}
-                    className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50"
-                  >
-                    <LogOut className="w-4 h-4" />
-                    Cerrar sesión
-                  </button>
+                  <div className="xl:hidden px-2 py-2 border-b border-gray-100"><AppSwitcher variant="sidebar" /></div>
+                  <Link to="/profile" className="flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50"><User className="w-4 h-4" /> Mi perfil</Link>
+                  <button type="button" onClick={handleLogout} className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50"><LogOut className="w-4 h-4" /> Cerrar sesión</button>
                 </div>
               </>
             )}
           </div>
         </div>
+
+        {/* Módulos (celular) */}
+        {visibleTabs.length > 0 && (
+          <nav className="md:hidden flex overflow-x-auto border-t border-gray-100" aria-label="Menú de Social Media">
+            {visibleTabs.map((tab) => tabLink(tab, true))}
+          </nav>
+        )}
       </header>
 
-      {/* Contenido a pantalla completa restante */}
-      <main className="flex-1 overflow-hidden">{children}</main>
+      {/* Contenido */}
+      <main className="flex-1 min-h-0 overflow-y-auto">{children}</main>
     </div>
   );
 }

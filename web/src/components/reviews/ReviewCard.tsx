@@ -56,7 +56,7 @@ export const ReviewCard = ({
               className="w-10 h-10 rounded-full object-cover"
             />
           ) : (
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-violet-500 to-pink-500 flex items-center justify-center text-white font-semibold">
+            <div className="w-10 h-10 rounded-full bg-app-100 flex items-center justify-center text-app-700 font-semibold">
               {review.user.name.charAt(0).toUpperCase()}
             </div>
           )}

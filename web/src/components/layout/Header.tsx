@@ -11,6 +11,7 @@ import { MobileUserMenu } from '../auth/MobileUserMenu';
 import AppSwitcher from '../common/AppSwitcher';
 import { CategoriesMenu } from './CategoriesMenu';
 import { NotificationBell } from '../notifications/NotificationBell';
+import { buttonClass } from '../ui';
 
 export const Header = () => {
   const location = useLocation();
@@ -26,16 +27,12 @@ export const Header = () => {
 
   const isActive = (path: string) => location.pathname === path;
 
-  // Colores de marca dinámicos desde settings.appearance
-  const brandColors = settings.appearance?.brandColors || settings.general.brandColors || {
-    primary: '#7c3aed',
-    secondary: '#ec4899',
-    accent: '#f59e0b',
-  };
+  // El acento de la tienda es el color de marca primario (clases app-*, ver AppTheme).
   const showSlogan = settings.appearance?.showSlogan ?? true;
   const enableCustomizer = settings.home?.enableCustomizer ?? true;
-  const gradientStyle = `linear-gradient(to right, ${brandColors.primary}, ${brandColors.secondary}, ${brandColors.accent})`;
-  const gradientBgStyle = `linear-gradient(to bottom right, ${brandColors.primary}, ${brandColors.secondary}, ${brandColors.accent})`;
+  const iconBtn = (active: boolean) =>
+    `relative p-2 rounded-lg transition-colors ${active ? 'bg-app-50 text-app-700' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'}`;
+  const countBadge = 'absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-semibold flex items-center justify-center ring-2 ring-white';
 
   const handleProfileClickMobile = () => {
     if (isAuthenticated) {
@@ -49,46 +46,30 @@ export const Header = () => {
   return (
     <>
       {/* Desktop Header */}
-      <header className="bg-white shadow-md fixed top-0 left-0 right-0 z-50 border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-3 md:px-4 py-2.5 md:py-4">
-          <div className="flex items-center justify-between gap-2 md:gap-3">
+      <header className="bg-white/95 backdrop-blur fixed top-0 left-0 right-0 z-50 border-b border-gray-200">
+        <div className="max-w-7xl mx-auto px-3 md:px-4 py-2.5 md:py-3">
+          <div className="flex items-center justify-between gap-2 md:gap-4">
             {/* Logo - Desktop */}
-            <Link to="/" className="hidden md:flex items-center gap-3 group">
+            <Link to="/" className="hidden md:flex items-center gap-2.5 group flex-shrink-0">
               {/* Logo o Icono por defecto */}
               {settings.general.logo ? (
                 <img
                   src={settings.general.logo}
                   alt={settings.general.siteName}
-                  className="h-12 max-w-[80px] object-contain"
+                  className="h-10 max-w-[80px] object-contain"
                 />
               ) : (
-                <div className="relative">
-                  <div
-                    className="absolute inset-0 rounded-2xl blur-md opacity-50 group-hover:opacity-75 transition-opacity"
-                    style={{ background: gradientBgStyle }}
-                  />
-                  <div
-                    className="relative p-3 rounded-2xl"
-                    style={{ background: gradientBgStyle }}
-                  >
-                    <Shirt className="w-7 h-7 text-white" strokeWidth={2.5} />
-                  </div>
+                <div className="p-2 rounded-lg bg-app-600">
+                  <Shirt className="w-6 h-6 text-white" strokeWidth={2.25} />
                 </div>
               )}
-              {/* Nombre y Slogan siempre visibles */}
-              <div className="flex flex-col">
-                <span
-                  className="text-2xl font-black bg-clip-text text-transparent"
-                  style={{
-                    backgroundImage: gradientStyle,
-                    WebkitBackgroundClip: 'text',
-                    WebkitTextFillColor: 'transparent',
-                  }}
-                >
+              {/* Nombre y slogan */}
+              <div className="flex flex-col leading-tight">
+                <span className="text-xl font-bold tracking-tight text-gray-900">
                   {settings.general.siteName || 'StylePrint'}
                 </span>
                 {showSlogan && settings.general.slogan && (
-                  <span className="text-[10px] text-gray-500 font-bold tracking-widest uppercase">
+                  <span className="text-[10px] text-gray-500 font-medium tracking-wider uppercase">
                     {settings.general.slogan}
                   </span>
                 )}
@@ -105,28 +86,12 @@ export const Header = () => {
                   className="h-8 max-w-[40px] object-contain"
                 />
               ) : (
-                <div className="relative">
-                  <div
-                    className="absolute inset-0 rounded-lg blur-md opacity-50"
-                    style={{ background: gradientBgStyle }}
-                  />
-                  <div
-                    className="relative p-1.5 rounded-lg"
-                    style={{ background: gradientBgStyle }}
-                  >
-                    <Shirt className="w-5 h-5 text-white" strokeWidth={2.5} />
-                  </div>
+                <div className="p-1.5 rounded-lg bg-app-600">
+                  <Shirt className="w-5 h-5 text-white" strokeWidth={2.25} />
                 </div>
               )}
               {/* Nombre en mobile */}
-              <span
-                className="text-lg font-black bg-clip-text text-transparent"
-                style={{
-                  backgroundImage: gradientStyle,
-                  WebkitBackgroundClip: 'text',
-                  WebkitTextFillColor: 'transparent',
-                }}
-              >
+              <span className="text-base font-bold tracking-tight text-gray-900 truncate max-w-[110px]">
                 {settings.general.siteName || 'StylePrint'}
               </span>
             </Link>
@@ -142,7 +107,7 @@ export const Header = () => {
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Buscar"
-                  className="w-full pl-9 pr-3 py-2 bg-gray-100 rounded-full text-sm font-medium text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:bg-white transition-all"
+                  className="w-full h-9 pl-9 pr-3 bg-gray-100 rounded-lg text-sm text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-app-200 focus:bg-white transition-colors"
                 />
               </div>
             </div>
@@ -151,13 +116,13 @@ export const Header = () => {
             <nav className="hidden md:flex items-center gap-1">
               <Link
                 to="/"
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-all ${
+                className={`flex items-center gap-2 h-9 px-3 rounded-lg font-medium text-sm transition-colors ${
                   isActive('/')
-                    ? 'bg-gray-100 text-gray-900'
-                    : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                    ? 'bg-app-50 text-app-700'
+                    : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
                 }`}
               >
-                <Home className="w-4 h-4" strokeWidth={isActive('/') ? 2.5 : 2} />
+                <Home className="w-4 h-4" />
                 Inicio
               </Link>
 
@@ -166,8 +131,7 @@ export const Header = () => {
               {enableCustomizer && (
                 <Link
                   to="/customize"
-                  className="flex items-center gap-2 px-6 py-2.5 ml-2 rounded-lg font-bold text-sm text-white hover:shadow-lg hover:-translate-y-0.5 transition-all"
-                  style={{ background: gradientStyle }}
+                  className={`${buttonClass('primary', 'sm')} ml-2 h-9`}
                 >
                   <Palette className="w-4 h-4" />
                   Personalizar
@@ -192,19 +156,18 @@ export const Header = () => {
                     }}
                     placeholder="Buscar productos"
                     autoFocus
-                    className="w-64 pl-12 pr-4 py-2.5 bg-gray-100 rounded-full text-sm font-medium text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:bg-white transition-all"
+                    className="w-56 lg:w-64 h-9 pl-11 pr-4 bg-gray-100 rounded-lg text-sm text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-app-200 focus:bg-white transition-colors"
                   />
                 </div>
               ) : (
                 <button
+                  type="button"
                   onClick={() => setShowSearchDesktop(true)}
                   aria-label="Buscar"
-                  className="p-2.5 rounded-lg hover:bg-gray-100 transition-all group"
+                  title="Buscar"
+                  className={iconBtn(false)}
                 >
-                  <Search
-                    className="w-6 h-6 text-gray-700 group-hover:text-gray-900 transition-colors"
-                    strokeWidth={2}
-                  />
+                  <Search className="w-5 h-5" />
                 </button>
               )}
 
@@ -213,18 +176,12 @@ export const Header = () => {
                 <Link
                   to="/favorites"
                   aria-label="Favoritos"
-                  className={`relative p-2.5 rounded-lg transition-all group ${
-                    isActive('/favorites') ? 'bg-gray-100' : 'hover:bg-gray-100'
-                  }`}
+                  title="Favoritos"
+                  className={iconBtn(isActive('/favorites'))}
                 >
-                  <Heart
-                    className={`w-6 h-6 transition-colors ${
-                      isActive('/favorites') ? 'text-red-500 fill-red-500' : 'text-gray-700 group-hover:text-gray-900'
-                    }`}
-                    strokeWidth={2}
-                  />
+                  <Heart className={`w-5 h-5 ${isActive('/favorites') ? 'text-red-500 fill-red-500' : ''}`} />
                   {favoritesCount > 0 && (
-                    <span className="absolute top-1 right-1 bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[16px] h-4 px-1 flex items-center justify-center">
+                    <span className={`${countBadge} bg-red-500 text-white`}>
                       {favoritesCount}
                     </span>
                   )}
@@ -238,21 +195,12 @@ export const Header = () => {
               <Link
                 to="/cart"
                 aria-label="Carrito"
-                className={`relative p-2.5 rounded-lg transition-all group ${
-                  isActive('/cart') ? 'bg-gray-100' : 'hover:bg-gray-100'
-                }`}
+                title="Carrito"
+                className={iconBtn(isActive('/cart'))}
               >
-                <ShoppingCart
-                  className={`w-6 h-6 transition-colors ${
-                    isActive('/cart') ? 'text-gray-900' : 'text-gray-700 group-hover:text-gray-900'
-                  }`}
-                  strokeWidth={isActive('/cart') ? 2.5 : 2}
-                />
+                <ShoppingCart className="w-5 h-5" />
                 {cart.totalItems > 0 && (
-                  <span
-                    className="absolute -top-1 -right-1 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center shadow-md"
-                    style={{ background: brandColors.primary }}
-                  >
+                  <span className={`${countBadge} bg-app-600 text-white`}>
                     {cart.totalItems}
                   </span>
                 )}
@@ -301,87 +249,54 @@ export const Header = () => {
       />
 
       {/* Bottom Navigation Bar - Solo Mobile */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200 shadow-lg pb-safe">
-        <div className="flex items-center justify-around px-2 py-2">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200 pb-safe">
+        <div className="flex items-center justify-around px-2 py-1.5">
           {/* Inicio */}
           <Link
             to="/"
-            className={`flex flex-col items-center justify-center gap-1 px-4 py-2 rounded-lg transition-all ${
-              isActive('/')
-                ? 'text-gray-900'
-                : 'text-gray-500 hover:text-gray-900'
+            className={`flex flex-col items-center justify-center gap-0.5 px-3 py-1.5 rounded-lg transition-colors ${
+              isActive('/') ? 'text-app-700' : 'text-gray-500 hover:text-gray-900'
             }`}
           >
-            <Home
-              className="w-6 h-6"
-              strokeWidth={isActive('/') ? 2.5 : 2}
-              fill={isActive('/') ? 'currentColor' : 'none'}
-            />
-            <span className="text-xs font-semibold">Inicio</span>
+            <Home className="w-6 h-6" strokeWidth={isActive('/') ? 2.25 : 1.75} />
+            <span className="text-[11px] font-medium">Inicio</span>
           </Link>
 
           {/* Catálogo */}
           <Link
             to="/catalog"
-            className={`flex flex-col items-center justify-center gap-1 px-4 py-2 rounded-lg transition-all ${
-              isActive('/catalog')
-                ? 'text-gray-900'
-                : 'text-gray-500 hover:text-gray-900'
+            className={`flex flex-col items-center justify-center gap-0.5 px-3 py-1.5 rounded-lg transition-colors ${
+              isActive('/catalog') ? 'text-app-700' : 'text-gray-500 hover:text-gray-900'
             }`}
           >
-            <Package
-              className="w-6 h-6"
-              strokeWidth={isActive('/catalog') ? 2.5 : 2}
-            />
-            <span className="text-xs font-semibold">Catálogo</span>
+            <Package className="w-6 h-6" strokeWidth={isActive('/catalog') ? 2.25 : 1.75} />
+            <span className="text-[11px] font-medium">Catálogo</span>
           </Link>
 
           {/* Personalizar - Botón Central Destacado (solo si está habilitado) */}
           {enableCustomizer && (
             <Link
               to="/customize"
-              className="flex flex-col items-center justify-center -mt-6"
+              className="flex flex-col items-center justify-center -mt-5"
             >
-              <div className="relative">
-                <div
-                  className="absolute inset-0 rounded-full blur-lg opacity-50"
-                  style={{ background: gradientBgStyle }}
-                ></div>
-                <div
-                  className="relative p-4 rounded-full shadow-xl"
-                  style={{ background: gradientBgStyle }}
-                >
-                  <Palette className="w-7 h-7 text-white" strokeWidth={2.5} />
-                </div>
+              <div className="p-3.5 rounded-full bg-app-600 ring-4 ring-white shadow-md">
+                <Palette className="w-6 h-6 text-white" strokeWidth={2.25} />
               </div>
-              <span
-                className="text-xs font-bold mt-1"
-                style={{ color: brandColors.primary }}
-              >
-                Diseñar
-              </span>
+              <span className="text-[11px] font-semibold mt-0.5 text-app-700">Diseñar</span>
             </Link>
           )}
 
           {/* Carrito */}
           <Link
             to="/cart"
-            className={`flex flex-col items-center justify-center gap-1 px-4 py-2 rounded-lg transition-all relative ${
-              isActive('/cart')
-                ? 'text-gray-900'
-                : 'text-gray-500 hover:text-gray-900'
+            className={`flex flex-col items-center justify-center gap-0.5 px-3 py-1.5 rounded-lg transition-colors relative ${
+              isActive('/cart') ? 'text-app-700' : 'text-gray-500 hover:text-gray-900'
             }`}
           >
-            <ShoppingCart
-              className="w-6 h-6"
-              strokeWidth={isActive('/cart') ? 2.5 : 2}
-            />
-            <span className="text-xs font-semibold">Carrito</span>
+            <ShoppingCart className="w-6 h-6" strokeWidth={isActive('/cart') ? 2.25 : 1.75} />
+            <span className="text-[11px] font-medium">Carrito</span>
             {cart.totalItems > 0 && (
-              <span
-                className="absolute top-1 right-2 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center shadow-md"
-                style={{ background: brandColors.primary }}
-              >
+              <span className={`${countBadge} top-0 right-1.5 bg-app-600 text-white`}>
                 {cart.totalItems}
               </span>
             )}
@@ -390,17 +305,12 @@ export const Header = () => {
           {/* Perfil - Mobile */}
           <button
             onClick={handleProfileClickMobile}
-            className={`flex flex-col items-center justify-center gap-1 px-4 py-2 rounded-lg transition-all ${
-              isActive('/profile')
-                ? 'text-gray-900'
-                : 'text-gray-500 hover:text-gray-900'
+            className={`flex flex-col items-center justify-center gap-0.5 px-3 py-1.5 rounded-lg transition-colors ${
+              isActive('/profile') ? 'text-app-700' : 'text-gray-500 hover:text-gray-900'
             }`}
           >
-            <User
-              className="w-6 h-6"
-              strokeWidth={isActive('/profile') ? 2.5 : 2}
-            />
-            <span className="text-xs font-semibold">Perfil</span>
+            <User className="w-6 h-6" strokeWidth={isActive('/profile') ? 2.25 : 1.75} />
+            <span className="text-[11px] font-medium">Perfil</span>
           </button>
         </div>
       </nav>
