@@ -211,8 +211,10 @@ class AuthController extends Controller
 
     public function logout(Request $request)
     {
-        // Revoca el token actual si la petición viene autenticada.
-        $request->user()?->currentAccessToken()?->delete();
+        // Revoca el token actual si la petición viene autenticada. La ruta es pública
+        // (sin auth:sanctum), así que el usuario se resuelve con el guard sanctum: con
+        // $request->user() llegaba null y el token nunca se revocaba.
+        $request->user('sanctum')?->currentAccessToken()?->delete();
 
         return $this->success(null, 'Sesión cerrada exitosamente');
     }
