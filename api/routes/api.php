@@ -61,10 +61,10 @@ Route::get('/health', function () {
 
 // ==================== AUTENTICACIÓN ====================
 Route::prefix('auth')->group(function () {
-    Route::post('register', [AuthController::class, 'register']);
-    Route::post('login', [AuthController::class, 'login']);
-    Route::post('forgot-password', [AuthController::class, 'forgotPassword']);
-    Route::post('reset-password', [AuthController::class, 'resetPassword']);
+    Route::post('register', [AuthController::class, 'register'])->middleware('throttle:auth-sensitive');
+    Route::post('login', [AuthController::class, 'login'])->middleware('throttle:login');
+    Route::post('forgot-password', [AuthController::class, 'forgotPassword'])->middleware('throttle:auth-sensitive');
+    Route::post('reset-password', [AuthController::class, 'resetPassword'])->middleware('throttle:auth-sensitive');
     Route::post('logout', [AuthController::class, 'logout']);
 
     Route::middleware('auth:sanctum')->group(function () {
@@ -87,8 +87,9 @@ Route::prefix('users')->middleware('auth:sanctum')->group(function () {
     Route::delete('addresses/{addressId}', [UserController::class, 'destroyAddress'])->whereNumber('addressId');
     Route::patch('addresses/{addressId}/default', [UserController::class, 'setDefaultAddress'])->whereNumber('addressId');
 
-    // Administración de usuarios (solo SuperAdmin).
-    Route::middleware('admin')->group(function () {
+    // Administración de usuarios. Con users.view solo se gestionan CLIENTES; las cuentas de
+    // staff y los roles los gestiona el SuperAdmin (UserPolicy).
+    Route::middleware('permission:users.view')->group(function () {
         Route::get('/', [UserController::class, 'index']);
         Route::post('/', [UserController::class, 'store']);
         Route::get('{id}', [UserController::class, 'show'])->whereNumber('id');
@@ -123,34 +124,34 @@ Route::prefix('catalogs')->group(function () {
     Route::get('product-types/{id}', [CatalogController::class, 'getProductType'])->whereNumber('id');
     Route::get('product-types/{productTypeId}/sizes', [CatalogController::class, 'sizesByProductType'])->whereNumber('productTypeId');
 
-    // Escritura: solo SuperAdmin.
-    Route::middleware(['auth:sanctum', 'admin'])->group(function () {
-        Route::post('sizes', [CatalogController::class, 'createSize']);
-        Route::put('sizes/{id}', [CatalogController::class, 'updateSize'])->whereNumber('id');
-        Route::delete('sizes/{id}', [CatalogController::class, 'deleteSize'])->whereNumber('id');
+    // Escritura de atributos: cada uno con su permiso (antes solo SuperAdmin).
+    Route::middleware('auth:sanctum')->group(function () {
+        Route::post('sizes', [CatalogController::class, 'createSize'])->middleware('permission:sizes.view');
+        Route::put('sizes/{id}', [CatalogController::class, 'updateSize'])->whereNumber('id')->middleware('permission:sizes.view');
+        Route::delete('sizes/{id}', [CatalogController::class, 'deleteSize'])->whereNumber('id')->middleware('permission:sizes.view');
 
-        Route::post('colors', [CatalogController::class, 'createColor']);
-        Route::put('colors/{id}', [CatalogController::class, 'updateColor'])->whereNumber('id');
-        Route::delete('colors/{id}', [CatalogController::class, 'deleteColor'])->whereNumber('id');
+        Route::post('colors', [CatalogController::class, 'createColor'])->middleware('permission:colors.view');
+        Route::put('colors/{id}', [CatalogController::class, 'updateColor'])->whereNumber('id')->middleware('permission:colors.view');
+        Route::delete('colors/{id}', [CatalogController::class, 'deleteColor'])->whereNumber('id')->middleware('permission:colors.view');
 
-        Route::post('categories', [CatalogController::class, 'createCategory']);
-        Route::put('categories/{id}', [CatalogController::class, 'updateCategory'])->whereNumber('id');
-        Route::delete('categories/{id}', [CatalogController::class, 'deleteCategory'])->whereNumber('id');
+        Route::post('categories', [CatalogController::class, 'createCategory'])->middleware('permission:categories.view');
+        Route::put('categories/{id}', [CatalogController::class, 'updateCategory'])->whereNumber('id')->middleware('permission:categories.view');
+        Route::delete('categories/{id}', [CatalogController::class, 'deleteCategory'])->whereNumber('id')->middleware('permission:categories.view');
 
-        Route::post('product-types', [CatalogController::class, 'createProductType']);
-        Route::put('product-types/{id}', [CatalogController::class, 'updateProductType'])->whereNumber('id');
-        Route::delete('product-types/{id}', [CatalogController::class, 'deleteProductType'])->whereNumber('id');
-        Route::put('product-types/{productTypeId}/sizes', [CatalogController::class, 'assignSizesToProductType'])->whereNumber('productTypeId');
+        Route::post('product-types', [CatalogController::class, 'createProductType'])->middleware('permission:product_types.view');
+        Route::put('product-types/{id}', [CatalogController::class, 'updateProductType'])->whereNumber('id')->middleware('permission:product_types.view');
+        Route::delete('product-types/{id}', [CatalogController::class, 'deleteProductType'])->whereNumber('id')->middleware('permission:product_types.view');
+        Route::put('product-types/{productTypeId}/sizes', [CatalogController::class, 'assignSizesToProductType'])->whereNumber('productTypeId')->middleware('permission:product_types.view');
     });
 });
 
 // ==================== IMÁGENES (servidas con cache) ====================
 Route::get('img/{type}/{id}/{slot}', [\App\Http\Controllers\ImageController::class, 'show'])
-    ->where('id', '[0-9]+');
+    ->where('id', '[0-9]+')->middleware('throttle:images');
 
 // ==================== PUBLICIDAD / ANUNCIOS ====================
 Route::get('announcements/active', [\App\Http\Controllers\AnnouncementController::class, 'active']);
-Route::prefix('announcements')->middleware(['auth:sanctum', 'admin'])->group(function () {
+Route::prefix('announcements')->middleware(['auth:sanctum', 'permission:announcements.view'])->group(function () {
     Route::get('/', [\App\Http\Controllers\AnnouncementController::class, 'index']);
     Route::post('/', [\App\Http\Controllers\AnnouncementController::class, 'store']);
     Route::put('{id}', [\App\Http\Controllers\AnnouncementController::class, 'update'])->whereNumber('id');
@@ -160,8 +161,8 @@ Route::prefix('announcements')->middleware(['auth:sanctum', 'admin'])->group(fun
 // ==================== CUPONES / DESCUENTOS ====================
 // Validar cupón: opcional autenticado (para límites por usuario) pero accesible a invitados.
 Route::post('discounts/validate', [\App\Http\Controllers\DiscountController::class, 'validateCoupon'])
-    ->middleware('auth.optional');
-Route::prefix('discounts')->middleware(['auth:sanctum', 'admin'])->group(function () {
+    ->middleware(['auth.optional', 'throttle:coupons']);
+Route::prefix('discounts')->middleware(['auth:sanctum', 'permission:discounts.view'])->group(function () {
     Route::get('/', [\App\Http\Controllers\DiscountController::class, 'index']);
     Route::post('/', [\App\Http\Controllers\DiscountController::class, 'store']);
     Route::put('{id}', [\App\Http\Controllers\DiscountController::class, 'update'])->whereNumber('id');
@@ -178,8 +179,8 @@ Route::prefix('products')->group(function () {
     Route::get('/', [ProductController::class, 'index']);
     Route::get('{id}', [ProductController::class, 'show'])->whereNumber('id');
 
-    // Escritura: solo SuperAdmin.
-    Route::middleware(['auth:sanctum', 'admin'])->group(function () {
+    // Crear, editar y borrar productos: products.manage (ver la lista es products.view).
+    Route::middleware(['auth:sanctum', 'permission:products.manage'])->group(function () {
         Route::post('/', [ProductController::class, 'store']);
         Route::put('{id}', [ProductController::class, 'update'])->whereNumber('id');
         Route::delete('{id}', [ProductController::class, 'destroy'])->whereNumber('id');
@@ -236,7 +237,7 @@ Route::prefix('reviews')->group(function () {
     });
 
     // Admin.
-    Route::middleware(['auth:sanctum', 'admin'])->group(function () {
+    Route::middleware(['auth:sanctum', 'permission:reviews.view'])->group(function () {
         Route::get('admin/all', [ReviewController::class, 'adminList']);
         Route::patch('admin/{id}/moderate', [ReviewController::class, 'moderate'])->whereNumber('id');
         Route::delete('admin/{id}', [ReviewController::class, 'adminDestroy'])->whereNumber('id');
@@ -269,8 +270,8 @@ Route::prefix('orders')->middleware('auth:sanctum')->group(function () {
     Route::post('confirm-payment/{orderNumber}', [OrderController::class, 'confirmPayment']);
     Route::post('/', [OrderController::class, 'store']);
 
-    // Admin.
-    Route::middleware('admin')->group(function () {
+    // Panel.
+    Route::middleware('permission:orders.view')->group(function () {
         Route::get('stats', [OrderController::class, 'stats']);
         Route::get('/', [OrderController::class, 'index']);
         Route::get('number/{orderNumber}', [OrderController::class, 'showByNumber']);
@@ -285,7 +286,7 @@ Route::prefix('payments')->middleware('auth:sanctum')->group(function () {
     Route::post('mercadopago/preference', [PaymentController::class, 'mercadopagoPreference']);
     Route::get('order/{orderId}', [PaymentController::class, 'myOrderPayments'])->whereNumber('orderId');
 
-    Route::middleware('admin')->group(function () {
+    Route::middleware('permission:payments.view')->group(function () {
         Route::get('stats', [PaymentController::class, 'stats']);
         Route::get('all', [PaymentController::class, 'index']);
         Route::get('order/{orderId}/all', [PaymentController::class, 'orderPayments'])->whereNumber('orderId');
@@ -304,7 +305,7 @@ Route::prefix('payments')->middleware('auth:sanctum')->group(function () {
 Route::prefix('webhooks')->group(function () {
     Route::post('wompi', [WebhookController::class, 'wompi']);
     Route::get('wompi/verify/{transactionId}', [WebhookController::class, 'verifyWompiTransaction'])
-        ->middleware(['auth:sanctum', 'admin']);
+        ->middleware(['auth:sanctum', 'permission:payments.view']);
 
     Route::post('mercadopago', [WebhookController::class, 'mercadopago']);
     Route::get('mercadopago/confirm/{orderNumber}', [WebhookController::class, 'confirmMercadoPago']);
@@ -319,7 +320,7 @@ Route::prefix('webhooks')->group(function () {
 });
 
 // ==================== TIPOS DE INSUMO ====================
-Route::prefix('input-types')->middleware(['auth:sanctum', 'admin'])->group(function () {
+Route::prefix('input-types')->middleware(['auth:sanctum', 'permission:input_types.view'])->group(function () {
     Route::get('/', [InputTypeController::class, 'index']);
     Route::get('{id}', [InputTypeController::class, 'show'])->whereNumber('id');
     Route::post('/', [InputTypeController::class, 'store']);
@@ -332,7 +333,7 @@ Route::prefix('templates')->group(function () {
     Route::get('public', [TemplateController::class, 'publicList']);
     Route::get('type/{typeSlug}', [TemplateController::class, 'byType']);
     Route::get('{id}', [TemplateController::class, 'show'])->whereNumber('id');
-    Route::middleware(['auth:sanctum', 'admin'])->group(function () {
+    Route::middleware(['auth:sanctum', 'permission:templates.view'])->group(function () {
         Route::get('/', [TemplateController::class, 'index']);
         Route::post('/', [TemplateController::class, 'store']);
         Route::put('{id}', [TemplateController::class, 'update'])->whereNumber('id');
@@ -344,7 +345,7 @@ Route::prefix('templates')->group(function () {
 Route::prefix('template-zones')->group(function () {
     Route::get('template/{templateId}', [TemplateZoneController::class, 'byTemplate'])->whereNumber('templateId');
     Route::get('{id}', [TemplateZoneController::class, 'show'])->whereNumber('id');
-    Route::middleware(['auth:sanctum', 'admin'])->group(function () {
+    Route::middleware(['auth:sanctum', 'permission:templates.view'])->group(function () {
         Route::post('template/{templateId}', [TemplateZoneController::class, 'store'])->whereNumber('templateId');
         Route::put('{id}', [TemplateZoneController::class, 'update'])->whereNumber('id');
         Route::delete('{id}', [TemplateZoneController::class, 'destroy'])->whereNumber('id');
@@ -357,7 +358,9 @@ Route::prefix('template-zones')->group(function () {
 Route::prefix('template-recipes')->group(function () {
     Route::get('product/{productId}/stock', [TemplateRecipeController::class, 'availableStock'])->whereNumber('productId');
     Route::get('variant-stock/{productId}', [TemplateRecipeController::class, 'variantStock'])->whereNumber('productId');
-    Route::middleware('auth:sanctum')->group(function () {
+    // Gestión de recetas: solo quien administra plantillas (antes bastaba con estar autenticado
+    // y cualquier cliente podía crear o borrar recetas y romper el stock de las plantillas).
+    Route::middleware(['auth:sanctum', 'permission:templates.view'])->group(function () {
         Route::post('/', [TemplateRecipeController::class, 'store']);
         Route::get('variant/{variantId}', [TemplateRecipeController::class, 'byVariant'])->whereNumber('variantId');
         Route::get('product/{productId}/inputs', [TemplateRecipeController::class, 'associatedInputIds'])->whereNumber('productId');
@@ -372,10 +375,15 @@ Route::prefix('template-recipes')->group(function () {
 Route::prefix('settings')->group(function () {
     Route::get('public', [SettingController::class, 'getPublic']);
 
-    Route::middleware(['auth:sanctum', 'admin'])->group(function () {
+    // Por tipo: el permiso depende del tipo (SettingController::TYPE_PERMISSIONS).
+    Route::middleware('auth:sanctum')->group(function () {
         $types = 'store|orders|payments|notifications|general|appearance|shipping|home|catalog|legal|printing';
         Route::get('{type}/config', [SettingController::class, 'getConfig'])->where('type', $types);
         Route::put('{type}/config', [SettingController::class, 'updateConfig'])->where('type', $types);
+    });
+
+    // Genérico por clave: solo SuperAdmin.
+    Route::middleware(['auth:sanctum', 'admin'])->group(function () {
         Route::get('/', [SettingController::class, 'index']);
         Route::get('{key}', [SettingController::class, 'showByKey']);
         Route::put('{key}', [SettingController::class, 'updateByKey']);
@@ -386,7 +394,7 @@ Route::prefix('settings')->group(function () {
 Route::prefix('zone-types')->group(function () {
     Route::get('/', [ZoneTypeController::class, 'index']);
     Route::get('{id}', [ZoneTypeController::class, 'show'])->whereNumber('id');
-    Route::middleware(['auth:sanctum', 'admin', 'permission:zone_types.view'])->group(function () {
+    Route::middleware(['auth:sanctum', 'permission:zone_types.view'])->group(function () {
         Route::post('/', [ZoneTypeController::class, 'store']);
         Route::put('{id}', [ZoneTypeController::class, 'update'])->whereNumber('id');
         Route::delete('{id}', [ZoneTypeController::class, 'destroy'])->whereNumber('id');
@@ -398,7 +406,7 @@ Route::prefix('design-images')->group(function () {
     Route::get('/', [DesignImageController::class, 'index']);
     Route::get('categories', [DesignImageController::class, 'categories']);
     Route::get('{id}', [DesignImageController::class, 'show'])->whereNumber('id');
-    Route::middleware(['auth:sanctum', 'admin', 'permission:design_images.view'])->group(function () {
+    Route::middleware(['auth:sanctum', 'permission:design_images.view'])->group(function () {
         Route::post('/', [DesignImageController::class, 'store']);
         Route::put('sort-order', [DesignImageController::class, 'updateSortOrder']);
         Route::put('{id}', [DesignImageController::class, 'update'])->whereNumber('id');
@@ -407,7 +415,7 @@ Route::prefix('design-images')->group(function () {
 });
 
 // ==================== INSUMOS ====================
-Route::prefix('inputs')->middleware(['auth:sanctum', 'admin'])->group(function () {
+Route::prefix('inputs')->middleware(['auth:sanctum', 'permission:inputs.view'])->group(function () {
     Route::get('low-stock', [InputController::class, 'lowStock']);
     Route::get('all-variants', [InputController::class, 'allVariants']);
     Route::get('variants/{variantId}', [InputController::class, 'variantById'])->whereNumber('variantId');
@@ -439,7 +447,7 @@ Route::prefix('purchase-orders')->middleware('auth:sanctum')->group(function () 
     Route::patch('{id}/status', [PurchaseOrderController::class, 'updateStatus'])->whereNumber('id')->middleware('permission:purchase_orders.view');
     Route::post('{id}/receive', [PurchaseOrderController::class, 'receive'])->whereNumber('id')->middleware('permission:purchase_orders.view');
     // Eliminar una orden de compra: solo el administrador (SuperAdmin).
-    Route::delete('{id}', [PurchaseOrderController::class, 'destroy'])->whereNumber('id')->middleware('admin');
+    Route::delete('{id}', [PurchaseOrderController::class, 'destroy'])->whereNumber('id')->middleware('permission:purchase_orders.view');
 });
 
 // ==================== DEVOLUCIONES DE COMPRA ====================
@@ -454,7 +462,7 @@ Route::prefix('purchase-returns')->middleware('auth:sanctum')->group(function ()
 });
 
 // ==================== LOTES DE INSUMO ====================
-Route::prefix('input-batches')->middleware(['auth:sanctum', 'admin'])->group(function () {
+Route::prefix('input-batches')->middleware(['auth:sanctum', 'permission:inputs.view'])->group(function () {
     Route::get('movements/all', [InputBatchController::class, 'allMovements']);
     Route::get('movements/stats', [InputBatchController::class, 'movementsStats']);
     Route::get('input/{inputId}/movements', [InputBatchController::class, 'movementsByInput'])->whereNumber('inputId');
@@ -530,17 +538,18 @@ Route::prefix('inventory-conversions')->middleware('auth:sanctum')->group(functi
 });
 
 // ==================== ENVÍOS ====================
-Route::prefix('shipping')->middleware(['auth:sanctum', 'admin'])->group(function () {
+Route::prefix('shipping')->middleware(['auth:sanctum', 'permission:shipping.config,shipping.zones,shipping.carriers'])->group(function () {
     Route::post('sync-rates', [\App\Http\Controllers\ShippingController::class, 'syncRates']);
 });
 
 // ==================== SUBIDA DE IMÁGENES ====================
 Route::prefix('uploads')->group(function () {
     Route::get('optimize', [UploadController::class, 'getOptimizedUrl']);
-    Route::middleware('auth:sanctum')->group(function () {
+    Route::middleware(['auth:sanctum', 'throttle:uploads'])->group(function () {
         Route::post('image', [UploadController::class, 'uploadImage']);
         Route::post('images', [UploadController::class, 'uploadMultipleImages']);
-        Route::post('from-url', [UploadController::class, 'uploadFromUrl']);
+        // Solo admin: descarga URLs externas (con protección SSRF). La tienda no la usa.
+        Route::post('from-url', [UploadController::class, 'uploadFromUrl'])->middleware('admin');
         Route::post('base64', [UploadController::class, 'uploadBase64']);
         Route::delete('{publicId}', [UploadController::class, 'deleteImage'])
             ->where('publicId', '.*')->middleware('admin');
@@ -573,9 +582,10 @@ Route::prefix('pos')->middleware('auth:sanctum')->group(function () {
     Route::get('product/{productId}/variants', [POSController::class, 'productVariants'])->whereNumber('productId')->middleware('permission:pos.access,pos.create_sale');
     Route::post('calculate', [POSController::class, 'calculate'])->middleware('permission:pos.access,pos.create_sale');
     Route::post('sale', [POSController::class, 'createSale'])->middleware('permission:pos.access,pos.create_sale');
-    Route::post('sale/{id}/cancel', [POSController::class, 'cancelSale'])->whereNumber('id')->middleware('permission:pos.access,pos.cancel_sale');
-    Route::post('sale/{id}/return', [POSController::class, 'returnSale'])->whereNumber('id')->middleware('permission:pos.access,pos.cancel_sale');
-    Route::put('sale/{id}', [POSController::class, 'updateSale'])->whereNumber('id')->middleware('permission:pos.access,pos.create_sale');
+    // Anular, devolver y editar ventas exigen pos.cancel_sale (antes bastaba pos.access).
+    Route::post('sale/{id}/cancel', [POSController::class, 'cancelSale'])->whereNumber('id')->middleware('permission:pos.cancel_sale');
+    Route::post('sale/{id}/return', [POSController::class, 'returnSale'])->whereNumber('id')->middleware('permission:pos.cancel_sale');
+    Route::put('sale/{id}', [POSController::class, 'updateSale'])->whereNumber('id')->middleware('permission:pos.cancel_sale');
     Route::get('sales', [POSController::class, 'salesHistory'])->middleware('permission:pos.access,pos.view_sales');
     Route::get('stats', [POSController::class, 'stats'])->middleware('permission:pos.access,pos.view_sales');
     Route::get('debts', [POSController::class, 'debts'])->middleware('permission:pos.access,pos.view_sales');
@@ -592,16 +602,18 @@ Route::prefix('pos')->middleware('auth:sanctum')->group(function () {
 
 // ==================== PLANTILLAS DE ETIQUETAS ====================
 Route::prefix('label-templates')->middleware('auth:sanctum')->group(function () {
-    Route::get('/', [LabelTemplateController::class, 'index'])->middleware('permission:settings.general');
+    // Leer plantillas: también quien imprime códigos de barras (products.view).
+    Route::get('/', [LabelTemplateController::class, 'index'])->middleware('permission:settings.label_templates,settings.general,products.view');
     Route::get('product-type/{productTypeId}', [LabelTemplateController::class, 'forProductType'])
-        ->whereNumber('productTypeId')->middleware('permission:settings.general');
-    Route::get('{id}', [LabelTemplateController::class, 'show'])->whereNumber('id')->middleware('permission:settings.general');
-    Route::post('/', [LabelTemplateController::class, 'store'])->middleware('permission:settings.general');
-    Route::patch('{id}', [LabelTemplateController::class, 'update'])->whereNumber('id')->middleware('permission:settings.general');
-    Route::delete('{id}', [LabelTemplateController::class, 'destroy'])->whereNumber('id')->middleware('permission:settings.general');
-    Route::post('{id}/duplicate', [LabelTemplateController::class, 'duplicate'])->whereNumber('id')->middleware('permission:settings.general');
+        ->whereNumber('productTypeId')->middleware('permission:settings.label_templates,settings.general,products.view');
+    Route::get('{id}', [LabelTemplateController::class, 'show'])->whereNumber('id')->middleware('permission:settings.label_templates,settings.general,products.view');
+    Route::post('/', [LabelTemplateController::class, 'store'])->middleware('permission:settings.label_templates,settings.general');
+    Route::patch('{id}', [LabelTemplateController::class, 'update'])->whereNumber('id')->middleware('permission:settings.label_templates,settings.general');
+    Route::delete('{id}', [LabelTemplateController::class, 'destroy'])->whereNumber('id')->middleware('permission:settings.label_templates,settings.general');
+    Route::post('{id}/duplicate', [LabelTemplateController::class, 'duplicate'])->whereNumber('id')->middleware('permission:settings.label_templates,settings.general');
 
-    Route::middleware('permission:settings.general')->group(function () {
+    // Editar plantillas: el permiso de etiquetas (settings.general se conserva por compatibilidad).
+    Route::middleware('permission:settings.label_templates,settings.general')->group(function () {
         Route::post('{templateId}/zones', [LabelTemplateController::class, 'createZone'])->whereNumber('templateId');
         Route::patch('{templateId}/zones/batch', [LabelTemplateController::class, 'updateZonesBatch'])->whereNumber('templateId');
         Route::patch('zones/{zoneId}', [LabelTemplateController::class, 'updateZone'])->whereNumber('zoneId');
@@ -638,7 +650,7 @@ Route::prefix('notifications')->middleware('auth:sanctum')->group(function () {
 });
 
 // ==================== MENSAJERÍA — bandeja y canales de admin ====================
-Route::prefix('messaging')->middleware(['auth:sanctum', 'admin', 'permission:messaging.access'])->group(function () {
+Route::prefix('messaging')->middleware(['auth:sanctum', 'permission:messaging.access'])->group(function () {
     // Conversaciones (Bandeja)
     Route::middleware('permission:messaging.inbox')->group(function () {
         Route::get('conversations', [ConversationController::class, 'index']);
@@ -825,7 +837,7 @@ Route::prefix('manufacturing')->middleware('auth:sanctum')->group(function () {
 // ==================== MENSAJERÍA — chat web público ====================
 // El widget de la tienda usa estas rutas. No requieren login; se autentican
 // con un token de sesión devuelto por /start y enviado en X-WebChat-Token.
-Route::prefix('webchat')->group(function () {
+Route::prefix('webchat')->middleware('throttle:webchat')->group(function () {
     Route::post('start', [WebChatController::class, 'start']);
     Route::post('send', [WebChatController::class, 'send']);
     Route::get('poll', [WebChatController::class, 'poll']);

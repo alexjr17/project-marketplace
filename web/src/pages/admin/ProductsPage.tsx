@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { AlertTriangle, ArrowDown, ArrowLeft, ArrowUp, ArrowUpDown, Grid3x3, Package, PackageX, Pencil, Plus, Printer, Star, Trash2 } from 'lucide-react';
 import { useProducts } from '../../context/ProductsContext';
@@ -30,6 +31,9 @@ const catName = (p: Product) => (p as Product & { categoryName?: string }).categ
 
 export const ProductsPage = () => {
   const { products, isLoading, addProduct, updateProduct, deleteProduct } = useProducts();
+  // Ver productos: products.view. Crear, editar y eliminar: products.manage (el Cajero solo ve).
+  const { hasPermission } = useAuth();
+  const canManage = hasPermission('products.manage');
   const confirm = useConfirm();
   const navigate = useNavigate();
   const [viewMode, setViewMode] = useState<ViewMode>('list');
@@ -234,7 +238,7 @@ export const ProductsPage = () => {
         icon={Package}
         title="Productos"
         subtitle="Gestiona tu catálogo de productos"
-        actions={<Button icon={<Plus className="w-4 h-4" />} onClick={() => setViewMode('add')}>Nuevo producto</Button>}
+        actions={canManage ? <Button icon={<Plus className="w-4 h-4" />} onClick={() => setViewMode('add')}>Nuevo producto</Button> : undefined}
       />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -279,12 +283,12 @@ export const ProductsPage = () => {
                   {hasFilters
                     ? <EmptyState icon={Package} title="No se encontraron productos" description="Prueba con otra búsqueda o quita los filtros." />
                     : <EmptyState icon={Package} title="No hay productos" description="Comienza agregando tu primer producto al catálogo."
-                        action={<Button size="sm" icon={<Plus className="w-4 h-4" />} onClick={() => setViewMode('add')}>Nuevo producto</Button>} />}
+                        action={canManage ? <Button size="sm" icon={<Plus className="w-4 h-4" />} onClick={() => setViewMode('add')}>Nuevo producto</Button> : undefined} />}
                 </td></tr>
               ) : pageRows.map((product) => {
                 const hasVariants = productsWithVariants.has(String(product.id));
                 return (
-                  <Tr key={product.id} onClick={() => startEdit(product)}>
+                  <Tr key={product.id} onClick={canManage ? () => startEdit(product) : undefined}>
                     <Td>
                       <div className="flex items-center gap-3 min-w-[14rem]">
                         <Thumb src={getFirstImage(product.images)} alt={product.name} size="lg" />
@@ -304,11 +308,11 @@ export const ProductsPage = () => {
                       </div>
                     </Td>
                     <Td align="right" className="whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                      <IconButton title="Editar" tone="app" onClick={() => startEdit(product)}><Pencil className="w-4 h-4" /></IconButton>
+                      {canManage && <IconButton title="Editar" tone="app" onClick={() => startEdit(product)}><Pencil className="w-4 h-4" /></IconButton>}
                       <ActionMenu items={[
                         { label: 'Imprimir códigos de barras', icon: <Printer className="w-4 h-4" />, onClick: () => handlePrintBarcodes(product), hidden: !hasVariants },
-                        { label: 'Generar variantes', icon: <Grid3x3 className="w-4 h-4" />, onClick: () => setGeneratingVariantsFor(product), hidden: hasVariants },
-                        { label: 'Eliminar', icon: <Trash2 className="w-4 h-4" />, onClick: () => handleDeleteProduct(product), danger: true },
+                        { label: 'Generar variantes', icon: <Grid3x3 className="w-4 h-4" />, onClick: () => setGeneratingVariantsFor(product), hidden: hasVariants || !canManage },
+                        { label: 'Eliminar', icon: <Trash2 className="w-4 h-4" />, onClick: () => handleDeleteProduct(product), danger: true, hidden: !canManage },
                       ]} />
                     </Td>
                   </Tr>

@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { ordersService } from '../../services/orders.service';
 import { useNavigate } from 'react-router-dom';
 import { CheckCircle, ChevronRight, ExternalLink, Package, Truck } from 'lucide-react';
 import { useOrders } from '../../context/OrdersContext';
@@ -15,7 +16,8 @@ type TabKey = 'toShip' | 'shipped';
 /** Despachos: pedidos pagados o en preparación por enviar, y envíos en tránsito por confirmar. */
 export const ShippingPage = () => {
   const navigate = useNavigate();
-  const { orders, updateOrderStatus, updateTrackingInfo } = useOrders();
+  const { orders, updateOrderStatus, refreshOrders } = useOrders();
+  const [shipping, setShipping] = useState(false);
   const toast = useToast();
   const confirm = useConfirm();
 
@@ -25,15 +27,18 @@ export const ShippingPage = () => {
   const [trackingData, setTrackingData] = useState({ number: '', url: '' });
   const [isTrackingModalOpen, setIsTrackingModalOpen] = useState(false);
 
-  const ordersToShip = useMemo(() => orders.filter((o) => o.status === 'paid' || o.status === 'processing'), [orders]);
-  const shippedOrders = useMemo(() => orders.filter((o) => o.status === 'shipped'), [orders]);
+  // Solo pedidos con datos de envío: las ventas del POS (sin envío) no se despachan y
+  // antes hacían caer la página.
+  const shippable = useMemo(() => orders.filter((o) => Boolean(o.shipping)), [orders]);
+  const ordersToShip = useMemo(() => shippable.filter((o) => o.status === 'paid' || o.status === 'processing'), [shippable]);
+  const shippedOrders = useMemo(() => shippable.filter((o) => o.status === 'shipped'), [shippable]);
   const deliveredToday = orders.filter((o) => o.status === 'delivered' && o.deliveredAt && new Date(o.deliveredAt).toDateString() === new Date().toDateString()).length;
 
   const filteredOrdersToShip = useMemo(() => {
     const query = searchQuery.toLowerCase();
     if (!query) return ordersToShip;
     return ordersToShip.filter((o) =>
-      o.orderNumber.toLowerCase().includes(query) || o.userName.toLowerCase().includes(query) || o.shipping.city.toLowerCase().includes(query));
+      o.orderNumber.toLowerCase().includes(query) || o.userName.toLowerCase().includes(query) || (o.shipping?.city ?? '').toLowerCase().includes(query));
   }, [ordersToShip, searchQuery]);
 
   const filteredShippedOrders = useMemo(() => {
@@ -52,17 +57,30 @@ export const ShippingPage = () => {
 
   const closeTracking = () => { setIsTrackingModalOpen(false); setSelectedOrderId(null); };
 
-  const handleMarkAsShipped = () => {
+  // La guía viaja con el cambio de estado (PATCH /orders/{id}/status). Antes se enviaba a
+  // PATCH /orders/{id}/tracking, que no existe, y el número de guía se perdía.
+  const handleMarkAsShipped = async () => {
     if (!selectedOrderId || !trackingData.number) {
       toast.error('Ingresa el número de guía');
       return;
     }
-    updateTrackingInfo(selectedOrderId, trackingData.number, trackingData.url || undefined);
-    updateOrderStatus(selectedOrderId, 'shipped');
-    toast.success('Pedido marcado como enviado');
-    setIsTrackingModalOpen(false);
-    setSelectedOrderId(null);
-    setTrackingData({ number: '', url: '' });
+    setShipping(true);
+    try {
+      await ordersService.changeStatus(Number(selectedOrderId), {
+        status: 'SHIPPED',
+        trackingNumber: trackingData.number.trim(),
+        trackingUrl: trackingData.url.trim() || undefined,
+      });
+      await refreshOrders();
+      toast.success('Pedido marcado como enviado');
+      setIsTrackingModalOpen(false);
+      setSelectedOrderId(null);
+      setTrackingData({ number: '', url: '' });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'No se pudo marcar como enviado');
+    } finally {
+      setShipping(false);
+    }
   };
 
   const handleMarkAsDelivered = async (orderId: string, orderNumber: string) => {
@@ -114,12 +132,12 @@ export const ShippingPage = () => {
                   </Td>
                   <Td>
                     <span className="text-gray-900">{o.userName}</span>
-                    <span className="block text-xs text-gray-500">{o.shipping.phone}</span>
+                    <span className="block text-xs text-gray-500">{o.shipping?.phone}</span>
                   </Td>
                   <Td className="min-w-[14rem]">
-                    <span className="text-gray-900">{o.shipping.address}</span>
-                    <span className="block text-xs text-gray-500">{[o.shipping.city, o.shipping.postalCode].filter(Boolean).join(', ')}</span>
-                    {o.shipping.notes && <span className="block text-xs text-amber-700 mt-0.5">Nota: {o.shipping.notes}</span>}
+                    <span className="text-gray-900">{o.shipping?.address}</span>
+                    <span className="block text-xs text-gray-500">{[o.shipping?.city, o.shipping?.postalCode].filter(Boolean).join(', ')}</span>
+                    {o.shipping?.notes && <span className="block text-xs text-amber-700 mt-0.5">Nota: {o.shipping?.notes}</span>}
                   </Td>
                   <Td align="right">{o.items.reduce((acc, item) => acc + item.quantity, 0)}</Td>
                   <Td align="right" className="whitespace-nowrap">
@@ -147,7 +165,7 @@ export const ShippingPage = () => {
                   <Td><button type="button" onClick={() => view(o.id)} className="font-medium text-gray-900 hover:text-app-700 text-left whitespace-nowrap">{o.orderNumber}</button></Td>
                   <Td>
                     <span className="text-gray-900">{o.userName}</span>
-                    <span className="block text-xs text-gray-500">{o.shipping.city}</span>
+                    <span className="block text-xs text-gray-500">{o.shipping?.city}</span>
                   </Td>
                   <Td>
                     {o.trackingNumber ? (
@@ -177,7 +195,7 @@ export const ShippingPage = () => {
         footer={
           <>
             <Button variant="secondary" onClick={closeTracking}>Cancelar</Button>
-            <Button icon={<Truck className="w-4 h-4" />} onClick={handleMarkAsShipped}>Marcar como enviado</Button>
+            <Button icon={<Truck className="w-4 h-4" />} onClick={handleMarkAsShipped} isLoading={shipping}>Marcar como enviado</Button>
           </>
         }
       >

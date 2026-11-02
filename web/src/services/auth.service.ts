@@ -66,9 +66,21 @@ export const authService = {
 
   // Obtener perfil
   async getProfile(): Promise<User> {
-    const response = await api.get<User>('/auth/me');
-    if (!response.data) throw new Error('No autenticado');
-    return response.data;
+    // /auth/me responde { user: {...} } dentro de data.
+    const response = await api.get<{ user: User }>('/auth/me');
+    if (!response.data?.user) throw new Error('No autenticado');
+    return response.data.user;
+  },
+
+  // Actualiza el usuario guardado (permisos frescos) sin tocar el token.
+  updateStoredUser(user: User): void {
+    const stored = localStorage.getItem(AUTH_STORAGE_KEY);
+    if (!stored) return;
+    try {
+      localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify({ ...JSON.parse(stored), user }));
+    } catch {
+      /* almacenamiento no disponible */
+    }
   },
 
   // Actualizar perfil
@@ -114,8 +126,13 @@ export const authService = {
     await api.post('/auth/reset-password', { token, password: newPassword });
   },
 
-  // Logout
+  // Logout: revoca el token en el servidor y borra la sesión local. Antes solo se borraba
+  // el localStorage y el token seguía válido. La petición toma el token al iniciarse, así
+  // que se puede borrar el almacenamiento enseguida sin esperar la respuesta.
   logout(): void {
+    if (localStorage.getItem(AUTH_STORAGE_KEY)) {
+      void api.post('/auth/logout').catch(() => { /* sin red: el token igual vence */ });
+    }
     localStorage.removeItem(AUTH_STORAGE_KEY);
   },
 

@@ -29,7 +29,8 @@ class PaymentController extends Controller
         if (! $order) {
             return $this->error('Pedido no encontrado', 404);
         }
-        if ($order->userId !== null && $order->userId !== $request->user()->id) {
+        // Solo pedidos propios: antes un pedido sin usuario (venta POS) aceptaba a cualquiera.
+        if ((int) $order->userId !== (int) $request->user()->id) {
             return $this->error('Pedido no encontrado', 404);
         }
 

@@ -8,7 +8,7 @@ import AppSwitcher from '../common/AppSwitcher';
 import { Avatar } from '../ui/Media';
 import { Breadcrumbs, Tabs } from '../ui/Display';
 import { CommandPalette } from './CommandPalette';
-import { ADMIN_NAV, SETTINGS_ITEM, activeTab, canSee, entryPath, findActive, visibleTabs, type NavItem } from './adminNav';
+import { ADMIN_NAV, SETTINGS_ITEM, SETTINGS_NAV, activeTab, canSee, entryPath, findActive, visibleTabs, type NavItem } from './adminNav';
 
 const COLLAPSE_KEY = 'admin_sidebar_collapsed';
 const readCollapsed = () => { try { return localStorage.getItem(COLLAPSE_KEY) === '1'; } catch { return false; } };
@@ -33,6 +33,7 @@ export const AdminLayout = ({ children }: { children: ReactNode }) => {
   const tabs = active ? visibleTabs(active.item, hasPermission) : [];
   const currentTab = active ? activeTab(active.item, pathname) : undefined;
   const siteName = settings.general?.siteName || 'Mi tienda';
+  const canSeeSettings = SETTINGS_NAV.some((g) => canSee(g, hasPermission));
 
   useEffect(() => { setMobileOpen(false); setProfileOpen(false); }, [location.pathname]);
 
@@ -99,9 +100,12 @@ export const AdminLayout = ({ children }: { children: ReactNode }) => {
         })}
       </nav>
 
-      <div className="border-t border-gray-100 p-3 space-y-0.5 flex-shrink-0">
-        <NavLinkItem item={SETTINGS_ITEM} compact={compact} />
-      </div>
+      {/* Configuración solo si el usuario puede ver al menos un grupo del hub. */}
+      {canSeeSettings && (
+        <div className="border-t border-gray-100 p-3 space-y-0.5 flex-shrink-0">
+          <NavLinkItem item={SETTINGS_ITEM} compact={compact} />
+        </div>
+      )}
     </>
   );
 

@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\Models\Payment;
+use App\Models\Discount;
 use App\Models\InputVariant;
 use App\Models\InputVariantMovement;
 use App\Models\Notification;
@@ -13,6 +15,7 @@ use App\Models\ProductVariant;
 use App\Models\Setting;
 use App\Models\TemplateRecipe;
 use App\Models\VariantMovement;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
@@ -33,7 +36,8 @@ class OrderService
 
     private const VALID_TRANSITIONS = [
         'PENDING' => ['PAID', 'CANCELLED'],
-        'PAID' => ['PROCESSING', 'CANCELLED'],
+        // Despachos envía directamente los pedidos pagados (sin pasar por "En proceso").
+        'PAID' => ['PROCESSING', 'SHIPPED', 'CANCELLED'],
         'PROCESSING' => ['SHIPPED', 'CANCELLED'],
         'SHIPPED' => ['DELIVERED'],
         'DELIVERED' => [],
@@ -43,6 +47,7 @@ class OrderService
     public function __construct(
         private TemplateStockService $templateStock,
         private DiscountService $discounts,
+        private ShippingQuoteService $shippingQuotes,
     ) {}
 
     /** Primera imagen utilizable de un producto ({front,...} u array). */
@@ -236,7 +241,18 @@ class OrderService
             ];
         }
 
-        $shippingCost = $subtotal >= $settings['freeShippingThreshold'] ? 0 : $settings['shippingCost'];
+        // Envío por zona y transportadora (igual que el checkout); si no se puede cotizar,
+        // la tarifa fija de respaldo. Antes siempre se cobraba la fija y no coincidía con lo
+        // que el cliente veía.
+        $shippingSettings = $this->shippingQuotes->settings();
+        $totalItems = (int) array_sum(array_column($data['items'], 'quantity'));
+        $quoted = $this->shippingQuotes->quote(
+            $shippingSettings,
+            (string) ($data['shipping']['city'] ?? ''),
+            $this->shippingQuotes->packageWeight($shippingSettings, $totalItems),
+            $subtotal,
+        );
+        $shippingCost = $quoted ?? ($subtotal >= $settings['freeShippingThreshold'] ? 0 : $settings['shippingCost']);
         $tax = ($settings['taxEnabled'] && ! $settings['taxIncluded'])
             ? round($subtotal * $settings['taxRate'])
             : 0;
@@ -436,12 +452,60 @@ class OrderService
                 }
             } elseif ($newStatus === 'CANCELLED') {
                 $this->restoreStock($order);
+                $this->releaseOrderResources($order);
             }
 
             $order->save();
         });
 
         return $order->load(['items.product:id,images', 'user']);
+    }
+
+    /**
+     * Al cancelar: devuelve el uso del cupón y cancela los pagos aún pendientes del pedido
+     * (antes el cupón quedaba gastado y el pago seguía "pendiente" en el módulo Pagos).
+     */
+    private function releaseOrderResources(Order $order): void
+    {
+        if ($order->discountId && ($discount = Discount::find($order->discountId))) {
+            $this->discounts->release($discount);
+        }
+        Payment::where('orderId', $order->id)
+            ->whereIn('status', ['PENDING', 'PROCESSING'])
+            ->update(['status' => 'CANCELLED', 'cancelledAt' => now()]);
+    }
+
+    /**
+     * Pago aprobado por la pasarela sobre un pedido YA CANCELADO (p. ej. un PSE que se aprobó
+     * después de que el cliente cambió de dirección y el checkout canceló el pedido). No se
+     * reabre el pedido (su stock ya se devolvió): se registra el pago como aprobado con nota
+     * de reembolso y queda en el historial, para que el admin lo vea en Pagos y lo devuelva.
+     */
+    public function recordPaymentOnCancelledOrder(Order $order, string $method, string $transactionId, float $amount): void
+    {
+        Payment::updateOrCreate(
+            ['transactionId' => $transactionId],
+            [
+                'orderId' => $order->id,
+                'paymentMethod' => $method,
+                'amount' => $amount,
+                'currency' => 'COP',
+                'status' => 'APPROVED',
+                'paidAt' => now(),
+                'payerName' => $order->customerName ?? $order->user?->name,
+                'payerEmail' => $order->customerEmail ?? $order->user?->email,
+                'notes' => 'Pago aprobado sobre un pedido cancelado: requiere reembolso.',
+            ],
+        );
+        $history = is_array($order->statusHistory) ? $order->statusHistory : [];
+        $history[] = [
+            'status' => 'CANCELLED',
+            'timestamp' => now()->toIso8601String(),
+            'note' => "Pago {$method} aprobado ({$transactionId}) con el pedido cancelado: requiere reembolso.",
+        ];
+        $order->statusHistory = $history;
+        $order->save();
+        Log::warning("Pago {$method} aprobado sobre el pedido cancelado {$order->orderNumber}: requiere reembolso.");
     }
 
     public function cancelOrder(int $id, int $userId): Order

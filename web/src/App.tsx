@@ -1,4 +1,5 @@
 import { lazy, Suspense } from 'react';
+import { ADMIN_NAV, SETTINGS_NAV, canSee, entryPath } from './components/admin/adminNav';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Layout } from './components/layout/Layout';
 
@@ -130,8 +131,29 @@ import type { Permission } from './types/roles';
 
 // Protected route for admin access
 // Cliente (roleId 2) NUNCA puede acceder al panel admin, sin importar permisos
+/** Pantalla mínima mientras se restaura la sesión. */
+const RouteLoading = () => (
+  <div className="flex h-screen items-center justify-center bg-gray-50">
+    <span className="h-8 w-8 animate-spin rounded-full border-[3px] border-gray-200 border-t-gray-600" />
+  </div>
+);
+
+/**
+ * Inicio del panel: el Resumen si el rol tiene dashboard.view; si no, el primer módulo que
+ * puede ver (antes redirigía a /admin-panel mismo y quedaba en blanco, p. ej. el Cajero).
+ */
+const AdminHome = () => {
+  const { hasPermission } = useAuth();
+  if (hasPermission('dashboard.view')) return <DashboardPage />;
+  const first = ADMIN_NAV.flatMap((sec) => sec.items).find((i) => canSee(i, hasPermission))
+    ?? SETTINGS_NAV.find((g) => canSee(g, hasPermission));
+  return <Navigate to={first ? entryPath(first, hasPermission) : '/apps'} replace />;
+};
+
 const AdminRoute = ({ children }: { children: React.ReactNode }) => {
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, isLoading } = useAuth();
+  // Mientras se restaura la sesión (F5) no redirigir: el usuario aún es null.
+  if (isLoading) return <RouteLoading />;
 
   // Si no está autenticado, redirigir al inicio
   if (!isAuthenticated || !user) {
@@ -163,7 +185,9 @@ const PermissionRoute = ({
 
 // Protected route for POS access
 const POSRoute = ({ children }: { children: React.ReactNode }) => {
-  const { user, isAuthenticated, hasPermission } = useAuth();
+  const { user, isAuthenticated, hasPermission, isLoading } = useAuth();
+  // Mientras se restaura la sesión (F5) no redirigir: el usuario aún es null.
+  if (isLoading) return <RouteLoading />;
 
   if (!isAuthenticated || !user) {
     return <Navigate to="/" replace />;
@@ -178,7 +202,9 @@ const POSRoute = ({ children }: { children: React.ReactNode }) => {
 
 // Protected route for Fábrica (manufacturing) access.
 const ManufacturingRoute = ({ children }: { children: React.ReactNode }) => {
-  const { user, isAuthenticated, hasPermission } = useAuth();
+  const { user, isAuthenticated, hasPermission, isLoading } = useAuth();
+  // Mientras se restaura la sesión (F5) no redirigir: el usuario aún es null.
+  if (isLoading) return <RouteLoading />;
 
   if (!isAuthenticated || !user) {
     return <Navigate to="/" replace />;
@@ -193,7 +219,9 @@ const ManufacturingRoute = ({ children }: { children: React.ReactNode }) => {
 
 // Selector de aplicaciones (/apps): requiere sesión iniciada.
 const AppsRoute = ({ children }: { children: React.ReactNode }) => {
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated, user, isLoading } = useAuth();
+  // Mientras se restaura la sesión (F5) no redirigir: el usuario aún es null.
+  if (isLoading) return <RouteLoading />;
   if (!isAuthenticated || !user) {
     return <Navigate to="/" replace />;
   }
@@ -225,7 +253,9 @@ const MessagingHome = () => {
 
 // Protected route for Social Media (messaging) access
 const MessagingRoute = ({ children }: { children: React.ReactNode }) => {
-  const { user, isAuthenticated, hasPermission } = useAuth();
+  const { user, isAuthenticated, hasPermission, isLoading } = useAuth();
+  // Mientras se restaura la sesión (F5) no redirigir: el usuario aún es null.
+  if (isLoading) return <RouteLoading />;
 
   if (!isAuthenticated || !user) {
     return <Navigate to="/" replace />;
@@ -347,7 +377,7 @@ function App() {
                                     <Route
                                       path="/"
                                       element={
-                                        <PermissionRoute permission="dashboard.view">
+                                        <PermissionRoute permission="dashboard.view" fallback={<AdminHome />}>
                                           <DashboardPage />
                                         </PermissionRoute>
                                       }
@@ -732,10 +762,10 @@ function App() {
                                     />
 
                                     {/* Publicidad / Anuncios */}
-                                    <Route path="/announcements" element={<AnnouncementsPage />} />
+                                    <Route path="/announcements" element={<PermissionRoute permission="announcements.view"><AnnouncementsPage /></PermissionRoute>} />
 
                                     {/* Cupones / Descuentos */}
-                                    <Route path="/discounts" element={<DiscountsPage />} />
+                                    <Route path="/discounts" element={<PermissionRoute permission="discounts.view"><DiscountsPage /></PermissionRoute>} />
 
                                     {/* Configuración */}
                                     <Route

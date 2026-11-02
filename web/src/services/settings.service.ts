@@ -34,6 +34,9 @@ export interface PublicSettings {
   appearance?: AppearanceSettings;
   home?: HomeSettings;
   catalog?: CatalogSettings;
+  /** Métodos de pago sin claves secretas (el backend las filtra). */
+  payment?: FrontendPaymentSettings;
+  legal?: LegalSettings;
 }
 
 export interface StoreSettings {

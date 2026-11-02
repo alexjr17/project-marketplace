@@ -249,19 +249,15 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
         const shippingCost = DEFAULT_ORDER_CONFIG.shippingCost;
         const freeShippingThreshold = DEFAULT_ORDER_CONFIG.freeShippingThreshold;
 
-        // Obtener configuración de impuestos
-        const taxEnabled = (publicSettings.tax as any)?.enabled ?? DEFAULT_ORDER_CONFIG.taxEnabled;
-
-        // Obtener tasa de impuestos - puede venir de tax.rate o de payment.taxRate
-        let taxRate = DEFAULT_ORDER_CONFIG.taxRate;
-        if (publicSettings.tax?.rate !== undefined) {
-          // Si viene como porcentaje (ej: 19), convertir a decimal
-          taxRate = publicSettings.tax.rate > 1 ? publicSettings.tax.rate / 100 : publicSettings.tax.rate;
-        }
-
-        // Determinar si el impuesto está incluido en el precio
-        // Por defecto true (estándar en Colombia)
-        const taxIncluded = (publicSettings.tax as any)?.included ?? true;
+        // Impuestos: vienen en payment (taxEnabled, taxIncluded, taxRate), con los mismos
+        // valores por defecto que usa el servidor (OrderService::getSettings). Antes se leían
+        // de `tax`, que la API no envía: con IVA no incluido el carrito mostraba impuesto 0 y
+        // el servidor cobraba más.
+        const pay = publicSettings.payment;
+        const taxEnabled = pay?.taxEnabled ?? false;
+        const rawRate = pay?.taxRate ?? 19;
+        const taxRate = rawRate > 1 ? rawRate / 100 : rawRate;
+        const taxIncluded = pay?.taxIncluded ?? true;
 
         setOrderConfig({
           shippingCost,

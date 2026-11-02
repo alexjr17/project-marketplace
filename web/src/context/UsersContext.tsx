@@ -41,6 +41,11 @@ interface UsersContextType {
   setPage: (page: number) => void;
 }
 
+// El API manda ids numéricos y las pantallas los pasan como texto: compararlos como texto.
+// (Antes `u.id === id` nunca coincidía: activar/desactivar no llamaba al API y las listas
+// no se actualizaban tras editar o eliminar.)
+const sameId = (a: string | number, b: string | number) => String(a) === String(b);
+
 const UsersContext = createContext<UsersContextType | undefined>(undefined);
 
 // Mapear status de API a local
@@ -197,21 +202,23 @@ export const UsersProvider = ({ children }: { children: ReactNode }) => {
     };
 
     const updated = await usersService.update(id, input);
-    setAllUsers((prev) => prev.map((u) => (u.id === id ? mapApiUserToUser(updated) : u)));
+    setAllUsers((prev) => prev.map((u) => (sameId(u.id, id) ? mapApiUserToUser(updated) : u)));
   };
 
   const deleteUser = async (id: string): Promise<void> => {
     await usersService.delete(id);
-    setAllUsers((prev) => prev.filter((u) => u.id !== id));
+    setAllUsers((prev) => prev.filter((u) => !sameId(u.id, id)));
   };
 
   const toggleUserStatus = async (id: string): Promise<void> => {
-    const user = allUsers.find((u) => u.id === id);
-    if (!user) return;
+    // Si no está en la página cargada, se consulta al API (antes se salía sin hacer nada).
+    const user = allUsers.find((u) => sameId(u.id, id))
+      ?? await usersService.getById(Number(id)).then((u) => (u ? mapApiUserToUser(u) : undefined));
+    if (!user) throw new Error('Usuario no encontrado');
 
     const newStatus = user.status === 'active' ? 'INACTIVE' : 'ACTIVE';
-    const updated = await usersService.changeStatus(id, newStatus as 'ACTIVE' | 'INACTIVE');
-    setAllUsers((prev) => prev.map((u) => (u.id === id ? mapApiUserToUser(updated) : u)));
+    const updated = await usersService.changeStatus(Number(id), newStatus as 'ACTIVE' | 'INACTIVE');
+    setAllUsers((prev) => prev.map((u) => (sameId(u.id, id) ? mapApiUserToUser(updated) : u)));
   };
 
   // Metodos para Administradores
@@ -244,23 +251,24 @@ export const UsersProvider = ({ children }: { children: ReactNode }) => {
     };
 
     const updated = await usersService.update(id, input);
-    setAllUsers((prev) => prev.map((u) => (u.id === id ? mapApiUserToUser(updated) : u)));
+    setAllUsers((prev) => prev.map((u) => (sameId(u.id, id) ? mapApiUserToUser(updated) : u)));
   };
 
   const deleteAdmin = async (id: string): Promise<void> => {
     // No permitir eliminar superadmin
-    const admin = allUsers.find((u) => u.id === id);
+    const admin = allUsers.find((u) => sameId(u.id, id));
     if (admin?.role === 'superadmin') {
       throw new Error('No se puede eliminar el superadmin');
     }
 
     await usersService.delete(id);
-    setAllUsers((prev) => prev.filter((u) => u.id !== id));
+    setAllUsers((prev) => prev.filter((u) => !sameId(u.id, id)));
   };
 
   const toggleAdminStatus = async (id: string): Promise<void> => {
-    const admin = allUsers.find((u) => u.id === id);
-    if (!admin) return;
+    const admin = allUsers.find((u) => sameId(u.id, id))
+      ?? await usersService.getById(Number(id)).then((u) => (u ? mapApiUserToUser(u) : undefined));
+    if (!admin) throw new Error('Administrador no encontrado');
 
     // No permitir desactivar superadmin
     if (admin.role === 'superadmin') {
@@ -269,13 +277,13 @@ export const UsersProvider = ({ children }: { children: ReactNode }) => {
 
     const newStatus = admin.status === 'active' ? 'INACTIVE' : 'ACTIVE';
     const updated = await usersService.changeStatus(id, newStatus as 'ACTIVE' | 'INACTIVE');
-    setAllUsers((prev) => prev.map((u) => (u.id === id ? mapApiUserToUser(updated) : u)));
+    setAllUsers((prev) => prev.map((u) => (sameId(u.id, id) ? mapApiUserToUser(updated) : u)));
   };
 
   // Helpers
   const getUserById = async (id: string): Promise<User | undefined> => {
     // Primero buscar en cache local
-    const cached = allUsers.find((u) => u.id === id && u.role === 'user');
+    const cached = allUsers.find((u) => sameId(u.id, id) && u.role === 'user');
     if (cached) return cached;
 
     // Si no esta en cache, buscar en API
@@ -293,7 +301,7 @@ export const UsersProvider = ({ children }: { children: ReactNode }) => {
   const getAdminById = async (id: string): Promise<User | undefined> => {
     // Primero buscar en cache local
     const cached = allUsers.find(
-      (u) => u.id === id && (u.role === 'admin' || u.role === 'superadmin')
+      (u) => sameId(u.id, id) && (u.role === 'admin' || u.role === 'superadmin')
     );
     if (cached) return cached;
 

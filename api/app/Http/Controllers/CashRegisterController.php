@@ -179,6 +179,13 @@ class CashRegisterController extends Controller
         if ($session->status === 'CLOSED') {
             return $this->error('La sesión ya está cerrada', 400);
         }
+        // Cada cajero cierra solo su sesión; el SuperAdmin puede cerrar cualquiera. Antes
+        // cualquier usuario con pos.access cerraba la caja de otro. (pos.cash_register no sirve
+        // de excepción: el rol Cajero lo tiene.)
+        $user = $request->user();
+        if ((int) $session->sellerId !== (int) $user->id && (int) $user->roleId !== 1) {
+            return $this->error('Solo puedes cerrar tu propia sesión de caja', 403);
+        }
 
         $sales = Order::where('cashRegisterId', $session->cashRegisterId)
             ->where('sellerId', $session->sellerId)

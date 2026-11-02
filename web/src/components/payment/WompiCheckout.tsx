@@ -63,29 +63,34 @@ export const WompiCheckout = ({
   onClose,
 }: WompiCheckoutProps) => {
   const available = isValidPublicKey(publicKey);
-  const [scriptReady, setScriptReady] = useState(false);
+  const [scriptReady, setScriptReady] = useState(() => Boolean(window.WidgetCheckout));
   const [processing, setProcessing] = useState(false);
-  const loading = useRef(false);
+  // El callback de error va por ref: si cambia en cada render del checkout, no debe
+  // reiniciar la carga del script.
+  const onErrorRef = useRef(onPaymentError);
+  onErrorRef.current = onPaymentError;
 
-  // Carga el script del widget una sola vez.
+  // Carga el script del widget (una sola etiqueta <script> para toda la app). El efecto
+  // puede correr dos veces (StrictMode): cada corrida instala y quita su propio listener.
   useEffect(() => {
-    if (!available || loading.current) return;
-    loading.current = true;
+    if (!available) return;
     if (window.WidgetCheckout) { setScriptReady(true); return; }
 
-    const existing = document.querySelector<HTMLScriptElement>(`script[src="${WOMPI_WIDGET_URL}"]`);
-    const script = existing ?? document.createElement('script');
-    const onLoad = () => setScriptReady(true);
-    const onError = () => onPaymentError?.('No se pudo cargar la pasarela de Wompi. Recarga la página.');
-    script.addEventListener('load', onLoad);
-    script.addEventListener('error', onError);
-    if (!existing) {
+    let script = document.querySelector<HTMLScriptElement>(`script[src="${WOMPI_WIDGET_URL}"]`);
+    if (!script) {
+      script = document.createElement('script');
       script.src = WOMPI_WIDGET_URL;
       script.async = true;
       document.body.appendChild(script);
     }
-    return () => { script.removeEventListener('load', onLoad); script.removeEventListener('error', onError); };
-  }, [available, onPaymentError]);
+    const onLoad = () => setScriptReady(true);
+    const onError = () => onErrorRef.current?.('No se pudo cargar la pasarela de Wompi. Recarga la página.');
+    script.addEventListener('load', onLoad);
+    script.addEventListener('error', onError);
+    // Por si terminó de cargar entre la consulta y el listener.
+    if (window.WidgetCheckout) setScriptReady(true);
+    return () => { script!.removeEventListener('load', onLoad); script!.removeEventListener('error', onError); };
+  }, [available]);
 
   const handlePay = async () => {
     if (!window.WidgetCheckout) {

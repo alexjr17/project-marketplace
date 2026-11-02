@@ -215,6 +215,11 @@ export const ordersService = {
     }
   },
 
+  // Cancelar un pedido propio pendiente (devuelve el stock).
+  async cancelMy(orderId: number): Promise<void> {
+    await api.post(`/orders/my/${orderId}/cancel`);
+  },
+
   // Datos firmados por el servidor para abrir el widget de Wompi de un pedido propio y pendiente.
   async wompiCheckout(orderId: number): Promise<WompiCheckoutData> {
     const response = await api.post<WompiCheckoutData>(`/orders/my/${orderId}/wompi-checkout`);

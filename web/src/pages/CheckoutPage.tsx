@@ -81,7 +81,11 @@ export const CheckoutPage = () => {
   // Referencia del pago manual (transferencia, Nequi…). Wompi usa el número del pedido.
   const [paymentReference, setPaymentReference] = useState('');
   // Pedido pendiente creado al pagar con Wompi: se reutiliza si el cliente reintenta.
-  const [wompiOrder, setWompiOrder] = useState<{ id: number; orderNumber: string } | null>(null);
+  // Se guarda con la "huella" de lo que define su monto: si el cliente cambia dirección,
+  // cupón, carrito o método, el pedido viejo se cancela y se crea otro con el monto correcto.
+  const [wompiOrder, setWompiOrder] = useState<{ id: number; orderNumber: string; key: string } | null>(null);
+  // Igual para Mercado Pago: un reintento sin cambios no crea otro pedido ni otro pago.
+  const [mpOrder, setMpOrder] = useState<{ id: number; key: string; paymentCreated: boolean } | null>(null);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string>('');
   // Comprobante de pago (dataURL) para métodos manuales con verificación.
   const [proofImage, setProofImage] = useState<string | null>(null);
@@ -397,14 +401,33 @@ export const CheckoutPage = () => {
     return order;
   };
 
+  // Huella del pedido: lo que cambia su monto o su destino.
+  const orderKey = JSON.stringify({
+    method: selectedMethod?.type,
+    city: formData.shippingCity.trim().toLowerCase(),
+    address: formData.shippingAddress.trim().toLowerCase(),
+    postal: formData.shippingPostalCode.trim(),
+    coupon: coupon?.code ?? null,
+    items: cart.items.map((i) => [i.id, i.quantity, i.price]),
+  });
+
+  /** Cancela un pedido pendiente que quedó desactualizado (no bloquea si falla). */
+  const discardStaleOrder = async (orderId: number) => {
+    try { await ordersService.cancelMy(orderId); } catch { /* ya no está pendiente o sin red */ }
+  };
+
   // Wompi: 1) crea el pedido pendiente (una sola vez), 2) el servidor entrega monto,
   // referencia (número del pedido) y firma. La clave de integridad nunca llega al navegador.
   const handleWompiPrepare = async () => {
     if (!validateForm()) throw new Error('Completa los campos requeridos antes de pagar');
     let target = wompiOrder;
+    if (target && target.key !== orderKey) {
+      await discardStaleOrder(target.id);
+      target = null;
+    }
     if (!target) {
       const order = await createOrderFromCart();
-      target = { id: Number(order.id), orderNumber: order.orderNumber };
+      target = { id: Number(order.id), orderNumber: order.orderNumber, key: orderKey };
       setWompiOrder(target);
     }
     return ordersService.wompiCheckout(target.id);
@@ -501,19 +524,32 @@ export const CheckoutPage = () => {
     setIsSubmitting(true);
 
     try {
-      const order = await createOrderFromCart();
+      let current = mpOrder;
+      if (current && current.key !== orderKey) {
+        await discardStaleOrder(current.id);
+        current = null;
+      }
+      if (!current) {
+        const order = await createOrderFromCart();
+        current = { id: Number(order.id), key: orderKey, paymentCreated: false };
+        setMpOrder(current);
+      }
+      const orderId = current.id;
+      // El registro del pago se crea una sola vez, pero se reintenta si falló antes.
+      if (!current.paymentCreated) {
+        await createPayment({
+          orderId,
+          paymentMethod: 'mercadopago',
+          amount: orderTotal,
+          currency: settings.general.currency || 'COP',
+          payerName: formData.customerName,
+          payerEmail: formData.customerEmail,
+          payerPhone: formData.customerPhone,
+        });
+        setMpOrder({ ...current, paymentCreated: true });
+      }
 
-      await createPayment({
-        orderId: Number(order.id),
-        paymentMethod: 'mercadopago',
-        amount: orderTotal,
-        currency: settings.general.currency || 'COP',
-        payerName: formData.customerName,
-        payerEmail: formData.customerEmail,
-        payerPhone: formData.customerPhone,
-      });
-
-      const pref = await paymentsService.createMercadoPagoPreference(Number(order.id));
+      const pref = await paymentsService.createMercadoPagoPreference(orderId);
       if (!pref.initPoint) {
         throw new Error('No se obtuvo la URL de pago de Mercado Pago');
       }

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { usePOS } from '../../context/POSContext';
 import { useToast } from '../../context/ToastContext';
@@ -36,6 +37,9 @@ function MethodIcon({ method }: { method: string }) {
 }
 
 export default function SalesHistoryPage() {
+  // Editar, devolver y anular exigen pos.cancel_sale (el backend lo valida).
+  const { hasPermission } = useAuth();
+  const canModifySales = hasPermission('pos.cancel_sale');
   const { currentSession, isLoadingSession } = usePOS();
   const { showToast } = useToast();
   const navigate = useNavigate();
@@ -806,12 +810,12 @@ export default function SalesHistoryPage() {
 
               {/* Acciones */}
               <div className="space-y-2 pt-1">
-                {!isCancelled && (
+                {!isCancelled && canModifySales && (
                   <Button size="lg" fullWidth icon={<Pencil className="w-4 h-4" />} onClick={() => { const id = summarySale.id; setSummarySale(null); navigate(`/pos/sale?edit=${id}`); }}>
                     Editar venta
                   </Button>
                 )}
-                {!isCancelled && (summarySale.items?.length > 0) && (
+                {!isCancelled && canModifySales && (summarySale.items?.length > 0) && (
                   <Button variant="secondary" size="lg" fullWidth icon={<Undo2 className="w-4 h-4" />} onClick={pick(openReturnModal)}>
                     Devolver productos
                   </Button>
@@ -822,7 +826,7 @@ export default function SalesHistoryPage() {
                   {summarySale.paymentMethod === 'transfer' && (
                     <Button variant="secondary" icon={summarySale.paymentEvidence ? <ImageIcon className="w-4 h-4" /> : <Camera className="w-4 h-4" />} onClick={pick(handleOpenEvidenceModal)}>Evidencia</Button>
                   )}
-                  {!isCancelled && (
+                  {!isCancelled && canModifySales && (
                     <Button variant="ghost" className="text-red-600 hover:text-red-700 hover:bg-red-50" icon={<Trash2 className="w-4 h-4" />} onClick={pick(handleCancelSale)}>Anular</Button>
                   )}
                 </div>

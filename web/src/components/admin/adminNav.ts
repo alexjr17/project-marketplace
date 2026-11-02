@@ -99,8 +99,8 @@ export const ADMIN_NAV: NavSection[] = [
     items: [
       { label: 'Clientes', icon: Users, path: `${BASE}/users`, permission: 'users.view' },
       { label: 'Reseñas', icon: Star, path: `${BASE}/reviews`, permission: 'reviews.view' },
-      { label: 'Cupones', icon: Ticket, path: `${BASE}/discounts` },
-      { label: 'Anuncios', icon: Megaphone, path: `${BASE}/announcements` },
+      { label: 'Cupones', icon: Ticket, path: `${BASE}/discounts`, permission: 'discounts.view' },
+      { label: 'Anuncios', icon: Megaphone, path: `${BASE}/announcements`, permission: 'announcements.view' },
     ],
   },
 ];

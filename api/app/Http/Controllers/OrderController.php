@@ -113,6 +113,9 @@ class OrderController extends Controller
         if ($order->status !== 'PENDING') {
             return $this->error('El pedido no está pendiente de pago', 409);
         }
+        if ($order->paymentMethod !== 'wompi') {
+            return $this->error('El pedido no es de pago con Wompi', 409);
+        }
 
         try {
             return $this->success($this->wompi->checkoutData($order));

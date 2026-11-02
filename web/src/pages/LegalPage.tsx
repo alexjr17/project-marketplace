@@ -1,4 +1,5 @@
 import { useParams, Link, useNavigate } from 'react-router-dom';
+import { sanitizeHtml } from '../lib/sanitize';
 import { FileText, Shield, RefreshCw, Calendar } from 'lucide-react';
 import { useSettings } from '../context/SettingsContext';
 import type { LegalSettings } from '../types/settings';
@@ -103,7 +104,7 @@ export const LegalPage = () => {
               <p className="text-xs text-gray-500 flex items-center gap-1"><Calendar className="w-3 h-3" />Última actualización: {formattedDate}</p>
             </div>
           </header>
-          <div className={`px-5 md:px-8 py-6 ${RICH_TEXT}`} dangerouslySetInnerHTML={{ __html: legalPage.content }} />
+          <div className={`px-5 md:px-8 py-6 ${RICH_TEXT}`} dangerouslySetInnerHTML={{ __html: sanitizeHtml(legalPage.content) }} />
           <footer className="border-t border-gray-100 px-5 md:px-8 py-4 text-xs text-gray-500">
             {settings.general.siteName} · Todos los derechos reservados
           </footer>

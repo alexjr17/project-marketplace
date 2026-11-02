@@ -93,6 +93,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const storedAuth = authService.getStoredAuth();
     if (storedAuth?.user) {
       setUser(mapApiUserToUser(storedAuth.user, storedAuth));
+      // Refresca rol y permisos desde el servidor en segundo plano: antes se usaban los del
+      // login para siempre y un cambio de permisos no se veía hasta volver a iniciar sesión.
+      // Un 401 lo maneja api.service (sesión expirada); otros errores dejan lo guardado.
+      authService.getProfile()
+        .then((fresh) => {
+          authService.updateStoredUser(fresh);
+          setUser(mapApiUserToUser(fresh));
+        })
+        .catch(() => { /* sin red o sesión expirada: se mantiene lo guardado */ });
     }
     setIsLoading(false);
   }, []);

@@ -261,8 +261,8 @@ export const OrderDetailPage = () => {
                 <DescriptionList items={[
                   { label: 'Nombre', value: order.userName },
                   { label: 'Email', value: order.userEmail },
-                  { label: 'Teléfono', value: order.shipping.phone || null },
-                  { label: 'Ciudad', value: order.shipping.city || null },
+                  { label: 'Teléfono', value: order.shipping?.phone || null },
+                  { label: 'Ciudad', value: order.shipping?.city || null },
                 ]} />
               </Card>
               <Card>
@@ -343,12 +343,12 @@ export const OrderDetailPage = () => {
               <Card>
                 <CardTitle icon={MapPin}>Dirección de entrega</CardTitle>
                 <DescriptionList items={[
-                  { label: 'Destinatario', value: order.shipping.recipientName },
-                  { label: 'Teléfono', value: order.shipping.phone || null },
-                  { label: 'Dirección', value: order.shipping.address, full: true },
-                  { label: 'Ciudad', value: [order.shipping.city, order.shipping.postalCode].filter(Boolean).join(', ') || null },
-                  { label: 'País', value: order.shipping.country || null },
-                  ...(order.shipping.notes ? [{ label: 'Notas', value: order.shipping.notes, full: true }] : []),
+                  { label: 'Destinatario', value: order.shipping?.recipientName },
+                  { label: 'Teléfono', value: order.shipping?.phone || null },
+                  { label: 'Dirección', value: order.shipping?.address, full: true },
+                  { label: 'Ciudad', value: [order.shipping?.city, order.shipping?.postalCode].filter(Boolean).join(', ') || null },
+                  { label: 'País', value: order.shipping?.country || null },
+                  ...(order.shipping?.notes ? [{ label: 'Notas', value: order.shipping?.notes, full: true }] : []),
                 ]} />
               </Card>
               <Card>

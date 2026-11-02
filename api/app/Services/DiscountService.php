@@ -73,7 +73,9 @@ class DiscountService
 
         // Usos por usuario.
         if ($discount->maxUsesPerUser !== null && $userId) {
-            $used = Order::where('discountId', $discount->id)->where('userId', $userId)->count();
+            // Los pedidos cancelados no cuentan como uso (antes un pedido cancelado gastaba el cupón).
+            $used = Order::where('discountId', $discount->id)->where('userId', $userId)
+                ->where('status', '!=', 'CANCELLED')->count();
             if ($used >= $discount->maxUsesPerUser) {
                 throw new RuntimeException('Ya usaste este cupón el máximo de veces permitido');
             }
@@ -135,6 +137,13 @@ class DiscountService
     public function redeem(Discount $discount): void
     {
         $discount->usedCount = (int) $discount->usedCount + 1;
+        $discount->save();
+    }
+
+    /** Devuelve un uso del cupón (al cancelar un pedido que lo había canjeado). */
+    public function release(Discount $discount): void
+    {
+        $discount->usedCount = max(0, (int) $discount->usedCount - 1);
         $discount->save();
     }
 

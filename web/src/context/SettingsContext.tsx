@@ -451,6 +451,10 @@ export const SettingsProvider = ({ children }: { children: ReactNode }) => {
           catalog: withFallback(publicSettings.catalog, prev.catalog),
           // El cliente también necesita la config de envíos para calcular el costo.
           shipping: withFallback(publicSettings.shipping, prev.shipping),
+          // Métodos de pago (el backend ya quita las claves secretas) y páginas legales:
+          // antes no se copiaban y el checkout mostraba los métodos por defecto.
+          payment: withFallback(publicSettings.payment, prev.payment),
+          legal: withFallback(publicSettings.legal, prev.legal),
         }));
       } catch (err) {
         console.error('Error loading public settings:', err);

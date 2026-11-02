@@ -196,6 +196,12 @@ class WompiService
             return ['success' => false, 'message' => 'El monto pagado no coincide con el pedido', 'status' => 'AMOUNT_MISMATCH'];
         }
 
+        if ($order->status === 'CANCELLED') {
+            $this->orders->recordPaymentOnCancelledOrder($order, 'wompi', $transactionId, $paidCents / 100);
+
+            return ['success' => false, 'message' => 'El pedido estaba cancelado: el pago quedó registrado para reembolso', 'status' => 'ORDER_CANCELLED'];
+        }
+
         if ($order->status === 'PENDING') {
             $order->paymentRef = $transactionId;
             $order->save();

@@ -241,6 +241,12 @@ class MercadoPagoService
 
     private function approve(Order $order, string $paymentId): void
     {
+        if ($order->status === 'CANCELLED') {
+            $this->orders->recordPaymentOnCancelledOrder($order, 'mercadopago', $paymentId, (float) $order->total);
+
+            return;
+        }
+
         if ($order->status === 'PENDING') {
             $order->paymentRef = $paymentId;
             $order->save();
