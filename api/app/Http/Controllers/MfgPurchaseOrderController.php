@@ -99,7 +99,8 @@ class MfgPurchaseOrderController extends Controller
                 'clientId' => $data['clientId'],
                 'collectionId' => $data['collectionId'] ?? null,
                 'semester' => $this->semesterFrom($data),
-                'market' => $data['market'] ?? 'NATIONAL',
+                // Sin market en el PUT se conserva el actual (no se reinicia a Nacional).
+                'market' => $data['market'] ?? $order->market,
                 'dispatchStartDate' => $data['dispatchStartDate'] ?? null,
                 'deliveryDate' => $data['deliveryDate'] ?? null,
                 'partialDates' => $this->cleanDates($data['partialDates'] ?? null),

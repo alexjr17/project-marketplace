@@ -205,7 +205,8 @@ class MfgProductionOrderController extends Controller
                 $order->semester = $this->semesterFromCollection($order->collectionId) ?? ($data['semester'] ?? $order->semester);
             }
             if (array_key_exists('market', $data)) {
-                $order->market = $data['market'];
+                // market es NOT NULL: un null explícito vuelve a Nacional (como al crear).
+                $order->market = $data['market'] ?? 'NATIONAL';
             }
             if (array_key_exists('internalCode', $data)) {
                 $order->internalCode = $data['internalCode'];

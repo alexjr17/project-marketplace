@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Concerns\ApiResponse;
+use App\Models\MfgExchangeRate;
 use App\Models\MfgGarmentType;
 use App\Models\MfgReference;
 use Illuminate\Http\Request;
@@ -284,15 +285,21 @@ class MfgReferenceController extends Controller
         // Grupos de tallas (listas de precio) + tallas + recargos por color.
         if (array_key_exists('sizeGroups', $data)) {
             $ref->sizeGroups()->delete();
+            $rate = (float) (MfgExchangeRate::active()?->rate ?? 0);
             foreach ($data['sizeGroups'] ?? [] as $i => $g) {
+                $market = $g['market'] ?? 'NATIONAL';
                 $factor = (float) ($g['factor'] ?? 1);
                 $extra = (float) ($g['fixedCostExtra'] ?? 0);
                 $provided = (float) ($g['listPrice'] ?? 0);
                 $listPrice = $provided > 0 ? $provided : round(($costs['costUnit'] + $extra) * $factor, 2);
+                // Exportación se guarda en USD: pesos ÷ tasa activa (sin tasa queda en 0, nunca en pesos).
+                if ($provided <= 0 && $market === 'EXPORT') {
+                    $listPrice = $rate > 0 ? round($listPrice / $rate, 2) : 0;
+                }
 
                 $group = $ref->sizeGroups()->create([
                     'name' => $g['name'],
-                    'market' => $g['market'] ?? 'NATIONAL',
+                    'market' => $market,
                     'fixedCostExtra' => $extra,
                     'factor' => $factor,
                     'listPrice' => $listPrice,
