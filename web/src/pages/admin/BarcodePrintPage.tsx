@@ -60,7 +60,7 @@ export default function BarcodePrintPage() {
         setSelectedTemplate(activeTemplates[0].id);
       }
     } catch (error: any) {
-      toast.error('Error al cargar variantes: ' + (error.response?.data?.message || error.message));
+      toast.error('Error al cargar variantes: ' + (error?.message));
       navigate(BACK);
     } finally {
       setLoading(false);
@@ -99,7 +99,7 @@ export default function BarcodePrintPage() {
       toast.success('Etiquetas generadas exitosamente');
     } catch (error: any) {
       console.error('Error generating labels:', error);
-      toast.error('Error al generar etiquetas: ' + (error.response?.data?.message || error.message));
+      toast.error('Error al generar etiquetas: ' + (error?.message));
     } finally {
       setPrinting(false);
     }

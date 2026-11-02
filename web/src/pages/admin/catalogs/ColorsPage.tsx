@@ -3,7 +3,7 @@ import { Palette } from 'lucide-react';
 import { useCatalogs } from '../../../context/CatalogsContext';
 import { ColorInput, Field, Switch, TextInput, toast, useConfirm } from '../../../components/ui';
 import type { Color } from '../../../types/catalog';
-import { CatalogDialog, CatalogListPage, ctxId, errMsg } from './CatalogListPage';
+import { CatalogDialog, CatalogListPage, errMsg } from './CatalogListPage';
 
 const EMPTY = { name: '', hexCode: '#000000', isActive: true };
 const HEX = /^#[0-9A-Fa-f]{6}$/;
@@ -30,10 +30,10 @@ export const ColorsPage = () => {
     setSaving(true);
     try {
       if (editing) {
-        await updateColor(ctxId(editing.id), form);
+        await updateColor(editing.id, form);
         toast.success('Color actualizado');
       } else {
-        await addColor(form as Parameters<typeof addColor>[0]);
+        await addColor(form);
         toast.success('Color creado');
       }
       setOpen(false);
@@ -47,7 +47,7 @@ export const ColorsPage = () => {
   const remove = async (c: Color) => {
     if (!(await confirm({ title: `¿Eliminar el color "${c.name}"?`, message: 'Esta acción no se puede deshacer.', tone: 'danger' }))) return;
     try {
-      await deleteColor(ctxId(c.id));
+      await deleteColor(c.id);
       toast.success('Color eliminado');
       setOpen(false);
     } catch (err) {

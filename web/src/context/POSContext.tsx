@@ -32,7 +32,7 @@ export interface TemplateCartItem {
 }
 
 // Union type for cart items
-export type CartItem = ProductCartItem | TemplateCartItem;
+export type PosCartItem = ProductCartItem | TemplateCartItem;
 
 interface POSContextType {
   // Session
@@ -41,7 +41,7 @@ interface POSContextType {
   loadSession: () => Promise<void>;
 
   // Cart
-  cart: CartItem[];
+  cart: PosCartItem[];
   addToCart: (product: ScanProductResponse, quantity?: number) => void;
   addTemplateToCart: (templateId: number, templateName: string, templateImage: string, basePrice: number, selectedZones: TemplateZoneInfo[], totalPrice: number, quantity?: number) => void;
   removeFromCart: (itemId: string) => void;
@@ -82,7 +82,7 @@ export function POSProvider({ children }: { children: React.ReactNode }) {
   const [isLoadingSession, setIsLoadingSession] = useState(true);
 
   // Cart state
-  const [cart, setCart] = useState<CartItem[]>([]);
+  const [cart, setCart] = useState<PosCartItem[]>([]);
   const [discount, setDiscount] = useState(0);
   // Si se está editando una venta existente, su id (si no, null = venta nueva).
   const [editingSaleId, setEditingSaleId] = useState<number | null>(null);
@@ -270,7 +270,7 @@ export function POSProvider({ children }: { children: React.ReactNode }) {
    * Usa stock alto para no bloquear el ajuste de cantidades durante la edición.
    */
   const loadSaleForEditing = useCallback((sale: Sale) => {
-    const items: CartItem[] = (sale.items || []).map((it: any) => {
+    const items: PosCartItem[] = (sale.items || []).map((it: any) => {
       const price = Number(it.unitPrice ?? it.price) || 0;
       const quantity = Number(it.quantity) || 1;
       return {
@@ -318,7 +318,7 @@ export function POSProvider({ children }: { children: React.ReactNode }) {
       } catch (error: any) {
         console.error('Error scanning product:', error);
         showToast(
-          error.response?.data?.message || 'Producto no encontrado',
+          error?.message || 'Producto no encontrado',
           'error'
         );
       } finally {
@@ -345,11 +345,14 @@ export function POSProvider({ children }: { children: React.ReactNode }) {
         setIsProcessingSale(true);
 
         // Prepare sale items
-        const items: SaleItem[] = cart.map((item) => ({
-          variantId: item.variantId,
-          quantity: item.quantity,
-          price: item.price,
-        }));
+        const items: SaleItem[] = cart.map((item) => {
+          // El API exige variantId en cada ítem; los ítems de plantilla no lo tienen y antes
+          // se mandaban sin él (el API respondía 422). Se avisa con un mensaje claro.
+          if (item.itemType !== 'product') {
+            throw new Error(`"${item.product.name}" es un producto personalizable y no se puede cobrar desde el POS: el API exige una variante por ítem.`);
+          }
+          return { variantId: item.variantId, quantity: item.quantity, price: item.price };
+        });
 
         let sale: Sale;
         if (editingSaleId) {
@@ -393,7 +396,7 @@ export function POSProvider({ children }: { children: React.ReactNode }) {
       } catch (error: any) {
         console.error('Error processing sale:', error);
         showToast(
-          error.response?.data?.message || 'Error al procesar la venta',
+          error?.message || 'Error al procesar la venta',
           'error'
         );
         throw error;

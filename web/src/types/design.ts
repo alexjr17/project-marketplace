@@ -1,4 +1,4 @@
-import type { PrintZone, ProductType } from './product';
+import type { PrintZone, ProductTypeSlug } from './product';
 
 // Diseño aplicado a una vista del template (front/back)
 // El posicionamiento es libre sobre el área del template PNG
@@ -59,7 +59,7 @@ export interface SavedZoneConfig {
 export interface CustomizedProduct {
   id: string;
   productId: string;
-  productType: ProductType;
+  productType: ProductTypeSlug;
   productName: string;
   basePrice: number;
   selectedColor: string;
@@ -91,7 +91,7 @@ export interface CustomizedProduct {
 // Estado del editor de personalización
 export interface CustomizerState {
   productId: string | null;
-  productType: ProductType | null;
+  productType: ProductTypeSlug | null;
   selectedColor: string;
   selectedSize: string;
   currentView: 'front' | 'back';

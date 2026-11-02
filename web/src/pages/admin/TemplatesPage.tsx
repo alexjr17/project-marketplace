@@ -95,7 +95,7 @@ export const TemplatesPage = () => {
       await loadTemplates();
       setViewMode('list');
     } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Error al crear modelo');
+      toast.error(error?.message || 'Error al crear modelo');
     }
   };
 
@@ -127,7 +127,7 @@ export const TemplatesPage = () => {
       setSelectedInputIds([]);
     } catch (error: any) {
       console.error('Error al guardar:', error);
-      toast.error(error.response?.data?.message || 'Error al actualizar modelo');
+      toast.error(error?.message || 'Error al actualizar modelo');
     }
   };
 
@@ -140,7 +140,7 @@ export const TemplatesPage = () => {
       setViewMode('list');
       setSelectedTemplate(null);
     } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Error al eliminar modelo');
+      toast.error(error?.message || 'Error al eliminar modelo');
     }
   };
 
@@ -218,7 +218,7 @@ export const TemplatesPage = () => {
 
       setGeneratingVariantsFor(null);
     } catch (error: any) {
-      toast.error('Error al generar variantes: ' + (error.response?.data?.message || error.message));
+      toast.error('Error al generar variantes: ' + (error?.message));
     } finally {
       setIsGenerating(false);
     }

@@ -440,7 +440,7 @@ export const OrderConfirmationPage = () => {
               Dirección de Envío
             </h2>
             <div className="text-sm text-gray-600 space-y-1">
-              <p className="font-medium text-gray-900">{order.shipping.recipientName}</p>
+              <p className="font-medium text-gray-900">{order.shipping.name || order.shipping.recipientName}</p>
               <p>{order.shipping.address}</p>
               <p>
                 {order.shipping.city}

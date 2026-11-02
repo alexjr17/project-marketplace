@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { apiUrl } from '../../../lib/http';
 import type { ReactNode } from 'react';
 import { Copy, ExternalLink, Eye, EyeOff, Save } from 'lucide-react';
 import type { PaymentMethodConfig, WompiConfig, PickupConfig, NequiConfig, MercadoPagoConfig } from '../../../types/settings';
@@ -11,9 +12,8 @@ type MethodForm = Omit<PaymentMethodConfig, 'id'>;
 
 // URL base de la API (para mostrar las URLs de webhook que el comercio debe
 // registrar en el panel de Wompi / Mercado Pago).
-const apiBase = (import.meta.env.VITE_API_URL || 'http://localhost:8000/api').replace(/\/$/, '');
-const wompiWebhookUrl = `${apiBase}/webhooks/wompi`;
-const mpWebhookUrl = `${apiBase}/webhooks/mercadopago`;
+const wompiWebhookUrl = apiUrl('/webhooks/wompi');
+const mpWebhookUrl = apiUrl('/webhooks/mercadopago');
 
 const copyToClipboard = (text: string) => {
   navigator.clipboard.writeText(text);

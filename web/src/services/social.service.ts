@@ -1,4 +1,6 @@
 import api from './api.service';
+import { http } from '../lib/http';
+import { assetUrl as toAbsoluteUrl } from '../utils/assetUrl';
 import type { SocialPlatform, SocialPost, SocialPostStatus } from '../types/messaging';
 
 export interface SocialPostListParams {
@@ -58,36 +60,13 @@ class SocialService {
    * la `<img>` la pueda mostrar en el preview.
    */
   async uploadImage(file: File, folder: string = 'general'): Promise<string> {
-    const apiUrl = (import.meta.env.VITE_API_URL as string | undefined) || 'http://localhost:8000/api';
-    const baseOrigin = apiUrl.replace(/\/api\/?$/, '');
-
-    const authData = localStorage.getItem('marketplace_auth');
-    let token: string | null = null;
-    if (authData) {
-      try {
-        token = (JSON.parse(authData) as { token?: string }).token ?? null;
-      } catch {
-        token = null;
-      }
-    }
-
     const formData = new FormData();
     formData.append('image', file);
     formData.append('folder', folder);
 
-    const response = await fetch(`${apiUrl}/uploads/image`, {
-      method: 'POST',
-      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-      body: formData,
-    });
-
-    const json = (await response.json()) as { success?: boolean; data?: { url?: string }; message?: string };
-    if (!response.ok || !json.success || !json.data?.url) {
-      throw new Error(json.message || 'No se pudo subir la imagen');
-    }
-
-    const relative = json.data.url; // "/uploads/general/abc.jpg"
-    return relative.startsWith('http') ? relative : `${baseOrigin}${relative}`;
+    const data = await http.upload<{ url?: string }>('/uploads/image', formData);
+    if (!data?.url) throw new Error('No se pudo subir la imagen');
+    return toAbsoluteUrl(data.url); // "/uploads/general/abc.jpg" → URL completa
   }
 
   /**
@@ -97,35 +76,9 @@ class SocialService {
    * en URLs descargables por Meta/Facebook.
    */
   async uploadBase64(dataUrl: string, folder: string = 'general'): Promise<string> {
-    const apiUrl = (import.meta.env.VITE_API_URL as string | undefined) || 'http://localhost:8000/api';
-    const baseOrigin = apiUrl.replace(/\/api\/?$/, '');
-
-    const authData = localStorage.getItem('marketplace_auth');
-    let token: string | null = null;
-    if (authData) {
-      try {
-        token = (JSON.parse(authData) as { token?: string }).token ?? null;
-      } catch {
-        token = null;
-      }
-    }
-
-    const response = await fetch(`${apiUrl}/uploads/base64`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      body: JSON.stringify({ image: dataUrl, folder }),
-    });
-
-    const json = (await response.json()) as { success?: boolean; data?: { url?: string }; message?: string };
-    if (!response.ok || !json.success || !json.data?.url) {
-      throw new Error(json.message || 'No se pudo subir la imagen base64');
-    }
-
-    const relative = json.data.url;
-    return relative.startsWith('http') ? relative : `${baseOrigin}${relative}`;
+    const data = await http.post<{ url?: string }>('/uploads/base64', { image: dataUrl, folder });
+    if (!data?.url) throw new Error('No se pudo subir la imagen base64');
+    return toAbsoluteUrl(data.url);
   }
 }
 

@@ -1,33 +1,9 @@
 import api from './api.service';
 import type { WompiCheckoutData } from './wompi.service';
-import type { OrderStatus, PaymentMethod } from '../types/order';
+import type { OrderItem, OrderStatus, PaymentMethod, ShippingInfo } from '../types/order';
 
-export interface OrderItem {
-  id: number;
-  productId: number;
-  productName: string;
-  productImage: string;
-  size: string;
-  color: string;
-  quantity: number;
-  unitPrice: number;
-  customization?: {
-    designFront?: string;
-    designBack?: string;
-  };
-}
-
-export interface ShippingInfo {
-  recipientName: string;
-  phone: string;
-  address: string;
-  city: string;
-  postalCode: string;
-  country: string;
-  notes?: string;
-}
-
-export interface StatusHistoryEntry {
+/** Entrada del historial de estados tal como llega del API (fechas en texto). */
+export interface ApiStatusHistoryEntry {
   id: string;
   fromStatus: OrderStatus | null;
   toStatus: OrderStatus;
@@ -37,10 +13,11 @@ export interface StatusHistoryEntry {
   trackingNumber?: string;
   trackingUrl?: string;
   cancellationReason?: string;
-  evidences?: PaymentEvidence[];
+  evidences?: ApiPaymentEvidence[];
 }
 
-export interface PaymentEvidence {
+/** Evidencia de pago tal como llega del API. */
+export interface ApiPaymentEvidence {
   id: string;
   type: 'receipt' | 'transfer' | 'screenshot' | 'other';
   url: string;
@@ -53,6 +30,8 @@ export interface ApiOrder {
   id: number;
   orderNumber: string;
   userId: number;
+  userName?: string | null;
+  userEmail?: string | null;
   user?: {
     id: number;
     name: string;
@@ -71,7 +50,7 @@ export interface ApiOrder {
   trackingNumber?: string;
   trackingUrl?: string;
   notes?: string;
-  statusHistory: StatusHistoryEntry[];
+  statusHistory: ApiStatusHistoryEntry[];
   paidAt?: string;
   shippedAt?: string;
   deliveredAt?: string;
@@ -151,14 +130,9 @@ export const ordersService = {
     // El backend devuelve { success, data, meta } donde meta tiene la paginación
     const response = await api.get<ApiOrder[]>('/orders', filters) as any;
 
-    console.log('[ordersService.getAll] Raw response:', response);
-
     // Mapear 'meta' del backend a 'pagination' del frontend
     const meta = response.meta || response.pagination;
     const data = response.data || [];
-
-    console.log('[ordersService.getAll] Extracted data:', data);
-    console.log('[ordersService.getAll] Extracted meta:', meta);
 
     return {
       data,
@@ -260,27 +234,6 @@ export const ordersService = {
     } catch {
       return [];
     }
-  },
-
-  // Actualizar información de tracking
-  async updateTracking(
-    orderId: number,
-    trackingNumber: string,
-    trackingUrl?: string
-  ): Promise<ApiOrder> {
-    const response = await api.patch<ApiOrder>(`/orders/${orderId}/tracking`, {
-      trackingNumber,
-      trackingUrl,
-    });
-    if (!response.data) throw new Error('Error actualizando tracking');
-    return response.data;
-  },
-
-  // Agregar nota al pedido
-  async addNote(orderId: number, note: string): Promise<ApiOrder> {
-    const response = await api.patch<ApiOrder>(`/orders/${orderId}/notes`, { note });
-    if (!response.data) throw new Error('Error agregando nota');
-    return response.data;
   },
 };
 

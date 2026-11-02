@@ -70,12 +70,12 @@ describe('payments.service (caracterización)', () => {
       expect((await paymentsService.listPayments()).meta).toEqual(meta);
     });
 
-    it('sin datos: lista vacía y meta por defecto; escribe en consola', async () => {
+    it('sin datos: lista vacía y meta por defecto; no escribe en consola', async () => {
       const log = vi.spyOn(console, 'log').mockImplementation(() => {});
       server.use(http.get(`${API}/payments/all`, () => HttpResponse.json({ success: true })));
       expect(await paymentsService.listPayments()).toEqual({ data: [], meta: { page: 1, limit: 20, total: 0, totalPages: 0 } });
-      // ACTUAL (posible bug): console.log de depuración en producción.
-      expect(log).toHaveBeenCalled();
+      // CORREGIDO: se quitó el console.log de depuración.
+      expect(log).not.toHaveBeenCalled();
     });
   });
 

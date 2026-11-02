@@ -1,15 +1,16 @@
-import type { ProductType } from './product';
+import type { ProductType } from './catalog';
 
-export const enum LabelZoneType {
-  PRODUCT_NAME = 'PRODUCT_NAME',
-  SIZE = 'SIZE',
-  COLOR = 'COLOR',
-  BARCODE = 'BARCODE',
-  BARCODE_TEXT = 'BARCODE_TEXT',
-  SKU = 'SKU',
-  PRICE = 'PRICE',
-  CUSTOM_TEXT = 'CUSTOM_TEXT',
-}
+export const LabelZoneType = {
+  PRODUCT_NAME: 'PRODUCT_NAME',
+  SIZE: 'SIZE',
+  COLOR: 'COLOR',
+  BARCODE: 'BARCODE',
+  BARCODE_TEXT: 'BARCODE_TEXT',
+  SKU: 'SKU',
+  PRICE: 'PRICE',
+  CUSTOM_TEXT: 'CUSTOM_TEXT',
+} as const;
+export type LabelZoneType = (typeof LabelZoneType)[keyof typeof LabelZoneType];
 
 export interface LabelZone {
   id: number;

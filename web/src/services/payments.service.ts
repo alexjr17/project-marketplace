@@ -187,7 +187,6 @@ class PaymentsService {
    */
   async listPayments(query?: ListPaymentsQuery): Promise<PaginatedPayments> {
     const response = await api.get<Payment[]>('/payments/all', query) as any;
-    console.log('[paymentsService] response.data:', response.data);
 
     // El backend retorna { success, data, meta }
     // api.get() ya parsea esto, así que accedemos directamente

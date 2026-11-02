@@ -193,7 +193,6 @@ export const exportDesignsToZip = async (
     templateName = 'diseño',
     selectedColor = '',
     selectedSize = '',
-    includeOriginal = true,
     templateImages,
     colorizedTemplateImages,
   } = options;

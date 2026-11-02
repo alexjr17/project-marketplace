@@ -36,7 +36,7 @@ export const RolesPage = () => {
       if (await deleteRole(role.id)) toast.success('Rol eliminado');
       else toast.error('No se pudo eliminar el rol');
     } catch (err: any) {
-      toast.error(err?.response?.data?.message || err?.message || 'No se pudo eliminar el rol');
+      toast.error(err?.message || 'No se pudo eliminar el rol');
     }
   };
 

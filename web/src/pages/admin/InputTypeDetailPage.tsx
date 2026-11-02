@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Check, Save, Tags, Trash2 } from 'lucide-react';
 import { inputTypesService, type CreateInputTypeDto, type UpdateInputTypeDto } from '../../services/input-types.service';
-import { catalogsService, type Size } from '../../services/catalogs.service';
+import { catalogsService } from '../../services/catalogs.service';
+import type { Size } from '../../types/catalog';
 import {
   Page, PageHeader, Button, Card, CardTitle, Field, TextInput, TextArea, NumberInput, FormGrid, FormActions,
   Alert, Spinner, EmptyState, useConfirm, toast,
@@ -122,7 +123,7 @@ export default function InputTypeDetailPage() {
       toast.success('Tipo de insumo eliminado');
       navigate(LIST);
     } catch (err: any) {
-      const msg = err.response?.data?.message || 'Error al eliminar el tipo de insumo';
+      const msg = err?.message || 'Error al eliminar el tipo de insumo';
       setError(msg);
       toast.error(msg);
       console.error(err);

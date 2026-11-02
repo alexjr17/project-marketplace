@@ -315,7 +315,7 @@ export const MyOrdersPage = () => {
                   </p>
                 )}
                 <div className="mt-3 pt-3 border-t border-gray-100 text-sm text-gray-600">
-                  <p className="flex items-center gap-1.5 font-medium text-gray-900"><MapPin className="w-4 h-4 text-gray-400" />{selectedOrder.shipping.recipientName}</p>
+                  <p className="flex items-center gap-1.5 font-medium text-gray-900"><MapPin className="w-4 h-4 text-gray-400" />{selectedOrder.shipping.name || selectedOrder.shipping.recipientName}</p>
                   <p className="pl-5">{selectedOrder.shipping.address}</p>
                   <p className="pl-5">{selectedOrder.shipping.city}{selectedOrder.shipping.postalCode && `, ${selectedOrder.shipping.postalCode}`}</p>
                   <p className="pl-5">{selectedOrder.shipping.phone}</p>

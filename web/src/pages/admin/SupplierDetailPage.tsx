@@ -123,7 +123,7 @@ export default function SupplierDetailPage() {
       }
       navigate(LIST);
     } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Error al guardar');
+      toast.error(error?.message || 'Error al guardar');
     } finally {
       setSaving(false);
     }
@@ -138,7 +138,7 @@ export default function SupplierDetailPage() {
       toast.success('Proveedor eliminado');
       navigate(LIST);
     } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Error al eliminar');
+      toast.error(error?.message || 'Error al eliminar');
     } finally {
       setSaving(false);
     }

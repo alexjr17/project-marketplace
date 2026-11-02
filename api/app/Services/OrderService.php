@@ -5,7 +5,6 @@ namespace App\Services;
 use App\Models\Payment;
 use App\Models\Discount;
 use App\Models\InputVariant;
-use App\Models\InputVariantMovement;
 use App\Models\Notification;
 use App\Models\Order;
 use App\Models\OrderItem;
@@ -14,7 +13,6 @@ use App\Models\ProductInput;
 use App\Models\ProductVariant;
 use App\Models\Setting;
 use App\Models\TemplateRecipe;
-use App\Models\VariantMovement;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
@@ -48,6 +46,8 @@ class OrderService
         private TemplateStockService $templateStock,
         private DiscountService $discounts,
         private ShippingQuoteService $shippingQuotes,
+        private NumberSequenceService $numbers,
+        private StockService $stock,
     ) {}
 
     /** Primera imagen utilizable de un producto ({front,...} u array). */
@@ -126,18 +126,6 @@ class OrderService
         ];
     }
 
-    private function generateOrderNumber(): string
-    {
-        $now = now();
-        $prefix = 'ORD-'.$now->format('ymd').'-';
-        $count = Order::whereBetween('createdAt', [
-            $now->copy()->startOfDay(),
-            $now->copy()->endOfDay(),
-        ])->count();
-
-        return $prefix.str_pad((string) ($count + 1), 4, '0', STR_PAD_LEFT);
-    }
-
     private function getSettings(): array
     {
         $order = Setting::where('key', 'order_settings')->value('value') ?? [];
@@ -166,6 +154,7 @@ class OrderService
         $orderItems = [];
         $stockUpdates = [];
         $couponItems = []; // contexto para validar cupones (producto/categoría)
+        $requested = []; // variantId => cantidad total pedida (suma líneas repetidas)
 
         foreach ($data['items'] as $item) {
             $product = Product::with('variants.color', 'variants.size')->find($item['productId']);
@@ -193,14 +182,15 @@ class OrderService
                 );
             }
 
+            $requested[$variant->id] = ($requested[$variant->id] ?? 0) + $item['quantity'];
             if ($product->isTemplate) {
                 $available = $this->templateStock->getAvailableStockForTemplate($variant->id);
-                if ($available < $item['quantity']) {
+                if ($available < $requested[$variant->id]) {
                     throw new RuntimeException(
                         "Stock insuficiente para \"{$product->name}\" ({$item['size']}, {$item['color']}). Disponible: {$available}"
                     );
                 }
-            } elseif ($variant->stock < $item['quantity']) {
+            } elseif ($variant->stock < $requested[$variant->id]) {
                 throw new RuntimeException(
                     "Stock insuficiente para \"{$product->name}\" ({$item['size']}, {$item['color']}). Disponible: {$variant->stock}"
                 );
@@ -274,12 +264,12 @@ class OrderService
         }
 
         $total = max(0, $subtotal + $shippingCost + $tax - $discount);
-        $orderNumber = $this->generateOrderNumber();
 
         return DB::transaction(function () use (
-            $userId, $data, $orderNumber, $subtotal, $shippingCost, $tax, $total,
+            $userId, $data, $subtotal, $shippingCost, $tax, $total,
             $discount, $discountModel, $couponCode, $orderItems, $stockUpdates
         ) {
+            $orderNumber = $this->numbers->next(NumberSequenceService::ORDER);
             $order = Order::create([
                 'orderNumber' => $orderNumber,
                 'userId' => $userId,
@@ -316,20 +306,9 @@ class OrderService
                 if ($su['isTemplate']) {
                     continue;
                 }
-                $variant = ProductVariant::find($su['variantId']);
-                if (! $variant) {
-                    continue;
-                }
-                $previousStock = $variant->stock;
-                $variant->stock = $previousStock - $su['quantity'];
-                $variant->save();
-
-                VariantMovement::create([
-                    'variantId' => $variant->id,
-                    'movementType' => 'SALE',
-                    'quantity' => -$su['quantity'],
-                    'previousStock' => $previousStock,
-                    'newStock' => $variant->stock,
+                // Con bloqueo de fila: si otro pedido se llevó el stock entre la validación y
+                // aquí, falla (400) en vez de dejar la variante en negativo.
+                $this->stock->variantOut($su['variantId'], $su['quantity'], 'SALE', [
                     'referenceType' => 'order',
                     'referenceId' => $order->id,
                     'reason' => "Venta online - Orden {$orderNumber}",
@@ -633,16 +612,7 @@ class OrderService
                     }
                 }
             } else {
-                $previousStock = $variant->stock;
-                $variant->stock = $previousStock + $item->quantity;
-                $variant->save();
-
-                VariantMovement::create([
-                    'variantId' => $variant->id,
-                    'movementType' => 'RETURN',
-                    'quantity' => $item->quantity,
-                    'previousStock' => $previousStock,
-                    'newStock' => $variant->stock,
+                $this->stock->variantIn($variant->id, $item->quantity, 'RETURN', [
                     'referenceType' => 'order_cancel',
                     'referenceId' => $order->id,
                     'reason' => "Cancelación orden {$order->orderNumber}",
@@ -668,26 +638,15 @@ class OrderService
 
     private function moveInputStock(int $inputVariantId, float $delta, string $type, string $refType, int $refId, string $reason): void
     {
-        $inputVariant = InputVariant::find($inputVariantId);
-        if (! $inputVariant) {
+        if (! InputVariant::whereKey($inputVariantId)->exists()) {
             return;
         }
-        $previousStock = (float) $inputVariant->currentStock;
-        $newStock = $previousStock + $delta;
+        $attrs = ['referenceType' => $refType, 'referenceId' => $refId, 'reason' => $reason];
 
-        $inputVariant->currentStock = $newStock;
-        $inputVariant->save();
-
-        InputVariantMovement::create([
-            'inputVariantId' => $inputVariantId,
-            'movementType' => $type,
-            'quantity' => $delta,
-            'previousStock' => $previousStock,
-            'newStock' => $newStock,
-            'referenceType' => $refType,
-            'referenceId' => $refId,
-            'reason' => $reason,
-        ]);
+        // El consumo de plantillas ocurre al confirmarse el pago: no puede fallar por stock.
+        $delta < 0
+            ? $this->stock->inputVariantOut($inputVariantId, -$delta, $type, $attrs, allowNegative: true)
+            : $this->stock->inputVariantIn($inputVariantId, $delta, $type, $attrs);
     }
 
     /** Crea notificaciones de reseña para los productos de un pedido entregado. */

@@ -47,12 +47,12 @@ describe('orders.service (caracterización)', () => {
       expect(await ordersService.getAll()).toEqual({ data: [], pagination: DEFAULT_PAGINATION });
     });
 
-    it('escribe la respuesta cruda en consola', async () => {
+    it('no escribe la respuesta en consola', async () => {
       const log = quiet();
       server.use(http.get(`${API}/orders`, () => ok([], undefined, { meta: DEFAULT_PAGINATION })));
       await ordersService.getAll();
-      // ACTUAL (posible bug): console.log de depuración en producción con datos de pedidos.
-      expect(log).toHaveBeenCalled();
+      // CORREGIDO: se quitó el console.log de depuración con datos de pedidos.
+      expect(log).not.toHaveBeenCalled();
     });
 
     it('propaga el error del backend (403)', async () => {
@@ -228,21 +228,6 @@ describe('orders.service (caracterización)', () => {
     it('create: lanza el message si no viene data', async () => {
       server.use(http.post(`${API}/orders`, () => HttpResponse.json({ success: true, message: 'Sin stock' })));
       await expect(ordersService.create({} as never)).rejects.toThrow('Sin stock');
-    });
-
-    it('updateTracking y addNote llaman rutas que la API no define', async () => {
-      // ACTUAL (posible bug): api/routes/api.php no tiene PATCH /orders/{id}/tracking ni /notes
-      // (solo /status). Aquí solo se fija la URL que usa el front.
-      const paths: string[] = [];
-      server.use(
-        http.patch(`${API}/orders/:id/:what`, ({ request }) => {
-          paths.push(new URL(request.url).pathname);
-          return ok(order());
-        }),
-      );
-      await ordersService.updateTracking(1, 'T');
-      await ordersService.addNote(1, 'n');
-      expect(paths).toEqual(['/api/orders/1/tracking', '/api/orders/1/notes']);
     });
 
     it('getByEmail usa GET /orders?search= (ruta de admin) y traga errores', async () => {

@@ -7,7 +7,8 @@ import {
 import { productsService } from '../../services/products.service';
 import { inputsService, type Input } from '../../services/inputs.service';
 import * as variantsService from '../../services/variants.service';
-import { catalogsService, type ProductType as CatalogProductType } from '../../services/catalogs.service';
+import { catalogsService } from '../../services/catalogs.service';
+import type { ProductType as CatalogProductType } from '../../types/catalog';
 import type { Product } from '../../types/product';
 
 export interface PurchaseItem {

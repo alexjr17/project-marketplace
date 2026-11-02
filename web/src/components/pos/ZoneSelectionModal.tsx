@@ -2,23 +2,8 @@ import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { X, CheckCircle, Package, Eye, Loader2 } from 'lucide-react';
 import type { TemplateSearchResult, TemplateZoneInfo } from '../../services/pos.service';
 import { applyColorToImage } from '../../utils/imageColorizer';
-import axios from 'axios';
 import { Button } from '../ui';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
-
-const getAuthToken = () => {
-  const authData = localStorage.getItem('marketplace_auth');
-  if (authData) {
-    try {
-      const parsed = JSON.parse(authData);
-      return parsed.token;
-    } catch {
-      return null;
-    }
-  }
-  return null;
-};
+import { templateRecipesService } from '../../services/template-recipes.service';
 
 interface ZoneSelectionModalProps {
   template: TemplateSearchResult;
@@ -121,24 +106,17 @@ export default function ZoneSelectionModal({ template, onConfirm, onCancel }: Zo
     const fetchStock = async () => {
       setIsLoadingStock(true);
       try {
-        const response = await axios.get(
-          `${API_URL}/template-recipes/variant-stock/${template.templateId}`,
-          {
-            params: {
-              colorId: template.scannedVariant?.colorId,
-              sizeId: template.scannedVariant?.sizeId,
-            },
-            headers: {
-              Authorization: `Bearer ${getAuthToken()}`,
-            },
-          }
+        const data = await templateRecipesService.getVariantStock(
+          template.templateId,
+          template.scannedVariant?.colorId,
+          template.scannedVariant?.sizeId,
         );
 
-        if (response.data.success && response.data.data) {
+        if (data) {
           setStockInfo({
-            availableStock: response.data.data.availableStock || 0,
-            variantId: response.data.data.variantId || null,
-            sku: response.data.data.sku || '',
+            availableStock: data.availableStock || 0,
+            variantId: data.variantId || null,
+            sku: data.sku || '',
           });
         } else {
           setStockInfo({ availableStock: 0, variantId: null, sku: '' });

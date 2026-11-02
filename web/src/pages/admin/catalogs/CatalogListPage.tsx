@@ -12,13 +12,9 @@ import {
  * Así las cuatro pantallas tienen la misma estructura: encabezado, indicadores, filtros, tabla y diálogo.
  */
 
-/** El contexto de catálogos tipa el id como string pero compara contra el id numérico de la API. */
-export const ctxId = (id: number) => id as unknown as string;
-
 /** Mensaje legible de un error de la API. */
 export const errMsg = (e: unknown, fallback: string) => {
-  const m = (e as { response?: { data?: { message?: string } }; message?: string })?.response?.data?.message
-    ?? (e instanceof Error ? e.message : '');
+  const m = e instanceof Error ? e.message : '';
   return m ? `${fallback}: ${m}` : fallback;
 };
 

@@ -5,7 +5,6 @@ namespace App\Services;
 use App\Models\CashRegister;
 use App\Models\CashSession;
 use App\Models\InputVariant;
-use App\Models\InputVariantMovement;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\POSCustomer;
@@ -26,6 +25,8 @@ class POSService
     public function __construct(
         private TemplateStockService $templateStock,
         private DiscountService $discounts,
+        private NumberSequenceService $numbers,
+        private StockService $stock,
     ) {}
 
     /** Ofertas automáticas vigentes para el POS, cacheadas por request. */
@@ -70,12 +71,6 @@ class POSService
         $ids = $caja?->categoryIds;
 
         return (is_array($ids) && count($ids) > 0) ? $ids : null;
-    }
-
-    /** Genera un número de orden POS (POS-AAMMDD-NNNN). */
-    private function generateOrderNumber(): string
-    {
-        return 'POS-'.date('ymd').'-'.str_pad((string) random_int(0, 9999), 4, '0', STR_PAD_LEFT);
     }
 
     /** Escanea una variante por código de barras (POST /pos/scan). */
@@ -524,22 +519,33 @@ class POSService
             }
         }
 
-        // Verificar stock de todos los items.
+        // Verificar stock contra el TOTAL por variante: dos líneas de la misma variante se
+        // suman (antes se validaba línea por línea y 2 + 2 con stock 3 dejaba -1).
+        $requested = [];
         foreach ($data['items'] as $item) {
-            $variant = ProductVariant::with('product')->find($item['variantId']);
+            $requested[$item['variantId']] = ($requested[$item['variantId']] ?? 0) + $item['quantity'];
+        }
+        $regular = [];
+        foreach ($requested as $variantId => $quantity) {
+            $variant = ProductVariant::with('product')->find($variantId);
             if (! $variant) {
-                throw new RuntimeException("Variante {$item['variantId']} no encontrada");
+                throw new RuntimeException("Variante {$variantId} no encontrada");
             }
-            $available = (int) $variant->stock;
-            if ($variant->product->isTemplate) {
-                $available = $this->templateStock->getAvailableStockForTemplate($variant->id);
+            if (! $variant->product->isTemplate) {
+                $regular[$variantId] = $quantity;
+
+                continue;
             }
-            if ($available < $item['quantity']) {
-                throw new RuntimeException("Stock insuficiente para {$variant->sku}. Disponible: {$available}, Solicitado: {$item['quantity']}");
+            $available = $this->templateStock->getAvailableStockForTemplate($variant->id);
+            if ($available < $quantity) {
+                throw new RuntimeException("Stock insuficiente para {$variant->sku}. Disponible: {$available}, Solicitado: {$quantity}");
             }
         }
 
-        return DB::transaction(function () use ($data, $calculation, $session) {
+        return DB::transaction(function () use ($data, $calculation, $session, $regular) {
+            // Bloquea las variantes y revalida dentro de la transacción (dos cajas a la vez).
+            $this->stock->assertVariantsAvailable($regular);
+
             $isDebt = ($data['paymentMethod'] === 'debe');
 
             // Resolver cliente: por id seleccionado, por cédula (upsert) o por nombre.
@@ -569,7 +575,7 @@ class POSService
             $leavesDebt = $isDebt && ($abonoPaid + 0.01 < $calculation['total']);
 
             $order = Order::create([
-                'orderNumber' => $this->generateOrderNumber(),
+                'orderNumber' => $this->numbers->next(NumberSequenceService::POS_SALE),
                 'posCustomerId' => $posCustomerId,
                 'customerEmail' => $data['customerEmail'] ?? 'venta-pos@local.com',
                 'customerName' => $data['customerName'] ?? 'Cliente POS',
@@ -633,36 +639,19 @@ class POSService
                     $recipes = TemplateRecipe::where('variantId', $variant->id)->get();
                     foreach ($recipes as $recipe) {
                         $consume = (float) $recipe->quantity * $item['quantity'];
-                        $iv = InputVariant::find($recipe->inputVariantId);
-                        if (! $iv) {
+                        if (! InputVariant::whereKey($recipe->inputVariantId)->exists()) {
                             continue;
                         }
-                        $prev = (float) $iv->currentStock;
-                        $iv->currentStock = $prev - $consume;
-                        $iv->save();
-
-                        InputVariantMovement::create([
-                            'inputVariantId' => $recipe->inputVariantId,
-                            'movementType' => 'SALIDA',
-                            'quantity' => -$consume,
-                            'previousStock' => $prev,
-                            'newStock' => $prev - $consume,
+                        // El disponible de la plantilla ya se validó arriba; el consumo de
+                        // insumos conserva su comportamiento (no bloquea la venta).
+                        $this->stock->inputVariantOut($recipe->inputVariantId, $consume, 'SALIDA', [
                             'referenceType' => 'sale',
                             'referenceId' => $order->id,
                             'reason' => 'Venta POS - Template '.$variant->product->name,
-                        ]);
+                        ], allowNegative: true);
                     }
                 } else {
-                    $prev = (int) $variant->stock;
-                    $variant->stock = $prev - $item['quantity'];
-                    $variant->save();
-
-                    VariantMovement::create([
-                        'variantId' => $variant->id,
-                        'movementType' => 'SALE',
-                        'quantity' => -$item['quantity'],
-                        'previousStock' => $prev,
-                        'newStock' => $prev - $item['quantity'],
+                    $this->stock->variantOut($variant->id, $item['quantity'], 'SALE', [
                         'referenceType' => 'sale',
                         'referenceId' => $order->id,
                         'reason' => 'Venta POS',

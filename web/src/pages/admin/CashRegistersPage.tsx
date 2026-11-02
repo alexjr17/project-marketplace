@@ -59,7 +59,7 @@ export default function CashRegistersPage() {
       await loadCashRegisters();
     } catch (error: any) {
       console.error('Error deleting register:', error);
-      toast.error(error.response?.data?.message || 'Error al eliminar la caja');
+      toast.error(error?.message || 'Error al eliminar la caja');
     }
   };
 

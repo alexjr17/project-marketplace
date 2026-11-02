@@ -1,21 +1,4 @@
-import axios from 'axios';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
-
-// Helper para obtener token desde marketplace_auth
-const getAuthToken = (): string | null => {
-  const authData = localStorage.getItem('marketplace_auth');
-  if (authData) {
-    try {
-      const parsed = JSON.parse(authData);
-      return parsed.token || null;
-    } catch {
-      return null;
-    }
-  }
-  return null;
-};
-
+import { httpKeepUrls as client, isApiError } from '../lib/http';
 // ==================== TYPES ====================
 
 export interface CashRegister {
@@ -96,24 +79,14 @@ export interface SessionsFilter {
  */
 export async function getCashRegisters(activeOnly: boolean = false): Promise<CashRegister[]> {
   const params = activeOnly ? '?activeOnly=true' : '';
-  const response = await axios.get(`${API_URL}/cash-registers${params}`, {
-    headers: {
-      Authorization: `Bearer ${getAuthToken()}`,
-    },
-  });
-  return response.data.data;
+  return client.get<CashRegister[]>(`/cash-registers${params}`);
 }
 
 /**
  * Get cash register by ID
  */
 export async function getCashRegister(id: number): Promise<CashRegister> {
-  const response = await axios.get(`${API_URL}/cash-registers/${id}`, {
-    headers: {
-      Authorization: `Bearer ${getAuthToken()}`,
-    },
-  });
-  return response.data.data;
+  return client.get<CashRegister>(`/cash-registers/${id}`);
 }
 
 /**
@@ -125,12 +98,7 @@ export async function createCashRegister(data: {
   code: string;
   categoryIds?: number[];
 }): Promise<CashRegister> {
-  const response = await axios.post(`${API_URL}/cash-registers`, data, {
-    headers: {
-      Authorization: `Bearer ${getAuthToken()}`,
-    },
-  });
-  return response.data.data;
+  return client.post<CashRegister>(`/cash-registers`, data);
 }
 
 /**
@@ -146,23 +114,14 @@ export async function updateCashRegister(
     categoryIds?: number[];
   }
 ): Promise<CashRegister> {
-  const response = await axios.patch(`${API_URL}/cash-registers/${id}`, data, {
-    headers: {
-      Authorization: `Bearer ${getAuthToken()}`,
-    },
-  });
-  return response.data.data;
+  return client.patch<CashRegister>(`/cash-registers/${id}`, data);
 }
 
 /**
  * Delete cash register
  */
 export async function deleteCashRegister(id: number): Promise<void> {
-  await axios.delete(`${API_URL}/cash-registers/${id}`, {
-    headers: {
-      Authorization: `Bearer ${getAuthToken()}`,
-    },
-  });
+  await client.delete(`/cash-registers/${id}`);
 }
 
 /**
@@ -172,24 +131,14 @@ export async function openSession(
   cashRegisterId: number,
   data: OpenSessionRequest
 ): Promise<CashSession> {
-  const response = await axios.post(`${API_URL}/cash-registers/${cashRegisterId}/open-session`, data, {
-    headers: {
-      Authorization: `Bearer ${getAuthToken()}`,
-    },
-  });
-  return response.data.data;
+  return client.post<CashSession>(`/cash-registers/${cashRegisterId}/open-session`, data);
 }
 
 /**
  * Close cash session
  */
 export async function closeSession(sessionId: number, data: CloseSessionRequest): Promise<CashSession> {
-  const response = await axios.post(`${API_URL}/cash-registers/sessions/${sessionId}/close`, data, {
-    headers: {
-      Authorization: `Bearer ${getAuthToken()}`,
-    },
-  });
-  return response.data.data;
+  return client.post<CashSession>(`/cash-registers/sessions/${sessionId}/close`, data);
 }
 
 /**
@@ -197,14 +146,9 @@ export async function closeSession(sessionId: number, data: CloseSessionRequest)
  */
 export async function getMySession(): Promise<CashSession | null> {
   try {
-    const response = await axios.get(`${API_URL}/cash-registers/my-session`, {
-      headers: {
-        Authorization: `Bearer ${getAuthToken()}`,
-      },
-    });
-    return response.data.data;
-  } catch (error: any) {
-    if (error.response?.status === 404) {
+    return await client.get<CashSession | null>(`/cash-registers/my-session`);
+  } catch (error) {
+    if (isApiError(error) && error.status === 404) {
       return null;
     }
     throw error;
@@ -215,12 +159,7 @@ export async function getMySession(): Promise<CashSession | null> {
  * Get session report
  */
 export async function getSessionReport(sessionId: number): Promise<SessionReport> {
-  const response = await axios.get(`${API_URL}/cash-registers/sessions/${sessionId}/report`, {
-    headers: {
-      Authorization: `Bearer ${getAuthToken()}`,
-    },
-  });
-  return response.data.data;
+  return client.get<SessionReport>(`/cash-registers/sessions/${sessionId}/report`);
 }
 
 /**
@@ -234,10 +173,5 @@ export async function getSessions(filter?: SessionsFilter): Promise<CashSession[
   if (filter?.dateFrom) params.append('dateFrom', filter.dateFrom);
   if (filter?.dateTo) params.append('dateTo', filter.dateTo);
 
-  const response = await axios.get(`${API_URL}/cash-registers/sessions?${params.toString()}`, {
-    headers: {
-      Authorization: `Bearer ${getAuthToken()}`,
-    },
-  });
-  return response.data.data;
+  return client.get<CashSession[]>(`/cash-registers/sessions?${params.toString()}`);
 }

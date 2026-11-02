@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import type { ProductType } from '../../services/catalogs.service';
+import type { ProductType } from '../../types/catalog';
 import { catalogsService } from '../../services/catalogs.service';
 import { useCatalogs } from '../../context/CatalogsContext';
 import { Button, Field, FormActions, FormGrid, SelectInput, Spinner, Switch, TextArea, TextInput, toast } from '../ui';

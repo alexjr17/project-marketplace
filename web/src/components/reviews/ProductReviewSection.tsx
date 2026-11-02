@@ -120,7 +120,7 @@ export const ProductReviewSection = ({ productId }: ProductReviewSectionProps) =
       loadReviews();
       checkCanReview();
     } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Error al guardar la reseña');
+      toast.error(err?.message || 'Error al guardar la reseña');
     } finally {
       setIsSubmitting(false);
     }
@@ -140,7 +140,7 @@ export const ProductReviewSection = ({ productId }: ProductReviewSectionProps) =
       loadReviews();
       checkCanReview();
     } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Error al eliminar la reseña');
+      toast.error(err?.message || 'Error al eliminar la reseña');
     }
   };
 
@@ -163,7 +163,7 @@ export const ProductReviewSection = ({ productId }: ProductReviewSectionProps) =
         )
       );
     } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Error al votar');
+      toast.error(err?.message || 'Error al votar');
     } finally {
       setIsVoting(false);
     }
@@ -182,7 +182,7 @@ export const ProductReviewSection = ({ productId }: ProductReviewSectionProps) =
         )
       );
     } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Error al remover voto');
+      toast.error(err?.message || 'Error al remover voto');
     } finally {
       setIsVoting(false);
     }

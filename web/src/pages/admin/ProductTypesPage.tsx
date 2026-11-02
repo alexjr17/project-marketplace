@@ -3,7 +3,7 @@ import { Shirt } from 'lucide-react';
 import { useCatalogs } from '../../context/CatalogsContext';
 import { ProductTypeForm } from '../../components/admin/ProductTypeForm';
 import { Badge, toast, useConfirm } from '../../components/ui';
-import type { ProductType } from '../../services/catalogs.service';
+import type { ProductType } from '../../types/catalog';
 import { CatalogDialog, CatalogListPage, errMsg } from './catalogs/CatalogListPage';
 
 /** Tipos de producto (pestaña de Atributos). Mismo patrón que Categorías, Tallas y Colores. */
@@ -41,7 +41,7 @@ export const ProductTypesPage = () => {
   const remove = async (t: ProductType) => {
     if (!(await confirm({ title: `¿Eliminar el tipo "${t.name}"?`, message: 'Esta acción no se puede deshacer.', tone: 'danger' }))) return;
     try {
-      await deleteProductType(t.id as unknown as string);
+      await deleteProductType(t.id);
       toast.success('Tipo de producto eliminado');
       setOpen(false);
       setSelected(null);

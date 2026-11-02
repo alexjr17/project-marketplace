@@ -115,7 +115,7 @@ export const RoleFormPage = () => {
       }
       navigate(LIST);
     } catch (err: any) {
-      toast.error(err?.response?.data?.message || err?.message || 'No se pudo guardar el rol');
+      toast.error(err?.message || 'No se pudo guardar el rol');
       setSaving(false);
     }
   };
@@ -128,7 +128,7 @@ export const RoleFormPage = () => {
       toast.success('Rol eliminado correctamente');
       navigate(LIST);
     } catch (err: any) {
-      toast.error(err?.response?.data?.message || err?.message || 'No se pudo eliminar el rol');
+      toast.error(err?.message || 'No se pudo eliminar el rol');
     }
   };
 

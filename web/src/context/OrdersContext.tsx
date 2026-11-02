@@ -2,7 +2,6 @@ import { createContext, useContext, useState, useEffect, useCallback, type React
 import type {
   Order,
   OrderStatus,
-  StatusHistoryEntry,
   PaymentEvidence,
   PaymentMethod,
 } from '../types/order';
@@ -11,7 +10,7 @@ import type { ApiOrder, CreateOrderInput, ChangeStatusInput } from '../services/
 import { useAuth } from './AuthContext';
 
 interface ChangeStatusParams {
-  orderId: string;
+  orderId: number;
   newStatus: OrderStatus;
   note?: string;
   evidences?: Omit<PaymentEvidence, 'id' | 'uploadedAt'>[];
@@ -64,10 +63,9 @@ interface OrdersContextType {
   getOrderById: (id: string) => Promise<Order | undefined>;
   getOrderByNumber: (orderNumber: string) => Promise<Order | undefined>;
   changeOrderStatus: (params: ChangeStatusParams) => Promise<void>;
-  updateOrderStatus: (orderId: string, status: OrderStatus) => Promise<void>;
-  updateTrackingInfo: (orderId: string, trackingNumber: string, trackingUrl?: string) => Promise<void>;
+  updateOrderStatus: (orderId: number, status: OrderStatus) => Promise<void>;
   addEvidenceToStatus: (
-    orderId: string,
+    orderId: number,
     historyEntryId: string,
     evidence: Omit<PaymentEvidence, 'id' | 'uploadedAt'>
   ) => void;
@@ -175,7 +173,6 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
     setError(null);
 
     try {
-      console.log('[OrdersContext] Cargando pedidos...');
       const response = await ordersService.getAll({
         page: pagination.page,
         limit: pagination.limit,
@@ -184,10 +181,7 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
         sortBy: 'createdAt',
         sortOrder: 'desc',
       });
-
-      console.log('[OrdersContext] Respuesta recibida:', response);
       const mappedOrders = response.data.map(mapApiOrderToOrder);
-      console.log('[OrdersContext] Pedidos mapeados:', mappedOrders);
 
       setOrders(mappedOrders);
       setPagination(response.pagination);
@@ -206,8 +200,6 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
     if (authLoading) {
       return;
     }
-
-    console.log('[OrdersContext] Auth cargado. isAdmin:', isAdmin, 'isAuthenticated:', isAuthenticated);
 
     if (isAuthenticated && isAdmin) {
       loadOrders();
@@ -280,14 +272,14 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
       })),
     };
 
-    const updated = await ordersService.changeStatus(Number(orderId), input);
+    const updated = await ordersService.changeStatus(orderId, input);
     const mappedOrder = mapApiOrderToOrder(updated);
 
-    setOrders((prev) => prev.map((order) => (order.id === Number(orderId) ? mappedOrder : order)));
+    setOrders((prev) => prev.map((order) => (order.id === orderId ? mappedOrder : order)));
   };
 
   const addEvidenceToStatus = (
-    orderId: string,
+    orderId: number,
     historyEntryId: string,
     evidence: Omit<PaymentEvidence, 'id' | 'uploadedAt'>
   ) => {
@@ -331,35 +323,8 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
     return orders.filter((order) => order.status === 'processing' || order.status === 'paid');
   };
 
-  const updateOrderStatus = async (orderId: string, status: OrderStatus): Promise<void> => {
+  const updateOrderStatus = async (orderId: number, status: OrderStatus): Promise<void> => {
     await changeOrderStatus({ orderId, newStatus: status });
-  };
-
-  const updateTrackingInfo = async (
-    orderId: string,
-    trackingNumber: string,
-    trackingUrl?: string
-  ): Promise<void> => {
-    try {
-      const updated = await ordersService.updateTracking(orderId, trackingNumber, trackingUrl);
-      const mappedOrder = mapApiOrderToOrder(updated);
-      setOrders((prev) => prev.map((order) => (order.id === orderId ? mappedOrder : order)));
-    } catch (err) {
-      // Si falla el endpoint específico, intentar con cambio de estado
-      setOrders((prev) =>
-        prev.map((order) => {
-          if (order.id === orderId) {
-            return {
-              ...order,
-              trackingNumber,
-              trackingUrl,
-              updatedAt: new Date(),
-            };
-          }
-          return order;
-        })
-      );
-    }
   };
 
   const createOrder = async (data: CreateOrderData): Promise<Order> => {
@@ -441,7 +406,6 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
         getOrderByNumber,
         changeOrderStatus,
         updateOrderStatus,
-        updateTrackingInfo,
         addEvidenceToStatus,
         getOrdersByStatus,
         getOrdersReadyToShip,

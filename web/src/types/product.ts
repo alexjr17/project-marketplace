@@ -1,5 +1,5 @@
 // Tipos de productos disponibles (enfocados en sublimación)
-export type ProductType =
+export type ProductTypeSlug =
   // Ropa sublimable
   | 'tshirt'           // Camiseta
   | 'hoodie'           // Hoodie/Buzo con capucha
@@ -64,7 +64,7 @@ export interface PrintZoneConfig {
 
 // Configuración de tipo de producto
 export interface ProductTypeConfig {
-  type: ProductType;
+  type: ProductTypeSlug;
   name: string;
   category: ProductCategory;
   basePrice: number;
@@ -76,7 +76,7 @@ export interface ProductTypeConfig {
 
 // Producto base del catálogo
 export interface Product {
-  id: number | string; // Puede ser número (DB) o string (mock)
+  id: number;
   sku?: string;
   slug?: string;
   name: string;
@@ -88,7 +88,7 @@ export interface Product {
   typeId?: number;        // ID de tipo de producto en la BD
   typeName?: string;      // Nombre del tipo de producto
   // Campos legacy para compatibilidad (se usarán categorySlug/typeSlug en su lugar)
-  type?: ProductType | string;
+  type?: ProductTypeSlug | string;
   category?: ProductCategory | string;
   isTemplate?: boolean;   // Si es true, es un modelo/plantilla para personalización
   basePrice: number;
@@ -129,19 +129,6 @@ export interface ProductSize {
   id: number;
   name: string;
   abbreviation: string;
-}
-
-// Filtros para productos
-export interface ProductFilters {
-  category?: ProductCategory;
-  type?: ProductType;
-  minPrice?: number;
-  maxPrice?: number;
-  colors?: string[];
-  sizes?: string[];
-  inStock?: boolean;
-  featured?: boolean;
-  search?: string;
 }
 
 // Opciones de ordenamiento

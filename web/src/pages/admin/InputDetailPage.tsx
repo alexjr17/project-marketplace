@@ -3,7 +3,8 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { Boxes, Check, Save, Trash2 } from 'lucide-react';
 import { inputsService, type CreateInputDto, type UpdateInputDto, type Input } from '../../services/inputs.service';
 import { inputTypesService, type InputType } from '../../services/input-types.service';
-import { catalogsService, type Color } from '../../services/catalogs.service';
+import { catalogsService } from '../../services/catalogs.service';
+import type { Color } from '../../types/catalog';
 import {
   Page, PageHeader, Button, Badge, Card, CardTitle, Field, TextInput, TextArea, SelectInput, NumberInput, MoneyInput,
   FormGrid, FormActions, Alert, Spinner, Tabs, useConfirm, toast,
@@ -164,7 +165,7 @@ export default function InputDetailPage() {
       toast.success('Insumo eliminado');
       navigate(LIST);
     } catch (err: any) {
-      const msg = err.response?.data?.message || 'Error al eliminar el insumo';
+      const msg = err?.message || 'Error al eliminar el insumo';
       setError(msg);
       toast.error(msg);
       console.error(err);
@@ -206,7 +207,7 @@ export default function InputDetailPage() {
       setCurrentInput(updated);
       toast.success('Color agregado');
     } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Error al agregar color');
+      toast.error(err?.message || 'Error al agregar color');
     } finally {
       setSavingColor(false);
     }
@@ -227,7 +228,7 @@ export default function InputDetailPage() {
       setCurrentInput(updated);
       toast.success('Color eliminado');
     } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Error al eliminar color');
+      toast.error(err?.message || 'Error al eliminar color');
     } finally {
       setSavingColor(false);
     }
@@ -241,7 +242,7 @@ export default function InputDetailPage() {
       setCurrentInput(updated);
       toast.success('Talla agregada');
     } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Error al agregar talla');
+      toast.error(err?.message || 'Error al agregar talla');
     } finally {
       setSavingSize(false);
     }
@@ -262,7 +263,7 @@ export default function InputDetailPage() {
       setCurrentInput(updated);
       toast.success('Talla eliminada');
     } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Error al eliminar talla');
+      toast.error(err?.message || 'Error al eliminar talla');
     } finally {
       setSavingSize(false);
     }

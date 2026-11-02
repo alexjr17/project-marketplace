@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { ChevronDown, ChevronUp, ClipboardList, Plus, Save, Shirt, Trash2 } from 'lucide-react';
 import { getVariants, type ProductVariant } from '../../services/variants.service';
 import { inputsService, type Input, type InputVariant } from '../../services/inputs.service';
+import { templateRecipesService } from '../../services/template-recipes.service';
 import {
   Badge, Button, Card, Dialog, EmptyState, Field, NumberInput, Page, PageHeader, SearchInput, Spinner, Thumb, toast, useConfirm,
 } from '../../components/ui';
@@ -141,26 +142,11 @@ export default function TemplateRecipesPage() {
     try {
       setSaving(true);
 
-      const authData = localStorage.getItem('marketplace_auth');
-      const token = authData ? JSON.parse(authData).token : '';
-
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
-      const response = await fetch(`${apiUrl}/template-recipes`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          variantId: selectedVariantId,
-          inputVariantId: inputVariantToUse.id,
-          quantity: inputQuantity,
-        }),
+      await templateRecipesService.createRecipe({
+        variantId: selectedVariantId,
+        inputVariantId: inputVariantToUse.id,
+        quantity: inputQuantity,
       });
-
-      if (!response.ok) {
-        throw new Error('Error al agregar receta');
-      }
 
       toast.success('Receta agregada correctamente');
       setShowAddInputModal(false);
@@ -178,24 +164,7 @@ export default function TemplateRecipesPage() {
     try {
       setSaving(true);
 
-      const authData = localStorage.getItem('marketplace_auth');
-      const token = authData ? JSON.parse(authData).token : '';
-
-      // Use the specific endpoint to delete by composite key
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
-      const response = await fetch(
-        `${apiUrl}/template-recipes/variant/${variantId}/input/${inputVariantId}`,
-        {
-          method: 'DELETE',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          },
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error('Error al eliminar receta');
-      }
+      await templateRecipesService.deleteRecipeInput(variantId, inputVariantId);
 
       toast.success('Receta eliminada correctamente');
       loadData();

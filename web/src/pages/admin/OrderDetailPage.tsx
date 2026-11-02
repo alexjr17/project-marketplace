@@ -176,7 +176,7 @@ export const OrderDetailPage = () => {
     setSaving(true);
     try {
       await changeOrderStatus({
-        orderId: String(order.id),
+        orderId: order.id,
         newStatus,
         note: note || undefined,
         evidences,
@@ -209,7 +209,7 @@ export const OrderDetailPage = () => {
       toast.error('Ingresa la URL del archivo');
       return;
     }
-    addEvidenceToStatus(String(order.id), selectedHistoryEntryId, {
+    addEvidenceToStatus(order.id, selectedHistoryEntryId, {
       type: evidenceFormData.type,
       url: evidenceFormData.url,
       description: evidenceFormData.description || undefined,
@@ -343,7 +343,7 @@ export const OrderDetailPage = () => {
               <Card>
                 <CardTitle icon={MapPin}>Dirección de entrega</CardTitle>
                 <DescriptionList items={[
-                  { label: 'Destinatario', value: order.shipping?.recipientName },
+                  { label: 'Destinatario', value: order.shipping?.name || order.shipping?.recipientName },
                   { label: 'Teléfono', value: order.shipping?.phone || null },
                   { label: 'Dirección', value: order.shipping?.address, full: true },
                   { label: 'Ciudad', value: [order.shipping?.city, order.shipping?.postalCode].filter(Boolean).join(', ') || null },

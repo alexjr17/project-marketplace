@@ -506,7 +506,7 @@ export const CheckoutPage = () => {
       // Redirigir a mis pedidos
       navigate('/my-orders');
     } catch (error: any) {
-      const errorMessage = error?.response?.data?.message || error?.message || 'Error al procesar el pedido. Intenta de nuevo.';
+      const errorMessage = error?.message || 'Error al procesar el pedido. Intenta de nuevo.';
       showToast(errorMessage, 'error');
     } finally {
       setIsSubmitting(false);
@@ -558,7 +558,7 @@ export const CheckoutPage = () => {
       // Redirige a la pasarela de Mercado Pago.
       window.location.href = pref.initPoint;
     } catch (error: any) {
-      const errorMessage = error?.response?.data?.message || error?.message || 'No se pudo iniciar el pago con Mercado Pago.';
+      const errorMessage = error?.message || 'No se pudo iniciar el pago con Mercado Pago.';
       showToast(errorMessage, 'error');
       setIsSubmitting(false);
     }

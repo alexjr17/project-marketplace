@@ -91,7 +91,7 @@ export default function ProductDetailPage() {
       setError(null);
 
       try {
-        const productData = await productsService.getById(id);
+        const productData = await productsService.getById(Number(id));
         if (productData) {
           setProduct(productData);
           // Inicializar selección

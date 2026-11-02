@@ -62,18 +62,6 @@ export interface OrderSettings {
   maxOrderItems?: number;
 }
 
-export interface PaymentSettings {
-  enabledMethods: string[];
-  bankInfo?: {
-    bankName?: string;
-    accountType?: string;
-    accountNumber?: string;
-    accountHolder?: string;
-  };
-  nequiNumber?: string;
-  daviplataNumber?: string;
-}
-
 export interface NotificationSettings {
   emailNotifications: boolean;
   orderConfirmation: boolean;
@@ -82,11 +70,6 @@ export interface NotificationSettings {
   lowStockThreshold?: number;
 }
 
-interface ApiResponse<T> {
-  success: boolean;
-  data: T;
-  message?: string;
-}
 
 export const settingsService = {
   // Obtener configuración pública (no requiere auth)
@@ -126,19 +109,6 @@ export const settingsService = {
 
   async updateOrderSettings(data: OrderSettings): Promise<OrderSettings> {
     const response = await api.put<{ value: OrderSettings }>('/settings/orders/config', data);
-    if (!response.data) throw new Error('Error actualizando configuración');
-    return response.data.value;
-  },
-
-  // Payment Settings
-  async getPaymentSettings(): Promise<PaymentSettings> {
-    const response = await api.get<PaymentSettings>('/settings/payments/config');
-    if (!response.data) throw new Error('Error obteniendo configuración de pagos');
-    return response.data;
-  },
-
-  async updatePaymentSettings(data: PaymentSettings): Promise<PaymentSettings> {
-    const response = await api.put<{ value: PaymentSettings }>('/settings/payments/config', data);
     if (!response.data) throw new Error('Error actualizando configuración');
     return response.data.value;
   },

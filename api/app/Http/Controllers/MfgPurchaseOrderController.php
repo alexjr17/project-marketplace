@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Concerns\ApiResponse;
 use App\Models\MfgProductionOrder;
 use App\Models\MfgPurchaseOrder;
+use App\Services\NumberSequenceService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -16,6 +17,8 @@ use Illuminate\Support\Facades\DB;
 class MfgPurchaseOrderController extends Controller
 {
     use ApiResponse;
+
+    public function __construct(private NumberSequenceService $numbers) {}
 
     private const RELATIONS = [
         'client:id,name,businessName,city,phone',
@@ -54,7 +57,7 @@ class MfgPurchaseOrderController extends Controller
 
     public function generateNumber()
     {
-        return $this->success(['code' => $this->nextCode()]);
+        return $this->success(['code' => $this->numbers->peek(NumberSequenceService::MFG_PURCHASE_ORDER)]);
     }
 
     public function store(Request $request)
@@ -63,7 +66,7 @@ class MfgPurchaseOrderController extends Controller
 
         $order = DB::transaction(function () use ($data, $request) {
             $order = MfgPurchaseOrder::create([
-                'code' => $this->nextCode(),
+                'code' => $this->numbers->next(NumberSequenceService::MFG_PURCHASE_ORDER),
                 'clientId' => $data['clientId'],
                 'collectionId' => $data['collectionId'] ?? null,
                 'semester' => $this->semesterFrom($data),
@@ -273,17 +276,5 @@ class MfgPurchaseOrderController extends Controller
                 ]);
             }
         }
-    }
-
-    private function nextCode(): string
-    {
-        $year = now()->year;
-        $prefix = 'PED-'.$year.'-';
-        $last = MfgPurchaseOrder::where('code', 'like', $prefix.'%')
-            ->orderByRaw('CAST(SUBSTRING_INDEX(code, "-", -1) AS UNSIGNED) DESC')
-            ->first();
-        $n = $last ? ((int) substr(strrchr($last->code, '-'), 1)) + 1 : 1;
-
-        return sprintf('%s%04d', $prefix, $n);
     }
 }

@@ -1,3 +1,4 @@
+import { http } from '../lib/http';
 import { api } from './api.service';
 
 // Tipos
@@ -115,26 +116,22 @@ export const inventoryConversionsService = {
     const queryString = params.toString();
     const url = `/inventory-conversions${queryString ? `?${queryString}` : ''}`;
 
-    const response = await api.get(url);
-    return response.data.data || response.data;
+    return http.get<InventoryConversion[]>(url);
   },
 
   // Obtener conversión por ID
   async getConversionById(id: number): Promise<InventoryConversion> {
-    const response = await api.get(`/inventory-conversions/${id}`);
-    return response.data.data || response.data;
+    return http.get<InventoryConversion>(`/inventory-conversions/${id}`);
   },
 
   // Crear conversión
   async createConversion(data: CreateConversionData): Promise<InventoryConversion> {
-    const response = await api.post('/inventory-conversions', data);
-    return response.data.data || response.data;
+    return http.post<InventoryConversion>('/inventory-conversions', data);
   },
 
   // Agregar insumo a la conversión
   async addInputItem(conversionId: number, data: AddInputItemData): Promise<InventoryConversion> {
-    const response = await api.post(`/inventory-conversions/${conversionId}/input-items`, data);
-    return response.data.data || response.data;
+    return http.post<InventoryConversion>(`/inventory-conversions/${conversionId}/input-items`, data);
   },
 
   // Actualizar item de insumo
@@ -143,25 +140,22 @@ export const inventoryConversionsService = {
     itemId: number,
     data: { quantity?: number; notes?: string }
   ): Promise<InventoryConversion> {
-    const response = await api.patch(
+    return http.patch<InventoryConversion>(
       `/inventory-conversions/${conversionId}/input-items/${itemId}`,
       data
     );
-    return response.data.data || response.data;
   },
 
   // Eliminar item de insumo
   async removeInputItem(conversionId: number, itemId: number): Promise<InventoryConversion> {
-    const response = await api.delete(
+    return http.delete<InventoryConversion>(
       `/inventory-conversions/${conversionId}/input-items/${itemId}`
     );
-    return response.data.data || response.data;
   },
 
   // Agregar producto a la conversión
   async addOutputItem(conversionId: number, data: AddOutputItemData): Promise<InventoryConversion> {
-    const response = await api.post(`/inventory-conversions/${conversionId}/output-items`, data);
-    return response.data.data || response.data;
+    return http.post<InventoryConversion>(`/inventory-conversions/${conversionId}/output-items`, data);
   },
 
   // Actualizar item de producto
@@ -170,37 +164,32 @@ export const inventoryConversionsService = {
     itemId: number,
     data: { quantity?: number; notes?: string }
   ): Promise<InventoryConversion> {
-    const response = await api.patch(
+    return http.patch<InventoryConversion>(
       `/inventory-conversions/${conversionId}/output-items/${itemId}`,
       data
     );
-    return response.data.data || response.data;
   },
 
   // Eliminar item de producto
   async removeOutputItem(conversionId: number, itemId: number): Promise<InventoryConversion> {
-    const response = await api.delete(
+    return http.delete<InventoryConversion>(
       `/inventory-conversions/${conversionId}/output-items/${itemId}`
     );
-    return response.data.data || response.data;
   },
 
   // Enviar a aprobación
   async submitForApproval(id: number): Promise<InventoryConversion> {
-    const response = await api.post(`/inventory-conversions/${id}/submit`);
-    return response.data.data || response.data;
+    return http.post<InventoryConversion>(`/inventory-conversions/${id}/submit`);
   },
 
   // Aprobar conversión
   async approveConversion(id: number): Promise<InventoryConversion> {
-    const response = await api.post(`/inventory-conversions/${id}/approve`);
-    return response.data.data || response.data;
+    return http.post<InventoryConversion>(`/inventory-conversions/${id}/approve`);
   },
 
   // Cancelar conversión
   async cancelConversion(id: number): Promise<InventoryConversion> {
-    const response = await api.post(`/inventory-conversions/${id}/cancel`);
-    return response.data.data || response.data;
+    return http.post<InventoryConversion>(`/inventory-conversions/${id}/cancel`);
   },
 
   // Eliminar conversión
@@ -210,13 +199,11 @@ export const inventoryConversionsService = {
 
   // Obtener estadísticas
   async getStats(): Promise<ConversionStats> {
-    const response = await api.get('/inventory-conversions/stats');
-    return response.data.data || response.data;
+    return http.get<ConversionStats>('/inventory-conversions/stats');
   },
 
   // Crear conversión desde plantilla
   async createConversionFromTemplate(data: CreateConversionFromTemplateData): Promise<InventoryConversion> {
-    const response = await api.post('/inventory-conversions/from-template', data);
-    return response.data.data || response.data;
+    return http.post<InventoryConversion>('/inventory-conversions/from-template', data);
   },
 };

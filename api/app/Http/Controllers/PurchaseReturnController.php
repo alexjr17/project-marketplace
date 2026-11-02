@@ -14,6 +14,7 @@ use App\Models\PurchaseOrderItem;
 use App\Models\PurchaseReturn;
 use App\Models\PurchaseReturnItem;
 use App\Models\VariantMovement;
+use App\Services\NumberSequenceService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -26,6 +27,8 @@ use Illuminate\Support\Facades\DB;
 class PurchaseReturnController extends Controller
 {
     use ApiResponse;
+
+    public function __construct(private NumberSequenceService $numbers) {}
 
     private const RELATIONS = [
         'supplier:id,name,code',
@@ -61,7 +64,7 @@ class PurchaseReturnController extends Controller
     /** GET /api/purchase-returns/generate-number */
     public function generateNumber()
     {
-        return $this->success(['returnNumber' => $this->nextNumber()]);
+        return $this->success(['returnNumber' => $this->numbers->peek(NumberSequenceService::PURCHASE_RETURN)]);
     }
 
     /** GET /api/purchase-returns/returnable/{purchaseOrderId} — ítems devolubles de una OC. */
@@ -160,7 +163,7 @@ class PurchaseReturnController extends Controller
 
         $return = DB::transaction(function () use ($order, $data, $resolved, $user) {
             $return = PurchaseReturn::create([
-                'returnNumber' => $this->nextNumber(),
+                'returnNumber' => $this->numbers->next(NumberSequenceService::PURCHASE_RETURN),
                 'purchaseOrderId' => $order->id,
                 'supplierId' => $order->supplierId,
                 'reason' => $data['reason'],
@@ -210,15 +213,6 @@ class PurchaseReturnController extends Controller
         }
 
         return $this->success($return);
-    }
-
-    /** Genera el siguiente número de devolución (DEV-AAAA-NNNN). */
-    private function nextNumber(): string
-    {
-        $year = date('Y');
-        $count = PurchaseReturn::where('returnNumber', 'like', "DEV-{$year}%")->count();
-
-        return sprintf('DEV-%s-%04d', $year, $count + 1);
     }
 
     /** Descripción legible de un ítem de orden de compra. */

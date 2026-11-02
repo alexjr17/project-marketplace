@@ -87,7 +87,7 @@ export default function VariantsPage() {
         totalPages: result.pagination.totalPages,
       });
     } catch (error: any) {
-      toast.error('Error al cargar variantes de productos: ' + (error.response?.data?.message || error.message));
+      toast.error('Error al cargar variantes de productos: ' + (error?.message));
     } finally {
       setLoadingProducts(false);
     }
@@ -111,7 +111,7 @@ export default function VariantsPage() {
       });
       setTemplatesLoaded(true);
     } catch (error: any) {
-      toast.error('Error al cargar variantes de plantillas: ' + (error.response?.data?.message || error.message));
+      toast.error('Error al cargar variantes de plantillas: ' + (error?.message));
     } finally {
       setLoadingTemplates(false);
     }
@@ -170,7 +170,7 @@ export default function VariantsPage() {
       toast.success('Código de barras asignado exitosamente');
       handleRefresh();
     } catch (error: any) {
-      toast.error('Error al asignar código de barras: ' + (error.response?.data?.message || error.message));
+      toast.error('Error al asignar código de barras: ' + (error?.message));
     }
   };
 
@@ -183,7 +183,7 @@ export default function VariantsPage() {
       setShowDetailModal(null);
       handleRefresh();
     } catch (error: any) {
-      toast.error('Error al eliminar variante: ' + (error.response?.data?.message || error.message));
+      toast.error('Error al eliminar variante: ' + (error?.message));
     }
   };
 

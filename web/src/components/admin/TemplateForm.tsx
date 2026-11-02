@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Check, Eye, Image as ImageIcon, Info, Layers, Save, Tag, Trash2 } from 'lucide-react';
 import type { Template } from '../../services/templates.service';
 import { catalogsService } from '../../services/catalogs.service';
-import type { Color, Size, Category, ProductType as CatalogProductType } from '../../services/catalogs.service';
+import type { Color, Size, Category, ProductType as CatalogProductType } from '../../types/catalog';
 import {
   Alert, Button, Card, CardTitle, Field, FormActions, FormGrid, ImageGallery, MoneyInput, SelectInput, Switch,
   TextArea, TextInput,

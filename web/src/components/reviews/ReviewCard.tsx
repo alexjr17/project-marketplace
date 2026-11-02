@@ -25,7 +25,7 @@ export const ReviewCard = ({
   isVoting = false,
 }: ReviewCardProps) => {
   const [showMenu, setShowMenu] = useState(false);
-  const isOwner = currentUserId && review.userId === currentUserId;
+  const isOwner = currentUserId !== undefined && review.userId === currentUserId;
 
   const handleVote = (isHelpful: boolean) => {
     if (!onVoteHelpful || isOwner) return;

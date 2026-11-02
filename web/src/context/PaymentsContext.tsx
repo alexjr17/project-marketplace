@@ -1,16 +1,13 @@
 import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react';
 import paymentsService, {
   type Payment,
-  type PaymentStatus,
   type CreatePaymentInput,
   type UpdatePaymentInput,
   type VerifyPaymentInput,
   type RefundPaymentInput,
   type PaymentStats,
   type ListPaymentsQuery,
-  type PaginatedPayments,
 } from '../services/payments.service';
-import { useAuth } from './AuthContext';
 import { useToast } from './ToastContext';
 
 interface PaymentsContextType {
@@ -52,7 +49,6 @@ interface PaymentsProviderProps {
 }
 
 export function PaymentsProvider({ children }: PaymentsProviderProps) {
-  const { user } = useAuth();
   const { showToast } = useToast();
 
   const [payments, setPayments] = useState<Payment[]>([]);
@@ -86,7 +82,7 @@ export function PaymentsProvider({ children }: PaymentsProviderProps) {
         showToast('Pago iniciado correctamente', 'success');
         return payment;
       } catch (err: any) {
-        const errorMessage = err.response?.data?.message || 'Error al crear el pago';
+        const errorMessage = err?.message || 'Error al crear el pago';
         setError(errorMessage);
         showToast(errorMessage, 'error');
         throw err;
@@ -105,7 +101,7 @@ export function PaymentsProvider({ children }: PaymentsProviderProps) {
         const payments = await paymentsService.getMyOrderPayments(orderId);
         return payments;
       } catch (err: any) {
-        const errorMessage = err.response?.data?.message || 'Error al obtener pagos';
+        const errorMessage = err?.message || 'Error al obtener pagos';
         setError(errorMessage);
         showToast(errorMessage, 'error');
         return [];
@@ -125,7 +121,7 @@ export function PaymentsProvider({ children }: PaymentsProviderProps) {
         showToast('Pago actualizado correctamente', 'success');
         return payment;
       } catch (err: any) {
-        const errorMessage = err.response?.data?.message || 'Error al actualizar el pago';
+        const errorMessage = err?.message || 'Error al actualizar el pago';
         setError(errorMessage);
         showToast(errorMessage, 'error');
         throw err;
@@ -167,7 +163,7 @@ export function PaymentsProvider({ children }: PaymentsProviderProps) {
         setPayments(result.data);
         setPagination(result.meta);
       } catch (err: any) {
-        const errorMessage = err.response?.data?.message || 'Error al listar pagos';
+        const errorMessage = err?.message || 'Error al listar pagos';
         setError(errorMessage);
         showToast(errorMessage, 'error');
         console.error('[PaymentsContext] Error listing payments:', err);
@@ -186,7 +182,7 @@ export function PaymentsProvider({ children }: PaymentsProviderProps) {
         const payments = await paymentsService.getOrderPayments(orderId);
         return payments;
       } catch (err: any) {
-        const errorMessage = err.response?.data?.message || 'Error al obtener pagos del pedido';
+        const errorMessage = err?.message || 'Error al obtener pagos del pedido';
         setError(errorMessage);
         showToast(errorMessage, 'error');
         return [];
@@ -205,7 +201,7 @@ export function PaymentsProvider({ children }: PaymentsProviderProps) {
         const payment = await paymentsService.getPaymentById(id);
         return payment;
       } catch (err: any) {
-        const errorMessage = err.response?.data?.message || 'Error al obtener el pago';
+        const errorMessage = err?.message || 'Error al obtener el pago';
         setError(errorMessage);
         showToast(errorMessage, 'error');
         return undefined;
@@ -224,7 +220,7 @@ export function PaymentsProvider({ children }: PaymentsProviderProps) {
         const payment = await paymentsService.getPaymentByTransactionId(transactionId);
         return payment;
       } catch (err: any) {
-        const errorMessage = err.response?.data?.message || 'Error al obtener el pago';
+        const errorMessage = err?.message || 'Error al obtener el pago';
         setError(errorMessage);
         showToast(errorMessage, 'error');
         return undefined;
@@ -249,7 +245,7 @@ export function PaymentsProvider({ children }: PaymentsProviderProps) {
         await listPayments();
         return payment;
       } catch (err: any) {
-        const errorMessage = err.response?.data?.message || 'Error al verificar el pago';
+        const errorMessage = err?.message || 'Error al verificar el pago';
         setError(errorMessage);
         showToast(errorMessage, 'error');
         throw err;
@@ -271,7 +267,7 @@ export function PaymentsProvider({ children }: PaymentsProviderProps) {
         await listPayments();
         return payment;
       } catch (err: any) {
-        const errorMessage = err.response?.data?.message || 'Error al procesar reembolso';
+        const errorMessage = err?.message || 'Error al procesar reembolso';
         setError(errorMessage);
         showToast(errorMessage, 'error');
         throw err;
@@ -293,7 +289,7 @@ export function PaymentsProvider({ children }: PaymentsProviderProps) {
         await listPayments();
         return payment;
       } catch (err: any) {
-        const errorMessage = err.response?.data?.message || 'Error al cancelar el pago';
+        const errorMessage = err?.message || 'Error al cancelar el pago';
         setError(errorMessage);
         showToast(errorMessage, 'error');
         throw err;
@@ -311,7 +307,7 @@ export function PaymentsProvider({ children }: PaymentsProviderProps) {
       const stats = await paymentsService.getPaymentStats();
       return stats;
     } catch (err: any) {
-      const errorMessage = err.response?.data?.message || 'Error al obtener estadísticas';
+      const errorMessage = err?.message || 'Error al obtener estadísticas';
       setError(errorMessage);
       showToast(errorMessage, 'error');
       throw err;

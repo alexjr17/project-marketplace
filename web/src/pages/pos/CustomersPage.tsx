@@ -28,7 +28,7 @@ export default function CustomersPage() {
     try {
       setCustomers(await posService.listCustomers(q));
     } catch (e: any) {
-      setError(e?.response?.data?.message || 'Error al cargar los clientes');
+      setError(e?.message || 'Error al cargar los clientes');
     } finally {
       setLoading(false);
     }

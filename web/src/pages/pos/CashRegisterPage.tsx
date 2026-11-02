@@ -60,7 +60,7 @@ export default function CashRegisterPage() {
       await loadSession(); // Reload to clear session
     } catch (error: any) {
       console.error('Error closing session:', error);
-      showToast(error.response?.data?.message || 'Error al cerrar la sesión', 'error');
+      showToast(error?.message || 'Error al cerrar la sesión', 'error');
     } finally {
       setIsClosing(false);
     }

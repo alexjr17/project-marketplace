@@ -34,7 +34,7 @@ export const UserDetailPage = () => {
       if (!id) { setIsLoadingUser(false); return; }
       setIsLoadingUser(true);
       try {
-        setUser(await getUserById(id));
+        setUser(await getUserById(Number(id)));
       } catch (error) {
         console.error('Error loading user:', error);
       } finally {
@@ -82,7 +82,7 @@ export const UserDetailPage = () => {
     if (!formData.name.trim()) { toast.error('El nombre es obligatorio'); return; }
     setSaving(true);
     try {
-      await updateUser(String(user.id), {
+      await updateUser(user.id, {
         name: formData.name,
         phone: formData.phone || undefined,
         cedula: formData.cedula || undefined,
@@ -100,7 +100,7 @@ export const UserDetailPage = () => {
     const active = user.status === 'active';
     if (active && !(await confirm({ title: `¿Desactivar a ${user.name}?`, message: 'No podrá iniciar sesión en la tienda hasta que lo actives de nuevo.', tone: 'danger', confirmText: 'Desactivar' }))) return;
     try {
-      await toggleUserStatus(String(user.id));
+      await toggleUserStatus(user.id);
       toast.success(active ? 'Usuario desactivado correctamente' : 'Usuario activado correctamente');
     } catch {
       toast.error('No se pudo cambiar el estado del cliente');

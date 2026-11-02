@@ -1,20 +1,4 @@
-import axios from 'axios';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
-
-const getAuthHeader = () => {
-  const authData = localStorage.getItem('marketplace_auth');
-  if (authData) {
-    try {
-      const parsed = JSON.parse(authData);
-      return parsed.token ? { Authorization: `Bearer ${parsed.token}` } : {};
-    } catch {
-      return {};
-    }
-  }
-  return {};
-};
-
+import { httpKeepUrls as client, isApiError, type Paged } from '../lib/http';
 // ==================== TIPOS ====================
 
 export interface ProductVariant {
@@ -107,20 +91,14 @@ export async function getVariants(filter: VariantFilter = {}): Promise<ProductVa
   if (filter.isActive !== undefined) params.append('isActive', filter.isActive.toString());
   if (filter.lowStock) params.append('lowStock', 'true');
 
-  const response = await axios.get(`${API_URL}/variants?${params.toString()}`, {
-    headers: getAuthHeader(),
-  });
-  return response.data.data;
+  return client.get<ProductVariant[]>(`/variants?${params.toString()}`);
 }
 
 /**
  * Obtener una variante por ID
  */
 export async function getVariantById(id: number): Promise<ProductVariant> {
-  const response = await axios.get(`${API_URL}/variants/${id}`, {
-    headers: getAuthHeader(),
-  });
-  return response.data.data;
+  return client.get<ProductVariant>(`/variants/${id}`);
 }
 
 /**
@@ -128,12 +106,9 @@ export async function getVariantById(id: number): Promise<ProductVariant> {
  */
 export async function getVariantByBarcode(barcode: string): Promise<ProductVariant | null> {
   try {
-    const response = await axios.get(`${API_URL}/variants/barcode/${barcode}`, {
-      headers: getAuthHeader(),
-    });
-    return response.data.data;
-  } catch (error: any) {
-    if (error.response?.status === 404) {
+    return await client.get<ProductVariant | null>(`/variants/barcode/${barcode}`);
+  } catch (error) {
+    if (isApiError(error) && error.status === 404) {
       return null;
     }
     throw error;
@@ -145,12 +120,9 @@ export async function getVariantByBarcode(barcode: string): Promise<ProductVaria
  */
 export async function getVariantBySku(sku: string): Promise<ProductVariant | null> {
   try {
-    const response = await axios.get(`${API_URL}/variants/sku/${sku}`, {
-      headers: getAuthHeader(),
-    });
-    return response.data.data;
-  } catch (error: any) {
-    if (error.response?.status === 404) {
+    return await client.get<ProductVariant | null>(`/variants/sku/${sku}`);
+  } catch (error) {
+    if (isApiError(error) && error.status === 404) {
       return null;
     }
     throw error;
@@ -161,29 +133,21 @@ export async function getVariantBySku(sku: string): Promise<ProductVariant | nul
  * Crear una variante manualmente
  */
 export async function createVariant(data: CreateVariantInput): Promise<ProductVariant> {
-  const response = await axios.post(`${API_URL}/variants`, data, {
-    headers: getAuthHeader(),
-  });
-  return response.data.data;
+  return client.post<ProductVariant>(`/variants`, data);
 }
 
 /**
  * Actualizar una variante
  */
 export async function updateVariant(id: number, data: UpdateVariantInput): Promise<ProductVariant> {
-  const response = await axios.patch(`${API_URL}/variants/${id}`, data, {
-    headers: getAuthHeader(),
-  });
-  return response.data.data;
+  return client.patch<ProductVariant>(`/variants/${id}`, data);
 }
 
 /**
  * Eliminar una variante
  */
 export async function deleteVariant(id: number): Promise<void> {
-  await axios.delete(`${API_URL}/variants/${id}`, {
-    headers: getAuthHeader(),
-  });
+  await client.delete(`/variants/${id}`);
 }
 
 /**
@@ -193,10 +157,7 @@ export async function generateVariantsForProduct(
   productId: number,
   initialStock: number = 0
 ): Promise<{ created: ProductVariant[]; errors: any[]; total: number }> {
-  const response = await axios.post(`${API_URL}/variants/generate/${productId}`, { initialStock }, {
-    headers: getAuthHeader(),
-  });
-  return response.data.data;
+  return client.post<{ created: ProductVariant[]; errors: any[]; total: number }>(`/variants/generate/${productId}`, { initialStock });
 }
 
 /**
@@ -207,21 +168,20 @@ export async function adjustStock(
   quantity: number,
   reason?: string
 ): Promise<ProductVariant> {
-  const response = await axios.post(`${API_URL}/variants/${id}/adjust-stock`, { quantity, reason }, {
-    headers: getAuthHeader(),
-  });
-  return response.data.data;
+  return client.post<ProductVariant>(`/variants/${id}/adjust-stock`, { quantity, reason });
 }
 
 /**
  * Obtener variantes con stock bajo
  */
 export async function getLowStockVariants(): Promise<ProductVariant[]> {
-  const response = await axios.get(`${API_URL}/variants/low-stock`, {
-    headers: getAuthHeader(),
-  });
-  return response.data.data;
+  return client.get<ProductVariant[]>(`/variants/low-stock`);
 }
+
+const toPaginatedResult = <T,>({ items, page, limit, total, totalPages }: Paged<T>): PaginatedResult<T> => ({
+  data: items,
+  pagination: { page, limit, total, totalPages },
+});
 
 /**
  * Obtener solo variantes de PRODUCTOS (no templates) - con paginación del servidor
@@ -238,13 +198,7 @@ export async function getProductVariants(filter: VariantFilter = {}): Promise<Pa
   if (filter.limit) params.append('limit', filter.limit.toString());
   if (filter.search) params.append('search', filter.search);
 
-  const response = await axios.get(`${API_URL}/variants/products?${params.toString()}`, {
-    headers: getAuthHeader(),
-  });
-  return {
-    data: response.data.data,
-    pagination: response.data.pagination,
-  };
+  return toPaginatedResult(await client.getPaged<ProductVariant>(`/variants/products?${params.toString()}`));
 }
 
 /**
@@ -262,13 +216,7 @@ export async function getTemplateVariants(filter: VariantFilter = {}): Promise<P
   if (filter.limit) params.append('limit', filter.limit.toString());
   if (filter.search) params.append('search', filter.search);
 
-  const response = await axios.get(`${API_URL}/variants/templates?${params.toString()}`, {
-    headers: getAuthHeader(),
-  });
-  return {
-    data: response.data.data,
-    pagination: response.data.pagination,
-  };
+  return toPaginatedResult(await client.getPaged<ProductVariant>(`/variants/templates?${params.toString()}`));
 }
 
 /**
@@ -287,12 +235,9 @@ export async function getVariantByProductColorSize(
       sizeName,
     });
 
-    const response = await axios.get(`${API_URL}/variants/lookup?${params.toString()}`, {
-      headers: getAuthHeader(),
-    });
-    return response.data.data;
-  } catch (error: any) {
-    if (error.response?.status === 404) {
+    return await client.get<ProductVariant | null>(`/variants/lookup?${params.toString()}`);
+  } catch (error) {
+    if (isApiError(error) && error.status === 404) {
       return null;
     }
     throw error;

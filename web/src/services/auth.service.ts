@@ -1,4 +1,6 @@
 import api from './api.service';
+import type { AuthUser } from '../types/user';
+import { AUTH_STORAGE_KEY } from '../lib/config';
 
 export interface LoginCredentials {
   email: string;
@@ -12,34 +14,10 @@ export interface RegisterData {
   phone?: string;
 }
 
-export interface UserProfile {
-  cedula?: string;
-  phone?: string;
-  address?: string;
-  city?: string;
-  postalCode?: string;
-  country?: string;
-}
-
-export interface User {
-  id: number;
-  email: string;
-  name: string;
-  phone?: string;
-  avatar?: string;
-  roleId: number;
-  role: string;
-  permissions: string[];
-  status: string;
-  profile?: UserProfile;
-}
-
 export interface AuthResponse {
-  user: User;
+  user: AuthUser;
   token: string;
 }
-
-const AUTH_STORAGE_KEY = 'marketplace_auth';
 
 export const authService = {
   // Login
@@ -65,15 +43,15 @@ export const authService = {
   },
 
   // Obtener perfil
-  async getProfile(): Promise<User> {
+  async getProfile(): Promise<AuthUser> {
     // /auth/me responde { user: {...} } dentro de data.
-    const response = await api.get<{ user: User }>('/auth/me');
+    const response = await api.get<{ user: AuthUser }>('/auth/me');
     if (!response.data?.user) throw new Error('No autenticado');
     return response.data.user;
   },
 
   // Actualiza el usuario guardado (permisos frescos) sin tocar el token.
-  updateStoredUser(user: User): void {
+  updateStoredUser(user: AuthUser): void {
     const stored = localStorage.getItem(AUTH_STORAGE_KEY);
     if (!stored) return;
     try {
@@ -84,8 +62,8 @@ export const authService = {
   },
 
   // Actualizar perfil
-  async updateProfile(data: Partial<User>): Promise<User> {
-    const response = await api.put<User>('/auth/me', data);
+  async updateProfile(data: Partial<AuthUser>): Promise<AuthUser> {
+    const response = await api.put<AuthUser>('/auth/me', data);
     if (!response.data) throw new Error('Error actualizando perfil');
 
     // Actualizar en localStorage

@@ -1,38 +1,5 @@
 import api from './api.service';
-
-export interface Size {
-  id: number;
-  name: string;
-  abbreviation: string;
-  sortOrder: number;
-  isActive: boolean;
-}
-
-export interface Color {
-  id: number;
-  name: string;
-  slug: string;
-  hexCode: string;
-  isActive: boolean;
-}
-
-export interface Category {
-  id: number;
-  name: string;
-  slug: string;
-  description?: string;
-  isActive: boolean;
-}
-
-export interface ProductType {
-  id: number;
-  name: string;
-  slug: string;
-  description?: string;
-  categoryId?: number | null;
-  categorySlug?: string | null;
-  isActive: boolean;
-}
+import type { Size, Color, Category, ProductType, CatalogInput } from '../types/catalog';
 
 export const catalogsService = {
   // ==================== TALLAS ====================
@@ -41,7 +8,7 @@ export const catalogsService = {
     return response.data || [];
   },
 
-  async createSize(data: Omit<Size, 'id'>): Promise<Size> {
+  async createSize(data: CatalogInput<Size>): Promise<Size> {
     const response = await api.post<Size>('/catalogs/sizes', data);
     if (!response.data) throw new Error('Error creando talla');
     return response.data;
@@ -63,7 +30,7 @@ export const catalogsService = {
     return response.data || [];
   },
 
-  async createColor(data: Omit<Color, 'id'>): Promise<Color> {
+  async createColor(data: CatalogInput<Color>): Promise<Color> {
     const response = await api.post<Color>('/catalogs/colors', data);
     if (!response.data) throw new Error('Error creando color');
     return response.data;
@@ -85,7 +52,7 @@ export const catalogsService = {
     return response.data || [];
   },
 
-  async createCategory(data: Omit<Category, 'id'>): Promise<Category> {
+  async createCategory(data: CatalogInput<Category>): Promise<Category> {
     const response = await api.post<Category>('/catalogs/categories', data);
     if (!response.data) throw new Error('Error creando categoría');
     return response.data;
@@ -113,7 +80,7 @@ export const catalogsService = {
     return response.data;
   },
 
-  async createProductType(data: Omit<ProductType, 'id'>): Promise<ProductType> {
+  async createProductType(data: CatalogInput<ProductType>): Promise<ProductType> {
     const response = await api.post<ProductType>('/catalogs/product-types', data);
     if (!response.data) throw new Error('Error creando tipo de producto');
     return response.data;

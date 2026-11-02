@@ -3,21 +3,22 @@
 namespace App\Http\Controllers;
 
 use App\Http\Concerns\ApiResponse;
-use App\Models\Input;
-use App\Models\InputBatch;
+use App\Http\Requests\ReceivePurchaseOrderRequest;
 use App\Models\InputBatchMovement;
-use App\Models\InputVariant;
 use App\Models\InputVariantMovement;
-use App\Models\ProductVariant;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseOrderItem;
 use App\Models\VariantMovement;
+use App\Services\PurchaseOrderService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use RuntimeException;
 
 class PurchaseOrderController extends Controller
 {
     use ApiResponse;
+
+    public function __construct(private PurchaseOrderService $purchaseOrders) {}
 
     private const VALID_TRANSITIONS = [
         'DRAFT' => ['SENT', 'CANCELLED'],
@@ -45,16 +46,6 @@ class PurchaseOrderController extends Controller
         'items.inputVariant.color:id,name,hexCode',
         'items.inputVariant.size:id,name,abbreviation',
     ];
-
-    private function generateNumberValue(): string
-    {
-        $prefix = 'OC-'.now()->year.'-';
-        $last = PurchaseOrder::where('orderNumber', 'like', "{$prefix}%")
-            ->orderByDesc('orderNumber')->first();
-        $next = $last ? ((int) str_replace($prefix, '', $last->orderNumber)) + 1 : 1;
-
-        return $prefix.str_pad((string) $next, 4, '0', STR_PAD_LEFT);
-    }
 
     public function index(Request $request)
     {
@@ -106,7 +97,7 @@ class PurchaseOrderController extends Controller
 
     public function generateNumber()
     {
-        return $this->success(['orderNumber' => $this->generateNumberValue()]);
+        return $this->success(['orderNumber' => $this->purchaseOrders->peekNumber()]);
     }
 
     public function show(int $id)
@@ -132,38 +123,7 @@ class PurchaseOrderController extends Controller
             'items.*.notes' => 'nullable|string',
         ]);
 
-        $subtotal = 0;
-        foreach ($data['items'] as $item) {
-            $subtotal += $item['quantity'] * $item['unitCost'];
-        }
-
-        $order = DB::transaction(function () use ($data, $subtotal, $request) {
-            $order = PurchaseOrder::create([
-                'orderNumber' => $this->generateNumberValue(),
-                'supplierId' => $data['supplierId'],
-                'status' => 'DRAFT',
-                'subtotal' => $subtotal,
-                'total' => $subtotal,
-                'expectedDate' => $data['expectedDate'] ?? null,
-                'notes' => $data['notes'] ?? null,
-                'createdById' => $request->user()->id,
-            ]);
-            foreach ($data['items'] as $item) {
-                PurchaseOrderItem::create([
-                    'purchaseOrderId' => $order->id,
-                    'variantId' => $item['variantId'] ?? null,
-                    'inputId' => $item['inputId'] ?? null,
-                    'inputVariantId' => $item['inputVariantId'] ?? null,
-                    'description' => $item['description'] ?? null,
-                    'quantity' => $item['quantity'],
-                    'unitCost' => $item['unitCost'],
-                    'subtotal' => $item['quantity'] * $item['unitCost'],
-                    'notes' => $item['notes'] ?? null,
-                ]);
-            }
-
-            return $order;
-        });
+        $order = $this->purchaseOrders->create($data, $request->user()->id);
 
         return $this->created(PurchaseOrder::with(self::DETAIL_RELATIONS)->find($order->id), 'Orden de compra creada');
     }
@@ -249,66 +209,12 @@ class PurchaseOrderController extends Controller
         return $this->success(PurchaseOrder::with(self::DETAIL_RELATIONS)->find($id), 'Estado actualizado');
     }
 
-    public function receive(Request $request, int $id)
+    public function receive(ReceivePurchaseOrderRequest $request, int $id)
     {
-        $data = $request->validate([
-            'items' => 'required|array|min:1',
-            'items.*.itemId' => 'required|integer',
-            'items.*.quantityReceived' => 'required|numeric|min:0',
-        ]);
-
-        $order = PurchaseOrder::with('items')->find($id);
-        if (! $order) {
-            return $this->error('Orden de compra no encontrada', 404);
-        }
-        if (! in_array($order->status, ['CONFIRMED', 'PARTIAL'], true)) {
-            return $this->error('La orden debe estar confirmada para recibir mercancía', 400);
-        }
-
-        $userId = $request->user()->id;
-
         try {
-            DB::transaction(function () use ($order, $data, $userId) {
-                foreach ($data['items'] as $r) {
-                    $item = $order->items->firstWhere('id', $r['itemId']);
-                    if (! $item) {
-                        continue;
-                    }
-                    $qty = $r['quantityReceived'];
-                    $newReceived = (float) $item->quantityReceived + $qty;
-                    if ($newReceived > (float) $item->quantity) {
-                        throw new \RuntimeException("No se puede recibir más de {$item->quantity} unidades para el item {$item->id}");
-                    }
-                    $item->quantityReceived = $newReceived;
-                    $item->save();
-
-                    if ($item->variantId) {
-                        $this->receiveVariant($item, $qty, $order, $userId);
-                    }
-                    if ($item->inputId) {
-                        $this->receiveInput($item, $qty, $order, $userId);
-                    }
-                    if ($item->inputVariantId) {
-                        $this->receiveInputVariant($item, $qty, $order, $userId);
-                    }
-                }
-
-                // Recalcular estado de la orden.
-                $items = PurchaseOrderItem::where('purchaseOrderId', $order->id)->get();
-                $allReceived = $items->every(fn ($i) => (float) $i->quantityReceived >= (float) $i->quantity);
-                $someReceived = $items->contains(fn ($i) => (float) $i->quantityReceived > 0);
-
-                $newStatus = $allReceived ? 'RECEIVED' : ($someReceived ? 'PARTIAL' : $order->status);
-                if ($newStatus !== $order->status) {
-                    $order->status = $newStatus;
-                    if ($newStatus === 'RECEIVED') {
-                        $order->receivedDate = now();
-                    }
-                    $order->save();
-                }
-            });
-        } catch (\RuntimeException $e) {
-            return $this->error($e->getMessage(), 400);
+            $this->purchaseOrders->receive($id, $request->validated('items'), $request->user()->id);
+        } catch (RuntimeException $e) {
+            return $this->error($e->getMessage(), $e->getCode() === 404 ? 404 : 400);
         }
 
         return $this->success(PurchaseOrder::with(self::DETAIL_RELATIONS)->find($id), 'Items recibidos');
@@ -339,95 +245,5 @@ class PurchaseOrderController extends Controller
         });
 
         return $this->success(null, 'Orden eliminada correctamente');
-    }
-
-    private function receiveVariant(PurchaseOrderItem $item, float $qty, PurchaseOrder $order, int $userId): void
-    {
-        $variant = ProductVariant::find($item->variantId);
-        if (! $variant) {
-            return;
-        }
-        $previous = $variant->stock;
-        $variant->stock = $previous + $qty;
-        $variant->save();
-
-        VariantMovement::create([
-            'variantId' => $variant->id,
-            'movementType' => 'PURCHASE',
-            'quantity' => $qty,
-            'previousStock' => $previous,
-            'newStock' => $variant->stock,
-            'referenceType' => 'purchase_order',
-            'referenceId' => $order->id,
-            'reason' => "Recepción de OC {$order->orderNumber}",
-            'userId' => $userId,
-            'unitCost' => $item->unitCost,
-        ]);
-    }
-
-    private function receiveInput(PurchaseOrderItem $item, float $qty, PurchaseOrder $order, int $userId): void
-    {
-        $input = Input::find($item->inputId);
-        if (! $input) {
-            return;
-        }
-        $input->currentStock = (float) $input->currentStock + $qty;
-        $input->save();
-
-        $batch = InputBatch::where('inputId', $item->inputId)->where('isActive', true)
-            ->orderByDesc('createdAt')->first();
-        if (! $batch) {
-            $batch = InputBatch::create([
-                'inputId' => $item->inputId,
-                'batchNumber' => "OC-{$order->orderNumber}-{$item->id}",
-                'initialQuantity' => $qty,
-                'currentQuantity' => $qty,
-                'unitCost' => $item->unitCost,
-                'totalCost' => (float) $item->unitCost * $qty,
-                'purchaseDate' => now(),
-                'isActive' => true,
-            ]);
-        } else {
-            $batch->currentQuantity = (float) $batch->currentQuantity + $qty;
-            $batch->save();
-        }
-
-        InputBatchMovement::create([
-            'inputId' => $item->inputId,
-            'inputBatchId' => $batch->id,
-            'movementType' => 'ENTRADA',
-            'quantity' => $qty,
-            'reason' => "Recepción de OC {$order->orderNumber}",
-            'referenceType' => 'purchase_order',
-            'referenceId' => $order->id,
-            'userId' => $userId,
-        ]);
-    }
-
-    private function receiveInputVariant(PurchaseOrderItem $item, float $qty, PurchaseOrder $order, int $userId): void
-    {
-        $iv = InputVariant::find($item->inputVariantId);
-        if (! $iv) {
-            return;
-        }
-        $previous = (float) $iv->currentStock;
-        $iv->currentStock = $previous + $qty;
-        $iv->save();
-
-        InputVariantMovement::create([
-            'inputVariantId' => $iv->id,
-            'movementType' => 'ENTRADA',
-            'quantity' => $qty,
-            'previousStock' => $previous,
-            'newStock' => $iv->currentStock,
-            'referenceType' => 'purchase_order',
-            'referenceId' => $order->id,
-            'reason' => "Recepción de OC {$order->orderNumber}",
-            'userId' => $userId,
-            'unitCost' => $item->unitCost,
-        ]);
-
-        $total = InputVariant::where('inputId', $iv->inputId)->where('isActive', true)->sum('currentStock');
-        Input::where('id', $iv->inputId)->update(['currentStock' => $total]);
     }
 }

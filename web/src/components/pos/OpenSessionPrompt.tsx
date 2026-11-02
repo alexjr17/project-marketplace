@@ -60,7 +60,7 @@ export default function OpenSessionPrompt({
       setNotes('');
     } catch (error: any) {
       console.error('Error opening session:', error);
-      showToast(error.response?.data?.message || 'Error al abrir sesión', 'error');
+      showToast(error?.message || 'Error al abrir sesión', 'error');
     } finally {
       setIsLoading(false);
     }

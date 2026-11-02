@@ -45,7 +45,6 @@ interface HeroCardProps {
 const CarouselBackground = ({
   images,
   interval = 5000,
-  transition = 'fade'
 }: {
   images: string[];
   interval?: number;

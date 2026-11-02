@@ -1,19 +1,4 @@
-import axios from 'axios';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
-
-const authHeader = () => {
-  const raw = localStorage.getItem('marketplace_auth');
-  let token: string | null = null;
-  if (raw) {
-    try {
-      token = JSON.parse(raw).token || null;
-    } catch {
-      token = null;
-    }
-  }
-  return token ? { Authorization: `Bearer ${token}` } : {};
-};
+import { httpKeepUrls as client } from '../lib/http';
 
 export type AnnouncementType =
   | 'bar'
@@ -54,25 +39,21 @@ export type AnnouncementInput = Omit<Announcement, 'id'>;
 
 /** Anuncios activos (público, para la tienda). */
 export async function getActiveAnnouncements(): Promise<Announcement[]> {
-  const res = await axios.get(`${API_URL}/announcements/active`);
-  return res.data.data || [];
+  return (await client.get<Announcement[]>('/announcements/active')) || [];
 }
 
 export async function listAnnouncements(): Promise<Announcement[]> {
-  const res = await axios.get(`${API_URL}/announcements`, { headers: authHeader() });
-  return res.data.data || [];
+  return (await client.get<Announcement[]>('/announcements')) || [];
 }
 
 export async function createAnnouncement(data: AnnouncementInput): Promise<Announcement> {
-  const res = await axios.post(`${API_URL}/announcements`, data, { headers: authHeader() });
-  return res.data.data;
+  return client.post<Announcement>('/announcements', data);
 }
 
 export async function updateAnnouncement(id: number, data: AnnouncementInput): Promise<Announcement> {
-  const res = await axios.put(`${API_URL}/announcements/${id}`, data, { headers: authHeader() });
-  return res.data.data;
+  return client.put<Announcement>(`/announcements/${id}`, data);
 }
 
 export async function deleteAnnouncement(id: number): Promise<void> {
-  await axios.delete(`${API_URL}/announcements/${id}`, { headers: authHeader() });
+  await client.delete(`/announcements/${id}`);
 }

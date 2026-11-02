@@ -18,7 +18,7 @@ export default function DebtsPage() {
     try {
       setDebts(await posService.getDebts());
     } catch (e: any) {
-      setError(e?.response?.data?.message || 'Error al cargar los fiados');
+      setError(e?.message || 'Error al cargar los fiados');
     } finally {
       setLoading(false);
     }
@@ -47,7 +47,7 @@ export default function DebtsPage() {
       setAbonoInput('');
       await load();
     } catch (e: any) {
-      setError(e?.response?.data?.message || 'No se pudo registrar el abono');
+      setError(e?.message || 'No se pudo registrar el abono');
     } finally {
       setCollectingId(null);
     }

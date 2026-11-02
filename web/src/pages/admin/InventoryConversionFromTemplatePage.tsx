@@ -7,6 +7,7 @@ import {
 } from '../../components/ui';
 import { inventoryConversionsService } from '../../services/inventory-conversions.service';
 import { getVariants, type ProductVariant } from '../../services/variants.service';
+import { templateRecipesService } from '../../services/template-recipes.service';
 import { StepCard } from './InventoryStepCard';
 
 const LIST = '/admin-panel/inventory-conversions';
@@ -159,23 +160,7 @@ export default function InventoryConversionFromTemplatePage() {
   const loadTemplateRecipes = async (templateId: number) => {
     try {
       setLoadingRecipes(true);
-      const authData = localStorage.getItem('marketplace_auth');
-      const token = authData ? JSON.parse(authData).token : '';
-
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
-      const response = await fetch(`${apiUrl}/template-recipes/product/${templateId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Response error:', errorText);
-        throw new Error('Error al cargar recetas');
-      }
-
-      // El API responde con el envoltorio { success, data: [...] }.
-      const json = await response.json();
-      const recipes: any[] = Array.isArray(json) ? json : (json?.data ?? []);
+      const recipes: any[] = await templateRecipesService.getRecipesByProduct(templateId);
 
       const recipesByVariant = new Map<number, any[]>();
       recipes.forEach((recipe: any) => {

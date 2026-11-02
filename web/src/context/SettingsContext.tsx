@@ -17,7 +17,6 @@ import type {
   ProductSection,
   WhatsAppButtonSettings,
   CatalogSettings,
-  PromoBanner,
 } from '../types/settings';
 import { settingsService } from '../services/settings.service';
 import { useAuth } from './AuthContext';

@@ -41,7 +41,7 @@ export const AdminDetailPage = () => {
       }
       setIsLoadingAdmin(true);
       try {
-        const data = await getAdminById(id);
+        const data = await getAdminById(Number(id));
         setAdmin(data);
       } catch (error) {
         console.error('Error loading admin:', error);
@@ -117,14 +117,16 @@ export const AdminDetailPage = () => {
   }
 
   const isSuperAdmin = admin.role === 'superadmin';
-  const isOriginalSuper = isSuperAdmin && admin.id === 'super-admin-001';
+  // El Super Administrador (rol 1 del sistema) no puede cambiar de rol. Antes se comparaba con un id
+  // de los datos de prueba ('super-admin-001') que nunca coincide con el id numérico del API.
+  const isOriginalSuper = isSuperAdmin;
   const isActive = admin.status === 'active';
   const roleLabel = isSuperAdmin
     ? 'Super Administrador'
     : roles.find((r) => r.id === formData.roleId)?.name || admin.roleName || 'Administrador';
 
   const reload = async () => {
-    try { setAdmin(await getAdminById(id!)); } catch { /* se mantiene lo que había */ }
+    try { setAdmin(await getAdminById(Number(id))); } catch { /* se mantiene lo que había */ }
   };
 
   const handleSaveProfile = async () => {
@@ -140,7 +142,7 @@ export const AdminDetailPage = () => {
       setIsEditing(false);
       await reload();
     } catch (err: any) {
-      toast.error(err?.response?.data?.message || 'No se pudo actualizar el perfil');
+      toast.error(err?.message || 'No se pudo actualizar el perfil');
     } finally {
       setSaving(false);
     }
@@ -157,7 +159,7 @@ export const AdminDetailPage = () => {
       toast.success(isActive ? 'Administrador desactivado correctamente' : 'Administrador activado correctamente');
       await reload();
     } catch (err: any) {
-      toast.error(err?.response?.data?.message || 'No se pudo cambiar el estado');
+      toast.error(err?.message || 'No se pudo cambiar el estado');
     }
   };
 

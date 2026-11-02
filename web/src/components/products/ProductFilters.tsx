@@ -3,11 +3,11 @@ import { SlidersHorizontal, X } from 'lucide-react';
 import { Button, Checkbox, Field, NumberInput } from '../ui';
 import { useSettings } from '../../context/SettingsContext';
 import { productsService } from '../../services/products.service';
-import type { ProductCategory, ProductType } from '../../types/product';
+import type { ProductCategory, ProductTypeSlug } from '../../types/product';
 
 export interface FilterValues {
   category?: ProductCategory;
-  type?: ProductType;
+  type?: ProductTypeSlug;
   minPrice?: number;
   maxPrice?: number;
   inStock?: boolean;
@@ -179,7 +179,7 @@ export const ProductFilters = ({ onFilterChange, initialFilters = {} }: ProductF
                   <input
                     type="checkbox"
                     checked={filters.type === type.id}
-                    onChange={(e) => handleFilterChange('type', e.target.checked ? (type.id as ProductType) : undefined)}
+                    onChange={(e) => handleFilterChange('type', e.target.checked ? (type.id as ProductTypeSlug) : undefined)}
                     className="w-4 h-4 rounded border-gray-300 text-app-600 focus:ring-app-500"
                   />
                   {type.label}

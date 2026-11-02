@@ -238,18 +238,18 @@ class InventoryCountFlowTest extends TestCase
         $this->assertSame(0, InventoryCountItem::count());
     }
 
-    public function test_numeracion_se_basa_en_el_conteo_y_choca_al_borrar(): void
+    public function test_numeracion_consecutiva_no_se_repite_al_borrar(): void
     {
         $this->makeInput();
-        $year = date('Y');
+        $year = now()->format('Y');
         $id1 = $this->postJson('/api/inventory-counts', ['countType' => 'FULL'])->json('data.id');
         $this->postJson('/api/inventory-counts', ['countType' => 'FULL'])->assertJsonPath('data.countNumber', "INV-{$year}-0002");
 
         $this->deleteJson("/api/inventory-counts/{$id1}")->assertOk();
-        // ACTUAL (posible bug): el número sale de COUNT()+1; tras borrar uno vuelve a
-        // generar INV-AAAA-0002, que ya existe → violación de único → 500
-        // (InventoryCountController.php:61-67).
-        $this->postJson('/api/inventory-counts', ['countType' => 'FULL'])->assertStatus(500);
+        // Corregido: antes salía de COUNT()+1 y tras borrar volvía a dar INV-AAAA-0002 (500 por
+        // el índice único). Ahora lo entrega NumberSequenceService y nunca repite.
+        $this->postJson('/api/inventory-counts', ['countType' => 'FULL'])
+            ->assertCreated()->assertJsonPath('data.countNumber', "INV-{$year}-0003");
     }
 
     public function test_el_cliente_no_entra_a_conteos(): void

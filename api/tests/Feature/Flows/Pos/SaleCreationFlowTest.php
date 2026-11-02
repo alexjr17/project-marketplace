@@ -255,12 +255,10 @@ class SaleCreationFlowTest extends PosFlowTestCase
             $numbers[] = $this->sellOk($register, [[$a, 1]])->orderNumber;
         }
 
-        foreach ($numbers as $n) {
-            // ACTUAL (posible bug): POS-AAMMDD-NNNN con NNNN aleatorio (random_int 0..9999), no
-            // consecutivo; usa date() (reloj real, no now()) y puede chocar con el índice único.
-            $this->assertMatchesRegularExpression('/^POS-'.date('ymd').'-\d{4}$/', $n);
-        }
-        $this->assertCount(3, array_unique($numbers));
+        // Corregido: antes NNNN era aleatorio (random_int 0..9999, ~50% de choque con ~118
+        // ventas/día) y usaba date(). Ahora es consecutivo por día con el mismo formato.
+        $day = now()->format('ymd');
+        $this->assertSame(["POS-{$day}-0001", "POS-{$day}-0002", "POS-{$day}-0003"], $numbers);
     }
 
     public function test_validaciones_de_sesion_caja_stock_y_payload(): void
@@ -314,15 +312,23 @@ class SaleCreationFlowTest extends PosFlowTestCase
         $this->assertSame(0, Order::count());
     }
 
-    public function test_dos_lineas_de_la_misma_variante_validan_stock_por_linea(): void
+    public function test_dos_lineas_de_la_misma_variante_validan_el_total(): void
     {
         [, $register] = $this->cajeroConCaja();
         $a = $this->makeVariant('Camiseta', 1000, 3);
 
-        // ACTUAL (posible bug): el stock se valida línea por línea contra el stock total,
-        // sin sumar líneas repetidas: 2 + 2 con stock 3 pasa y el stock queda en -1.
-        $this->sell($register, [[$a, 2], [$a, 2]])->assertCreated();
-        $this->assertSame(-1, $this->stockOf($a));
+        // Corregido: antes se validaba línea por línea y 2 + 2 con stock 3 pasaba dejando -1.
+        // Ahora se valida el total por variante (StockService) y no se crea nada.
+        $this->sell($register, [[$a, 2], [$a, 2]])
+            ->assertStatus(400)
+            ->assertJsonPath('message', 'Stock insuficiente para '.$a->sku.'. Disponible: 3, Solicitado: 4');
+        $this->assertSame(3, $this->stockOf($a));
+        $this->assertSame(0, VariantMovement::where('variantId', $a->id)->count());
+        $this->assertSame(0, Order::count());
+
+        // Si el total alcanza, ambas líneas se venden y dejan su movimiento.
+        $this->sell($register, [[$a, 2], [$a, 1]])->assertCreated();
+        $this->assertSame(0, $this->stockOf($a));
         $this->assertSame(2, VariantMovement::where('variantId', $a->id)->count());
     }
 

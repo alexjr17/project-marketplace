@@ -63,7 +63,7 @@ export default function ZoneTypeDetailPage() {
       }
       navigate(LIST);
     } catch (err: any) {
-      const msg = err.response?.data?.message || 'Error al guardar el tipo de zona';
+      const msg = err?.message || 'Error al guardar el tipo de zona';
       setError(msg);
       toast.error(msg);
       console.error(err);
@@ -81,7 +81,7 @@ export default function ZoneTypeDetailPage() {
       toast.success('Tipo de zona eliminado');
       navigate(LIST);
     } catch (err: any) {
-      const msg = err.response?.data?.message || 'Error al eliminar el tipo de zona';
+      const msg = err?.message || 'Error al eliminar el tipo de zona';
       setError(msg);
       toast.error(msg);
       console.error(err);

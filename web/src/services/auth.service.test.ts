@@ -1,10 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { http, HttpResponse } from 'msw';
 import { server, API } from '../test/server';
 import { ok, fail, setSession } from '../test/helpers';
-import { authService, type User } from './auth.service';
+import { authService } from './auth.service';
+import type { AuthUser } from '../types/user';
 
-const user: User = { id: 1, email: 'a@b.co', name: 'Ana', roleId: 3, role: 'Vendedor', permissions: ['orders.view'], status: 'ACTIVE' };
+const user: AuthUser = { id: 1, email: 'a@b.co', name: 'Ana', roleId: 3, role: 'Vendedor', permissions: ['orders.view'], status: 'ACTIVE' };
 const stored = () => JSON.parse(localStorage.getItem('marketplace_auth') ?? 'null');
 
 describe('auth.service (caracterización)', () => {
@@ -34,12 +35,15 @@ describe('auth.service (caracterización)', () => {
       await expect(authService.login({ email: 'a@b.co', password: 'x' })).rejects.toThrow('Tu cuenta está desactivada');
     });
 
-    it('login con una sesión vieja guardada y 401: se trata como "sesión expirada"', async () => {
+    it('login con una sesión vieja guardada y 401: muestra el motivo real, no "sesión expirada"', async () => {
       setSession('viejo');
+      const listener = vi.fn();
+      window.addEventListener('auth:token-expired', listener);
       server.use(http.post(`${API}/auth/login`, () => fail('Credenciales inválidas', 401)));
-      // ACTUAL (posible bug): si quedó un token en localStorage, un login fallido muestra
-      // "Sesión expirada" en vez de "Credenciales inválidas" (api.service manda el token viejo).
-      await expect(authService.login({ email: 'a@b.co', password: 'x' })).rejects.toThrow('Sesión expirada');
+      // CORREGIDO: un 401 del propio login nunca se trata como sesión expirada.
+      await expect(authService.login({ email: 'a@b.co', password: 'x' })).rejects.toThrow('Credenciales inválidas');
+      expect(listener).not.toHaveBeenCalled();
+      window.removeEventListener('auth:token-expired', listener);
     });
 
     it('200 sin data: lanza "Error en el login"', async () => {

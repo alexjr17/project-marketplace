@@ -85,7 +85,7 @@ export const ShippingPage = () => {
 
   const handleMarkAsDelivered = async (orderId: string, orderNumber: string) => {
     if (!(await confirm({ title: `¿Marcar ${orderNumber} como entregado?`, message: 'El pedido pasará a estado final y ya no admite cambios.', confirmText: 'Marcar entregado' }))) return;
-    updateOrderStatus(orderId, 'delivered');
+    updateOrderStatus(Number(orderId), 'delivered');
     toast.success('Pedido marcado como entregado');
   };
 

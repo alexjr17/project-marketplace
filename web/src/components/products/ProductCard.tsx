@@ -69,7 +69,7 @@ export const ProductCard = ({ product, priority = false }: ProductCardProps) => 
       {/* Datos */}
       <div className="p-3 sm:p-4 flex flex-col gap-1.5 flex-1">
         <span className="text-[11px] font-medium tracking-wide text-gray-500 uppercase truncate">
-          {categoryLabels[product.category] || product.category}
+          {(product.category && categoryLabels[product.category]) || product.category}
         </span>
 
         <h3 className="font-medium text-gray-900 text-sm leading-snug line-clamp-2 min-h-[2.5rem]">

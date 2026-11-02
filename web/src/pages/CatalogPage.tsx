@@ -9,7 +9,7 @@ import { Seo } from '../components/seo/Seo';
 import { ProductFilters, type FilterValues } from '../components/products/ProductFilters';
 import { ProductSort } from '../components/products/ProductSort';
 import { Pagination } from '../components/common/Pagination';
-import type { ProductCategory, ProductType } from '../types/product';
+import type { ProductCategory, ProductTypeSlug } from '../types/product';
 
 export const CatalogPage = () => {
   const [searchParams] = useSearchParams();
@@ -32,7 +32,7 @@ export const CatalogPage = () => {
     const sort = searchParams.get('sort');
 
     if (category) urlFilters.category = category as ProductCategory;
-    if (type) urlFilters.type = type as ProductType;
+    if (type) urlFilters.type = type as ProductTypeSlug;
     if (featured === 'true') urlFilters.featured = true;
     if (inStock === 'true') urlFilters.inStock = true;
     if (bestsellers === 'true') urlFilters.bestsellers = true;

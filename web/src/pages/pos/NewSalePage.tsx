@@ -6,7 +6,8 @@ import { useSettings } from '../../context/SettingsContext';
 import * as posService from '../../services/pos.service';
 import type { SearchResult, TemplateSearchResult, ProductSearchResult, TemplateZoneInfo, PosVariant } from '../../services/pos.service';
 import { VariantSelectModal } from '../../components/pos/VariantSelectModal';
-import { catalogsService, type Category } from '../../services/catalogs.service';
+import { catalogsService } from '../../services/catalogs.service';
+import type { Category } from '../../types/catalog';
 import OpenSessionPrompt from '../../components/pos/OpenSessionPrompt';
 import ZoneSelectionModal from '../../components/pos/ZoneSelectionModal';
 import CheckoutModal from '../../components/pos/CheckoutModal';
@@ -228,7 +229,7 @@ export default function NewSalePage() {
       }
     } catch (error: any) {
       console.error('Error searching:', error);
-      showToast(error.response?.data?.message || 'Error al buscar', 'error');
+      showToast(error?.message || 'Error al buscar', 'error');
     } finally {
       setIsSearching(false);
       barcodeInputRef.current?.focus();
@@ -315,7 +316,7 @@ export default function NewSalePage() {
         product: { id: v.productId, name: v.name, image: v.image || '' },
         color: v.colorName || 'N/A',
         size: v.size || 'N/A',
-        sku: v.sku,
+        sku: v.sku ?? '',
         barcode: v.barcode,
         price: v.price,
         basePrice: v.basePrice,
@@ -421,7 +422,7 @@ export default function NewSalePage() {
       }
     } catch (error: any) {
       console.error('Error searching:', error);
-      showToast(error.response?.data?.message || 'Error al buscar', 'error');
+      showToast(error?.message || 'Error al buscar', 'error');
     } finally {
       setIsSearching(false);
     }

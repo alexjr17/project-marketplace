@@ -11,12 +11,15 @@ use App\Models\InventoryConversion;
 use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\VariantMovement;
+use App\Services\NumberSequenceService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class InventoryConversionController extends Controller
 {
     use ApiResponse;
+
+    public function __construct(private NumberSequenceService $numbers) {}
 
     /** Da formato a una conversión con sus items, normalizando numéricos. */
     private function formatConversion(InventoryConversion $c, bool $withTemplate = false): array
@@ -88,15 +91,6 @@ class InventoryConversionController extends Controller
             'availableStock' => (float) ($stockByVariant[$i->inputVariantId] ?? 0),
             'notes' => $i->notes,
         ])->all();
-    }
-
-    /** Genera el siguiente número de conversión (CONV-AAAA-NNNN). */
-    private function generateConversionNumber(): string
-    {
-        $year = date('Y');
-        $count = InventoryConversion::where('conversionNumber', 'like', "CONV-{$year}%")->count();
-
-        return sprintf('CONV-%s-%04d', $year, $count + 1);
     }
 
     /** Recalcula los totales de la conversión a partir de sus items. */
@@ -187,7 +181,7 @@ class InventoryConversionController extends Controller
 
         $user = $request->user();
         $conversion = InventoryConversion::create([
-            'conversionNumber' => $this->generateConversionNumber(),
+            'conversionNumber' => $this->numbers->next(NumberSequenceService::INVENTORY_CONVERSION),
             'conversionType' => $data['conversionType'] ?? 'MANUAL',
             'templateId' => $data['templateId'] ?? null,
             'templateVariantId' => $data['templateVariantId'] ?? null,
@@ -251,7 +245,7 @@ class InventoryConversionController extends Controller
         $user = $request->user();
         $conversion = DB::transaction(function () use ($data, $templateVariant, $outputVariant, $user) {
             $conversion = InventoryConversion::create([
-                'conversionNumber' => $this->generateConversionNumber(),
+                'conversionNumber' => $this->numbers->next(NumberSequenceService::INVENTORY_CONVERSION),
                 'conversionType' => 'TEMPLATE',
                 'templateId' => $templateVariant->productId,
                 'templateVariantId' => $data['templateVariantId'],

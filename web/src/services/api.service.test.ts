@@ -3,6 +3,7 @@ import { http, HttpResponse } from 'msw';
 import { server, API, API_ORIGIN } from '../test/server';
 import { ok, fail, setSession } from '../test/helpers';
 import api from './api.service';
+import { ApiError } from '../lib/http';
 
 /** Registra un handler que guarda la última petición recibida. */
 function capture(method: 'get' | 'post' | 'put' | 'patch' | 'delete', path: string, response: () => Response = () => ok({ ok: 1 })) {
@@ -51,11 +52,10 @@ describe('api.service (caracterización)', () => {
       expect(seen.req!.url).toBe(`${API}/q`);
     });
 
-    it('con params todos vacíos deja un "?" colgando', async () => {
+    it('con params todos vacíos no agrega "?"', async () => {
       const seen = capture('get', '/q');
       await api.get('/q', { search: '' });
-      // ACTUAL: la URL termina en "?" (inofensivo).
-      expect(seen.req!.url).toBe(`${API}/q?`);
+      expect(seen.req!.url).toBe(`${API}/q`);
     });
   });
 
@@ -153,13 +153,14 @@ describe('api.service (caracterización)', () => {
       await expect(api.get('/x')).rejects.toThrow('Error en la solicitud');
     });
 
-    it('422: el Error solo lleva message; los errors de validación se pierden', async () => {
+    it('422: ApiError con status, message y los errors de validación por campo', async () => {
       server.use(http.post(`${API}/x`, () => fail('Datos inválidos', 422, { errors: { email: ['requerido'] } })));
       const err = await api.post('/x', {}).catch((e) => e);
-      expect(err).toBeInstanceOf(Error);
+      expect(err).toBeInstanceOf(ApiError);
       expect(err.message).toBe('Datos inválidos');
-      // ACTUAL (posible bug): el detalle por campo (errors) no llega a quien llama.
-      expect((err as any).errors).toBeUndefined();
+      // CORREGIDO: el detalle por campo llega a quien llama.
+      expect(err.status).toBe(422);
+      expect(err.errors).toEqual({ email: ['requerido'] });
     });
 
     it('respuesta 2xx con success:false NO lanza: se devuelve tal cual', async () => {
@@ -168,26 +169,28 @@ describe('api.service (caracterización)', () => {
       await expect(api.get('/x')).resolves.toEqual({ success: false, message: 'raro' });
     });
 
-    it('respuesta no JSON (p. ej. HTML de un 502): lanza el error de parseo crudo', async () => {
+    it('respuesta no JSON (p. ej. HTML de un 502): ApiError con mensaje legible, no SyntaxError', async () => {
       server.use(http.get(`${API}/x`, () => new HttpResponse('<html>Bad Gateway</html>', { status: 502 })));
       const err = await api.get('/x').catch((e) => e);
-      // ACTUAL (posible bug): el usuario ve un SyntaxError de JSON en vez de un mensaje amigable.
-      expect(err).toBeInstanceOf(SyntaxError);
+      // CORREGIDO: antes se veía el SyntaxError del parseo.
+      expect(err).toBeInstanceOf(ApiError);
+      expect(err.status).toBe(502);
+      expect(err.message).toBe('Error en la solicitud');
     });
 
-    it('204 sin cuerpo: también falla al parsear', async () => {
+    it('204 sin cuerpo: se resuelve como éxito', async () => {
       server.use(http.delete(`${API}/x`, () => new HttpResponse(null, { status: 204 })));
-      // ACTUAL (posible bug): un 204 se trata como error.
-      await expect(api.delete('/x')).rejects.toBeInstanceOf(SyntaxError);
+      // CORREGIDO: antes un 204 se trataba como error de parseo.
+      await expect(api.delete('/x')).resolves.toEqual({ success: true });
     });
 
-    it('fallo de red: se relanza el TypeError de fetch, nunca "Error de conexión con el servidor"', async () => {
+    it('fallo de red: ApiError(0) "Error de conexión con el servidor"', async () => {
       server.use(http.get(`${API}/x`, () => HttpResponse.error()));
       const err = await api.get('/x').catch((e) => e);
-      // ACTUAL (posible bug): el mensaje "Error de conexión con el servidor" es inalcanzable,
-      // porque fetch lanza TypeError (que es instanceof Error) y se relanza tal cual.
-      expect(err).toBeInstanceOf(TypeError);
-      expect(err.message).not.toBe('Error de conexión con el servidor');
+      // CORREGIDO: antes se relanzaba el TypeError crudo de fetch.
+      expect(err).toBeInstanceOf(ApiError);
+      expect(err.status).toBe(0);
+      expect(err.message).toBe('Error de conexión con el servidor');
     });
   });
 
@@ -217,11 +220,12 @@ describe('api.service (caracterización)', () => {
       expect(res.data.html).toBe(`<img src="${API_ORIGIN}/uploads/a.png"><img src="${API_ORIGIN}/uploads/b.png">`);
     });
 
-    it('URL de OTRO dominio con /uploads/ queda corrupta', async () => {
-      server.use(http.get(`${API}/p`, () => ok({ image: 'https://cdn.example.com/uploads/a.png' })));
+    it('URL de OTRO dominio con /uploads/ queda intacta', async () => {
+      server.use(http.get(`${API}/p`, () => ok({ image: 'https://cdn.example.com/uploads/a.png', html: '<img src="https://cdn.example.com/uploads/b.png">' })));
       const res = await api.get<any>('/p');
-      // ACTUAL (posible bug): se antepone el origen en medio de la URL externa.
-      expect(res.data.image).toBe(`https://cdn.example.com${API_ORIGIN}/uploads/a.png`);
+      // CORREGIDO: antes se anteponía el origen en medio de la URL externa.
+      expect(res.data.image).toBe('https://cdn.example.com/uploads/a.png');
+      expect(res.data.html).toBe('<img src="https://cdn.example.com/uploads/b.png">');
     });
 
     it('también reescribe /uploads/ dentro del message de un error', async () => {
@@ -248,12 +252,17 @@ describe('api.service (caracterización)', () => {
       expect(await blob.text()).toBe('PDFDATA');
     });
 
-    it('error JSON: lanza el message; 401 con token dispara auth:token-expired', async () => {
+    it('error JSON: lanza el message del backend', async () => {
+      server.use(http.get(`${API}/pdf`, () => fail('No existe', 404)));
+      await expect(api.getBlob('/pdf')).rejects.toThrow('No existe');
+    });
+
+    it('401 con token: igual que el resto de peticiones (sesión expirada + auth:token-expired)', async () => {
       setSession('t');
       const listener = vi.fn();
       window.addEventListener('auth:token-expired', listener);
       server.use(http.get(`${API}/pdf`, () => fail('Expirado', 401)));
-      await expect(api.getBlob('/pdf')).rejects.toThrow('Expirado');
+      await expect(api.getBlob('/pdf')).rejects.toThrow('Sesión expirada');
       expect(listener).toHaveBeenCalledTimes(1);
       expect(localStorage.getItem('marketplace_auth')).toBeNull();
       window.removeEventListener('auth:token-expired', listener);

@@ -158,7 +158,7 @@ export default function SalesHistoryPage() {
       setCancelSale(null);
       loadSales();
     } catch (error: any) {
-      showToast(error.response?.data?.message || 'No se pudo anular la venta', 'error');
+      showToast(error?.message || 'No se pudo anular la venta', 'error');
     } finally {
       setIsCancelling(false);
     }
@@ -203,7 +203,7 @@ export default function SalesHistoryPage() {
       setReturnModalSale(null);
       loadSales();
     } catch (error: any) {
-      showToast(error.response?.data?.message || 'No se pudo registrar la devolución', 'error');
+      showToast(error?.message || 'No se pudo registrar la devolución', 'error');
     } finally {
       setIsReturning(false);
     }
@@ -257,7 +257,7 @@ export default function SalesHistoryPage() {
       setEmailInput('');
     } catch (error: any) {
       console.error('Error sending invoice:', error);
-      showToast(error.response?.data?.message || 'Error al enviar recibo', 'error');
+      showToast(error?.message || 'Error al enviar recibo', 'error');
     } finally {
       setIsSendingEmail(false);
     }
@@ -464,8 +464,7 @@ export default function SalesHistoryPage() {
       // En caso de error, restaurar la imagen para reintentar
       setEvidencePreview(imageToUpload);
       setIsUploadingEvidence(false);
-      const errorMsg = error?.response?.data?.message
-        || error?.message
+      const errorMsg = error?.message
         || 'Error al subir';
       showToast(`Error: ${errorMsg}`, 'error');
     }

@@ -161,7 +161,7 @@ export const DashboardPage = () => {
                                 <span className="font-medium text-gray-900 whitespace-nowrap">{o.orderNumber}</span>
                                 <span className="block text-xs text-gray-500">{new Date(o.createdAt).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
                               </Td>
-                              <Td>{o.user?.name || o.shipping?.recipientName || '—'}</Td>
+                              <Td>{o.user?.name || o.shipping?.name || o.shipping?.recipientName || '—'}</Td>
                               <Td align="center"><Badge tone={ORDER_TONE[st] ?? 'gray'}>{ORDER_STATUS_LABELS[st] ?? o.status}</Badge></Td>
                               <Td align="right" className="font-medium text-gray-900">{money(o.total)}</Td>
                             </Tr>

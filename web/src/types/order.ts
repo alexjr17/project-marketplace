@@ -26,13 +26,18 @@ export interface OrderItem {
   };
 }
 
+/** Datos de envío guardados en el pedido (los que manda el checkout). */
 export interface ShippingInfo {
-  recipientName: string;
+  name?: string;
+  email?: string;
+  /** Nombre del destinatario en pedidos antiguos; los nuevos usan `name`. */
+  recipientName?: string;
   phone: string;
   address: string;
   city: string;
-  postalCode: string;
-  country: string;
+  department?: string;
+  postalCode?: string;
+  country?: string;
   notes?: string;
 }
 

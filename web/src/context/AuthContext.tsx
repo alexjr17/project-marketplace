@@ -1,44 +1,15 @@
 import type { ReactNode } from 'react';
 import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { authService } from '../services';
-import type { AuthResponse, User as ApiUser } from '../services/auth.service';
+import type { AuthUser, SessionUser, SessionRole, UserProfile } from '../types/user';
 import { getAppPermissions } from '../types/roles';
 
 // Permisos que pertenecen al panel de Administración (acceso + todos sus módulos)
 const ADMIN_PERMISSIONS = new Set<string>(getAppPermissions('admin'));
 
-export interface UserProfile {
-  phone?: string;
-  cedula?: string;
-  address?: string;
-  city?: string;
-  postalCode?: string;
-  country?: string;
-}
-
-export interface User {
-  id: string;
-  email: string;
-  name: string;
-  phone?: string;
-  avatar?: string;
-  roleId: number;
-  roleName: string;
-  permissions: string[];
-  status: string;
-  createdAt: Date;
-  profile?: UserProfile;
-}
-
-export interface Role {
-  id: number;
-  name: string;
-  permissions: string[];
-}
-
 interface AuthContextType {
-  user: User | null;
-  role: Role | null;
+  user: SessionUser | null;
+  role: SessionRole | null;
   isAuthenticated: boolean;
   isSuperAdmin: boolean;
   isAdmin: boolean;
@@ -60,7 +31,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 // Mapear usuario de API a usuario local
-const mapApiUserToUser = (apiUser: ApiUser, storedAuth?: AuthResponse | null): User => {
+const mapApiUserToUser = (apiUser: AuthUser): SessionUser => {
   return {
     id: apiUser.id,
     email: apiUser.email,
@@ -84,7 +55,7 @@ const mapApiUserToUser = (apiUser: ApiUser, storedAuth?: AuthResponse | null): U
 };
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<SessionUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const hasRedirectedRef = useRef(false);
 
@@ -92,7 +63,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     const storedAuth = authService.getStoredAuth();
     if (storedAuth?.user) {
-      setUser(mapApiUserToUser(storedAuth.user, storedAuth));
+      setUser(mapApiUserToUser(storedAuth.user));
       // Refresca rol y permisos desde el servidor en segundo plano: antes se usaban los del
       // login para siempre y un cambio de permisos no se veía hasta volver a iniciar sesión.
       // Un 401 lo maneja api.service (sesión expirada); otros errores dejan lo guardado.
@@ -136,7 +107,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   // Obtener rol del usuario
-  const role: Role | null = user
+  const role: SessionRole | null = user
     ? {
         id: user.roleId,
         name: user.roleName,
@@ -147,7 +118,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   // Login
   const login = async (email: string, password: string): Promise<void> => {
     const response = await authService.login({ email, password });
-    setUser(mapApiUserToUser(response.user, response));
+    setUser(mapApiUserToUser(response.user));
   };
 
   // Registro
@@ -158,7 +129,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     phone?: string
   ): Promise<void> => {
     const response = await authService.register({ email, password, name, phone });
-    setUser(mapApiUserToUser(response.user, response));
+    setUser(mapApiUserToUser(response.user));
   };
 
   // Recuperar contraseña

@@ -12,6 +12,9 @@ export interface ProductInfo {
     extra2: string | null;
   };
   basePrice: number;
+  /** Precio con el descuento directo del producto ya aplicado (lo calcula el API). */
+  salePrice?: number;
+  hasDiscount?: boolean;
 }
 
 export interface VariantInfo {

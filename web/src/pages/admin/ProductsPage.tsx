@@ -103,7 +103,7 @@ export const ProductsPage = () => {
       toast.success('Producto creado correctamente');
       setViewMode('list');
     } catch (error: any) {
-      toast.error('No se pudo crear el producto: ' + (error?.response?.data?.message || error?.message || 'error desconocido'));
+      toast.error('No se pudo crear el producto: ' + (error?.message || 'error desconocido'));
     } finally {
       setSaving(false);
     }
@@ -113,10 +113,10 @@ export const ProductsPage = () => {
     if (!selectedProduct) return;
     try {
       setSaving(true);
-      await updateProduct(String(selectedProduct.id), productData);
+      await updateProduct(selectedProduct.id, productData);
       toast.success('Producto actualizado correctamente');
     } catch (error: any) {
-      toast.error('No se pudo actualizar el producto: ' + (error?.response?.data?.message || error?.message || 'error desconocido'));
+      toast.error('No se pudo actualizar el producto: ' + (error?.message || 'error desconocido'));
     } finally {
       setSaving(false);
     }
@@ -125,12 +125,12 @@ export const ProductsPage = () => {
   const handleDeleteProduct = async (product: Product) => {
     if (!(await confirm({ title: `¿Eliminar "${product.name}"?`, message: 'Se elimina el producto del catálogo. Esta acción no se puede deshacer.', tone: 'danger' }))) return;
     try {
-      await deleteProduct(String(product.id));
+      await deleteProduct(product.id);
       toast.success('Producto eliminado correctamente');
       setSelectedProduct(null);
       setViewMode('list');
     } catch (error: any) {
-      toast.error('No se pudo eliminar el producto: ' + (error?.response?.data?.message || error?.message || 'error desconocido'));
+      toast.error('No se pudo eliminar el producto: ' + (error?.message || 'error desconocido'));
     }
   };
 
@@ -193,7 +193,7 @@ export const ProductsPage = () => {
 
       setGeneratingVariantsFor(null);
     } catch (error: any) {
-      toast.error('Error al generar variantes: ' + (error.response?.data?.message || error.message));
+      toast.error('Error al generar variantes: ' + (error?.message));
     } finally {
       setIsGenerating(false);
     }

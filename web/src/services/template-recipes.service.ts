@@ -1,4 +1,4 @@
-import api from './api.service';
+import { http, isApiError } from '../lib/http';
 
 export interface TemplateRecipe {
   id: number;
@@ -73,6 +73,13 @@ export interface CreateTemplateRecipeInput {
   quantity?: number;
 }
 
+export interface VariantStockInfo {
+  variantId: number | null;
+  sku?: string;
+  availableStock: number;
+  recipe?: { inputName: string; inputStock: number; quantity: number }[] | null;
+}
+
 class TemplateRecipesService {
   private baseUrl = '/template-recipes';
 
@@ -80,8 +87,7 @@ class TemplateRecipesService {
    * Crear o actualizar receta para una variante de template
    */
   async createRecipe(data: CreateTemplateRecipeInput): Promise<TemplateRecipe> {
-    const response = await api.post<TemplateRecipe>(this.baseUrl, data);
-    return response.data;
+    return http.post<TemplateRecipe>(this.baseUrl, data);
   }
 
   /**
@@ -89,10 +95,9 @@ class TemplateRecipesService {
    */
   async getRecipe(variantId: number): Promise<TemplateRecipe | null> {
     try {
-      const response = await api.get<TemplateRecipe>(`${this.baseUrl}/variant/${variantId}`);
-      return response.data;
-    } catch (error: any) {
-      if (error.response?.status === 404) {
+      return (await http.get<TemplateRecipe | null>(`${this.baseUrl}/variant/${variantId}`)) ?? null;
+    } catch (error) {
+      if (isApiError(error) && error.status === 404) {
         return null;
       }
       throw error;
@@ -103,39 +108,45 @@ class TemplateRecipesService {
    * Obtener todas las recetas de un template
    */
   async getRecipesByProduct(productId: number): Promise<TemplateRecipe[]> {
-    const response = await api.get<TemplateRecipe[]>(`${this.baseUrl}/product/${productId}`);
-    return response.data;
+    return (await http.get<TemplateRecipe[]>(`${this.baseUrl}/product/${productId}`)) ?? [];
   }
 
   /**
    * Obtener stock disponible para todas las variantes de un template
    */
   async getAvailableStock(productId: number): Promise<TemplateVariantStock[]> {
-    const response = await api.get<TemplateVariantStock[]>(`${this.baseUrl}/product/${productId}/stock`);
-    return Array.isArray(response.data) ? response.data : [];
+    const data = await http.get<TemplateVariantStock[]>(`${this.baseUrl}/product/${productId}/stock`);
+    return Array.isArray(data) ? data : [];
   }
 
   /**
    * Eliminar receta de una variante
    */
   async deleteRecipe(variantId: number): Promise<void> {
-    await api.delete(`${this.baseUrl}/variant/${variantId}`);
+    await http.delete(`${this.baseUrl}/variant/${variantId}`);
   }
 
   /**
-   * Asociar insumos a un template
+   * Quitar un insumo concreto de la receta de una variante
    */
-  async associateInputs(productId: number, inputIds: number[]): Promise<{ created: number; templateVariants: number }> {
-    const response = await api.post<{ created: number; templateVariants: number }>(`${this.baseUrl}/product/${productId}/associate`, { inputIds });
-    return response as any;
+  async deleteRecipeInput(variantId: number, inputVariantId: number): Promise<void> {
+    await http.delete(`${this.baseUrl}/variant/${variantId}/input/${inputVariantId}`);
   }
 
   /**
-   * Obtener IDs de insumos asociados a un template
+   * Asociar insumos a un template. El API responde la forma cruda { created, message }.
+   */
+  async associateInputs(productId: number, inputIds: number[]): Promise<{ created: number; message?: string }> {
+    const res = await http.envelope<never>('POST', `${this.baseUrl}/product/${productId}/associate`, { body: { inputIds } });
+    return { created: Number(res.created ?? 0), message: res.message };
+  }
+
+  /**
+   * Obtener IDs de insumos asociados a un template. El API responde la forma cruda { inputIds }.
    */
   async getAssociatedInputIds(productId: number): Promise<number[]> {
-    const response = await api.get<{ inputIds: number[] }>(`${this.baseUrl}/product/${productId}/inputs`);
-    return (response as any).inputIds;
+    const res = await http.envelope<never>('GET', `${this.baseUrl}/product/${productId}/inputs`);
+    return Array.isArray(res.inputIds) ? (res.inputIds as number[]) : [];
   }
 
   /**
@@ -148,19 +159,14 @@ class TemplateRecipesService {
     sizeId?: number | null,
     colorHex?: string | null,
     sizeName?: string | null
-  ): Promise<{
-    variantId: number | null;
-    availableStock: number;
-    recipe: { inputName: string; inputStock: number; quantity: number }[] | null;
-  }> {
-    const params = new URLSearchParams();
-    if (colorId) params.append('colorId', colorId.toString());
-    if (sizeId) params.append('sizeId', sizeId.toString());
-    if (colorHex) params.append('colorHex', colorHex);
-    if (sizeName) params.append('sizeName', sizeName);
-
-    const response = await api.get<{ success: boolean; data: any }>(`${this.baseUrl}/variant-stock/${productId}?${params.toString()}`);
-    return response.data.data;
+  ): Promise<VariantStockInfo> {
+    // Antes se leía response.data.data (un nivel de más) y siempre llegaba undefined.
+    return http.get<VariantStockInfo>(`${this.baseUrl}/variant-stock/${productId}`, {
+      colorId: colorId || undefined,
+      sizeId: sizeId || undefined,
+      colorHex: colorHex || undefined,
+      sizeName: sizeName || undefined,
+    });
   }
 }
 

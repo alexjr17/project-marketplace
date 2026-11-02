@@ -185,7 +185,7 @@ export default function DesignImagesPage() {
       loadCategories();
     } catch (err: any) {
       console.error('Error al guardar:', err);
-      toast.error(`Error al guardar la imagen: ${err.response?.data?.message || err.message || 'Error desconocido'}`);
+      toast.error(`Error al guardar la imagen: ${err?.message || 'Error desconocido'}`);
     } finally {
       setSaving(false);
     }

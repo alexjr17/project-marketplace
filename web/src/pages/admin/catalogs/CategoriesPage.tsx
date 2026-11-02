@@ -3,7 +3,7 @@ import { FolderTree } from 'lucide-react';
 import { useCatalogs } from '../../../context/CatalogsContext';
 import { Field, Switch, TextArea, TextInput, toast, useConfirm } from '../../../components/ui';
 import type { Category } from '../../../types/catalog';
-import { CatalogDialog, CatalogListPage, ctxId, errMsg } from './CatalogListPage';
+import { CatalogDialog, CatalogListPage, errMsg } from './CatalogListPage';
 
 const EMPTY = { name: '', description: '', isActive: true };
 
@@ -28,10 +28,10 @@ export const CategoriesPage = () => {
     setSaving(true);
     try {
       if (editing) {
-        await updateCategory(ctxId(editing.id), form);
+        await updateCategory(editing.id, form);
         toast.success('Categoría actualizada');
       } else {
-        await addCategory(form as Parameters<typeof addCategory>[0]);
+        await addCategory(form);
         toast.success('Categoría creada');
       }
       setOpen(false);
@@ -45,7 +45,7 @@ export const CategoriesPage = () => {
   const remove = async (c: Category) => {
     if (!(await confirm({ title: `¿Eliminar la categoría "${c.name}"?`, message: 'Esta acción no se puede deshacer.', tone: 'danger' }))) return;
     try {
-      await deleteCategory(ctxId(c.id));
+      await deleteCategory(c.id);
       toast.success('Categoría eliminada');
       setOpen(false);
     } catch (err) {

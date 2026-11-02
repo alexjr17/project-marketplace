@@ -12,12 +12,13 @@ import { useAuth } from '../context/AuthContext';
 import { ColorPicker } from '../components/customizer/ColorPicker';
 import { ImageUploader, type ImageUploadData } from '../components/customizer/ImageUploader';
 import { SizeGuideModal } from '../components/customizer/SizeGuideModal';
+import { getSizeChart } from '../data/sizeCharts';
 import { ImageCarousel } from '../components/customizer/ImageCarousel';
 import { applyColorToImage } from '../utils/imageColorizer';
 import { assetUrl } from '../utils/assetUrl';
 import { exportDesignsToZip } from '../utils/designExporter';
 import { detectPngBounds, clampPositionToBounds, type PngBounds } from '../utils/pngBoundsDetector';
-import type { ProductType, PrintZone } from '../types/product';
+import type { ProductTypeSlug, PrintZone } from '../types/product';
 import type { Design, CustomizedProduct } from '../types/design';
 import toast from '../lib/toast';
 
@@ -74,7 +75,6 @@ export const CustomizerPage = () => {
   // Modo admin: id de la zona de impresión donde se está colocando/editando el diseño
   const [activeZoneId, setActiveZoneId] = useState<number | null>(null);
   // Zonas de diseño (habilitadas y bloqueadas) del template actual
-  const [allowedZones, setAllowedZones] = useState<DesignZone[]>([]);
   const [blockedZones, setBlockedZones] = useState<DesignZone[]>([]);
 
   // Ref para el slider de tamaño (evita re-renders)
@@ -82,7 +82,6 @@ export const CustomizerPage = () => {
   const sizeDisplayRef = useRef<HTMLSpanElement>(null);
 
   // Estado para drag & drop del diseño
-  const [isDragging, setIsDragging] = useState(false);
   const isDraggingRef = useRef(false);
   const dragStartRef = useRef({ x: 0, y: 0 });
   const designStartPosRef = useRef({ x: 0, y: 0 });
@@ -102,136 +101,6 @@ export const CustomizerPage = () => {
   // Constantes del canvas
   const CANVAS_WIDTH = 600;
   const CANVAS_HEIGHT = 600;
-
-  // Función auxiliar para verificar si un punto está dentro de un polígono (triángulo)
-  const isPointInPolygon = useCallback((
-    point: { x: number; y: number },
-    polygonPoints: Array<{ x: number; y: number }>,
-    zoneX: number,
-    zoneY: number,
-    zoneWidth: number,
-    zoneHeight: number
-  ): boolean => {
-    // Convertir puntos relativos (0-100%) a coordenadas absolutas
-    const absolutePoints = polygonPoints.map(p => ({
-      x: zoneX + (p.x / 100) * zoneWidth,
-      y: zoneY + (p.y / 100) * zoneHeight
-    }));
-
-    let inside = false;
-    for (let i = 0, j = absolutePoints.length - 1; i < absolutePoints.length; j = i++) {
-      const xi = absolutePoints[i].x, yi = absolutePoints[i].y;
-      const xj = absolutePoints[j].x, yj = absolutePoints[j].y;
-
-      if (((yi > point.y) !== (yj > point.y)) &&
-          (point.x < (xj - xi) * (point.y - yi) / (yj - yi) + xi)) {
-        inside = !inside;
-      }
-    }
-    return inside;
-  }, []);
-
-  // Función para verificar si el diseño colisiona con una zona
-  const checkZoneCollision = useCallback((
-    position: { x: number; y: number },
-    size: { width: number; height: number },
-    zone: DesignZone
-  ): boolean => {
-    // Calcular los bordes del diseño (posición es el centro)
-    const designLeft = position.x - size.width / 2;
-    const designRight = position.x + size.width / 2;
-    const designTop = position.y - size.height / 2;
-    const designBottom = position.y + size.height / 2;
-
-    if (zone.shape === 'circle' && zone.radius) {
-      // Para círculos, verificar si el rectángulo del diseño intersecta con el círculo
-      const centerX = zone.x + zone.radius;
-      const centerY = zone.y + zone.radius;
-      // Encontrar el punto más cercano del rectángulo al centro del círculo
-      const closestX = Math.max(designLeft, Math.min(centerX, designRight));
-      const closestY = Math.max(designTop, Math.min(centerY, designBottom));
-      const distance = Math.sqrt(Math.pow(closestX - centerX, 2) + Math.pow(closestY - centerY, 2));
-      return distance <= zone.radius;
-    }
-
-    if (zone.shape === 'polygon' && zone.points && zone.points.length >= 3) {
-      // Para polígonos (triángulos), verificar si alguna esquina del diseño está dentro
-      const zoneWidth = zone.width || 30;
-      const zoneHeight = zone.height || 30;
-
-      // Verificar las 4 esquinas del diseño
-      const corners = [
-        { x: designLeft, y: designTop },
-        { x: designRight, y: designTop },
-        { x: designRight, y: designBottom },
-        { x: designLeft, y: designBottom },
-        { x: position.x, y: position.y } // También el centro
-      ];
-
-      for (const corner of corners) {
-        if (isPointInPolygon(corner, zone.points, zone.x, zone.y, zoneWidth, zoneHeight)) {
-          return true;
-        }
-      }
-
-      // Verificar si el centro del triángulo está dentro del diseño
-      const triangleCenter = {
-        x: zone.x + zoneWidth / 2,
-        y: zone.y + zoneHeight * 0.67 // El centroide del triángulo está a 2/3 de la altura
-      };
-
-      if (triangleCenter.x >= designLeft && triangleCenter.x <= designRight &&
-          triangleCenter.y >= designTop && triangleCenter.y <= designBottom) {
-        return true;
-      }
-
-      return false;
-    }
-
-    // Rectángulo: verificar intersección
-    const zoneLeft = zone.x;
-    const zoneRight = zone.x + (zone.width || 0);
-    const zoneTop = zone.y;
-    const zoneBottom = zone.y + (zone.height || 0);
-
-    return !(
-      designRight < zoneLeft ||
-      designLeft > zoneRight ||
-      designBottom < zoneTop ||
-      designTop > zoneBottom
-    );
-  }, [isPointInPolygon]);
-
-  // Función para verificar si la posición del diseño es válida
-  // Retorna true si el diseño está en una posición válida
-  const isDesignPositionValid = useCallback((
-    position: { x: number; y: number },
-    size: { width: number; height: number }
-  ): boolean => {
-    // Verificar colisión con zonas bloqueadas - si colisiona, posición inválida
-    for (const zone of blockedZones) {
-      if (checkZoneCollision(position, size, zone)) {
-        return false;
-      }
-    }
-
-    // Si hay zonas habilitadas, el diseño debe estar dentro de al menos una
-    if (allowedZones.length > 0) {
-      let isInAnyAllowedZone = false;
-      for (const zone of allowedZones) {
-        if (checkZoneCollision(position, size, zone)) {
-          isInAnyAllowedZone = true;
-          break;
-        }
-      }
-      // Si no está en ninguna zona habilitada, posición inválida
-      if (!isInAnyAllowedZone) {
-        return false;
-      }
-    }
-
-    return true;
-  }, [allowedZones, blockedZones, checkZoneCollision]);
 
   // Calcular el área real de la imagen visible considerando object-contain
   const getImageContentArea = useCallback(() => {
@@ -607,6 +476,11 @@ export const CustomizerPage = () => {
     ? selectedTemplate.sizes.map(s => s.abbreviation)
     : ['S', 'M', 'L', 'XL'];
 
+  // Guía de tallas del tipo de producto (antes el modal recibía null y se rompía al abrirlo).
+  const sizeChart = selectedTemplate
+    ? getSizeChart((selectedTemplate.typeSlug || 'tshirt') as ProductTypeSlug)
+    : undefined;
+
   // Inicializar canvas
   useEffect(() => {
     if (canvasRef.current) {
@@ -759,7 +633,6 @@ export const CustomizerPage = () => {
   useEffect(() => {
     const loadZonesFromDB = async () => {
       if (!selectedTemplate?.id || !currentZoneType) {
-        setAllowedZones([]);
         setBlockedZones([]);
         return;
       }
@@ -789,20 +662,15 @@ export const CustomizerPage = () => {
           name: zone.name,
         });
 
-        // Separar zonas por isBlocked
-        const allowed = zonesForCurrentView
-          .filter((z) => !z.isBlocked)
-          .map(convertToDesignZone);
+        // Zonas bloqueadas (se dibujan sobre la prenda). Las habilitadas no se usan aún:
+        // la validación de posición contra zonas nunca se conectó al arrastre.
         const blocked = zonesForCurrentView
           .filter((z) => z.isBlocked)
           .map(convertToDesignZone);
 
-        console.log('[CustomizerPage] Zonas habilitadas:', allowed.length, 'Zonas bloqueadas:', blocked.length);
-        setAllowedZones(allowed);
         setBlockedZones(blocked);
       } catch (error) {
         console.error('[CustomizerPage] Error al cargar zonas:', error);
-        setAllowedZones([]);
         setBlockedZones([]);
       }
     };
@@ -953,7 +821,7 @@ export const CustomizerPage = () => {
   // thumbnailUrl: imagen pequeña para preview en el personalizador
   // fullUrl: URL de alta calidad para guardar en el pedido
   const handlePresetImageSelect = (thumbnailUrl: string, fullUrl: string, imageName: string) => {
-    handleImageUpload(thumbnailUrl, { original: fullUrl, fileName: imageName, fileSize: 0 });
+    handleImageUpload(thumbnailUrl, { compressed: thumbnailUrl, original: fullUrl, fileName: imageName, fileSize: 0 });
   };
 
   // Función interna de movimiento (usa refs para evitar re-renders)
@@ -1054,7 +922,6 @@ export const CustomizerPage = () => {
       });
     }
 
-    setIsDragging(false);
   }, []);
 
   // Actualizar refs cuando cambian las funciones
@@ -1091,7 +958,6 @@ export const CustomizerPage = () => {
     designElementRef.current.style.willChange = 'left, top';
     designElementRef.current.style.boxShadow = `0 0 0 2px white, 0 0 0 4px ${brandColors.primary}`;
 
-    setIsDragging(true);
   };
 
   const handleDesignUpdate = (updates: Partial<Design>) => {
@@ -1311,7 +1177,7 @@ export const CustomizerPage = () => {
     const customizedProduct: CustomizedProduct = {
       id: `custom-${Date.now()}`,
       productId: selectedTemplate.id.toString(),
-      productType: (selectedTemplate.typeSlug || 'tshirt') as ProductType,
+      productType: (selectedTemplate.typeSlug || 'tshirt') as ProductTypeSlug,
       productName: selectedTemplate.name,
       basePrice: basePrice,
       selectedColor: selectedColor,
@@ -1522,13 +1388,15 @@ export const CustomizerPage = () => {
                   <div>
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-sm font-semibold text-gray-900">Talla</span>
-                      <button
-                        onClick={() => setShowSizeGuide(true)}
-                        className="text-xs font-medium hover:opacity-80"
-                        style={{ color: brandColors.primary }}
-                      >
-                        Guía
-                      </button>
+                      {sizeChart && (
+                        <button
+                          onClick={() => setShowSizeGuide(true)}
+                          className="text-xs font-medium hover:opacity-80"
+                          style={{ color: brandColors.primary }}
+                        >
+                          Guía
+                        </button>
+                      )}
                     </div>
                     <div className="flex flex-wrap gap-2">
                       {availableSizes.map((size) => (
@@ -2233,11 +2101,13 @@ export const CustomizerPage = () => {
       </div>
 
       {/* Modal guía de tallas */}
-      <SizeGuideModal
-        isOpen={showSizeGuide}
-        onClose={() => setShowSizeGuide(false)}
-        sizeChart={null}
-      />
+      {sizeChart && (
+        <SizeGuideModal
+          isOpen={showSizeGuide}
+          onClose={() => setShowSizeGuide(false)}
+          sizeChart={sizeChart}
+        />
+      )}
     </div>
   );
 };

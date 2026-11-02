@@ -12,7 +12,8 @@ import {
 } from '@tanstack/react-table';
 import * as labelTemplatesService from '../../../services/label-templates.service';
 import * as barcodeService from '../../../services/barcode.service';
-import { catalogsService, type ProductType as ProductTypeCatalog } from '../../../services/catalogs.service';
+import { catalogsService } from '../../../services/catalogs.service';
+import type { ProductType as ProductTypeCatalog } from '../../../types/catalog';
 import type { LabelTemplate, LabelZone } from '../../../types/label-template';
 import { LabelTemplateEditor } from '../../../components/admin/LabelTemplateEditor';
 import {
@@ -349,7 +350,7 @@ export default function LabelTemplatesPage() {
 
     } catch (err: any) {
       console.error('Error generando PDF:', err);
-      toast.error(err.response?.data?.message || err.message || 'Error al generar PDF de ejemplo');
+      toast.error(err?.message || 'Error al generar PDF de ejemplo');
     } finally {
       setGeneratingPDF(false);
     }
@@ -443,7 +444,7 @@ export default function LabelTemplatesPage() {
 
     } catch (err: any) {
       console.error('Error generando PDF:', err);
-      toast.error(err.response?.data?.message || err.message || 'Error al generar PDF de ejemplo');
+      toast.error(err?.message || 'Error al generar PDF de ejemplo');
     } finally {
       setGeneratingPDF(false);
     }

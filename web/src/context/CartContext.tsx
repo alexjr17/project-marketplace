@@ -129,7 +129,7 @@ const normalizeCartItem = (item: CartItemType): CartItemType => {
 };
 
 export const CartProvider = ({ children }: { children: ReactNode }) => {
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated } = useAuth();
   const [rawCartItems, setRawCartItems] = useLocalStorage<CartItemType[]>(STORAGE_KEYS.CART, []);
 
   // Normalizar items cuando se cargan desde localStorage

@@ -162,7 +162,7 @@ export const AdminUsersPage = () => {
       toast.success('Administrador creado correctamente');
       setIsFormOpen(false);
     } catch (err: any) {
-      toast.error(err?.response?.data?.message || err?.message || 'No se pudo crear el administrador');
+      toast.error(err?.message || 'No se pudo crear el administrador');
     } finally {
       setSaving(false);
     }

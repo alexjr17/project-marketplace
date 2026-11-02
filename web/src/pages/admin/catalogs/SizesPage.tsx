@@ -3,7 +3,7 @@ import { Ruler } from 'lucide-react';
 import { useCatalogs } from '../../../context/CatalogsContext';
 import { Badge, Field, FormGrid, NumberInput, Switch, TextInput, toast, useConfirm } from '../../../components/ui';
 import type { Size } from '../../../types/catalog';
-import { CatalogDialog, CatalogListPage, ctxId, errMsg } from './CatalogListPage';
+import { CatalogDialog, CatalogListPage, errMsg } from './CatalogListPage';
 
 const EMPTY = { name: '', abbreviation: '', sortOrder: 0, isActive: true };
 
@@ -28,7 +28,7 @@ export const SizesPage = () => {
     setSaving(true);
     try {
       if (editing) {
-        await updateSize(ctxId(editing.id), form);
+        await updateSize(editing.id, form);
         toast.success('Talla actualizada');
       } else {
         await addSize(form);
@@ -45,7 +45,7 @@ export const SizesPage = () => {
   const remove = async (s: Size) => {
     if (!(await confirm({ title: `¿Eliminar la talla "${s.name}"?`, message: 'Esta acción no se puede deshacer.', tone: 'danger' }))) return;
     try {
-      await deleteSize(ctxId(s.id));
+      await deleteSize(s.id);
       toast.success('Talla eliminada');
       setOpen(false);
     } catch (err) {

@@ -11,6 +11,7 @@ use App\Models\ProductSize;
 use App\Models\ProductType;
 use App\Models\ProductVariant;
 use App\Services\DiscountService;
+use App\Services\NumberSequenceService;
 use App\Services\VariantService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -25,6 +26,7 @@ class ProductController extends Controller
     public function __construct(
         private VariantService $variants,
         private DiscountService $discounts,
+        private NumberSequenceService $numbers,
     ) {}
 
     /** Descuentos automáticos vigentes (tienda), cacheados por request. */
@@ -462,7 +464,8 @@ class ProductController extends Controller
                 $prefix = strtoupper(substr($slug, 0, 3));
             }
         }
-        $count = Product::count() + 1;
+        // Consecutivo global atómico; nunca por debajo de la cantidad de productos (como antes).
+        $count = $this->numbers->nextValue(NumberSequenceService::PRODUCT_SKU, fn () => Product::count());
         $timestamp = strtoupper(base_convert((string) (now()->timestamp * 1000), 10, 36));
 
         return $prefix.'-'.str_pad((string) $count, 4, '0', STR_PAD_LEFT).'-'.$timestamp;

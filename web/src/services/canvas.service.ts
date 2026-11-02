@@ -1,5 +1,5 @@
 import type { Design } from '../types/design';
-import type { ProductType, PrintZoneConfig } from '../types/product';
+import type { ProductTypeSlug, PrintZoneConfig } from '../types/product';
 
 // Constantes de configuración del canvas
 const CANVAS_CONFIG = {
@@ -57,7 +57,7 @@ export class CanvasService {
   /**
    * Dibujar el producto base
    */
-  drawProductBase(productType: ProductType, color: string, view: 'front' | 'back', selectedZone?: PrintZoneConfig, sizeScale: number = 1.0): void {
+  drawProductBase(productType: ProductTypeSlug, color: string, view: 'front' | 'back', selectedZone?: PrintZoneConfig, sizeScale: number = 1.0): void {
     if (!this.canvas || !this.ctx) return;
 
     this.clear();

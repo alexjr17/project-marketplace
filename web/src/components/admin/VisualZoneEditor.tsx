@@ -89,7 +89,6 @@ async function ensureUrl(value: string): Promise<string> {
 export const VisualZoneEditor = ({
   templateId,
   templateImage,
-  templateImageBack,
   onZonesChange,
   zoneTypeImages: externalZoneTypeImages,
   onZoneTypeImagesChange,
@@ -108,7 +107,6 @@ export const VisualZoneEditor = ({
   const [currentViewSlug, setCurrentViewSlug] = useState<string | null>(null);
   const [showZones, setShowZones] = useState(true);
   const [imageLoaded, setImageLoaded] = useState(false);
-  const [imageDimensions, setImageDimensions] = useState({ width: 0, height: 0 });
 
   const [isCreatingZone, setIsCreatingZone] = useState(false);
   const [newZoneType, setNewZoneType] = useState<number>(0);
@@ -200,10 +198,6 @@ export const VisualZoneEditor = ({
 
   const handleImageLoad = () => {
     if (imageRef.current) {
-      setImageDimensions({
-        width: imageRef.current.naturalWidth,
-        height: imageRef.current.naturalHeight,
-      });
       setImageLoaded(true);
     }
   };
@@ -457,23 +451,11 @@ export const VisualZoneEditor = ({
 
   // Factor de conversión: píxeles por centímetro (para visualización en el editor)
   // Esto mantiene las proporciones correctas entre ancho y alto
-  const PIXELS_PER_CM = 10; // 1cm = 10 píxeles en el editor
 
   // Convertir porcentaje a cm
   const percentToCm = (percent: number, isWidth: boolean): number => {
     const maxCm = isWidth ? PRINT_AREA_WIDTH_CM : PRINT_AREA_HEIGHT_CM;
     return Math.round((percent / 100) * maxCm * 10) / 10; // Redondear a 1 decimal
-  };
-
-  // Convertir cm a porcentaje
-  const cmToPercent = (cm: number, isWidth: boolean): number => {
-    const maxCm = isWidth ? PRINT_AREA_WIDTH_CM : PRINT_AREA_HEIGHT_CM;
-    return Math.min((cm / maxCm) * 100, 100);
-  };
-
-  // Convertir cm a píxeles para visualización
-  const cmToPixels = (cm: number): number => {
-    return cm * PIXELS_PER_CM;
   };
 
   // Calcular el área real de la imagen visible considerando object-contain

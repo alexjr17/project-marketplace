@@ -20,10 +20,10 @@ interface ProductsContextType {
   setFilters: (filters: FilterValues) => void;
   setSortOption: (option: ProductSortOption) => void;
   setPage: (page: number) => void;
-  getProductById: (id: string) => Promise<Product | null>;
+  getProductById: (id: number) => Promise<Product | null>;
   addProduct: (product: Omit<Product, 'id' | 'createdAt' | 'updatedAt'>) => Promise<Product>;
-  updateProduct: (id: string, updates: Partial<Product>) => Promise<Product>;
-  deleteProduct: (id: string) => Promise<void>;
+  updateProduct: (id: number, updates: Partial<Product>) => Promise<Product>;
+  deleteProduct: (id: number) => Promise<void>;
   refreshProducts: () => Promise<void>;
 }
 
@@ -122,7 +122,7 @@ export const ProductsProvider = ({ children }: { children: ReactNode }) => {
     setPagination((prev) => ({ ...prev, page }));
   };
 
-  const getProductById = async (id: string): Promise<Product | null> => {
+  const getProductById = async (id: number): Promise<Product | null> => {
     // Primero buscar en cache local
     const cached = products.find((p) => p.id === id);
     if (cached) return cached;
@@ -155,7 +155,7 @@ export const ProductsProvider = ({ children }: { children: ReactNode }) => {
     };
   };
 
-  const updateProduct = async (id: string, updates: Partial<Product>): Promise<Product> => {
+  const updateProduct = async (id: number, updates: Partial<Product>): Promise<Product> => {
     const updated = await productsService.update(id, updates);
     await loadProducts(); // Recargar lista
     return {
@@ -165,7 +165,7 @@ export const ProductsProvider = ({ children }: { children: ReactNode }) => {
     };
   };
 
-  const deleteProduct = async (id: string): Promise<void> => {
+  const deleteProduct = async (id: number): Promise<void> => {
     await productsService.delete(id);
     await loadProducts(); // Recargar lista
   };

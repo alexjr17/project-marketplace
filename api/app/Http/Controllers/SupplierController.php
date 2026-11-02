@@ -5,11 +5,14 @@ namespace App\Http\Controllers;
 use App\Http\Concerns\ApiResponse;
 use App\Models\PurchaseOrder;
 use App\Models\Supplier;
+use App\Services\NumberSequenceService;
 use Illuminate\Http\Request;
 
 class SupplierController extends Controller
 {
     use ApiResponse;
+
+    public function __construct(private NumberSequenceService $numbers) {}
 
     /** Agrega el conteo de órdenes de compra en formato { _count: { purchaseOrders } }. */
     private function withCount(Supplier $supplier): array
@@ -57,10 +60,7 @@ class SupplierController extends Controller
 
     public function generateCode()
     {
-        $last = Supplier::where('code', 'like', 'PROV-%')->orderByDesc('code')->first();
-        $next = $last ? ((int) str_replace('PROV-', '', $last->code)) + 1 : 1;
-
-        return $this->success(['code' => 'PROV-'.str_pad((string) $next, 3, '0', STR_PAD_LEFT)]);
+        return $this->success(['code' => $this->numbers->peek(NumberSequenceService::SUPPLIER)]);
     }
 
     public function show(int $id)

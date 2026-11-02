@@ -6,7 +6,8 @@ import {
   toast, useConfirm,
 } from '../../components/ui';
 import * as cashRegisterService from '../../services/cash-register.service';
-import { catalogsService, type Category } from '../../services/catalogs.service';
+import { catalogsService } from '../../services/catalogs.service';
+import type { Category } from '../../types/catalog';
 
 const LIST = '/admin-panel/cash-registers';
 
@@ -71,7 +72,7 @@ export default function CashRegisterFormPage() {
       navigate(LIST);
     } catch (error: any) {
       console.error('Error eliminando la caja:', error);
-      toast.error(error.response?.data?.message || 'No se pudo eliminar la caja');
+      toast.error(error?.message || 'No se pudo eliminar la caja');
       setSaving(false);
     }
   };
@@ -99,7 +100,7 @@ export default function CashRegisterFormPage() {
       navigate(LIST);
     } catch (error: any) {
       console.error('Error guardando la caja:', error);
-      toast.error(error.response?.data?.message || 'Error al guardar la caja');
+      toast.error(error?.message || 'Error al guardar la caja');
     } finally {
       setSaving(false);
     }

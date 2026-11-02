@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { Alert, Badge, Button, EmptyState, Field, Page, PageHeader, Spinner, Switch, TextInput } from '../../components/ui';
 import messagingService from '../../services/messaging.service';
+import { API_ORIGIN } from '../../lib/config';
 import type { Channel, ChannelConfig, ChannelType } from '../../types/messaging';
 
 // ============================================================
@@ -224,10 +225,7 @@ const ChannelCard = ({ channel, onSaved }: ChannelCardProps) => {
   const [feedback, setFeedback] = useState<{ ok: boolean; msg: string } | null>(null);
 
   const Icon = meta.icon;
-  const apiBaseUrl =
-    (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/api\/?$/, '') ||
-    'http://localhost:8000';
-  const webhookUrl = meta.webhookPath ? `${apiBaseUrl}${meta.webhookPath}` : null;
+  const webhookUrl = meta.webhookPath ? `${API_ORIGIN}${meta.webhookPath}` : null;
 
   const handleFieldChange = (key: string, value: string) => {
     setConfig((prev) => ({ ...prev, [key]: value }));
