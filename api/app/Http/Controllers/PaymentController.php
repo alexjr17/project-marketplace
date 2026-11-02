@@ -62,6 +62,13 @@ class PaymentController extends Controller
             'payerDocument' => 'nullable|string',
         ]);
 
+        // Solo sobre pedidos propios (el SuperAdmin puede sobre cualquiera). Antes se podía
+        // registrar un pago sobre el pedido de otro usuario.
+        $order = Order::find($data['orderId']);
+        if (! $order || ($order->userId !== $request->user()->id && (int) $request->user()->roleId !== 1)) {
+            return $this->error('Pedido no encontrado', 404);
+        }
+
         try {
             $payment = $this->payments->createPayment($data);
         } catch (RuntimeException $e) {

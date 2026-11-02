@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Concerns\ApiResponse;
 use App\Models\Setting;
+use App\Services\PaymentGatewayConfig;
 use Illuminate\Http\Request;
 
 class SettingController extends Controller
@@ -48,7 +49,8 @@ class SettingController extends Controller
             'home' => $this->readSetting('home_settings'),
             'catalog' => $this->readSetting('catalog_settings'),
             'shipping' => $this->readSetting('shipping_settings'),
-            'payment' => $this->readSetting('payment_settings'),
+            // Sin claves secretas de las pasarelas (antes salían privateKey, integrityKey y accessToken).
+            'payment' => PaymentGatewayConfig::publicView($this->readSetting('payment_settings')),
             'legal' => $this->readSetting('legal_settings'),
         ]);
     }

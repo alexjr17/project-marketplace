@@ -241,9 +241,11 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
     const cached = orders.find((order) => order.orderNumber === orderNumber);
     if (cached) return cached;
 
-    // Si no está en cache, buscar en API
+    // Si no está en cache, buscar en API. Primero como "mi pedido" (lo usa el cliente en la
+    // confirmación); la ruta /orders/number es solo de admin y al cliente le daba 403.
     try {
-      const apiOrder = await ordersService.getByNumber(orderNumber);
+      const apiOrder = (await ordersService.getMyByNumber(orderNumber))
+        ?? (isAdmin ? await ordersService.getByNumber(orderNumber) : null);
       if (apiOrder) {
         return mapApiOrderToOrder(apiOrder);
       }

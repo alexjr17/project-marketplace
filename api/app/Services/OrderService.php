@@ -328,7 +328,8 @@ class OrderService
     public function listOrders(array $query): array
     {
         $page = max(1, (int) ($query['page'] ?? 1));
-        $limit = max(1, (int) ($query['limit'] ?? 10));
+        // Tope de página: sin él se podía descargar toda la tabla en una petición.
+        $limit = min(100, max(1, (int) ($query['limit'] ?? 10)));
 
         $builder = Order::with(['items.product:id,images', 'user']);
 

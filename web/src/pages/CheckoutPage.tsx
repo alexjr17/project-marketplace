@@ -36,6 +36,7 @@ import { validateCoupon, type CouponResult } from '../services/discounts.service
 import { CitySelect } from '../components/shared/CitySelect';
 import { PageHeader } from '../components/shared/PageHeader';
 import paymentsService from '../services/payments.service';
+import { ordersService } from '../services/orders.service';
 
 interface FormData {
   customerName: string;
@@ -58,7 +59,7 @@ interface FormErrors {
 export const CheckoutPage = () => {
   const navigate = useNavigate();
   const { cart, clearCart } = useCart();
-  const { createOrder, changeOrderStatus } = useOrders();
+  const { createOrder } = useOrders();
   const { createPayment, updateMyPayment } = usePayments();
   const { settings } = useSettings();
   const { showToast } = useToast();
@@ -77,7 +78,10 @@ export const CheckoutPage = () => {
   const [errors, setErrors] = useState<FormErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [step, setStep] = useState<'info' | 'payment'>('info');
+  // Referencia del pago manual (transferencia, Nequi…). Wompi usa el número del pedido.
   const [paymentReference, setPaymentReference] = useState('');
+  // Pedido pendiente creado al pagar con Wompi: se reutiliza si el cliente reintenta.
+  const [wompiOrder, setWompiOrder] = useState<{ id: number; orderNumber: string } | null>(null);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string>('');
   // Comprobante de pago (dataURL) para métodos manuales con verificación.
   const [proofImage, setProofImage] = useState<string | null>(null);
@@ -327,7 +331,8 @@ export const CheckoutPage = () => {
     }
   };
 
-  const createOrderFromCart = async (status: 'pending' | 'paid' = 'pending', transactionId?: string) => {
+  // Crea el pedido PENDIENTE. El paso a pagado lo hace el backend al confirmar con la pasarela.
+  const createOrderFromCart = async () => {
     const orderItems = cart.items.map((item) => {
       if (item.type === 'customized') {
         const customized = item.customizedProduct;
@@ -389,47 +394,36 @@ export const CheckoutPage = () => {
       couponCode: coupon?.code,
     });
 
-    // Si el pago fue exitoso (Wompi), cambiar estado a pagado
-    if (status === 'paid' && transactionId) {
-      await changeOrderStatus({
-        orderId: String(order.id),
-        newStatus: 'paid',
-        note: `Pago confirmado via Wompi. ID: ${transactionId}`,
-      });
-    }
-
     return order;
   };
 
-  const handleWompiSuccess = async (transactionId: string) => {
+  // Wompi: 1) crea el pedido pendiente (una sola vez), 2) el servidor entrega monto,
+  // referencia (número del pedido) y firma. La clave de integridad nunca llega al navegador.
+  const handleWompiPrepare = async () => {
+    if (!validateForm()) throw new Error('Completa los campos requeridos antes de pagar');
+    let target = wompiOrder;
+    if (!target) {
+      const order = await createOrderFromCart();
+      target = { id: Number(order.id), orderNumber: order.orderNumber };
+      setWompiOrder(target);
+    }
+    return ordersService.wompiCheckout(target.id);
+  };
+
+  // 3) El widget terminó: el backend consulta la transacción en Wompi y marca el pedido
+  // como pagado si el monto coincide (el webhook también lo confirma).
+  const handleWompiResult = async (transactionId: string, reference: string) => {
     setIsSubmitting(true);
-
     try {
-      // Crear pedido con estado pagado
-      const order = await createOrderFromCart('paid', transactionId);
-
-      // Crear registro de pago APROBADO
-      await createPayment({
-        orderId: Number(order.id),
-        transactionId: transactionId,
-        paymentMethod: 'wompi',
-        amount: orderTotal,
-        currency: settings.general.currency || 'COP',
-        payerName: formData.customerName,
-        payerEmail: formData.customerEmail,
-        payerPhone: formData.customerPhone,
-      });
-
-      // Limpiar carrito
+      const { order } = await ordersService.confirmWompiPayment(reference, transactionId);
       clearCart();
-
-      showToast('¡Pago exitoso! Tu pedido ha sido confirmado.', 'success');
-
-      // Redirigir a mis pedidos
+      showToast(String(order?.status ?? '').toUpperCase() === 'PAID' ? '¡Pago exitoso! Tu pedido está confirmado.' : 'Recibimos tu pago; lo estamos verificando.', 'success');
       navigate('/my-orders');
-    } catch (error: any) {
-      const errorMessage = error?.response?.data?.message || error?.message || 'Error al crear el pedido. Contacta soporte.';
-      showToast(errorMessage, 'error');
+    } catch (error: unknown) {
+      // El pago puede seguir pendiente en Wompi: el pedido queda creado y el webhook lo confirmará.
+      clearCart();
+      showToast(error instanceof Error ? error.message : 'Tu pago está en verificación.', 'info');
+      navigate('/my-orders');
     } finally {
       setIsSubmitting(false);
     }
@@ -454,7 +448,7 @@ export const CheckoutPage = () => {
 
     try {
       // Crear pedido pendiente
-      const order = await createOrderFromCart('pending');
+      const order = await createOrderFromCart();
 
       // Crear registro de pago PENDIENTE para verificación manual
       const payment = await createPayment({
@@ -507,7 +501,7 @@ export const CheckoutPage = () => {
     setIsSubmitting(true);
 
     try {
-      const order = await createOrderFromCart('pending');
+      const order = await createOrderFromCart();
 
       await createPayment({
         orderId: Number(order.id),
@@ -806,16 +800,14 @@ export const CheckoutPage = () => {
                       <div className="border-t border-gray-100 pt-5 mt-5">
                         <WompiCheckout
                           publicKey={wompiConfig.publicKey}
-                          integrityKey={wompiConfig.integrityKey}
                           amountInCents={amountInCents}
-                          reference={paymentReference}
                           customerEmail={formData.customerEmail}
                           customerFullName={formData.customerName}
                           customerPhone={formData.customerPhone}
-                          onPaymentSuccess={handleWompiSuccess}
+                          prepare={handleWompiPrepare}
+                          onPaymentResult={handleWompiResult}
                           onPaymentError={handleWompiError}
                           onClose={handleWompiClose}
-                          isTestMode={wompiConfig.isTestMode}
                         />
                       </div>
                     )}

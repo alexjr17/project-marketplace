@@ -1,4 +1,5 @@
 import api from './api.service';
+import type { WompiCheckoutData } from './wompi.service';
 import type { OrderStatus, PaymentMethod } from '../types/order';
 
 export interface OrderItem {
@@ -202,6 +203,29 @@ export const ordersService = {
     const response = await api.patch<ApiOrder>(`/orders/${orderId}/status`, data);
     if (!response.data) throw new Error(response.message || 'Error cambiando estado');
     return response.data;
+  },
+
+  // Mi pedido por número (cliente). /orders/number/{n} es solo de admin.
+  async getMyByNumber(orderNumber: string): Promise<ApiOrder | null> {
+    try {
+      const response = await api.get<ApiOrder>(`/orders/my/number/${encodeURIComponent(orderNumber)}`);
+      return response.data || null;
+    } catch {
+      return null;
+    }
+  },
+
+  // Datos firmados por el servidor para abrir el widget de Wompi de un pedido propio y pendiente.
+  async wompiCheckout(orderId: number): Promise<WompiCheckoutData> {
+    const response = await api.post<WompiCheckoutData>(`/orders/my/${orderId}/wompi-checkout`);
+    if (!response.data) throw new Error(response.message || 'No se pudo preparar el pago');
+    return response.data;
+  },
+
+  // Confirma el pago consultando la transacción en Wompi desde el backend.
+  async confirmWompiPayment(orderNumber: string, transactionId: string): Promise<{ order: ApiOrder | null; message: string }> {
+    const response = await api.post<ApiOrder>(`/orders/confirm-payment/${encodeURIComponent(orderNumber)}`, { transactionId });
+    return { order: response.data || null, message: response.message || '' };
   },
 
   // Obtener mis pedidos (usuario autenticado)

@@ -264,6 +264,8 @@ Route::prefix('orders')->middleware('auth:sanctum')->group(function () {
     Route::get('my/number/{orderNumber}', [OrderController::class, 'myOrderByNumber']);
     Route::get('my/{id}', [OrderController::class, 'myOrderById'])->whereNumber('id');
     Route::post('my/{id}/cancel', [OrderController::class, 'cancelMyOrder'])->whereNumber('id');
+    // Datos firmados por el servidor para abrir el widget de Wompi (monto y referencia del pedido).
+    Route::post('my/{id}/wompi-checkout', [OrderController::class, 'wompiCheckout'])->whereNumber('id');
     Route::post('confirm-payment/{orderNumber}', [OrderController::class, 'confirmPayment']);
     Route::post('/', [OrderController::class, 'store']);
 

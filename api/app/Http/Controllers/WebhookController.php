@@ -60,7 +60,7 @@ class WebhookController extends Controller
         } catch (Throwable $e) {
             Log::error('[Messenger] Webhook entrante: '.$e->getMessage());
 
-            return response()->json(['ok' => false, 'error' => $e->getMessage()]);
+            return response()->json(['ok' => false, 'error' => 'Error procesando el evento']);
         }
     }
 
@@ -100,7 +100,7 @@ class WebhookController extends Controller
         } catch (Throwable $e) {
             Log::error('[WhatsApp] Webhook entrante: '.$e->getMessage());
 
-            return response()->json(['ok' => false, 'error' => $e->getMessage()]);
+            return response()->json(['ok' => false, 'error' => 'Error procesando el evento']);
         }
     }
 
@@ -128,7 +128,7 @@ class WebhookController extends Controller
             Log::error('Webhook Wompi: '.$e->getMessage());
 
             // Siempre 200 para que Wompi no reintente.
-            return response()->json(['success' => false, 'message' => $e->getMessage()]);
+            return response()->json(['success' => false, 'message' => 'Error procesando el evento']);
         }
     }
 
@@ -152,7 +152,7 @@ class WebhookController extends Controller
         } catch (Throwable $e) {
             Log::error('Webhook MercadoPago: '.$e->getMessage());
 
-            return response()->json(['success' => false, 'message' => $e->getMessage()]);
+            return response()->json(['success' => false, 'message' => 'Error procesando el evento']);
         }
     }
 

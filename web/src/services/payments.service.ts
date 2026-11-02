@@ -1,5 +1,12 @@
 import api from './api.service';
 
+/** Devuelve `data` de la respuesta o lanza con el mensaje del backend. api.service ya
+ *  desenvuelve el sobre {success, data}: leer `response.data.data` daba undefined. */
+const unwrap = <T,>(response: { data?: T; message?: string }): T => {
+  if (response.data === undefined || response.data === null) throw new Error(response.message || 'Respuesta vacía del servidor');
+  return response.data;
+};
+
 export type PaymentStatus =
   | 'PENDING'
   | 'PROCESSING'
@@ -120,11 +127,11 @@ class PaymentsService {
    * Crear intento de pago
    */
   async createPayment(data: CreatePaymentInput): Promise<Payment> {
-    const response = await api.post<{ success: boolean; message: string; data: Payment }>(
+    const response = await api.post<Payment>(
       '/payments',
       data
     );
-    return response.data.data;
+    return unwrap(response);
   }
 
   /**
@@ -133,11 +140,8 @@ class PaymentsService {
   async createMercadoPagoPreference(
     orderId: number
   ): Promise<{ initPoint: string | null; preferenceId: string | null; isTestMode: boolean }> {
-    const response = await api.post<{
-      success: boolean;
-      data: { initPoint: string | null; preferenceId: string | null; isTestMode: boolean };
-    }>('/payments/mercadopago/preference', { orderId });
-    return response.data.data;
+    const response = await api.post<{ initPoint: string | null; preferenceId: string | null; isTestMode: boolean }>('/payments/mercadopago/preference', { orderId });
+    return unwrap(response);
   }
 
   /**
@@ -147,36 +151,33 @@ class PaymentsService {
     orderNumber: string,
     paymentId: string
   ): Promise<{ success: boolean; message: string; status?: string }> {
-    const response = await api.get<{ success: boolean; message: string; status?: string }>(
+    // Este endpoint responde {success, message, status} en la raíz (sin `data`).
+    const response = await api.get<never>(
       `/webhooks/mercadopago/confirm/${encodeURIComponent(orderNumber)}`,
       { payment_id: paymentId }
-    );
-    return (response.data ?? { success: false, message: 'Sin respuesta' }) as {
-      success: boolean;
-      message: string;
-      status?: string;
-    };
+    ) as unknown as { success?: boolean; message?: string; status?: string };
+    return { success: Boolean(response.success), message: response.message ?? '', status: response.status };
   }
 
   /**
    * Obtener pagos de mi pedido
    */
   async getMyOrderPayments(orderId: number): Promise<Payment[]> {
-    const response = await api.get<{ success: boolean; data: Payment[] }>(
+    const response = await api.get<Payment[]>(
       `/payments/order/${orderId}`
     );
-    return response.data.data;
+    return unwrap(response);
   }
 
   /**
    * Actualizar mi pago (subir comprobante)
    */
   async updateMyPayment(id: number, data: UpdatePaymentInput): Promise<Payment> {
-    const response = await api.patch<{ success: boolean; message: string; data: Payment }>(
+    const response = await api.patch<Payment>(
       `/payments/${id}`,
       data
     );
-    return response.data.data;
+    return unwrap(response);
   }
 
   // ==================== RUTAS DE ADMIN ====================
@@ -186,9 +187,7 @@ class PaymentsService {
    */
   async listPayments(query?: ListPaymentsQuery): Promise<PaginatedPayments> {
     const response = await api.get<Payment[]>('/payments/all', query) as any;
-    console.log('[paymentsService] Raw response:', response);
     console.log('[paymentsService] response.data:', response.data);
-    console.log('[paymentsService] response.meta:', response.meta);
 
     // El backend retorna { success, data, meta }
     // api.get() ya parsea esto, así que accedemos directamente
@@ -209,30 +208,30 @@ class PaymentsService {
    * Obtener todos los pagos de un pedido (Admin)
    */
   async getOrderPayments(orderId: number): Promise<Payment[]> {
-    const response = await api.get<{ success: boolean; data: Payment[] }>(
+    const response = await api.get<Payment[]>(
       `/payments/order/${orderId}/all`
     );
-    return response.data.data;
+    return unwrap(response);
   }
 
   /**
    * Obtener pago por ID (Admin)
    */
   async getPaymentById(id: number): Promise<Payment> {
-    const response = await api.get<{ success: boolean; data: Payment }>(
+    const response = await api.get<Payment>(
       `/payments/${id}/admin`
     );
-    return response.data.data;
+    return unwrap(response);
   }
 
   /**
    * Obtener pago por transactionId (Admin)
    */
   async getPaymentByTransactionId(transactionId: string): Promise<Payment> {
-    const response = await api.get<{ success: boolean; data: Payment }>(
+    const response = await api.get<Payment>(
       `/payments/transaction/${transactionId}`
     );
-    return response.data.data;
+    return unwrap(response);
   }
 
   /**
@@ -250,52 +249,52 @@ class PaymentsService {
       notes?: string;
     }
   ): Promise<Payment> {
-    const response = await api.patch<{ success: boolean; message: string; data: Payment }>(
+    const response = await api.patch<Payment>(
       `/payments/${id}/admin`,
       data
     );
-    return response.data.data;
+    return unwrap(response);
   }
 
   /**
    * Verificar pago manualmente (Admin)
    */
   async verifyPayment(id: number, data: VerifyPaymentInput): Promise<Payment> {
-    const response = await api.post<{ success: boolean; message: string; data: Payment }>(
+    const response = await api.post<Payment>(
       `/payments/${id}/verify`,
       data
     );
-    return response.data.data;
+    return unwrap(response);
   }
 
   /**
    * Reembolsar pago (Admin)
    */
   async refundPayment(id: number, data: RefundPaymentInput): Promise<Payment> {
-    const response = await api.post<{ success: boolean; message: string; data: Payment }>(
+    const response = await api.post<Payment>(
       `/payments/${id}/refund`,
       data
     );
-    return response.data.data;
+    return unwrap(response);
   }
 
   /**
    * Cancelar pago (Admin)
    */
   async cancelPayment(id: number, reason?: string): Promise<Payment> {
-    const response = await api.post<{ success: boolean; message: string; data: Payment }>(
+    const response = await api.post<Payment>(
       `/payments/${id}/cancel`,
       { reason }
     );
-    return response.data.data;
+    return unwrap(response);
   }
 
   /**
    * Obtener estadísticas de pagos (Admin)
    */
   async getPaymentStats(): Promise<PaymentStats> {
-    const response = await api.get<{ success: boolean; data: PaymentStats }>('/payments/stats');
-    return response.data.data;
+    const response = await api.get<PaymentStats>('/payments/stats');
+    return unwrap(response);
   }
 }
 

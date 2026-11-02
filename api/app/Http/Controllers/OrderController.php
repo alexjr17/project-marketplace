@@ -62,7 +62,9 @@ class OrderController extends Controller
 
     public function myOrders(Request $request)
     {
-        $result = $this->orders->listOrders($request->query() + ['userId' => $request->user()->id]);
+        // El userId del usuario autenticado SIEMPRE pisa al de la query: con `+` ganaba el
+        // del cliente y ?userId=X (o 0, que quitaba el filtro) exponía pedidos ajenos.
+        $result = $this->orders->listOrders(['userId' => $request->user()->id] + $request->query());
 
         return response()->json(['success' => true] + $result);
     }
@@ -98,6 +100,25 @@ class OrderController extends Controller
         }
 
         return $this->success($this->orders->formatOrder($order), 'Pedido cancelado exitosamente');
+    }
+
+    /** Datos para el widget de Wompi de un pedido propio y pendiente (firma calculada en el servidor). */
+    public function wompiCheckout(Request $request, int $id)
+    {
+        try {
+            $order = $this->orders->getOrderById($id, $request->user()->id);
+        } catch (RuntimeException $e) {
+            return $this->error('Orden no encontrada', 404);
+        }
+        if ($order->status !== 'PENDING') {
+            return $this->error('El pedido no está pendiente de pago', 409);
+        }
+
+        try {
+            return $this->success($this->wompi->checkoutData($order));
+        } catch (RuntimeException $e) {
+            return $this->error($e->getMessage(), 422);
+        }
     }
 
     public function confirmPayment(Request $request, string $orderNumber)

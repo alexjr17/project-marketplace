@@ -35,4 +35,24 @@ return [
         ],
     ],
 
+    // Pasarelas de pago. Respaldo cuando no están configuradas en Ajustes > Pagos
+    // (ver App\Services\PaymentGatewayConfig, que es quien las lee).
+    'wompi' => [
+        'public_key' => env('WOMPI_PUBLIC_KEY', ''),
+        'private_key' => env('WOMPI_PRIVATE_KEY', ''),
+        'integrity_key' => env('WOMPI_INTEGRITY_KEY', ''),
+        'events_secret' => env('WOMPI_EVENTS_SECRET', ''),
+    ],
+
+    'mercadopago' => [
+        'access_token' => env('MERCADOPAGO_ACCESS_TOKEN', ''),
+        'public_key' => env('MERCADOPAGO_PUBLIC_KEY', ''),
+    ],
+
+    // Webhooks: si falta el secreto de firma, en producción se RECHAZAN las peticiones.
+    // Solo en local/testing se puede permitir explícitamente (para probar sin la pasarela).
+    'webhooks' => [
+        'allow_unsigned' => (bool) env('WEBHOOKS_ALLOW_UNSIGNED', false),
+    ],
+
 ];
