@@ -1,0 +1,10 @@
+{
+  // Revisión de tipos de las pruebas (Vitest). Fuera de tsconfig.app.json para no mezclarlas con la app.
+  "extends": "./tsconfig.app.json",
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.test.tsbuildinfo",
+    "types": ["vite/client", "node"]
+  },
+  "include": ["src/**/*.test.ts", "src/**/*.test.tsx", "src/test"],
+  "exclude": []
+}

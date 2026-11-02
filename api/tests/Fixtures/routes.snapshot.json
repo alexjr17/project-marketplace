@@ -1,0 +1,1677 @@
+{
+    "DELETE api/announcements/{id}": [
+        "auth:sanctum",
+        "permission:announcements.view"
+    ],
+    "DELETE api/cart": [
+        "auth:sanctum"
+    ],
+    "DELETE api/cart/items/{id}": [
+        "auth:sanctum"
+    ],
+    "DELETE api/cash-registers/{id}": [
+        "auth:sanctum",
+        "permission:pos.cash_register"
+    ],
+    "DELETE api/catalogs/categories/{id}": [
+        "auth:sanctum",
+        "permission:categories.view"
+    ],
+    "DELETE api/catalogs/colors/{id}": [
+        "auth:sanctum",
+        "permission:colors.view"
+    ],
+    "DELETE api/catalogs/product-types/{id}": [
+        "auth:sanctum",
+        "permission:product_types.view"
+    ],
+    "DELETE api/catalogs/sizes/{id}": [
+        "auth:sanctum",
+        "permission:sizes.view"
+    ],
+    "DELETE api/design-images/{id}": [
+        "auth:sanctum",
+        "permission:design_images.view"
+    ],
+    "DELETE api/discounts/{id}": [
+        "auth:sanctum",
+        "permission:discounts.view"
+    ],
+    "DELETE api/input-types/{id}": [
+        "auth:sanctum",
+        "permission:input_types.view"
+    ],
+    "DELETE api/inputs/{id}": [
+        "auth:sanctum",
+        "permission:inputs.view"
+    ],
+    "DELETE api/inputs/{id}/colors/{colorId}": [
+        "auth:sanctum",
+        "permission:inputs.view"
+    ],
+    "DELETE api/inputs/{id}/sizes/{sizeId}": [
+        "auth:sanctum",
+        "permission:inputs.view"
+    ],
+    "DELETE api/inventory-conversions/{id}": [
+        "auth:sanctum",
+        "permission:conversions.view"
+    ],
+    "DELETE api/inventory-conversions/{id}/input-items/{itemId}": [
+        "auth:sanctum",
+        "permission:conversions.view"
+    ],
+    "DELETE api/inventory-conversions/{id}/output-items/{itemId}": [
+        "auth:sanctum",
+        "permission:conversions.view"
+    ],
+    "DELETE api/inventory-counts/{id}": [
+        "auth:sanctum",
+        "permission:inventory_counts.view"
+    ],
+    "DELETE api/label-templates/zones/{zoneId}": [
+        "auth:sanctum",
+        "permission:settings.label_templates,settings.general"
+    ],
+    "DELETE api/label-templates/{id}": [
+        "auth:sanctum",
+        "permission:settings.label_templates,settings.general"
+    ],
+    "DELETE api/manufacturing/brands/{id}": [
+        "auth:sanctum",
+        "permission:manufacturing.catalogs.view"
+    ],
+    "DELETE api/manufacturing/clients/{id}": [
+        "auth:sanctum",
+        "permission:manufacturing.catalogs.view"
+    ],
+    "DELETE api/manufacturing/collections/{id}": [
+        "auth:sanctum",
+        "permission:manufacturing.catalogs.view"
+    ],
+    "DELETE api/manufacturing/colors/{id}": [
+        "auth:sanctum",
+        "permission:manufacturing.catalogs.view"
+    ],
+    "DELETE api/manufacturing/dispatches/{id}": [
+        "auth:sanctum",
+        "permission:manufacturing.orders.view"
+    ],
+    "DELETE api/manufacturing/exchange-rates/{id}": [
+        "auth:sanctum",
+        "permission:manufacturing.catalogs.view"
+    ],
+    "DELETE api/manufacturing/garment-types/{id}": [
+        "auth:sanctum",
+        "permission:manufacturing.catalogs.view"
+    ],
+    "DELETE api/manufacturing/input-types/{id}": [
+        "auth:sanctum",
+        "permission:manufacturing.catalogs.view"
+    ],
+    "DELETE api/manufacturing/inputs/{id}": [
+        "auth:sanctum",
+        "permission:manufacturing.catalogs.view"
+    ],
+    "DELETE api/manufacturing/inputs/{id}/batches/{batchId}": [
+        "auth:sanctum",
+        "permission:manufacturing.catalogs.view"
+    ],
+    "DELETE api/manufacturing/processes/{id}": [
+        "auth:sanctum",
+        "permission:manufacturing.catalogs.view"
+    ],
+    "DELETE api/manufacturing/production-orders/{id}": [
+        "auth:sanctum",
+        "permission:manufacturing.orders.view"
+    ],
+    "DELETE api/manufacturing/production-orders/{id}/substitutions/{subId}": [
+        "auth:sanctum",
+        "permission:manufacturing.orders.view"
+    ],
+    "DELETE api/manufacturing/purchase-orders/{id}": [
+        "auth:sanctum",
+        "permission:manufacturing.orders.view"
+    ],
+    "DELETE api/manufacturing/references/{id}": [
+        "auth:sanctum",
+        "permission:manufacturing.references.view"
+    ],
+    "DELETE api/manufacturing/sizes/{id}": [
+        "auth:sanctum",
+        "permission:manufacturing.catalogs.view"
+    ],
+    "DELETE api/manufacturing/warehouses/{id}": [
+        "auth:sanctum",
+        "permission:manufacturing.catalogs.view"
+    ],
+    "DELETE api/manufacturing/workshops/{id}": [
+        "auth:sanctum",
+        "permission:manufacturing.catalogs.view"
+    ],
+    "DELETE api/messaging/knowledge/categories/{id}": [
+        "auth:sanctum",
+        "permission:messaging.access",
+        "permission:messaging.knowledge"
+    ],
+    "DELETE api/messaging/knowledge/{id}": [
+        "auth:sanctum",
+        "permission:messaging.access",
+        "permission:messaging.knowledge"
+    ],
+    "DELETE api/messaging/posts/{id}": [
+        "auth:sanctum",
+        "permission:messaging.access",
+        "permission:messaging.posts"
+    ],
+    "DELETE api/notifications/{id}": [
+        "auth:sanctum"
+    ],
+    "DELETE api/products/{id}": [
+        "auth:sanctum",
+        "permission:products.manage"
+    ],
+    "DELETE api/purchase-orders/{id}": [
+        "auth:sanctum",
+        "permission:purchase_orders.view"
+    ],
+    "DELETE api/reviews/admin/{id}": [
+        "auth:sanctum",
+        "permission:reviews.view"
+    ],
+    "DELETE api/reviews/{id}": [
+        "auth:sanctum"
+    ],
+    "DELETE api/reviews/{id}/vote": [
+        "auth:sanctum"
+    ],
+    "DELETE api/roles/{id}": [
+        "admin",
+        "auth:sanctum"
+    ],
+    "DELETE api/suppliers/{id}": [
+        "auth:sanctum",
+        "permission:suppliers.view"
+    ],
+    "DELETE api/template-recipes/variant/{variantId}": [
+        "auth:sanctum",
+        "permission:templates.view"
+    ],
+    "DELETE api/template-recipes/variant/{variantId}/input/{inputVariantId}": [
+        "auth:sanctum",
+        "permission:templates.view"
+    ],
+    "DELETE api/template-zones/{id}": [
+        "auth:sanctum",
+        "permission:templates.view"
+    ],
+    "DELETE api/template-zones/{zoneId}/input": [
+        "auth:sanctum",
+        "permission:templates.view"
+    ],
+    "DELETE api/templates/{id}": [
+        "auth:sanctum",
+        "permission:templates.view"
+    ],
+    "DELETE api/uploads/{publicId}": [
+        "admin",
+        "auth:sanctum",
+        "throttle:uploads"
+    ],
+    "DELETE api/users/addresses/{addressId}": [
+        "auth:sanctum"
+    ],
+    "DELETE api/users/{id}": [
+        "auth:sanctum",
+        "permission:users.view"
+    ],
+    "DELETE api/variants/{id}": [
+        "auth:sanctum",
+        "permission:variants.view"
+    ],
+    "DELETE api/zone-types/{id}": [
+        "auth:sanctum",
+        "permission:zone_types.view"
+    ],
+    "GET api/announcements": [
+        "auth:sanctum",
+        "permission:announcements.view"
+    ],
+    "GET api/announcements/active": [],
+    "GET api/auth/me": [
+        "auth:sanctum"
+    ],
+    "GET api/barcodes/image/{variantId}": [
+        "auth:sanctum",
+        "permission:products.view,pos.access"
+    ],
+    "GET api/barcodes/label/{variantId}": [
+        "auth:sanctum",
+        "permission:products.view"
+    ],
+    "GET api/barcodes/labels/product/{productId}": [
+        "auth:sanctum",
+        "permission:products.view"
+    ],
+    "GET api/cart": [
+        "auth:sanctum"
+    ],
+    "GET api/cash-registers": [
+        "auth:sanctum",
+        "permission:pos.cash_register,pos.access"
+    ],
+    "GET api/cash-registers/my-session": [
+        "auth:sanctum",
+        "permission:pos.access"
+    ],
+    "GET api/cash-registers/sessions": [
+        "auth:sanctum",
+        "permission:pos.view_reports,pos.cash_register"
+    ],
+    "GET api/cash-registers/sessions/{id}/report": [
+        "auth:sanctum",
+        "permission:pos.view_reports,pos.cash_register"
+    ],
+    "GET api/cash-registers/{id}": [
+        "auth:sanctum",
+        "permission:pos.cash_register,pos.access"
+    ],
+    "GET api/catalogs/categories": [],
+    "GET api/catalogs/categories/{id}": [],
+    "GET api/catalogs/colors": [],
+    "GET api/catalogs/colors/{id}": [],
+    "GET api/catalogs/product-types": [],
+    "GET api/catalogs/product-types/{id}": [],
+    "GET api/catalogs/product-types/{productTypeId}/sizes": [],
+    "GET api/catalogs/sizes": [],
+    "GET api/catalogs/sizes/{id}": [],
+    "GET api/design-images": [],
+    "GET api/design-images/categories": [],
+    "GET api/design-images/{id}": [],
+    "GET api/discounts": [
+        "auth:sanctum",
+        "permission:discounts.view"
+    ],
+    "GET api/doc": [
+        "Dedoc\\Scramble\\Http\\Middleware\\RestrictedDocsAccess",
+        "web"
+    ],
+    "GET api/doc.json": [
+        "Dedoc\\Scramble\\Http\\Middleware\\RestrictedDocsAccess",
+        "web"
+    ],
+    "GET api/health": [],
+    "GET api/img/{type}/{id}/{slot}": [
+        "throttle:images"
+    ],
+    "GET api/input-batches/input/{inputId}": [
+        "auth:sanctum",
+        "permission:inputs.view"
+    ],
+    "GET api/input-batches/input/{inputId}/movements": [
+        "auth:sanctum",
+        "permission:inputs.view"
+    ],
+    "GET api/input-batches/movements/all": [
+        "auth:sanctum",
+        "permission:inputs.view"
+    ],
+    "GET api/input-batches/movements/stats": [
+        "auth:sanctum",
+        "permission:inputs.view"
+    ],
+    "GET api/input-batches/{id}": [
+        "auth:sanctum",
+        "permission:inputs.view"
+    ],
+    "GET api/input-batches/{id}/movements": [
+        "auth:sanctum",
+        "permission:inputs.view"
+    ],
+    "GET api/input-types": [
+        "auth:sanctum",
+        "permission:input_types.view"
+    ],
+    "GET api/input-types/{id}": [
+        "auth:sanctum",
+        "permission:input_types.view"
+    ],
+    "GET api/inputs": [
+        "auth:sanctum",
+        "permission:inputs.view"
+    ],
+    "GET api/inputs/all-variants": [
+        "auth:sanctum",
+        "permission:inputs.view"
+    ],
+    "GET api/inputs/low-stock": [
+        "auth:sanctum",
+        "permission:inputs.view"
+    ],
+    "GET api/inputs/variants/{variantId}": [
+        "auth:sanctum",
+        "permission:inputs.view"
+    ],
+    "GET api/inputs/variants/{variantId}/movements": [
+        "auth:sanctum",
+        "permission:inputs.view"
+    ],
+    "GET api/inputs/{id}": [
+        "auth:sanctum",
+        "permission:inputs.view"
+    ],
+    "GET api/inputs/{id}/variants": [
+        "auth:sanctum",
+        "permission:inputs.view"
+    ],
+    "GET api/inventory-conversions": [
+        "auth:sanctum",
+        "permission:conversions.view"
+    ],
+    "GET api/inventory-conversions/stats": [
+        "auth:sanctum",
+        "permission:conversions.view"
+    ],
+    "GET api/inventory-conversions/{id}": [
+        "auth:sanctum",
+        "permission:conversions.view"
+    ],
+    "GET api/inventory-counts": [
+        "auth:sanctum",
+        "permission:inventory_counts.view"
+    ],
+    "GET api/inventory-counts/stats": [
+        "auth:sanctum",
+        "permission:inventory_counts.view"
+    ],
+    "GET api/inventory-counts/{id}": [
+        "auth:sanctum",
+        "permission:inventory_counts.view"
+    ],
+    "GET api/inventory/low-stock": [
+        "auth:sanctum",
+        "permission:inventory_movements.view"
+    ],
+    "GET api/inventory/movements": [
+        "auth:sanctum",
+        "permission:inventory_movements.view"
+    ],
+    "GET api/inventory/movements/variant/{variantId}": [
+        "auth:sanctum",
+        "permission:inventory_movements.view"
+    ],
+    "GET api/inventory/stats": [
+        "auth:sanctum",
+        "permission:inventory_movements.view"
+    ],
+    "GET api/inventory/summary": [
+        "auth:sanctum",
+        "permission:inventory_movements.view"
+    ],
+    "GET api/label-templates": [
+        "auth:sanctum",
+        "permission:settings.label_templates,settings.general,products.view"
+    ],
+    "GET api/label-templates/product-type/{productTypeId}": [
+        "auth:sanctum",
+        "permission:settings.label_templates,settings.general,products.view"
+    ],
+    "GET api/label-templates/{id}": [
+        "auth:sanctum",
+        "permission:settings.label_templates,settings.general,products.view"
+    ],
+    "GET api/manufacturing/brands": [
+        "auth:sanctum",
+        "permission:manufacturing.catalogs.view"
+    ],
+    "GET api/manufacturing/clients": [
+        "auth:sanctum",
+        "permission:manufacturing.catalogs.view"
+    ],
+    "GET api/manufacturing/collections": [
+        "auth:sanctum",
+        "permission:manufacturing.catalogs.view"
+    ],
+    "GET api/manufacturing/colors": [
+        "auth:sanctum",
+        "permission:manufacturing.catalogs.view"
+    ],
+    "GET api/manufacturing/dispatches": [
+        "auth:sanctum",
+        "permission:manufacturing.orders.view"
+    ],
+    "GET api/manufacturing/dispatches/available": [
+        "auth:sanctum",
+        "permission:manufacturing.orders.view"
+    ],
+    "GET api/manufacturing/dispatches/generate-number": [
+        "auth:sanctum",
+        "permission:manufacturing.orders.view"
+    ],
+    "GET api/manufacturing/dispatches/po/{poId}/pending": [
+        "auth:sanctum",
+        "permission:manufacturing.orders.view"
+    ],
+    "GET api/manufacturing/dispatches/{id}": [
+        "auth:sanctum",
+        "permission:manufacturing.orders.view"
+    ],
+    "GET api/manufacturing/exchange-rates": [
+        "auth:sanctum",
+        "permission:manufacturing.catalogs.view"
+    ],
+    "GET api/manufacturing/exchange-rates/active": [
+        "auth:sanctum",
+        "permission:manufacturing.catalogs.view"
+    ],
+    "GET api/manufacturing/garment-types": [
+        "auth:sanctum",
+        "permission:manufacturing.catalogs.view"
+    ],
+    "GET api/manufacturing/input-types": [
+        "auth:sanctum",
+        "permission:manufacturing.catalogs.view"
+    ],
+    "GET api/manufacturing/inputs": [
+        "auth:sanctum",
+        "permission:manufacturing.catalogs.view"
+    ],
+    "GET api/manufacturing/inputs/{id}/batches": [
+        "auth:sanctum",
+        "permission:manufacturing.catalogs.view"
+    ],
+    "GET api/manufacturing/inventory": [
+        "auth:sanctum",
+        "permission:manufacturing.orders.view"
+    ],
+    "GET api/manufacturing/processes": [
+        "auth:sanctum",
+        "permission:manufacturing.catalogs.view"
+    ],
+    "GET api/manufacturing/production-orders": [
+        "auth:sanctum",
+        "permission:manufacturing.orders.view"
+    ],
+    "GET api/manufacturing/production-orders/generate-number": [
+        "auth:sanctum",
+        "permission:manufacturing.orders.view"
+    ],
+    "GET api/manufacturing/production-orders/{id}": [
+        "auth:sanctum",
+        "permission:manufacturing.orders.view"
+    ],
+    "GET api/manufacturing/production-orders/{id}/materials": [
+        "auth:sanctum",
+        "permission:manufacturing.orders.view"
+    ],
+    "GET api/manufacturing/production-orders/{id}/stages/{stageId}/pdf": [
+        "auth:sanctum",
+        "permission:manufacturing.orders.view"
+    ],
+    "GET api/manufacturing/purchase-orders": [
+        "auth:sanctum",
+        "permission:manufacturing.orders.view"
+    ],
+    "GET api/manufacturing/purchase-orders/generate-number": [
+        "auth:sanctum",
+        "permission:manufacturing.orders.view"
+    ],
+    "GET api/manufacturing/purchase-orders/{id}": [
+        "auth:sanctum",
+        "permission:manufacturing.orders.view"
+    ],
+    "GET api/manufacturing/references": [
+        "auth:sanctum",
+        "permission:manufacturing.references.view"
+    ],
+    "GET api/manufacturing/references/{id}": [
+        "auth:sanctum",
+        "permission:manufacturing.references.view"
+    ],
+    "GET api/manufacturing/sizes": [
+        "auth:sanctum",
+        "permission:manufacturing.catalogs.view"
+    ],
+    "GET api/manufacturing/warehouses": [
+        "auth:sanctum",
+        "permission:manufacturing.catalogs.view"
+    ],
+    "GET api/manufacturing/workshops": [
+        "auth:sanctum",
+        "permission:manufacturing.catalogs.view"
+    ],
+    "GET api/messaging/channels": [
+        "auth:sanctum",
+        "permission:messaging.access",
+        "permission:messaging.channels,messaging.pages"
+    ],
+    "GET api/messaging/channels/{id}": [
+        "auth:sanctum",
+        "permission:messaging.access",
+        "permission:messaging.channels,messaging.pages"
+    ],
+    "GET api/messaging/conversations": [
+        "auth:sanctum",
+        "permission:messaging.access",
+        "permission:messaging.inbox"
+    ],
+    "GET api/messaging/conversations/{id}": [
+        "auth:sanctum",
+        "permission:messaging.access",
+        "permission:messaging.inbox"
+    ],
+    "GET api/messaging/conversations/{id}/messages": [
+        "auth:sanctum",
+        "permission:messaging.access",
+        "permission:messaging.inbox"
+    ],
+    "GET api/messaging/knowledge": [
+        "auth:sanctum",
+        "permission:messaging.access",
+        "permission:messaging.knowledge"
+    ],
+    "GET api/messaging/knowledge/categories": [
+        "auth:sanctum",
+        "permission:messaging.access",
+        "permission:messaging.knowledge"
+    ],
+    "GET api/messaging/posts": [
+        "auth:sanctum",
+        "permission:messaging.access",
+        "permission:messaging.posts"
+    ],
+    "GET api/messaging/posts/{id}": [
+        "auth:sanctum",
+        "permission:messaging.access",
+        "permission:messaging.posts"
+    ],
+    "GET api/notifications": [
+        "auth:sanctum"
+    ],
+    "GET api/notifications/unread-count": [
+        "auth:sanctum"
+    ],
+    "GET api/notifications/{id}": [
+        "auth:sanctum"
+    ],
+    "GET api/orders": [
+        "auth:sanctum",
+        "permission:orders.view"
+    ],
+    "GET api/orders/my": [
+        "auth:sanctum"
+    ],
+    "GET api/orders/my/number/{orderNumber}": [
+        "auth:sanctum"
+    ],
+    "GET api/orders/my/{id}": [
+        "auth:sanctum"
+    ],
+    "GET api/orders/number/{orderNumber}": [
+        "auth:sanctum",
+        "permission:orders.view"
+    ],
+    "GET api/orders/stats": [
+        "auth:sanctum",
+        "permission:orders.view"
+    ],
+    "GET api/orders/{id}": [
+        "auth:sanctum",
+        "permission:orders.view"
+    ],
+    "GET api/payments/all": [
+        "auth:sanctum",
+        "permission:payments.view"
+    ],
+    "GET api/payments/order/{orderId}": [
+        "auth:sanctum"
+    ],
+    "GET api/payments/order/{orderId}/all": [
+        "auth:sanctum",
+        "permission:payments.view"
+    ],
+    "GET api/payments/stats": [
+        "auth:sanctum",
+        "permission:payments.view"
+    ],
+    "GET api/payments/transaction/{transactionId}": [
+        "auth:sanctum",
+        "permission:payments.view"
+    ],
+    "GET api/payments/{id}/admin": [
+        "auth:sanctum",
+        "permission:payments.view"
+    ],
+    "GET api/pos/customer/search": [
+        "auth:sanctum",
+        "permission:pos.access,pos.create_sale"
+    ],
+    "GET api/pos/customers": [
+        "auth:sanctum",
+        "permission:pos.access,pos.view_sales"
+    ],
+    "GET api/pos/customers/{id}": [
+        "auth:sanctum",
+        "permission:pos.access,pos.view_sales"
+    ],
+    "GET api/pos/debts": [
+        "auth:sanctum",
+        "permission:pos.access,pos.view_sales"
+    ],
+    "GET api/pos/product/{productId}/variants": [
+        "auth:sanctum",
+        "permission:pos.access,pos.create_sale"
+    ],
+    "GET api/pos/products": [
+        "auth:sanctum",
+        "permission:pos.access,pos.create_sale"
+    ],
+    "GET api/pos/sale/{id}": [
+        "auth:sanctum",
+        "permission:pos.access,pos.view_sales"
+    ],
+    "GET api/pos/sale/{id}/invoice-pdf": [
+        "auth:sanctum",
+        "permission:pos.access,pos.view_sales"
+    ],
+    "GET api/pos/sale/{id}/payment-evidence": [
+        "auth:sanctum",
+        "permission:pos.access,pos.view_sales"
+    ],
+    "GET api/pos/sales": [
+        "auth:sanctum",
+        "permission:pos.access,pos.view_sales"
+    ],
+    "GET api/pos/stats": [
+        "auth:sanctum",
+        "permission:pos.access,pos.view_sales"
+    ],
+    "GET api/products": [],
+    "GET api/products/categories": [],
+    "GET api/products/category/{category}": [],
+    "GET api/products/featured": [],
+    "GET api/products/types": [],
+    "GET api/products/{id}": [],
+    "GET api/purchase-orders": [
+        "auth:sanctum",
+        "permission:purchase_orders.view"
+    ],
+    "GET api/purchase-orders/generate-number": [
+        "auth:sanctum",
+        "permission:purchase_orders.view"
+    ],
+    "GET api/purchase-orders/stats": [
+        "auth:sanctum",
+        "permission:purchase_orders.view"
+    ],
+    "GET api/purchase-orders/{id}": [
+        "auth:sanctum",
+        "permission:purchase_orders.view"
+    ],
+    "GET api/purchase-returns": [
+        "auth:sanctum",
+        "permission:purchase_returns.view"
+    ],
+    "GET api/purchase-returns/generate-number": [
+        "auth:sanctum",
+        "permission:purchase_returns.view"
+    ],
+    "GET api/purchase-returns/returnable/{purchaseOrderId}": [
+        "auth:sanctum",
+        "permission:purchase_returns.view"
+    ],
+    "GET api/purchase-returns/stats": [
+        "auth:sanctum",
+        "permission:purchase_returns.view"
+    ],
+    "GET api/purchase-returns/{id}": [
+        "auth:sanctum",
+        "permission:purchase_returns.view"
+    ],
+    "GET api/reviews/admin/all": [
+        "auth:sanctum",
+        "permission:reviews.view"
+    ],
+    "GET api/reviews/can-review/{productId}": [
+        "auth:sanctum"
+    ],
+    "GET api/reviews/my/all": [
+        "auth:sanctum"
+    ],
+    "GET api/reviews/pending/products": [
+        "auth:sanctum"
+    ],
+    "GET api/reviews/product/{productId}": [
+        "auth.optional"
+    ],
+    "GET api/reviews/product/{productId}/summary": [],
+    "GET api/reviews/{id}": [
+        "auth.optional"
+    ],
+    "GET api/roles": [
+        "admin",
+        "auth:sanctum"
+    ],
+    "GET api/roles/permissions": [
+        "admin",
+        "auth:sanctum"
+    ],
+    "GET api/roles/stats": [
+        "admin",
+        "auth:sanctum"
+    ],
+    "GET api/roles/{id}": [
+        "admin",
+        "auth:sanctum"
+    ],
+    "GET api/roles/{id}/users": [
+        "admin",
+        "auth:sanctum"
+    ],
+    "GET api/settings": [
+        "admin",
+        "auth:sanctum"
+    ],
+    "GET api/settings/public": [],
+    "GET api/settings/{key}": [
+        "admin",
+        "auth:sanctum"
+    ],
+    "GET api/settings/{type}/config": [
+        "auth:sanctum"
+    ],
+    "GET api/suppliers": [
+        "auth:sanctum",
+        "permission:suppliers.view"
+    ],
+    "GET api/suppliers/generate-code": [
+        "auth:sanctum",
+        "permission:suppliers.view"
+    ],
+    "GET api/suppliers/stats": [
+        "auth:sanctum",
+        "permission:suppliers.view"
+    ],
+    "GET api/suppliers/{id}": [
+        "auth:sanctum",
+        "permission:suppliers.view"
+    ],
+    "GET api/template-recipes/product/{productId}": [
+        "auth:sanctum",
+        "permission:templates.view"
+    ],
+    "GET api/template-recipes/product/{productId}/inputs": [
+        "auth:sanctum",
+        "permission:templates.view"
+    ],
+    "GET api/template-recipes/product/{productId}/stock": [],
+    "GET api/template-recipes/variant-stock/{productId}": [],
+    "GET api/template-recipes/variant/{variantId}": [
+        "auth:sanctum",
+        "permission:templates.view"
+    ],
+    "GET api/template-zones/template/{templateId}": [],
+    "GET api/template-zones/{id}": [],
+    "GET api/templates": [
+        "auth:sanctum",
+        "permission:templates.view"
+    ],
+    "GET api/templates/public": [],
+    "GET api/templates/type/{typeSlug}": [],
+    "GET api/templates/{id}": [],
+    "GET api/uploads/optimize": [],
+    "GET api/users": [
+        "auth:sanctum",
+        "permission:users.view"
+    ],
+    "GET api/users/addresses": [
+        "auth:sanctum"
+    ],
+    "GET api/users/profile/me": [
+        "auth:sanctum"
+    ],
+    "GET api/users/{id}": [
+        "auth:sanctum",
+        "permission:users.view"
+    ],
+    "GET api/variants": [
+        "auth:sanctum",
+        "permission:variants.view,products.view"
+    ],
+    "GET api/variants/barcode/{barcode}": [
+        "auth:sanctum",
+        "permission:variants.view,pos.access,products.view"
+    ],
+    "GET api/variants/lookup": [
+        "auth:sanctum"
+    ],
+    "GET api/variants/low-stock": [
+        "auth:sanctum",
+        "permission:variants.view,products.view"
+    ],
+    "GET api/variants/products": [
+        "auth:sanctum",
+        "permission:variants.view,products.view"
+    ],
+    "GET api/variants/sku/{sku}": [
+        "auth:sanctum",
+        "permission:variants.view,pos.access,products.view"
+    ],
+    "GET api/variants/templates": [
+        "auth:sanctum",
+        "permission:variants.view,products.view"
+    ],
+    "GET api/variants/{id}": [
+        "auth:sanctum",
+        "permission:variants.view,products.view"
+    ],
+    "GET api/webchat/poll": [
+        "throttle:webchat"
+    ],
+    "GET api/webhooks/mercadopago/confirm/{orderNumber}": [],
+    "GET api/webhooks/messenger": [],
+    "GET api/webhooks/whatsapp": [],
+    "GET api/webhooks/wompi/verify/{transactionId}": [
+        "auth:sanctum",
+        "permission:payments.view"
+    ],
+    "GET api/zone-types": [],
+    "GET api/zone-types/{id}": [],
+    "PATCH api/cart/items/{id}/customization": [
+        "auth:sanctum"
+    ],
+    "PATCH api/cash-registers/{id}": [
+        "auth:sanctum",
+        "permission:pos.cash_register"
+    ],
+    "PATCH api/inventory-conversions/{id}/input-items/{itemId}": [
+        "auth:sanctum",
+        "permission:conversions.view"
+    ],
+    "PATCH api/inventory-conversions/{id}/output-items/{itemId}": [
+        "auth:sanctum",
+        "permission:conversions.view"
+    ],
+    "PATCH api/inventory-counts/{id}/approve": [
+        "auth:sanctum",
+        "permission:inventory_counts.view"
+    ],
+    "PATCH api/inventory-counts/{id}/cancel": [
+        "auth:sanctum",
+        "permission:inventory_counts.view"
+    ],
+    "PATCH api/inventory-counts/{id}/items/{itemId}": [
+        "auth:sanctum",
+        "permission:inventory_counts.view"
+    ],
+    "PATCH api/inventory-counts/{id}/start": [
+        "auth:sanctum",
+        "permission:inventory_counts.view"
+    ],
+    "PATCH api/inventory-counts/{id}/submit": [
+        "auth:sanctum",
+        "permission:inventory_counts.view"
+    ],
+    "PATCH api/label-templates/zones/{zoneId}": [
+        "auth:sanctum",
+        "permission:settings.label_templates,settings.general"
+    ],
+    "PATCH api/label-templates/{id}": [
+        "auth:sanctum",
+        "permission:settings.label_templates,settings.general"
+    ],
+    "PATCH api/label-templates/{templateId}/zones/batch": [
+        "auth:sanctum",
+        "permission:settings.label_templates,settings.general"
+    ],
+    "PATCH api/manufacturing/dispatches/{id}/billing": [
+        "auth:sanctum",
+        "permission:manufacturing.orders.view"
+    ],
+    "PATCH api/manufacturing/production-orders/{id}/stages/{stageId}": [
+        "auth:sanctum",
+        "permission:manufacturing.orders.view"
+    ],
+    "PATCH api/manufacturing/production-orders/{id}/status": [
+        "auth:sanctum",
+        "permission:manufacturing.orders.view"
+    ],
+    "PATCH api/manufacturing/purchase-orders/{id}/status": [
+        "auth:sanctum",
+        "permission:manufacturing.orders.view"
+    ],
+    "PATCH api/messaging/channels/{id}": [
+        "auth:sanctum",
+        "permission:messaging.access",
+        "permission:messaging.channels"
+    ],
+    "PATCH api/messaging/conversations/{id}": [
+        "auth:sanctum",
+        "permission:messaging.access",
+        "permission:messaging.inbox"
+    ],
+    "PATCH api/messaging/knowledge/categories/{id}": [
+        "auth:sanctum",
+        "permission:messaging.access",
+        "permission:messaging.knowledge"
+    ],
+    "PATCH api/messaging/knowledge/{id}": [
+        "auth:sanctum",
+        "permission:messaging.access",
+        "permission:messaging.knowledge"
+    ],
+    "PATCH api/notifications/{id}/read": [
+        "auth:sanctum"
+    ],
+    "PATCH api/orders/{id}/status": [
+        "auth:sanctum",
+        "permission:orders.view"
+    ],
+    "PATCH api/payments/{id}": [
+        "auth:sanctum"
+    ],
+    "PATCH api/payments/{id}/admin": [
+        "auth:sanctum",
+        "permission:payments.view"
+    ],
+    "PATCH api/products/{id}/stock": [
+        "auth:sanctum",
+        "permission:products.manage"
+    ],
+    "PATCH api/purchase-orders/{id}/status": [
+        "auth:sanctum",
+        "permission:purchase_orders.view"
+    ],
+    "PATCH api/reviews/admin/{id}/moderate": [
+        "auth:sanctum",
+        "permission:reviews.view"
+    ],
+    "PATCH api/users/addresses/{addressId}/default": [
+        "auth:sanctum"
+    ],
+    "PATCH api/variants/{id}": [
+        "auth:sanctum",
+        "permission:variants.view"
+    ],
+    "POST api/announcements": [
+        "auth:sanctum",
+        "permission:announcements.view"
+    ],
+    "POST api/auth/change-password": [
+        "auth:sanctum"
+    ],
+    "POST api/auth/forgot-password": [
+        "throttle:auth-sensitive"
+    ],
+    "POST api/auth/login": [
+        "throttle:login"
+    ],
+    "POST api/auth/logout": [],
+    "POST api/auth/register": [
+        "throttle:auth-sensitive"
+    ],
+    "POST api/auth/reset-password": [
+        "throttle:auth-sensitive"
+    ],
+    "POST api/barcodes/assign-all": [
+        "auth:sanctum",
+        "permission:products.view"
+    ],
+    "POST api/barcodes/assign/{variantId}": [
+        "auth:sanctum",
+        "permission:products.view"
+    ],
+    "POST api/barcodes/image": [
+        "auth:sanctum",
+        "permission:products.view"
+    ],
+    "POST api/barcodes/labels/batch": [
+        "auth:sanctum",
+        "permission:products.view"
+    ],
+    "POST api/barcodes/print": [
+        "auth:sanctum",
+        "permission:products.view"
+    ],
+    "POST api/barcodes/validate": [
+        "auth:sanctum",
+        "permission:products.view"
+    ],
+    "POST api/cart/items": [
+        "auth:sanctum"
+    ],
+    "POST api/cart/sync": [
+        "auth:sanctum"
+    ],
+    "POST api/cash-registers": [
+        "auth:sanctum",
+        "permission:pos.cash_register"
+    ],
+    "POST api/cash-registers/sessions/{id}/close": [
+        "auth:sanctum",
+        "permission:pos.open_close_session,pos.access"
+    ],
+    "POST api/cash-registers/{id}/open-session": [
+        "auth:sanctum",
+        "permission:pos.open_close_session,pos.access"
+    ],
+    "POST api/catalogs/categories": [
+        "auth:sanctum",
+        "permission:categories.view"
+    ],
+    "POST api/catalogs/colors": [
+        "auth:sanctum",
+        "permission:colors.view"
+    ],
+    "POST api/catalogs/product-types": [
+        "auth:sanctum",
+        "permission:product_types.view"
+    ],
+    "POST api/catalogs/sizes": [
+        "auth:sanctum",
+        "permission:sizes.view"
+    ],
+    "POST api/design-images": [
+        "auth:sanctum",
+        "permission:design_images.view"
+    ],
+    "POST api/discounts": [
+        "auth:sanctum",
+        "permission:discounts.view"
+    ],
+    "POST api/discounts/validate": [
+        "auth.optional",
+        "throttle:coupons"
+    ],
+    "POST api/input-batches/input/{inputId}": [
+        "auth:sanctum",
+        "permission:inputs.view"
+    ],
+    "POST api/input-batches/{id}/adjust": [
+        "auth:sanctum",
+        "permission:inputs.view"
+    ],
+    "POST api/input-batches/{id}/output": [
+        "auth:sanctum",
+        "permission:inputs.view"
+    ],
+    "POST api/input-batches/{id}/release": [
+        "auth:sanctum",
+        "permission:inputs.view"
+    ],
+    "POST api/input-batches/{id}/reserve": [
+        "auth:sanctum",
+        "permission:inputs.view"
+    ],
+    "POST api/input-types": [
+        "auth:sanctum",
+        "permission:input_types.view"
+    ],
+    "POST api/inputs": [
+        "auth:sanctum",
+        "permission:inputs.view"
+    ],
+    "POST api/inputs/variants/{variantId}/stock": [
+        "auth:sanctum",
+        "permission:inputs.view"
+    ],
+    "POST api/inputs/{id}/colors": [
+        "auth:sanctum",
+        "permission:inputs.view"
+    ],
+    "POST api/inputs/{id}/recalculate-stock": [
+        "auth:sanctum",
+        "permission:inputs.view"
+    ],
+    "POST api/inputs/{id}/regenerate-variants": [
+        "auth:sanctum",
+        "permission:inputs.view"
+    ],
+    "POST api/inputs/{id}/sizes": [
+        "auth:sanctum",
+        "permission:inputs.view"
+    ],
+    "POST api/inventory-conversions": [
+        "auth:sanctum",
+        "permission:conversions.view"
+    ],
+    "POST api/inventory-conversions/from-template": [
+        "auth:sanctum",
+        "permission:conversions.view"
+    ],
+    "POST api/inventory-conversions/{id}/approve": [
+        "auth:sanctum",
+        "permission:conversions.view"
+    ],
+    "POST api/inventory-conversions/{id}/cancel": [
+        "auth:sanctum",
+        "permission:conversions.view"
+    ],
+    "POST api/inventory-conversions/{id}/input-items": [
+        "auth:sanctum",
+        "permission:conversions.view"
+    ],
+    "POST api/inventory-conversions/{id}/output-items": [
+        "auth:sanctum",
+        "permission:conversions.view"
+    ],
+    "POST api/inventory-conversions/{id}/submit": [
+        "auth:sanctum",
+        "permission:conversions.view"
+    ],
+    "POST api/inventory-counts": [
+        "auth:sanctum",
+        "permission:inventory_counts.view"
+    ],
+    "POST api/inventory/bulk-adjustment": [
+        "auth:sanctum",
+        "permission:inventory_movements.view"
+    ],
+    "POST api/inventory/movements": [
+        "auth:sanctum",
+        "permission:inventory_movements.view"
+    ],
+    "POST api/label-templates": [
+        "auth:sanctum",
+        "permission:settings.label_templates,settings.general"
+    ],
+    "POST api/label-templates/{id}/duplicate": [
+        "auth:sanctum",
+        "permission:settings.label_templates,settings.general"
+    ],
+    "POST api/label-templates/{templateId}/zones": [
+        "auth:sanctum",
+        "permission:settings.label_templates,settings.general"
+    ],
+    "POST api/manufacturing/brands": [
+        "auth:sanctum",
+        "permission:manufacturing.catalogs.view"
+    ],
+    "POST api/manufacturing/clients": [
+        "auth:sanctum",
+        "permission:manufacturing.catalogs.view"
+    ],
+    "POST api/manufacturing/collections": [
+        "auth:sanctum",
+        "permission:manufacturing.catalogs.view"
+    ],
+    "POST api/manufacturing/colors": [
+        "auth:sanctum",
+        "permission:manufacturing.catalogs.view"
+    ],
+    "POST api/manufacturing/dispatches": [
+        "auth:sanctum",
+        "permission:manufacturing.orders.view"
+    ],
+    "POST api/manufacturing/dispatches/{id}/cancel": [
+        "auth:sanctum",
+        "permission:manufacturing.orders.view"
+    ],
+    "POST api/manufacturing/dispatches/{id}/confirm": [
+        "auth:sanctum",
+        "permission:manufacturing.orders.view"
+    ],
+    "POST api/manufacturing/exchange-rates": [
+        "auth:sanctum",
+        "permission:manufacturing.catalogs.view"
+    ],
+    "POST api/manufacturing/garment-types": [
+        "auth:sanctum",
+        "permission:manufacturing.catalogs.view"
+    ],
+    "POST api/manufacturing/input-types": [
+        "auth:sanctum",
+        "permission:manufacturing.catalogs.view"
+    ],
+    "POST api/manufacturing/inputs": [
+        "auth:sanctum",
+        "permission:manufacturing.catalogs.view"
+    ],
+    "POST api/manufacturing/inputs/{id}/batches": [
+        "auth:sanctum",
+        "permission:manufacturing.catalogs.view"
+    ],
+    "POST api/manufacturing/processes": [
+        "auth:sanctum",
+        "permission:manufacturing.catalogs.view"
+    ],
+    "POST api/manufacturing/production-orders": [
+        "auth:sanctum",
+        "permission:manufacturing.orders.view"
+    ],
+    "POST api/manufacturing/production-orders/{id}/substitutions": [
+        "auth:sanctum",
+        "permission:manufacturing.orders.view"
+    ],
+    "POST api/manufacturing/purchase-orders": [
+        "auth:sanctum",
+        "permission:manufacturing.orders.view"
+    ],
+    "POST api/manufacturing/purchase-orders/{id}/generate-production": [
+        "auth:sanctum",
+        "permission:manufacturing.orders.view"
+    ],
+    "POST api/manufacturing/references": [
+        "auth:sanctum",
+        "permission:manufacturing.references.view"
+    ],
+    "POST api/manufacturing/references/generate-code": [
+        "auth:sanctum",
+        "permission:manufacturing.references.view"
+    ],
+    "POST api/manufacturing/sizes": [
+        "auth:sanctum",
+        "permission:manufacturing.catalogs.view"
+    ],
+    "POST api/manufacturing/warehouses": [
+        "auth:sanctum",
+        "permission:manufacturing.catalogs.view"
+    ],
+    "POST api/manufacturing/workshops": [
+        "auth:sanctum",
+        "permission:manufacturing.catalogs.view"
+    ],
+    "POST api/messaging/channels/{id}/test": [
+        "auth:sanctum",
+        "permission:messaging.access",
+        "permission:messaging.channels"
+    ],
+    "POST api/messaging/conversations/{id}/messages": [
+        "auth:sanctum",
+        "permission:messaging.access",
+        "permission:messaging.inbox"
+    ],
+    "POST api/messaging/conversations/{id}/read": [
+        "auth:sanctum",
+        "permission:messaging.access",
+        "permission:messaging.inbox"
+    ],
+    "POST api/messaging/conversations/{id}/suggest": [
+        "auth:sanctum",
+        "permission:messaging.access",
+        "permission:messaging.inbox"
+    ],
+    "POST api/messaging/knowledge": [
+        "auth:sanctum",
+        "permission:messaging.access",
+        "permission:messaging.knowledge"
+    ],
+    "POST api/messaging/knowledge/categories": [
+        "auth:sanctum",
+        "permission:messaging.access",
+        "permission:messaging.knowledge"
+    ],
+    "POST api/messaging/knowledge/test": [
+        "auth:sanctum",
+        "permission:messaging.access",
+        "permission:messaging.knowledge"
+    ],
+    "POST api/messaging/posts": [
+        "auth:sanctum",
+        "permission:messaging.access",
+        "permission:messaging.posts"
+    ],
+    "POST api/messaging/posts/publish": [
+        "auth:sanctum",
+        "permission:messaging.access",
+        "permission:messaging.posts"
+    ],
+    "POST api/messaging/posts/{id}/publish": [
+        "auth:sanctum",
+        "permission:messaging.access",
+        "permission:messaging.posts"
+    ],
+    "POST api/notifications/mark-all-read": [
+        "auth:sanctum"
+    ],
+    "POST api/notifications/mark-read": [
+        "auth:sanctum"
+    ],
+    "POST api/orders": [
+        "auth:sanctum"
+    ],
+    "POST api/orders/confirm-payment/{orderNumber}": [
+        "auth:sanctum"
+    ],
+    "POST api/orders/my/{id}/cancel": [
+        "auth:sanctum"
+    ],
+    "POST api/orders/my/{id}/wompi-checkout": [
+        "auth:sanctum"
+    ],
+    "POST api/payments": [
+        "auth:sanctum"
+    ],
+    "POST api/payments/mercadopago/preference": [
+        "auth:sanctum"
+    ],
+    "POST api/payments/{id}/cancel": [
+        "auth:sanctum",
+        "permission:payments.view"
+    ],
+    "POST api/payments/{id}/refund": [
+        "auth:sanctum",
+        "permission:payments.view"
+    ],
+    "POST api/payments/{id}/verify": [
+        "auth:sanctum",
+        "permission:payments.view"
+    ],
+    "POST api/pos/calculate": [
+        "auth:sanctum",
+        "permission:pos.access,pos.create_sale"
+    ],
+    "POST api/pos/sale": [
+        "auth:sanctum",
+        "permission:pos.access,pos.create_sale"
+    ],
+    "POST api/pos/sale/{id}/cancel": [
+        "auth:sanctum",
+        "permission:pos.cancel_sale"
+    ],
+    "POST api/pos/sale/{id}/collect": [
+        "auth:sanctum",
+        "permission:pos.access,pos.create_sale"
+    ],
+    "POST api/pos/sale/{id}/payment-evidence": [
+        "auth:sanctum",
+        "permission:pos.access,pos.create_sale"
+    ],
+    "POST api/pos/sale/{id}/return": [
+        "auth:sanctum",
+        "permission:pos.cancel_sale"
+    ],
+    "POST api/pos/sale/{id}/send-invoice": [
+        "auth:sanctum",
+        "permission:pos.access,pos.view_sales"
+    ],
+    "POST api/pos/scan": [
+        "auth:sanctum",
+        "permission:pos.access,pos.create_sale"
+    ],
+    "POST api/pos/search": [
+        "auth:sanctum",
+        "permission:pos.access,pos.create_sale"
+    ],
+    "POST api/products": [
+        "auth:sanctum",
+        "permission:products.manage"
+    ],
+    "POST api/purchase-orders": [
+        "auth:sanctum",
+        "permission:purchase_orders.view"
+    ],
+    "POST api/purchase-orders/{id}/receive": [
+        "auth:sanctum",
+        "permission:purchase_orders.view"
+    ],
+    "POST api/purchase-returns": [
+        "auth:sanctum",
+        "permission:purchase_returns.view"
+    ],
+    "POST api/reviews": [
+        "auth:sanctum"
+    ],
+    "POST api/reviews/{id}/vote": [
+        "auth:sanctum"
+    ],
+    "POST api/roles": [
+        "admin",
+        "auth:sanctum"
+    ],
+    "POST api/roles/assign": [
+        "admin",
+        "auth:sanctum"
+    ],
+    "POST api/shipping/sync-rates": [
+        "auth:sanctum",
+        "permission:shipping.config,shipping.zones,shipping.carriers"
+    ],
+    "POST api/suppliers": [
+        "auth:sanctum",
+        "permission:suppliers.view"
+    ],
+    "POST api/template-recipes": [
+        "auth:sanctum",
+        "permission:templates.view"
+    ],
+    "POST api/template-recipes/product/{productId}/associate": [
+        "auth:sanctum",
+        "permission:templates.view"
+    ],
+    "POST api/template-zones/template/{templateId}": [
+        "auth:sanctum",
+        "permission:templates.view"
+    ],
+    "POST api/template-zones/{zoneId}/input": [
+        "auth:sanctum",
+        "permission:templates.view"
+    ],
+    "POST api/templates": [
+        "auth:sanctum",
+        "permission:templates.view"
+    ],
+    "POST api/uploads/base64": [
+        "auth:sanctum",
+        "throttle:uploads"
+    ],
+    "POST api/uploads/from-url": [
+        "admin",
+        "auth:sanctum",
+        "throttle:uploads"
+    ],
+    "POST api/uploads/image": [
+        "auth:sanctum",
+        "throttle:uploads"
+    ],
+    "POST api/uploads/images": [
+        "auth:sanctum",
+        "throttle:uploads"
+    ],
+    "POST api/users": [
+        "auth:sanctum",
+        "permission:users.view"
+    ],
+    "POST api/users/addresses": [
+        "auth:sanctum"
+    ],
+    "POST api/variants": [
+        "auth:sanctum",
+        "permission:variants.view"
+    ],
+    "POST api/variants/generate/{productId}": [
+        "auth:sanctum",
+        "permission:variants.view"
+    ],
+    "POST api/variants/{id}/adjust-stock": [
+        "auth:sanctum",
+        "permission:variants.view"
+    ],
+    "POST api/webchat/send": [
+        "throttle:webchat"
+    ],
+    "POST api/webchat/start": [
+        "throttle:webchat"
+    ],
+    "POST api/webhooks/mercadopago": [],
+    "POST api/webhooks/messenger": [],
+    "POST api/webhooks/whatsapp": [],
+    "POST api/webhooks/wompi": [],
+    "POST api/zone-types": [
+        "auth:sanctum",
+        "permission:zone_types.view"
+    ],
+    "PUT api/announcements/{id}": [
+        "auth:sanctum",
+        "permission:announcements.view"
+    ],
+    "PUT api/auth/change-password": [
+        "auth:sanctum"
+    ],
+    "PUT api/auth/me": [
+        "auth:sanctum"
+    ],
+    "PUT api/cart/items/{id}": [
+        "auth:sanctum"
+    ],
+    "PUT api/catalogs/categories/{id}": [
+        "auth:sanctum",
+        "permission:categories.view"
+    ],
+    "PUT api/catalogs/colors/{id}": [
+        "auth:sanctum",
+        "permission:colors.view"
+    ],
+    "PUT api/catalogs/product-types/{id}": [
+        "auth:sanctum",
+        "permission:product_types.view"
+    ],
+    "PUT api/catalogs/product-types/{productTypeId}/sizes": [
+        "auth:sanctum",
+        "permission:product_types.view"
+    ],
+    "PUT api/catalogs/sizes/{id}": [
+        "auth:sanctum",
+        "permission:sizes.view"
+    ],
+    "PUT api/design-images/sort-order": [
+        "auth:sanctum",
+        "permission:design_images.view"
+    ],
+    "PUT api/design-images/{id}": [
+        "auth:sanctum",
+        "permission:design_images.view"
+    ],
+    "PUT api/discounts/{id}": [
+        "auth:sanctum",
+        "permission:discounts.view"
+    ],
+    "PUT api/input-batches/{id}": [
+        "auth:sanctum",
+        "permission:inputs.view"
+    ],
+    "PUT api/input-types/{id}": [
+        "auth:sanctum",
+        "permission:input_types.view"
+    ],
+    "PUT api/inputs/variants/{variantId}": [
+        "auth:sanctum",
+        "permission:inputs.view"
+    ],
+    "PUT api/inputs/{id}": [
+        "auth:sanctum",
+        "permission:inputs.view"
+    ],
+    "PUT api/manufacturing/brands/{id}": [
+        "auth:sanctum",
+        "permission:manufacturing.catalogs.view"
+    ],
+    "PUT api/manufacturing/clients/{id}": [
+        "auth:sanctum",
+        "permission:manufacturing.catalogs.view"
+    ],
+    "PUT api/manufacturing/collections/{id}": [
+        "auth:sanctum",
+        "permission:manufacturing.catalogs.view"
+    ],
+    "PUT api/manufacturing/colors/{id}": [
+        "auth:sanctum",
+        "permission:manufacturing.catalogs.view"
+    ],
+    "PUT api/manufacturing/dispatches/{id}": [
+        "auth:sanctum",
+        "permission:manufacturing.orders.view"
+    ],
+    "PUT api/manufacturing/garment-types/{id}": [
+        "auth:sanctum",
+        "permission:manufacturing.catalogs.view"
+    ],
+    "PUT api/manufacturing/input-types/{id}": [
+        "auth:sanctum",
+        "permission:manufacturing.catalogs.view"
+    ],
+    "PUT api/manufacturing/inputs/{id}": [
+        "auth:sanctum",
+        "permission:manufacturing.catalogs.view"
+    ],
+    "PUT api/manufacturing/processes/{id}": [
+        "auth:sanctum",
+        "permission:manufacturing.catalogs.view"
+    ],
+    "PUT api/manufacturing/production-orders/{id}": [
+        "auth:sanctum",
+        "permission:manufacturing.orders.view"
+    ],
+    "PUT api/manufacturing/purchase-orders/{id}": [
+        "auth:sanctum",
+        "permission:manufacturing.orders.view"
+    ],
+    "PUT api/manufacturing/references/{id}": [
+        "auth:sanctum",
+        "permission:manufacturing.references.view"
+    ],
+    "PUT api/manufacturing/sizes/{id}": [
+        "auth:sanctum",
+        "permission:manufacturing.catalogs.view"
+    ],
+    "PUT api/manufacturing/warehouses/{id}": [
+        "auth:sanctum",
+        "permission:manufacturing.catalogs.view"
+    ],
+    "PUT api/manufacturing/workshops/{id}": [
+        "auth:sanctum",
+        "permission:manufacturing.catalogs.view"
+    ],
+    "PUT api/pos/sale/{id}": [
+        "auth:sanctum",
+        "permission:pos.cancel_sale"
+    ],
+    "PUT api/products/{id}": [
+        "auth:sanctum",
+        "permission:products.manage"
+    ],
+    "PUT api/purchase-orders/{id}": [
+        "auth:sanctum",
+        "permission:purchase_orders.view"
+    ],
+    "PUT api/reviews/{id}": [
+        "auth:sanctum"
+    ],
+    "PUT api/roles/{id}": [
+        "admin",
+        "auth:sanctum"
+    ],
+    "PUT api/settings/{key}": [
+        "admin",
+        "auth:sanctum"
+    ],
+    "PUT api/settings/{type}/config": [
+        "auth:sanctum"
+    ],
+    "PUT api/suppliers/{id}": [
+        "auth:sanctum",
+        "permission:suppliers.view"
+    ],
+    "PUT api/template-zones/{id}": [
+        "auth:sanctum",
+        "permission:templates.view"
+    ],
+    "PUT api/templates/{id}": [
+        "auth:sanctum",
+        "permission:templates.view"
+    ],
+    "PUT api/users/addresses/{addressId}": [
+        "auth:sanctum"
+    ],
+    "PUT api/users/profile/me": [
+        "auth:sanctum"
+    ],
+    "PUT api/users/{id}": [
+        "auth:sanctum",
+        "permission:users.view"
+    ],
+    "PUT api/zone-types/{id}": [
+        "auth:sanctum",
+        "permission:zone_types.view"
+    ]
+}
