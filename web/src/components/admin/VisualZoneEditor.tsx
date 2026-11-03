@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import api from '../../services/api.service';
 import { assetUrl } from '../../utils/assetUrl';
+import { formatPrice } from '../../utils/formatPrice';
 import { templateZonesService, type TemplateZone, type CreateTemplateZoneDto } from '../../services/template-zones.service';
 import { zoneTypesService, type ZoneType } from '../../services/zone-types.service';
 import { Badge, Button, Field, MoneyInput, NumberInput, RadioGroup, SelectInput, Spinner, TextInput, toast, useConfirm } from '../ui';
@@ -85,6 +86,9 @@ async function ensureUrl(value: string): Promise<string> {
   }
   return value;
 }
+
+/** Porcentaje con 2 decimales: la API guarda las zonas en % (decimal 6,2). */
+const pct = (n: number) => Math.round(n * 100) / 100;
 
 export const VisualZoneEditor = ({
   templateId,
@@ -305,7 +309,7 @@ export const VisualZoneEditor = ({
         if (dragState.isDragging) {
           const newX = Math.max(0, Math.min(100 - zone.maxWidth, dragState.startZoneX + deltaX));
           const newY = Math.max(0, Math.min(100 - zone.maxHeight, dragState.startZoneY + deltaY));
-          return { ...zone, positionX: Math.round(newX), positionY: Math.round(newY) };
+          return { ...zone, positionX: pct(newX), positionY: pct(newY) };
         } else if (dragState.isResizing) {
           let newMaxWidth = dragState.startMaxWidth;
           let newMaxHeight = dragState.startMaxHeight;
@@ -409,10 +413,10 @@ export const VisualZoneEditor = ({
 
           return {
             ...zone,
-            positionX: Math.round(newX),
-            positionY: Math.round(newY),
-            maxWidth: Math.round(newMaxWidth),
-            maxHeight: Math.round(newMaxHeight)
+            positionX: pct(newX),
+            positionY: pct(newY),
+            maxWidth: pct(newMaxWidth),
+            maxHeight: pct(newMaxHeight)
           };
         }
         return zone;
@@ -616,11 +620,11 @@ export const VisualZoneEditor = ({
         ? `${newZoneName} (bloqueada)`
         : `${newZoneName} (${newZoneWidthCm}x${newZoneHeightCm}cm)`,
       shape: newZoneShape,
-      positionX: Math.round(positionX),
-      positionY: Math.round(positionY),
-      maxWidth: Math.round(widthPercent),
-      maxHeight: Math.round(heightPercent),
-      radius: newZoneShape === 'circle' ? Math.round(Math.min(widthPercent, heightPercent) / 2) : undefined,
+      positionX: pct(positionX),
+      positionY: pct(positionY),
+      maxWidth: pct(widthPercent),
+      maxHeight: pct(heightPercent),
+      radius: newZoneShape === 'circle' ? pct(Math.min(widthPercent, heightPercent) / 2) : undefined,
       points: newZoneShape === 'polygon' ? [
         { x: 50, y: 0 },
         { x: 100, y: 100 },
@@ -910,9 +914,11 @@ export const VisualZoneEditor = ({
                 </div>
               </Field>
 
-              <Field label="Precio" hint="Costo adicional por personalizar esta zona.">
-                <MoneyInput value={newZonePrice} onChange={(e) => setNewZonePrice(parseFloat(e.target.value) || 0)} placeholder="0.00" />
+              {!newZoneIsBlocked && (
+              <Field label="Precio de la zona" hint="Se suma al precio cuando el cliente diseña esta zona.">
+                <MoneyInput value={newZonePrice} onChange={(e) => setNewZonePrice(parseFloat(e.target.value) || 0)} placeholder="0" />
               </Field>
+              )}
 
               <div className="flex gap-2">
                 <Button onClick={resetNewZone} variant="secondary" className="flex-1">Cancelar</Button>
@@ -956,6 +962,9 @@ export const VisualZoneEditor = ({
                             <Badge tone="blue">{zone.shape === 'polygon' ? 'Triángulo' : 'Círculo'}</Badge>
                           )}
                           <span className="tabular-nums">{percentToCm(zone.maxWidth, true)} × {percentToCm(zone.maxHeight, false)} cm</span>
+                          {!zone.isBlocked && Number(zone.price) > 0 && (
+                            <span className="tabular-nums font-medium text-gray-700">+{formatPrice(Number(zone.price))}</span>
+                          )}
                         </div>
                       </div>
                       <button
@@ -1007,9 +1016,11 @@ export const VisualZoneEditor = ({
                 </div>
               </dl>
 
-              <Field label="Precio">
-                <MoneyInput value={editablePrice} onChange={(e) => setEditablePrice(parseFloat(e.target.value) || 0)} />
-              </Field>
+              {!selectedZone.isBlocked && (
+                <Field label="Precio de la zona" hint="Se suma al precio cuando el cliente diseña esta zona.">
+                  <MoneyInput value={editablePrice} onChange={(e) => setEditablePrice(parseFloat(e.target.value) || 0)} />
+                </Field>
+              )}
 
               <Button onClick={() => handleSaveZone(selectedZone)} variant="secondary" size="sm" fullWidth disabled={saving} icon={<Save className="w-4 h-4" />}>
                 Guardar esta zona

@@ -1081,6 +1081,9 @@
         "auth:sanctum",
         "permission:sizes.view"
     ],
+    "POST api/customizer/quote": [
+        "throttle:30,1"
+    ],
     "POST api/design-images": [
         "auth:sanctum",
         "permission:design_images.view"

@@ -6,15 +6,18 @@ use App\Models\Cart;
 use App\Models\CartItem;
 use App\Models\Product;
 use App\Models\ProductVariant;
+use App\Services\CustomizationPricingService;
 use App\Services\DiscountService;
 use App\Services\TemplateStockService;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 
 class CartController extends Controller
 {
     public function __construct(
         private TemplateStockService $templateStock,
         private DiscountService $discounts,
+        private CustomizationPricingService $customPricing,
     ) {}
 
     /** Obtiene o crea el carrito del usuario. */
@@ -60,11 +63,20 @@ class CartController extends Controller
             if ($item->isCustomized && $item->customization) {
                 $custom = $item->customization;
                 if (! empty($custom['templateId'])) {
+                    // Precio vigente del diseño (v2: base con oferta + zonas). Si una zona dejó de
+                    // existir, se conserva el precio guardado; el pedido lo vuelve a validar.
+                    try {
+                        $effectivePrice = $this->customPricing->cartUnitPrice($custom, $autos) ?? $effectivePrice;
+                    } catch (ValidationException) {
+                    }
                     $query = ProductVariant::where('productId', $custom['templateId']);
-                    if (! empty($custom['selectedColor'])) {
+                    $byIds = ! empty($custom['colorId']) && ! empty($custom['sizeId']);
+                    if ($byIds) {
+                        $query->where('colorId', $custom['colorId'])->where('sizeId', $custom['sizeId']);
+                    } elseif (! empty($custom['selectedColor'])) {
                         $query->whereHas('color', fn ($q) => $q->where('hexCode', $custom['selectedColor']));
                     }
-                    if (! empty($custom['selectedSize'])) {
+                    if (! $byIds && ! empty($custom['selectedSize'])) {
                         $query->whereHas('size', fn ($q) => $q->where('name', $custom['selectedSize'])
                             ->orWhere('abbreviation', $custom['selectedSize']));
                     }
@@ -168,6 +180,8 @@ class CartController extends Controller
         $isCustomized = (bool) ($data['isCustomized'] ?? false);
 
         if ($isCustomized && ! empty($data['customization'])) {
+            // v2: el precio lo calcula el servidor (base con oferta + zonas), no el cliente.
+            $data['unitPrice'] = $this->customPricing->cartUnitPrice($data['customization']) ?? $data['unitPrice'];
             // Los personalizados siempre se agregan como item nuevo.
             $item = CartItem::create([
                 'cartId' => $cart->id,
@@ -247,7 +261,7 @@ class CartController extends Controller
         }
 
         $item->customization = $data['customization'];
-        $item->unitPrice = $data['unitPrice'];
+        $item->unitPrice = $this->customPricing->cartUnitPrice($data['customization']) ?? $data['unitPrice'];
         $item->save();
 
         return response()->json(['success' => true, 'item' => $item]);

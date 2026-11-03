@@ -8,6 +8,7 @@ import type {
 import { ordersService } from '../services/orders.service';
 import type { ApiOrder, CreateOrderInput, ChangeStatusInput } from '../services/orders.service';
 import { useAuth } from './AuthContext';
+import type { OrderCustomization } from '../types/design';
 
 interface ChangeStatusParams {
   orderId: number;
@@ -36,12 +37,7 @@ interface CreateOrderData {
     color: string;
     quantity: number;
     unitPrice: number;
-    customization?: {
-      designFront?: string;
-      designBack?: string;
-      originalFront?: string;
-      originalBack?: string;
-    };
+    customization?: OrderCustomization;
   }[];
   subtotal: number;
   shippingCost: number;
@@ -334,14 +330,8 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
         size: item.size,
         color: item.color,
         quantity: item.quantity,
-        customization: item.customization
-          ? {
-              text: item.customization.designFront || item.customization.designBack,
-              notes: item.customization.designFront
-                ? `Front: ${item.customization.designFront}`
-                : undefined,
-            }
-          : undefined,
+        // Se envía completa (contrato v2 + claves viejas): antes se reducía a texto y se perdían los diseños.
+        customization: item.customization,
       })),
       shipping: {
         name: data.customerName,

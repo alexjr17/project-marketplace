@@ -8,6 +8,7 @@ use App\Models\ProductColor;
 use App\Models\ProductSize;
 use App\Models\ProductType;
 use App\Services\VariantService;
+use App\Support\TemplateImages;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -41,7 +42,7 @@ class TemplateController extends Controller
             'typeSlug' => $t->productType?->slug,
             'typeName' => $t->productType?->name,
             'basePrice' => (float) $t->basePrice,
-            'images' => is_array($t->images) ? $t->images : ['front' => ''],
+            'images' => TemplateImages::normalize($t->images),
             'zoneTypeImages' => $t->zoneTypeImages,
             'designZones' => $t->designZones,
             'exclusionZones' => $t->exclusionZones,
@@ -89,11 +90,29 @@ class TemplateController extends Controller
         return $this->success($templates->map(fn ($t) => $this->format($t)));
     }
 
-    public function show(int $id)
+    public function show(Request $request, int $id)
     {
-        $template = Product::with(self::RELATIONS)->where('isTemplate', true)->find($id);
+        // Ruta pública: las inactivas solo las ve quien administra plantillas (el editor del panel).
+        $template = Product::with(self::RELATIONS)->where('isTemplate', true)
+            ->when(! $this->canManageTemplates($request), fn ($q) => $q->where('isActive', true))
+            ->find($id);
 
         return $template ? $this->success($this->format($template)) : $this->error('Template no encontrado', 404);
+    }
+
+    /** Usuario con sesión (token opcional en esta ruta pública) y permiso de plantillas. */
+    private function canManageTemplates(Request $request): bool
+    {
+        $user = $request->user('sanctum');
+        if (! $user) {
+            return false;
+        }
+        if ((int) $user->roleId === 1) {
+            return true;
+        }
+        $permissions = is_array($user->role?->permissions) ? $user->role->permissions : [];
+
+        return in_array('templates.view', $permissions, true);
     }
 
     public function store(Request $request)
@@ -141,7 +160,7 @@ class TemplateController extends Controller
                 'categoryId' => $data['categoryId'] ?? null,
                 'typeId' => $data['typeId'] ?? null,
                 'basePrice' => $data['basePrice'],
-                'images' => $data['images'] ?? [],
+                'images' => TemplateImages::normalize($data['images'] ?? []),
                 'zoneTypeImages' => $data['zoneTypeImages'] ?? null,
                 'designZones' => $data['designZones'] ?? null,
                 'exclusionZones' => $data['exclusionZones'] ?? null,
@@ -207,6 +226,9 @@ class TemplateController extends Controller
                     ProductSize::create(['productId' => $template->id, 'sizeId' => $sizeId]);
                 }
                 $variantsNeedUpdate = true;
+            }
+            if ($request->has('images')) {
+                $data['images'] = TemplateImages::normalize($data['images'] ?? []);
             }
             foreach (['name', 'description', 'categoryId', 'typeId', 'basePrice', 'images',
                 'zoneTypeImages', 'designZones', 'exclusionZones', 'tags', 'isActive'] as $field) {

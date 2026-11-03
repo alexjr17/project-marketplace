@@ -6,6 +6,8 @@ import { Alert, Badge, IconButton } from '../ui';
 import { QuantityStepper } from './QuantityStepper';
 import { templateRecipesService } from '../../services/template-recipes.service';
 import type { CartItemCustomized } from '../../types/cart';
+import { assetUrl } from '../../utils/assetUrl';
+import { cartThumbnails } from '../customizer/customizerModel';
 
 interface CustomizedCartItemProps {
   item: CartItemCustomized;
@@ -24,6 +26,7 @@ export const CustomizedCartItem = ({ item, onUpdateQuantity, onRemove, onStockCh
     item.availableStock !== undefined ? item.availableStock : null
   );
   const [loadingStock, setLoadingStock] = useState(item.availableStock === undefined);
+  const [active, setActive] = useState(0);
 
 
   // Obtener stock disponible (solo si no viene de la DB)
@@ -103,6 +106,8 @@ export const CustomizedCartItem = ({ item, onUpdateQuantity, onRemove, onStockCh
 
   const canIncrease = !isOutOfStock && !(availableStock !== null && item.quantity >= availableStock);
   const designsCount = customizedProduct.designs?.length || 0;
+  const thumbs = cartThumbnails(customizedProduct);
+  const zoneNames = (customizedProduct.zonePrices || []).map((z) => z.name.toLowerCase()).join(' y ');
 
   return (
     <div className={`bg-white rounded-xl border p-3 sm:p-4 ${isOutOfStock ? 'border-red-200' : hasInsufficientStock ? 'border-amber-200' : 'border-gray-200'}`}>
@@ -117,18 +122,24 @@ export const CustomizedCartItem = ({ item, onUpdateQuantity, onRemove, onStockCh
       )}
 
       <div className="flex gap-3 sm:gap-4">
-        {/* Vista previa del diseño */}
-        <div className={`w-20 h-20 sm:w-28 sm:h-28 bg-gray-50 rounded-lg border border-gray-200 flex items-center justify-center flex-shrink-0 p-1.5 ${isOutOfStock ? 'opacity-50' : ''}`}>
-          {customizedProduct.previewImages?.front ? (
-            <img
-              src={customizedProduct.previewImages.front}
-              alt={`Vista previa de ${customizedProduct.productName}`}
-              loading="lazy"
-              decoding="async"
-              className="max-w-full max-h-full object-contain"
-            />
-          ) : (
-            <div className="w-full h-full rounded-md" style={{ backgroundColor: customizedProduct.selectedColor }} />
+        {/* Vista previa: una miniatura por vista con diseño (la primera grande) */}
+        <div className={`flex-shrink-0 ${isOutOfStock ? 'opacity-50' : ''}`}>
+          <div className="w-20 h-20 sm:w-28 sm:h-28 bg-gray-50 rounded-lg border border-gray-200 flex items-center justify-center p-1.5">
+            {thumbs[0] ? (
+              <img src={assetUrl(thumbs[active]?.src || thumbs[0].src)} alt={`Vista previa de ${customizedProduct.productName}`} loading="lazy" decoding="async" className="max-w-full max-h-full object-contain" />
+            ) : (
+              <div className="w-full h-full rounded-md" style={{ backgroundColor: customizedProduct.selectedColor }} />
+            )}
+          </div>
+          {thumbs.length > 1 && (
+            <div className="flex gap-1 mt-1.5">
+              {thumbs.map((t, i) => (
+                <button key={t.key} type="button" onClick={() => setActive(i)} title={t.key}
+                  className={`w-8 h-8 rounded border bg-gray-50 p-0.5 ${i === active ? 'border-app-500' : 'border-gray-200'}`}>
+                  <img src={assetUrl(t.src)} alt="" className="w-full h-full object-contain" />
+                </button>
+              ))}
+            </div>
           )}
         </div>
 
@@ -148,7 +159,7 @@ export const CustomizedCartItem = ({ item, onUpdateQuantity, onRemove, onStockCh
                   <span className="w-3.5 h-3.5 rounded-full ring-1 ring-gray-300" style={{ backgroundColor: customizedProduct.selectedColor }} />
                   Talla {customizedProduct.selectedSize}
                 </span>
-                <span>{designsCount} {designsCount === 1 ? 'diseño' : 'diseños'}</span>
+                <span>{designsCount} {designsCount === 1 ? 'diseño' : 'diseños'}{zoneNames ? ` · ${zoneNames}` : ''}</span>
                 {!loadingStock && availableStock !== null && (
                   <span className={isOutOfStock ? 'text-red-600' : hasInsufficientStock ? 'text-amber-700' : 'text-green-700'}>
                     {availableStock} disponibles

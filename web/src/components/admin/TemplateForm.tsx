@@ -4,7 +4,7 @@ import type { Template } from '../../services/templates.service';
 import { catalogsService } from '../../services/catalogs.service';
 import type { Color, Size, Category, ProductType as CatalogProductType } from '../../types/catalog';
 import {
-  Alert, Button, Card, CardTitle, Field, FormActions, FormGrid, ImageGallery, MoneyInput, SelectInput, Switch,
+  Alert, Button, Card, CardTitle, Field, FormActions, FormGrid, ImageInput, MoneyInput, SelectInput, Switch,
   TextArea, TextInput,
 } from '../ui';
 
@@ -24,23 +24,32 @@ export interface TemplateFormData {
   categoryId: number | null;
   typeId: number | null;
   basePrice: number;
-  images: string[];
+  /** Vistas base del modelo (la API las guarda como objeto {front, back, side}). */
+  images: TemplateImages;
   tags: string[];
   colorIds: number[];
   sizeIds: number[];
   isActive: boolean;
 }
 
-const MAX_IMAGES = 5;
+export interface TemplateImages {
+  front: string;
+  back: string;
+  side: string;
+}
 
-// Función auxiliar para extraer imágenes del template
-const getTemplateImages = (template?: Template): string[] => {
-  if (!template?.images) return [];
-  // Si images es un array, usarlo directamente
-  if (Array.isArray(template.images)) return (template.images as string[]).filter(Boolean);
-  // Si es objeto con front/back/side, convertirlo a array
-  const imgs = template.images as { front?: string; back?: string; side?: string };
-  return [imgs.front, imgs.back, imgs.side].filter((img): img is string => !!img);
+const IMAGE_SLOTS: { key: keyof TemplateImages; label: string; hint: string }[] = [
+  { key: 'front', label: 'Frente', hint: 'Vista principal del personalizador y del catálogo.' },
+  { key: 'back', label: 'Espalda', hint: 'Opcional.' },
+  { key: 'side', label: 'Lado', hint: 'Opcional.' },
+];
+
+/** Imágenes del modelo como {front, back, side}; acepta también la lista que se guardaba antes. */
+const getTemplateImages = (template?: Template): TemplateImages => {
+  const raw = template?.images as unknown;
+  if (Array.isArray(raw)) return { front: raw[0] || '', back: raw[1] || '', side: raw[2] || '' };
+  const o = (raw || {}) as Partial<TemplateImages>;
+  return { front: o.front || '', back: o.back || '', side: o.side || '' };
 };
 
 /** Ficha del modelo personalizable: una tarjeta por tema y pie de botones fijo. */
@@ -58,8 +67,8 @@ export const TemplateForm = ({ template, onSubmit, onDelete, onCancel }: Templat
   });
   const [saving, setSaving] = useState(false);
 
-  // Array de imágenes (la primera es la principal)
-  const [images, setImages] = useState<string[]>(getTemplateImages(template));
+  // Vistas base: frente, espalda y lado
+  const [images, setImages] = useState<TemplateImages>(getTemplateImages(template));
 
   // Catálogos disponibles
   const [availableColors, setAvailableColors] = useState<Color[]>([]);
@@ -170,7 +179,7 @@ export const TemplateForm = ({ template, onSubmit, onDelete, onCancel }: Templat
       basePrice: Number(formData.basePrice),
       isActive: formData.isActive,
       tags: formData.tags.split(',').map(t => t.trim()).filter(Boolean),
-      images: images.filter(Boolean),
+      images,
       colorIds: hasVariants ? selectedColorIds : [],
       sizeIds: hasVariants ? selectedSizeIds : [],
     };
@@ -242,8 +251,14 @@ export const TemplateForm = ({ template, onSubmit, onDelete, onCancel }: Templat
           {/* Imágenes */}
           <Card>
             <CardTitle icon={ImageIcon}>Imágenes</CardTitle>
-            <ImageGallery value={images} onChange={setImages} max={MAX_IMAGES} maxSizeMB={5} />
-            {images.length === 0 && <p className="text-xs text-gray-400 mt-1">Sin imagen: se mostrará un marcador de posición. La primera imagen es la vista frontal del editor de zonas.</p>}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {IMAGE_SLOTS.map(({ key, label, hint }) => (
+                <Field key={key} label={label} hint={hint}>
+                  <ImageInput value={images[key]} onChange={(v) => setImages(prev => ({ ...prev, [key]: v }))} maxSizeMB={5} />
+                </Field>
+              ))}
+            </div>
+            {!images.front && <p className="text-xs text-gray-400 mt-2">Sin imagen de frente: el personalizador muestra una silueta de respaldo. Las imágenes de cada zona (Frente, Espalda, Mangas…) se cargan en el editor de zonas.</p>}
           </Card>
 
           {/* Variantes */}

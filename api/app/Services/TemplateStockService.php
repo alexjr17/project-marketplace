@@ -2,21 +2,28 @@
 
 namespace App\Services;
 
+use App\Models\InputVariant;
 use App\Models\ProductInput;
 use App\Models\ProductVariant;
 use App\Models\TemplateRecipe;
 
 /**
- * Cálculo de stock disponible para variantes de plantillas (templates),
- * a partir del stock de sus insumos. Replica template-recipes.service del Node.
+ * Stock de las variantes de plantillas (productos personalizables).
+ *
+ * De dónde sale el stock de una variante (en este orden):
+ *  1) Receta (TemplateRecipe): el insumo que alcance para menos unidades manda.
+ *  2) Insumo asociado a la plantilla (ProductInput) que coincida en color/talla.
+ *  3) Si no tiene ninguno de los dos: el stock propio de la variante (product_variants.stock),
+ *     que se descuenta al crear el pedido como un producto normal.
+ * Antes, sin receta ni insumo el stock era 0 y nada se podía vender.
  */
 class TemplateStockService
 {
-    /**
-     * Stock disponible de una variante de template.
-     * 1) Si hay recetas (TemplateRecipe): cuello de botella entre ingredientes.
-     * 2) Si no: matching por color/talla con los insumos asociados (ProductInput).
-     */
+    public const SOURCE_RECIPE = 'recipe';
+    public const SOURCE_INPUT = 'input';
+    public const SOURCE_VARIANT = 'variant';
+
+    /** Stock disponible de una variante de template. */
     public function getAvailableStockForTemplate(int $variantId): float
     {
         $recipes = TemplateRecipe::with('inputVariant')->where('variantId', $variantId)->get();
@@ -37,23 +44,37 @@ class TemplateStockService
             return 0;
         }
 
+        $match = $this->matchingInputVariant($variant);
+        if ($match) {
+            return (float) $match->currentStock;
+        }
+
+        return max(0, (float) $variant->stock);
+    }
+
+    /** De dónde sale el stock de la variante: receta, insumo asociado o la variante misma. */
+    public function stockSource(ProductVariant $variant): string
+    {
+        if (TemplateRecipe::where('variantId', $variant->id)->exists()) {
+            return self::SOURCE_RECIPE;
+        }
+
+        return $this->matchingInputVariant($variant) ? self::SOURCE_INPUT : self::SOURCE_VARIANT;
+    }
+
+    /** Insumo asociado a la plantilla que coincide con el color/talla de la variante. */
+    public function matchingInputVariant(ProductVariant $variant): ?InputVariant
+    {
         $productInputs = ProductInput::where('productId', $variant->productId)
             ->with(['input.variants' => fn ($q) => $q->where('isActive', true)])
             ->get();
-
-        if ($productInputs->isEmpty()) {
-            return 0;
-        }
-
         $inputVariants = $productInputs->flatMap(fn ($pi) => $pi->input?->variants ?? []);
 
-        $match = $inputVariants->first(function ($iv) use ($variant) {
+        return $inputVariants->first(function ($iv) use ($variant) {
             $colorMatch = $variant->colorId === null || $iv->colorId === $variant->colorId;
             $sizeMatch = $variant->sizeId === null || $iv->sizeId === $variant->sizeId;
 
             return $colorMatch && $sizeMatch;
         });
-
-        return $match ? (float) $match->currentStock : 0;
     }
 }
