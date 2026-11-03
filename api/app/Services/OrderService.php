@@ -13,8 +13,10 @@ use App\Models\ProductInput;
 use App\Models\ProductVariant;
 use App\Models\Setting;
 use App\Models\TemplateRecipe;
+use App\Models\VariantMovement;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use RuntimeException;
 
 /**
@@ -48,6 +50,7 @@ class OrderService
         private ShippingQuoteService $shippingQuotes,
         private NumberSequenceService $numbers,
         private StockService $stock,
+        private CustomizationPricingService $customPricing,
     ) {}
 
     /** Primera imagen utilizable de un producto ({front,...} u array). */
@@ -165,16 +168,20 @@ class OrderService
                 throw new RuntimeException("El producto \"{$product->name}\" no está disponible");
             }
 
-            $itemColor = strtolower((string) ($item['color'] ?? ''));
-            $itemSize = (string) ($item['size'] ?? '');
-            $variant = $product->variants->first(function ($v) use ($itemColor, $itemSize) {
-                // Vacío/null se tratan igual (producto simple sin color/talla).
-                $colorMatch = strtolower((string) $v->color?->hexCode) === $itemColor;
-                $sizeMatch = (string) ($v->size?->name ?? '') === $itemSize
-                    || (string) ($v->size?->abbreviation ?? '') === $itemSize;
+            $customization = $item['customization'] ?? null;
+            $variant = $product->isTemplate ? $this->templateVariantByIds($product, $customization) : null;
+            if (! $variant) {
+                $itemColor = strtolower((string) ($item['color'] ?? ''));
+                $itemSize = (string) ($item['size'] ?? '');
+                $variant = $product->variants->first(function ($v) use ($itemColor, $itemSize) {
+                    // Vacío/null se tratan igual (producto simple sin color/talla).
+                    $colorMatch = strtolower((string) $v->color?->hexCode) === $itemColor;
+                    $sizeMatch = (string) ($v->size?->name ?? '') === $itemSize
+                        || (string) ($v->size?->abbreviation ?? '') === $itemSize;
 
-                return $colorMatch && $sizeMatch;
-            });
+                    return $colorMatch && $sizeMatch;
+                });
+            }
 
             if (! $variant) {
                 throw new RuntimeException(
@@ -183,7 +190,11 @@ class OrderService
             }
 
             $requested[$variant->id] = ($requested[$variant->id] ?? 0) + $item['quantity'];
-            if ($product->isTemplate) {
+            // Plantilla sin receta ni insumo asociado: su stock es el de la variante y se descuenta
+            // al crear el pedido, igual que un producto normal.
+            $templateFromInputs = $product->isTemplate
+                && $this->templateStock->stockSource($variant) !== TemplateStockService::SOURCE_VARIANT;
+            if ($templateFromInputs) {
                 $available = $this->templateStock->getAvailableStockForTemplate($variant->id);
                 if ($available < $requested[$variant->id]) {
                     throw new RuntimeException(
@@ -199,11 +210,17 @@ class OrderService
             $stockUpdates[] = [
                 'variantId' => $variant->id,
                 'quantity' => $item['quantity'],
-                'isTemplate' => $product->isTemplate,
+                // Las plantillas con receta/insumo se consumen al pagar, no aquí.
+                'fromInputs' => $templateFromInputs,
             ];
 
-            // Precio con la oferta automática aplicada (si alguna le aplica).
-            $unitPrice = $this->discounts->autoPrice($product, $autoDiscounts);
+            // Precio con la oferta automática aplicada (si alguna le aplica). Personalizado (v2):
+            // + el precio de las zonas diseñadas, calculado aquí (no se usa el que manda el cliente).
+            $salePrice = $this->discounts->autoPrice($product, $autoDiscounts);
+            $quote = $product->isTemplate
+                ? $this->customPricing->quoteForCustomization($product, $customization, $autoDiscounts)
+                : null;
+            $unitPrice = $quote ? $quote['total'] : $salePrice;
             $subtotal += $unitPrice * $item['quantity'];
 
             $couponItems[] = [
@@ -212,7 +229,7 @@ class OrderService
                 'price' => $unitPrice,
                 'quantity' => (int) $item['quantity'],
                 // Si el producto ya trae oferta automática, el cupón no se acumula.
-                'discounted' => $unitPrice < (float) $product->basePrice,
+                'discounted' => $salePrice < (float) $product->basePrice,
             ];
 
             $firstImage = $this->firstImage($product->images);
@@ -227,7 +244,12 @@ class OrderService
                 'variantId' => $variant->id,
                 'quantity' => $item['quantity'],
                 'unitPrice' => $unitPrice,
-                'customization' => $item['customization'] ?? null,
+                'customization' => $quote
+                    ? array_merge($customization, [
+                        'customizationPrice' => $quote['customizationPrice'],
+                        'totalPrice' => $quote['total'],
+                    ])
+                    : $customization,
             ];
         }
 
@@ -301,9 +323,10 @@ class OrderService
                 $this->discounts->redeem($discountModel);
             }
 
-            // Descontar stock de productos regulares (los templates se consumen al pagar).
+            // Descontar stock de productos regulares y de plantillas sin receta (las plantillas con
+            // receta o insumo asociado consumen sus insumos al pagar).
             foreach ($stockUpdates as $su) {
-                if ($su['isTemplate']) {
+                if ($su['fromInputs']) {
                     continue;
                 }
                 // Con bloqueo de fila: si otro pedido se llevó el stock entre la validación y
@@ -521,6 +544,11 @@ class OrderService
     /** Busca la variante de un order item por color (hex) y talla. */
     private function findVariant(Product $product, OrderItem $item): ?ProductVariant
     {
+        // La variante quedó guardada al crear el pedido (los personalizados la eligen por id).
+        if ($item->variantId && ($byId = $product->variants->firstWhere('id', $item->variantId))) {
+            return $byId;
+        }
+
         $itemColor = strtolower((string) ($item->color ?? ''));
         $itemSize = (string) ($item->size ?? '');
 
@@ -542,8 +570,8 @@ class OrderService
                 continue;
             }
             $variant = $this->findVariant($product, $item);
-            if (! $variant) {
-                continue;
+            if (! $variant || $this->soldFromVariantStock($order, $variant)) {
+                continue; // sin receta: su stock ya se descontó de la variante al crear el pedido
             }
 
             $recipes = TemplateRecipe::where('variantId', $variant->id)->get();
@@ -561,7 +589,7 @@ class OrderService
             }
 
             // Fallback: matching por color/talla con ProductInput.
-            $match = $this->matchingInputVariant($product->id, $variant);
+            $match = $this->templateStock->matchingInputVariant($variant);
             if ($match) {
                 $this->moveInputStock(
                     $match->id, -$item->quantity, 'SALIDA', 'order', $order->id,
@@ -588,7 +616,10 @@ class OrderService
                 continue;
             }
 
-            if ($product->isTemplate) {
+            // Plantillas con receta/insumo: se devuelven los insumos si ya se habían consumido.
+            // Sin receta (vendida del stock de la variante): se devuelve a la variante como un
+            // producto normal (rama de abajo).
+            if ($product->isTemplate && ! $this->soldFromVariantStock($order, $variant)) {
                 if (! $wasPaid) {
                     continue;
                 }
@@ -603,7 +634,7 @@ class OrderService
                         );
                     }
                 } else {
-                    $match = $this->matchingInputVariant($product->id, $variant);
+                    $match = $this->templateStock->matchingInputVariant($variant);
                     if ($match) {
                         $this->moveInputStock(
                             $match->id, $item->quantity, 'DEVOLUCION', 'order_cancel', $order->id,
@@ -621,19 +652,37 @@ class OrderService
         }
     }
 
-    private function matchingInputVariant(int $productId, ProductVariant $variant): ?InputVariant
+    /**
+     * Variante de una plantilla por los ids de la personalización v2 (colorId/sizeId).
+     * Ids que no son de una variante de la plantilla → 422. Sin ids → null (se busca por
+     * color/talla como siempre).
+     */
+    private function templateVariantByIds(Product $product, mixed $customization): ?ProductVariant
     {
-        $productInputs = ProductInput::where('productId', $productId)
-            ->with(['input.variants' => fn ($q) => $q->where('isActive', true)])
-            ->get();
-        $inputVariants = $productInputs->flatMap(fn ($pi) => $pi->input?->variants ?? []);
+        if (! is_array($customization) || empty($customization['colorId']) || empty($customization['sizeId'])) {
+            return null;
+        }
+        $colorId = (int) $customization['colorId'];
+        $sizeId = (int) $customization['sizeId'];
 
-        return $inputVariants->first(function ($iv) use ($variant) {
-            $colorMatch = $variant->colorId === null || $iv->colorId === $variant->colorId;
-            $sizeMatch = $variant->sizeId === null || $iv->sizeId === $variant->sizeId;
+        $variant = $product->variants->first(fn ($v) => (int) $v->colorId === $colorId && (int) $v->sizeId === $sizeId);
+        if (! $variant) {
+            throw ValidationException::withMessages([
+                'items' => "La combinación de color y talla elegida no existe para \"{$product->name}\".",
+            ]);
+        }
 
-            return $colorMatch && $sizeMatch;
-        });
+        return $variant;
+    }
+
+    /** ¿Esta línea de plantilla se vendió del stock de la variante (sin receta) en este pedido? */
+    private function soldFromVariantStock(Order $order, ProductVariant $variant): bool
+    {
+        return VariantMovement::where('variantId', $variant->id)
+            ->where('referenceType', 'order')
+            ->where('referenceId', $order->id)
+            ->where('movementType', 'SALE')
+            ->exists();
     }
 
     private function moveInputStock(int $inputVariantId, float $delta, string $type, string $refType, int $refId, string $reason): void

@@ -28,6 +28,8 @@ import { usePayments } from '../context/PaymentsContext';
 import { useSettings } from '../context/SettingsContext';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
+import { buildOrderCustomization } from '../components/customizer/customizerModel';
+import { uploadCustomizationAssets } from '../components/customizer/customizationAssets';
 import { Alert, Badge, Button, Card, CardTitle, DescriptionList, EmptyState, Field, TextArea, TextInput } from '../components/ui';
 import { WompiCheckout } from '../components/payment/WompiCheckout';
 import { addressesService, type Address } from '../services/addresses.service';
@@ -337,9 +339,12 @@ export const CheckoutPage = () => {
 
   // Crea el pedido PENDIENTE. El paso a pagado lo hace el backend al confirmar con la pasarela.
   const createOrderFromCart = async () => {
-    const orderItems = cart.items.map((item) => {
+    const orderItems = await Promise.all(cart.items.map(async (item) => {
       if (item.type === 'customized') {
-        const customized = item.customizedProduct;
+        // Las imágenes que sigan en el navegador se suben antes (el pedido guarda URLs).
+        const customized = user
+          ? await uploadCustomizationAssets(item.customizedProduct).catch(() => item.customizedProduct)
+          : item.customizedProduct;
         // Convertir productId a número - si es string numérico parsearlo, sino usar 1
         const productId = typeof customized.productId === 'string'
           ? (Number.isNaN(Number(customized.productId)) ? 1 : Number(customized.productId))
@@ -353,14 +358,8 @@ export const CheckoutPage = () => {
           color: customized.selectedColor,
           quantity: item.quantity,
           unitPrice: item.price,
-          customization: {
-            // Preview comprimido para visualización
-            designFront: customized.previewImages.front,
-            designBack: customized.previewImages.back,
-            // Imágenes originales en alta calidad para producción
-            originalFront: customized.productionImages?.front,
-            originalBack: customized.productionImages?.back,
-          },
+          // Contrato v2 (diseños, zonas, vistas previas) + claves viejas para el detalle del pedido.
+          customization: buildOrderCustomization(customized),
         };
       } else {
         const standardItem = item as import('../types/cart').CartItem;
@@ -379,7 +378,7 @@ export const CheckoutPage = () => {
           unitPrice: item.price,
         };
       }
-    });
+    }));
 
     const order = await createOrder({
       customerName: formData.customerName,

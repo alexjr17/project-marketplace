@@ -16,6 +16,26 @@ import { ORDER_TONE, fmtDateTime, money } from './orderUi';
 
 type TabType = 'summary' | 'items' | 'shipping' | 'history';
 
+/** Nombre legible de una vista del personalizador ('manga-izquierda' → 'Manga izquierda'). */
+const viewLabel = (slug: string) => {
+  const t = slug.replace(/[-_]+/g, ' ').trim();
+  return t ? t.charAt(0).toUpperCase() + t.slice(1) : 'Vista';
+};
+
+const slugify = (t: string) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9]+/g, '-').replace(/(^-|-$)/g, '').toLowerCase();
+
+/** Vistas de una personalización v2: la vista previa de cada una y los diseños que lleva. */
+const designViews = (item: OrderItem) => {
+  const c = item.customization;
+  if (!c?.designs?.length) return [];
+  const slugs = Array.from(new Set([...c.designs.map((d) => d.viewSlug), ...Object.keys(c.previews || {})]));
+  return slugs.map((slug) => ({
+    slug,
+    preview: c.previews?.[slug],
+    designs: c.designs!.filter((d) => d.viewSlug === slug),
+  }));
+};
+
 const EVIDENCE_OPTIONS: { value: PaymentEvidence['type']; label: string }[] = [
   { value: 'receipt', label: 'Recibo' },
   { value: 'transfer', label: 'Comprobante de transferencia' },
@@ -92,12 +112,12 @@ export const OrderDetailPage = () => {
     toast.success('Número de pedido copiado');
   };
 
-  // Descargar diseño como PNG
-  const handleDownloadDesign = (designUrl: string, itemName: string, side: 'front' | 'back') => {
+  // Descargar diseño como PNG (suffix: frente, espalda, frente-diseno-1…)
+  const handleDownloadDesign = (designUrl: string, itemName: string, suffix: string) => {
     try {
       const link = document.createElement('a');
       link.href = designUrl;
-      const fileName = `${order.orderNumber}_${itemName.replace(/\s+/g, '-')}_${side === 'front' ? 'frente' : 'espalda'}.png`;
+      const fileName = `${order.orderNumber}_${itemName.replace(/\s+/g, '-')}_${suffix}.png`;
       link.download = fileName;
       document.body.appendChild(link);
       link.click();
@@ -121,12 +141,26 @@ export const OrderDetailPage = () => {
     return side === 'front' ? !!item.customization.originalFront : !!item.customization.originalBack;
   };
 
+  /** Archivos de producción de un ítem: v2 = vista previa de cada vista + original de cada diseño. */
+  const productionFiles = (item: OrderItem): { url: string; suffix: string }[] => {
+    const views = designViews(item);
+    if (views.length) {
+      return views.flatMap((v) => [
+        ...(v.preview ? [{ url: v.preview, suffix: `${slugify(v.slug)}-vista` }] : []),
+        ...v.designs.map((d, i) => ({ url: d.originalImageData || d.imageData, suffix: `${slugify(v.slug)}-diseno-${i + 1}` })),
+      ]).filter((f) => !!f.url);
+    }
+    return (['front', 'back'] as const)
+      .map((side) => ({ url: getBestImage(item, side) || '', suffix: side === 'front' ? 'frente' : 'espalda' }))
+      .filter((f) => !!f.url);
+  };
+
+  const downloadFiles = (files: { url: string; suffix: string; name: string }[]) => {
+    files.forEach((f, i) => setTimeout(() => handleDownloadDesign(f.url, f.name, f.suffix), i * 500));
+  };
+
   const handleDownloadAllDesigns = (item: OrderItem) => {
-    if (!item.customization) return;
-    const frontImage = getBestImage(item, 'front');
-    const backImage = getBestImage(item, 'back');
-    if (frontImage) handleDownloadDesign(frontImage, item.productName, 'front');
-    if (backImage) setTimeout(() => handleDownloadDesign(backImage, item.productName, 'back'), 500);
+    downloadFiles(productionFiles(item).map((f) => ({ ...f, name: item.productName })));
   };
 
   const handleDownloadAllOrderDesigns = () => {
@@ -135,13 +169,7 @@ export const OrderDetailPage = () => {
       toast.info('Este pedido no tiene productos personalizados');
       return;
     }
-    let delay = 0;
-    itemsWithDesigns.forEach((item) => {
-      const frontImage = getBestImage(item, 'front');
-      const backImage = getBestImage(item, 'back');
-      if (frontImage) { setTimeout(() => handleDownloadDesign(frontImage, item.productName, 'front'), delay); delay += 500; }
-      if (backImage) { setTimeout(() => handleDownloadDesign(backImage, item.productName, 'back'), delay); delay += 500; }
-    });
+    downloadFiles(itemsWithDesigns.flatMap((item) => productionFiles(item).map((f) => ({ ...f, name: item.productName }))));
     toast.success(`Descargando ${itemsWithDesigns.length} diseño(s) en calidad original...`);
   };
 
@@ -299,7 +327,62 @@ export const OrderDetailPage = () => {
                       </div>
                     </div>
 
-                    {item.customization && (item.customization.designFront || item.customization.designBack) && (
+                    {designViews(item).length > 0 && (
+                      <div className="mt-4 pt-4 border-t border-gray-100">
+                        <div className="flex items-center justify-between mb-3">
+                          <p className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                            Diseños para producción
+                            {item.customization!.designs!.some((d) => d.originalImageData) && <Badge tone="green">HD</Badge>}
+                          </p>
+                          <Button size="sm" variant="ghost" icon={<Download className="w-4 h-4" />} onClick={() => handleDownloadAllDesigns(item)}>Descargar todos</Button>
+                        </div>
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                          {designViews(item).map((view) => (
+                            <div key={view.slug} className="rounded-lg border border-gray-200 overflow-hidden">
+                              <div className="flex items-center justify-between px-3 py-1.5 border-b border-gray-100">
+                                <span className="text-sm font-medium text-gray-700">{viewLabel(view.slug)}</span>
+                                {view.preview && (
+                                  <IconButton title={`Descargar vista previa: ${viewLabel(view.slug)}`}
+                                    onClick={() => handleDownloadDesign(view.preview!, item.productName, `${slugify(view.slug)}-vista`)}
+                                  ><Download className="w-4 h-4" /></IconButton>
+                                )}
+                              </div>
+                              {view.preview
+                                ? <img src={view.preview} alt={`${item.productName} - ${viewLabel(view.slug)}`} className="w-full h-44 object-contain bg-gray-50" />
+                                : <div className="h-20 flex items-center justify-center bg-gray-50 text-xs text-gray-400">Sin vista previa</div>}
+                              <ul className="divide-y divide-gray-100">
+                                {view.designs.map((d, i) => {
+                                  const file = d.originalImageData || d.imageData;
+                                  return (
+                                    <li key={d.id || i} className="flex items-center gap-3 px-3 py-2">
+                                      <Thumb src={d.imageData} alt={d.originalFileName || `Diseño ${i + 1}`} size="sm" />
+                                      <div className="flex-1 min-w-0 text-xs">
+                                        <p className="font-medium text-gray-900 truncate flex items-center gap-1.5">
+                                          {d.zoneName || `Diseño ${i + 1}`}
+                                          {d.originalImageData && <Badge tone="green">Original</Badge>}
+                                        </p>
+                                        {d.originalFileName && <p className="text-gray-500 truncate">{d.originalFileName}</p>}
+                                        <p className="text-gray-500 tabular-nums">
+                                          Centro {Math.round(d.position.x)}% · {Math.round(d.position.y)}% — {Math.round(d.size.width)}% × {Math.round(d.size.height)}%
+                                          {d.rotation ? ` — ${Math.round(d.rotation)}°` : ''}
+                                        </p>
+                                      </div>
+                                      {file && (
+                                        <IconButton title={d.originalImageData ? 'Descargar en calidad original' : 'Descargar diseño'}
+                                          onClick={() => handleDownloadDesign(file, item.productName, `${slugify(view.slug)}-diseno-${i + 1}`)}
+                                        ><Download className="w-4 h-4" /></IconButton>
+                                      )}
+                                    </li>
+                                  );
+                                })}
+                              </ul>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {designViews(item).length === 0 && item.customization && (item.customization.designFront || item.customization.designBack) && (
                       <div className="mt-4 pt-4 border-t border-gray-100">
                         <div className="flex items-center justify-between mb-3">
                           <p className="text-sm font-medium text-gray-700 flex items-center gap-2">
@@ -322,7 +405,7 @@ export const OrderDetailPage = () => {
                                   </span>
                                   <IconButton
                                     title={original ? 'Descargar en calidad original' : side === 'front' ? 'Descargar diseño frontal' : 'Descargar diseño trasero'}
-                                    onClick={() => handleDownloadDesign(getBestImage(item, side)!, item.productName, side)}
+                                    onClick={() => handleDownloadDesign(getBestImage(item, side)!, item.productName, side === 'front' ? 'frente' : 'espalda')}
                                   ><Download className="w-4 h-4" /></IconButton>
                                 </div>
                                 <img src={preview} alt={`${item.productName} - ${side === 'front' ? 'Frente' : 'Espalda'}`} className="w-full h-40 object-contain bg-gray-50" />

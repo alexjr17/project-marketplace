@@ -8,6 +8,13 @@ class TemplateZone extends BaseModel
 
     protected $casts = [
         'points' => 'array',
+        // Porcentaje (0-100) sobre la imagen de la vista; decimal en la BD.
+        'positionX' => 'float',
+        'positionY' => 'float',
+        'maxWidth' => 'float',
+        'maxHeight' => 'float',
+        'radius' => 'float',
+        'price' => 'float',
         'isEditable' => 'boolean',
         'isRequired' => 'boolean',
         'isBlocked' => 'boolean',

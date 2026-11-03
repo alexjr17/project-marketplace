@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import { Header } from './Header';
 import { Footer } from './Footer';
 import { AnnouncementsRenderer } from '../announcements/AnnouncementsRenderer';
@@ -27,9 +27,11 @@ export const Layout = ({ children }: LayoutProps) => {
   }, []);
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-50 overflow-x-hidden">
+    // overflow-x-clip (no hidden): recorta igual pero no crea un contenedor de scroll, así
+    // funciona `sticky` en las páginas. --store-header-h = alto del encabezado fijo.
+    <div className="min-h-screen flex flex-col bg-gray-50 overflow-x-clip" style={{ '--store-header-h': `${headerH}px` } as CSSProperties}>
       <Header />
-      <main className="flex-1 overflow-x-hidden pb-20 md:pb-0" style={{ paddingTop: headerH }}>
+      <main className="flex-1 overflow-x-clip pb-20 md:pb-0" style={{ paddingTop: headerH }}>
         <AnnouncementsRenderer />
         {children}
       </main>

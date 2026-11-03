@@ -49,6 +49,17 @@ export const sizeCharts: SizeChart[] = [
     ],
   },
   {
+    productType: 'sweatshirt',
+    productName: 'Suéter',
+    guide: 'Mide el contorno del pecho bajo las axilas y el largo desde el hombro hasta el final de la prenda. En los modelos oversize elige tu talla habitual: el corte ya es holgado.',
+    sizes: [
+      { size: 'S', chest: 100, length: 66, shoulders: 48, sleeves: 60, scale: 0.92 },
+      { size: 'M', chest: 106, length: 68, shoulders: 50, sleeves: 61, scale: 1.0 },
+      { size: 'L', chest: 112, length: 70, shoulders: 52, sleeves: 62, scale: 1.08 },
+      { size: 'XL', chest: 118, length: 72, shoulders: 54, sleeves: 63, scale: 1.15 },
+    ],
+  },
+  {
     productType: 'cap',
     productName: 'Gorra',
     guide: 'Talla única ajustable que se adapta a la mayoría de las cabezas.',

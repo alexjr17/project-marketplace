@@ -5,12 +5,17 @@
 | Incluido desde routes/api.php (prefijo /api); el orden de las rutas de cada prefijo se conserva.
 */
 
+use App\Http\Controllers\CustomizerController;
 use App\Http\Controllers\DesignImageController;
 use App\Http\Controllers\TemplateController;
 use App\Http\Controllers\TemplateRecipeController;
 use App\Http\Controllers\TemplateZoneController;
 use App\Http\Controllers\ZoneTypeController;
 use Illuminate\Support\Facades\Route;
+
+// ==================== COTIZACIÓN (personalizador de la tienda) ====================
+// Público: precio de una plantilla con las zonas diseñadas; el pedido cobra este mismo valor.
+Route::post('customizer/quote', [CustomizerController::class, 'quote'])->middleware('throttle:30,1');
 
 // ==================== PLANTILLAS (personalizador) ====================
 Route::prefix('templates')->group(function () {

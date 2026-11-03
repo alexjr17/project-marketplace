@@ -3,12 +3,29 @@ import { createContext, useContext, useEffect, useState, useCallback, useRef } f
 import type { Cart, CartItemType, CartSummary } from '../types/cart';
 import type { Product } from '../types/product';
 import type { CustomizedProduct } from '../types/design';
+import { fitForLocalCart, uploadCustomizationAssets } from '../components/customizer/customizationAssets';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import { STORAGE_KEYS } from '../services/storage.service';
 import { settingsService } from '../services/settings.service';
 import { cartService, type CartItemDB } from '../services/cart.service';
 import { getVariantByProductColorSize } from '../services/variants.service';
 import { useAuth } from './AuthContext';
+
+/**
+ * Imágenes de un producto personalizado antes de guardarlo: con sesión se suben al servidor
+ * (el carrito guarda URLs, no archivos); si no hay sesión o la subida falla, se achican para
+ * que quepan en el navegador.
+ */
+async function prepareCustomization(cp: CustomizedProduct, upload: boolean): Promise<CustomizedProduct> {
+  if (upload) {
+    try {
+      return await uploadCustomizationAssets(cp);
+    } catch {
+      /* se guarda liviano */
+    }
+  }
+  return fitForLocalCart(cp);
+}
 
 interface OrderConfig {
   shippingCost: number;
@@ -23,7 +40,8 @@ interface CartContextType {
   orderConfig: OrderConfig;
   addStandardProduct: (product: Product, color: string, size: string, quantity?: number) => Promise<void> | void;
   addCustomizedProduct: (customizedProduct: CustomizedProduct, quantity?: number) => Promise<void> | void;
-  updateCustomizedProduct: (itemId: string, customizedProduct: CustomizedProduct) => Promise<void> | void;
+  /** Guarda los cambios del diseño (y la cantidad, si se pasa) de un ítem personalizado. */
+  updateCustomizedProduct: (itemId: string, customizedProduct: CustomizedProduct, quantity?: number) => Promise<void> | void;
   getCartItemById: (itemId: string) => CartItemType | undefined;
   removeItem: (itemId: string) => Promise<void> | void;
   updateQuantity: (itemId: string, quantity: number) => Promise<void> | void;
@@ -183,12 +201,12 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
           console.log('[Cart] Usuario logueado, sincronizando localStorage con DB...');
 
           // Preparar items para enviar al backend
-          const itemsToSync = rawCartItems.map((item) => {
+          const itemsToSync = await Promise.all(rawCartItems.map(async (item) => {
             if (item.type === 'customized') {
               const customItem = item as import('../types/cart').CustomizedCartItem;
               return {
                 isCustomized: true,
-                customization: customItem.customizedProduct,
+                customization: await prepareCustomization(customItem.customizedProduct, true),
                 quantity: item.quantity,
                 unitPrice: item.price,
               };
@@ -202,7 +220,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
                 unitPrice: item.price,
               };
             }
-          });
+          }));
 
           // Sincronizar con backend
           const syncedItems = await cartService.syncCart(itemsToSync);
@@ -437,7 +455,8 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const addCustomizedProduct = async (customizedProduct: CustomizedProduct, quantity: number = 1) => {
+  const addCustomizedProduct = async (product: CustomizedProduct, quantity: number = 1) => {
+    const customizedProduct = await prepareCustomization(product, isAuthenticated);
     const newItem: CartItemType = {
       id: `custom-${customizedProduct.id}-${Date.now()}`,
       type: 'customized',
@@ -463,8 +482,9 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
         await loadCartFromDB();
       } catch (error) {
         console.error('[Cart] Error al agregar a DB:', error);
-        // Fallback a localStorage
-        setRawCartItems((prev) => [...prev, newItem]);
+        // Fallback a localStorage (con las imágenes livianas para que quepan)
+        const local = await fitForLocalCart(customizedProduct);
+        setRawCartItems((prev) => [...prev, { ...newItem, customizedProduct: local }]);
         return;
       }
     } else {
@@ -474,13 +494,15 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
   };
 
   // Actualizar un producto personalizado existente en el carrito
-  const updateCustomizedProduct = async (itemId: string, customizedProduct: CustomizedProduct) => {
+  const updateCustomizedProduct = async (itemId: string, product: CustomizedProduct, quantity?: number) => {
+    const customizedProduct = await prepareCustomization(product, isAuthenticated && itemId.startsWith('db-'));
     // Verificar si es un item de DB (id empieza con "db-")
     if (isAuthenticated && itemId.startsWith('db-')) {
       const dbId = parseInt(itemId.replace('db-', ''));
       if (!isNaN(dbId)) {
         try {
           await cartService.updateItemCustomization(dbId, customizedProduct, customizedProduct.totalPrice);
+          if (quantity && quantity > 0) await cartService.updateItem(dbId, quantity);
           console.log('[Cart] Customization actualizada en DB:', dbId);
           // Recargar carrito desde DB
           await loadCartFromDB();
@@ -495,11 +517,13 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     setRawCartItems((prev) =>
       prev.map((item) => {
         if (item.id === itemId && item.type === 'customized') {
+          const qty = quantity && quantity > 0 ? quantity : item.quantity;
           return {
             ...item,
             customizedProduct,
+            quantity: qty,
             price: customizedProduct.totalPrice,
-            subtotal: customizedProduct.totalPrice * item.quantity,
+            subtotal: customizedProduct.totalPrice * qty,
           };
         }
         return item;

@@ -32,8 +32,9 @@ class UploadController extends Controller
     private function uploadDir(string $folder): string
     {
         $dir = public_path("uploads/{$folder}");
-        if (! is_dir($dir)) {
-            mkdir($dir, 0775, true);
+        // Varias subidas a la vez pueden crear la carpeta al mismo tiempo: solo falla si al final no existe.
+        if (! is_dir($dir) && ! @mkdir($dir, 0775, true) && ! is_dir($dir)) {
+            throw new \RuntimeException("No se pudo crear la carpeta de subidas: {$folder}");
         }
 
         return $dir;

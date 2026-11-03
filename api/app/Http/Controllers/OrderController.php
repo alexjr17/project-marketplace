@@ -51,6 +51,8 @@ class OrderController extends Controller
             $order = $this->orders->createOrder($request->user()->id, $data);
         } catch (RuntimeException $e) {
             return $this->fail($e);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            throw $e; // 422: personalización con zonas o color/talla no válidos
         } catch (\Throwable $e) {
             \Log::error('Error creando pedido', ['error' => $e->getMessage()]);
 

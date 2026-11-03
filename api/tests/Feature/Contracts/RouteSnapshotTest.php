@@ -74,6 +74,7 @@ class RouteSnapshotTest extends TestCase
             'POST api/webhooks/wompi', 'POST api/webhooks/mercadopago',
             'POST api/webhooks/messenger', 'POST api/webhooks/whatsapp',
             'POST api/discounts/validate',
+            'POST api/customizer/quote', // solo calcula un precio; no escribe nada
             'POST api/webchat/start', 'POST api/webchat/send',
         ];
 

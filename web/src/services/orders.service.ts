@@ -1,3 +1,4 @@
+import type { OrderCustomization } from '../types/design';
 import api from './api.service';
 import type { WompiCheckoutData } from './wompi.service';
 import type { OrderItem, OrderStatus, PaymentMethod, ShippingInfo } from '../types/order';
@@ -64,12 +65,7 @@ export interface CreateOrderInput {
     size: string;
     color: string;
     quantity: number;
-    customization?: {
-      text?: string;
-      image?: string;
-      position?: string;
-      notes?: string;
-    };
+    customization?: OrderCustomization;
   }[];
   shipping: {
     name: string;

@@ -45,8 +45,8 @@ class MinimalSeeder extends Seeder
         $this->seedProductWithVariants();
         $this->seedSimpleProduct();
         $this->seedGorra();
-        $this->seedTemplate('sueter-basico', 'Suéter Básico', 70000, 'TPL-0001', 'https://loremflickr.com/600/600/sweater?lock=24');
-        $this->seedTemplate('sueter-oversize', 'Suéter Oversize', 78000, 'TPL-0002', 'https://loremflickr.com/600/600/sweater,oversize?lock=25');
+        $this->seedTemplate('sueter-basico', 'Suéter Básico', 70000, 'TPL-0001', '');
+        $this->seedTemplate('sueter-oversize', 'Suéter Oversize', 78000, 'TPL-0002', '');
         $this->seedAnnouncements();
         $this->seedDiscounts();
         $this->seedCashRegister();
@@ -227,7 +227,8 @@ class MinimalSeeder extends Seeder
                     [
                         'sku' => $sku.'-'.strtoupper(substr($color->slug, 0, 3)).'-'.$size->abbreviation,
                         'barcode' => $this->ean13(),
-                        'stock' => 0,
+                        // Sin receta de insumos, la plantilla vende del stock de la variante.
+                        'stock' => 10,
                         'minStock' => 0,
                         'isActive' => true,
                     ]
@@ -235,9 +236,10 @@ class MinimalSeeder extends Seeder
             }
         }
 
+        // Zonas en porcentaje de la imagen de la vista (esquina superior izquierda + tamaño).
         $zoneDefs = [
-            ['slug' => 'frente', 'name' => 'Frente', 'required' => true],
-            ['slug' => 'espalda', 'name' => 'Espalda', 'required' => false],
+            ['slug' => 'frente', 'name' => 'Frente', 'required' => true, 'x' => 30, 'y' => 24, 'w' => 40, 'h' => 42],
+            ['slug' => 'espalda', 'name' => 'Espalda', 'required' => false, 'x' => 28, 'y' => 20, 'w' => 44, 'h' => 50],
         ];
         foreach ($zoneDefs as $i => $zd) {
             $zoneType = ZoneType::where('slug', $zd['slug'])->first();
@@ -251,10 +253,10 @@ class MinimalSeeder extends Seeder
                     'name' => $zd['name'],
                     'description' => 'Área de personalización: '.strtolower($zd['name']),
                     'shape' => 'rect',
-                    'maxWidth' => 280,
-                    'maxHeight' => 360,
-                    'positionX' => 110,
-                    'positionY' => 90,
+                    'maxWidth' => $zd['w'],
+                    'maxHeight' => $zd['h'],
+                    'positionX' => $zd['x'],
+                    'positionY' => $zd['y'],
                     'isEditable' => true,
                     'isRequired' => $zd['required'],
                     'isBlocked' => false,

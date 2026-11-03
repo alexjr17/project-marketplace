@@ -1,3 +1,5 @@
+import type { OrderCustomization } from './design';
+
 export type OrderStatus =
   | 'pending'      // Pendiente de pago
   | 'paid'         // Pagado
@@ -17,13 +19,8 @@ export interface OrderItem {
   color: string;
   quantity: number;
   unitPrice: number;
-  customization?: {
-    designFront?: string; // Preview comprimido
-    designBack?: string;
-    // Imágenes originales para producción (sin compresión)
-    originalFront?: string;
-    originalBack?: string;
-  };
+  /** Personalización (ver OrderCustomization: v2 + claves viejas). */
+  customization?: OrderCustomization;
 }
 
 /** Datos de envío guardados en el pedido (los que manda el checkout). */

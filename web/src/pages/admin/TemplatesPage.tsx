@@ -84,8 +84,7 @@ export const TemplatesPage = () => {
         categoryId: data.categoryId || undefined,
         typeId: data.typeId || undefined,
         basePrice: data.basePrice,
-        // El backend recibe la lista plana de imágenes (la primera es la frontal).
-        images: data.images as unknown as Template['images'],
+        images: data.images,
         tags: data.tags,
         colorIds: data.colorIds,
         sizeIds: data.sizeIds,
@@ -94,8 +93,8 @@ export const TemplatesPage = () => {
       toast.success('Modelo creado exitosamente');
       await loadTemplates();
       setViewMode('list');
-    } catch (error: any) {
-      toast.error(error?.message || 'Error al crear modelo');
+    } catch (error) {
+      toast.error((error as Error)?.message || 'Error al crear modelo');
     }
   };
 
@@ -110,7 +109,7 @@ export const TemplatesPage = () => {
         categoryId: data.categoryId,
         typeId: data.typeId,
         basePrice: data.basePrice,
-        images: data.images as unknown as Template['images'],
+        images: data.images,
         tags: data.tags,
         isActive: data.isActive,
         colorIds: data.colorIds,
@@ -125,9 +124,9 @@ export const TemplatesPage = () => {
       setViewMode('list');
       setSelectedTemplate(null);
       setSelectedInputIds([]);
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error al guardar:', error);
-      toast.error(error?.message || 'Error al actualizar modelo');
+      toast.error((error as Error)?.message || 'Error al actualizar modelo');
     }
   };
 
@@ -139,8 +138,8 @@ export const TemplatesPage = () => {
       await loadTemplates();
       setViewMode('list');
       setSelectedTemplate(null);
-    } catch (error: any) {
-      toast.error(error?.message || 'Error al eliminar modelo');
+    } catch (error) {
+      toast.error((error as Error)?.message || 'Error al eliminar modelo');
     }
   };
 
@@ -217,8 +216,8 @@ export const TemplatesPage = () => {
       }
 
       setGeneratingVariantsFor(null);
-    } catch (error: any) {
-      toast.error('Error al generar variantes: ' + (error?.message));
+    } catch (error) {
+      toast.error('Error al generar variantes: ' + ((error as Error)?.message));
     } finally {
       setIsGenerating(false);
     }
