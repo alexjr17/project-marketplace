@@ -1,5 +1,6 @@
 import type { OrderCustomization } from '../types/design';
 import api from './api.service';
+import { ApiError, type PageMeta } from '../lib/http';
 import type { WompiCheckoutData } from './wompi.service';
 import type { OrderItem, OrderStatus, PaymentMethod, ShippingInfo } from '../types/order';
 
@@ -124,10 +125,10 @@ export const ordersService = {
   // Obtener todos los pedidos (admin)
   async getAll(filters?: OrdersFilters): Promise<OrdersResponse> {
     // El backend devuelve { success, data, meta } donde meta tiene la paginación
-    const response = await api.get<ApiOrder[]>('/orders', filters) as any;
+    const response = await api.get<ApiOrder[]>('/orders', filters);
 
     // Mapear 'meta' del backend a 'pagination' del frontend
-    const meta = response.meta || response.pagination;
+    const meta = (response.meta as PageMeta | undefined) || response.pagination;
     const data = response.data || [];
 
     return {
@@ -176,12 +177,14 @@ export const ordersService = {
   },
 
   // Mi pedido por número (cliente). /orders/number/{n} es solo de admin.
+  // null solo si no existe (404); otro error se propaga para no confundirlo con "no existe".
   async getMyByNumber(orderNumber: string): Promise<ApiOrder | null> {
     try {
       const response = await api.get<ApiOrder>(`/orders/my/number/${encodeURIComponent(orderNumber)}`);
       return response.data || null;
-    } catch {
-      return null;
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 404) return null;
+      throw e;
     }
   },
 
@@ -206,10 +209,10 @@ export const ordersService = {
   // Obtener mis pedidos (usuario autenticado)
   async getMyOrders(filters?: { page?: number; limit?: number }): Promise<OrdersResponse> {
     // El backend devuelve { success, data, meta } donde meta tiene la paginación
-    const response = await api.get<ApiOrder[]>('/orders/my', filters) as any;
+    const response = await api.get<ApiOrder[]>('/orders/my', filters);
 
     // Mapear 'meta' del backend a 'pagination' del frontend
-    const meta = response.meta || response.pagination;
+    const meta = (response.meta as PageMeta | undefined) || response.pagination;
 
     return {
       data: response.data || [],
@@ -220,16 +223,6 @@ export const ordersService = {
         totalPages: 0,
       },
     };
-  },
-
-  // Obtener pedidos por email (para usuarios no autenticados)
-  async getByEmail(email: string): Promise<ApiOrder[]> {
-    try {
-      const response = await api.get<ApiOrder[]>('/orders', { search: email });
-      return response.data || [];
-    } catch {
-      return [];
-    }
   },
 };
 

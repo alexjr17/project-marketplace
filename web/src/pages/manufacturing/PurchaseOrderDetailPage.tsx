@@ -9,6 +9,7 @@ import { Page, PageHeader, Button, Card, CardTitle, StatCard, Badge, Description
 import QtyMatrix from '../../components/manufacturing/QtyMatrix';
 import { MarketBadge } from '../../components/manufacturing/mfgUi';
 
+import { errorMessage } from '../../lib/http';
 export default function PurchaseOrderDetailPage() {
   const { id } = useParams();
   const ask = useConfirm();
@@ -58,7 +59,7 @@ export default function PurchaseOrderDetailPage() {
       const res = await manufacturingService.generateProduction(orderId);
       toast.success(`Se generaron ${res.created} orden(es) de producción`);
       setOrder(res.purchaseOrder);
-    } catch (e: any) { toast.error(e?.message || 'No se pudo generar la producción'); }
+    } catch (e) { toast.error(errorMessage(e, 'No se pudo generar la producción')); }
     finally { setBusy(false); }
   };
 

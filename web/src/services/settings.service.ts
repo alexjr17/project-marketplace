@@ -11,6 +11,7 @@ import type {
   PrintSettings,
 } from '../types/settings';
 
+/** Forma de GET /settings/public (SettingsService::publicSettings). Los impuestos van en `payment`. */
 export interface PublicSettings {
   store: {
     name: string;
@@ -26,10 +27,6 @@ export interface PublicSettings {
     };
   };
   shipping: ShippingSettings;
-  tax: {
-    rate: number;
-  };
-  paymentMethods: string[];
   general?: GeneralSettings;
   appearance?: AppearanceSettings;
   home?: HomeSettings;
@@ -39,91 +36,12 @@ export interface PublicSettings {
   legal?: LegalSettings;
 }
 
-export interface StoreSettings {
-  storeName: string;
-  storeDescription?: string;
-  storeLogo?: string;
-  storeEmail: string;
-  storePhone?: string;
-  storeAddress?: string;
-  socialMedia?: {
-    facebook?: string;
-    instagram?: string;
-    twitter?: string;
-    whatsapp?: string;
-  };
-}
-
-export interface OrderSettings {
-  shippingCost: number;
-  freeShippingThreshold: number;
-  taxRate: number;
-  minOrderAmount?: number;
-  maxOrderItems?: number;
-}
-
-export interface NotificationSettings {
-  emailNotifications: boolean;
-  orderConfirmation: boolean;
-  orderStatusUpdates: boolean;
-  lowStockAlerts: boolean;
-  lowStockThreshold?: number;
-}
-
-
 export const settingsService = {
   // Obtener configuración pública (no requiere auth)
   async getPublicSettings(): Promise<PublicSettings> {
     const response = await api.get<PublicSettings>('/settings/public');
     if (!response.data) throw new Error('Error obteniendo configuración');
     return response.data;
-  },
-
-  // ==================== ADMIN ONLY ====================
-
-  // Obtener toda la configuración
-  async getAllSettings(): Promise<Record<string, any>> {
-    const response = await api.get<Record<string, any>>('/settings');
-    return response.data || {};
-  },
-
-  // Store Settings
-  async getStoreSettings(): Promise<StoreSettings> {
-    const response = await api.get<StoreSettings>('/settings/store/config');
-    if (!response.data) throw new Error('Error obteniendo configuración de tienda');
-    return response.data;
-  },
-
-  async updateStoreSettings(data: StoreSettings): Promise<StoreSettings> {
-    const response = await api.put<{ value: StoreSettings }>('/settings/store/config', data);
-    if (!response.data) throw new Error('Error actualizando configuración');
-    return response.data.value;
-  },
-
-  // Order Settings
-  async getOrderSettings(): Promise<OrderSettings> {
-    const response = await api.get<OrderSettings>('/settings/orders/config');
-    if (!response.data) throw new Error('Error obteniendo configuración de pedidos');
-    return response.data;
-  },
-
-  async updateOrderSettings(data: OrderSettings): Promise<OrderSettings> {
-    const response = await api.put<{ value: OrderSettings }>('/settings/orders/config', data);
-    if (!response.data) throw new Error('Error actualizando configuración');
-    return response.data.value;
-  },
-
-  // Notification Settings
-  async getNotificationSettings(): Promise<NotificationSettings> {
-    const response = await api.get<NotificationSettings>('/settings/notifications/config');
-    if (!response.data) throw new Error('Error obteniendo configuración de notificaciones');
-    return response.data;
-  },
-
-  async updateNotificationSettings(data: NotificationSettings): Promise<NotificationSettings> {
-    const response = await api.put<{ value: NotificationSettings }>('/settings/notifications/config', data);
-    if (!response.data) throw new Error('Error actualizando configuración');
-    return response.data.value;
   },
 
   // ==================== CONFIGURACIONES DEL FRONTEND ====================

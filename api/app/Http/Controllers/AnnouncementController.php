@@ -78,14 +78,6 @@ class AnnouncementController extends Controller
     /** Anuncios activos según fecha (la segmentación por página la hace el front). */
     public function active()
     {
-        $now = now();
-        $items = Announcement::where('isActive', true)
-            ->where(fn ($q) => $q->whereNull('startsAt')->orWhere('startsAt', '<=', $now))
-            ->where(fn ($q) => $q->whereNull('endsAt')->orWhere('endsAt', '>=', $now))
-            ->orderByDesc('priority')
-            ->orderByDesc('createdAt')
-            ->get();
-
-        return $this->success($items);
+        return $this->success(Announcement::current()->get());
     }
 }

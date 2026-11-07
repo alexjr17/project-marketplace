@@ -155,7 +155,7 @@ export const Header = () => {
 
               <Link to="/favorites" aria-label="Favoritos" title="Favoritos" className={iconBtn(isActive('/favorites'))}>
                 <Heart className={`w-5 h-5 ${isActive('/favorites') ? 'text-red-500 fill-red-500' : ''}`} />
-                {favoritesCount > 0 && <span className={`${countBadge} bg-red-500 text-white`}>{favoritesCount}</span>}
+                {favoritesCount > 0 && <span className={`${countBadge} bg-red-600 text-white`}>{favoritesCount}</span>}
               </Link>
 
               <span className="hidden md:contents">
@@ -207,24 +207,26 @@ export const Header = () => {
               <span className="hidden md:block flex-shrink-0 pr-2 mr-1 border-r border-gray-200">
                 <CategoriesMenu />
               </span>
-              <Link to="/" className={`md:hidden ${tab(isActive('/'))}`}>
-                <Home className="w-4 h-4" />
-                Inicio
-              </Link>
               {activeCategories.map((c) => (
-                <Link key={c.id} to={`/catalog?category=${encodeURIComponent(c.slug)}`} className={tab(currentCategory === c.slug)}>
+                <Link
+                  key={c.id}
+                  to={`/catalog?category=${encodeURIComponent(c.slug)}`}
+                  className={tab(currentCategory === c.slug)}
+                  aria-current={currentCategory === c.slug ? 'page' : undefined}
+                >
                   {c.name}
                 </Link>
               ))}
-              <Link to="/catalog?onSale=1" className={`${tab(onSale)} ${onSale ? '' : '!text-red-600 hover:!text-red-700'}`}>
+              <Link to="/catalog?onSale=1" className={tab(onSale)} aria-current={onSale ? 'page' : undefined}>
                 <Percent className="w-4 h-4" />
                 Ofertas
               </Link>
               {enableCustomizer && (
                 <Link
                   to="/customize"
-                  className={`flex-shrink-0 md:ml-auto inline-flex items-center gap-1.5 h-8 px-3.5 rounded-full text-sm font-semibold whitespace-nowrap transition-colors ${
-                    isActive('/customize') ? 'bg-app-600 text-white' : 'bg-app-50 text-app-700 hover:bg-app-100'
+                  aria-current={isActive('/customize') ? 'page' : undefined}
+                  className={`order-first md:order-none mr-1 md:mr-0 flex-shrink-0 md:ml-auto inline-flex items-center gap-1.5 h-8 px-3.5 rounded-full text-sm font-semibold whitespace-nowrap text-white shadow-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-app-500 focus-visible:ring-offset-2 ${
+                    isActive('/customize') ? 'bg-app-700' : 'bg-app-600 hover:bg-app-700'
                   }`}
                 >
                   <Palette className="w-4 h-4" />
@@ -246,28 +248,33 @@ export const Header = () => {
       />
 
       {/* Barra inferior (solo celular) */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200 pb-safe">
-        <div className="flex items-center justify-around px-2 py-1.5">
-          <Link to="/" className={`flex flex-col items-center justify-center gap-0.5 px-3 py-1.5 rounded-lg transition-colors ${isActive('/') ? 'text-app-700' : 'text-gray-500 hover:text-gray-900'}`}>
+      {/* Alto = --store-bottom-nav (index.css): las barras de compra se apoyan encima. */}
+      <nav
+        aria-label="Navegación principal"
+        className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200"
+        style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+      >
+        <div className="flex items-center justify-around px-2 h-16">
+          <Link to="/" aria-current={isActive('/') ? 'page' : undefined} className={`flex flex-col items-center justify-center gap-0.5 px-3 py-1.5 rounded-lg transition-colors ${isActive('/') ? 'text-app-700' : 'text-gray-500 hover:text-gray-900'}`}>
             <Home className="w-6 h-6" strokeWidth={isActive('/') ? 2.25 : 1.75} />
             <span className="text-[11px] font-medium">Inicio</span>
           </Link>
 
-          <Link to="/catalog" className={`flex flex-col items-center justify-center gap-0.5 px-3 py-1.5 rounded-lg transition-colors ${isActive('/catalog') ? 'text-app-700' : 'text-gray-500 hover:text-gray-900'}`}>
+          <Link to="/catalog" aria-current={isActive('/catalog') ? 'page' : undefined} className={`flex flex-col items-center justify-center gap-0.5 px-3 py-1.5 rounded-lg transition-colors ${isActive('/catalog') ? 'text-app-700' : 'text-gray-500 hover:text-gray-900'}`}>
             <Package className="w-6 h-6" strokeWidth={isActive('/catalog') ? 2.25 : 1.75} />
             <span className="text-[11px] font-medium">Catálogo</span>
           </Link>
 
           {enableCustomizer && (
-            <Link to="/customize" className="flex flex-col items-center justify-center -mt-5">
-              <div className="p-3.5 rounded-full bg-app-600 ring-4 ring-white shadow-md">
-                <Palette className="w-6 h-6 text-white" strokeWidth={2.25} />
-              </div>
-              <span className="text-[11px] font-semibold mt-0.5 text-app-700">Diseñar</span>
+            <Link to="/customize" aria-current={isActive('/customize') ? 'page' : undefined} className="flex flex-col items-center justify-center gap-0.5 px-3">
+              <span className="w-11 h-8 rounded-full bg-app-600 flex items-center justify-center shadow-sm">
+                <Palette className="w-5 h-5 text-white" strokeWidth={2.25} />
+              </span>
+              <span className="text-[11px] font-semibold text-app-700">Diseñar</span>
             </Link>
           )}
 
-          <Link to="/cart" className={`flex flex-col items-center justify-center gap-0.5 px-3 py-1.5 rounded-lg transition-colors relative ${isActive('/cart') ? 'text-app-700' : 'text-gray-500 hover:text-gray-900'}`}>
+          <Link to="/cart" aria-current={isActive('/cart') ? 'page' : undefined} className={`flex flex-col items-center justify-center gap-0.5 px-3 py-1.5 rounded-lg transition-colors relative ${isActive('/cart') ? 'text-app-700' : 'text-gray-500 hover:text-gray-900'}`}>
             <ShoppingCart className="w-6 h-6" strokeWidth={isActive('/cart') ? 2.25 : 1.75} />
             <span className="text-[11px] font-medium">Carrito</span>
             {cart.totalItems > 0 && <span className={`${countBadge} top-0 right-1.5 bg-app-600 text-white`}>{cart.totalItems}</span>}

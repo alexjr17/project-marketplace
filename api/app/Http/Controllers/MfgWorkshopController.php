@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Concerns\ApiResponse;
 use App\Models\MfgWorkshop;
+use App\Services\Manufacturing\MfgPlantCatalogService;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
@@ -13,6 +14,8 @@ use Illuminate\Validation\Rule;
 class MfgWorkshopController extends Controller
 {
     use ApiResponse;
+
+    public function __construct(private MfgPlantCatalogService $catalogs) {}
 
     private function rules(int $ignoreId = 0): array
     {
@@ -36,15 +39,7 @@ class MfgWorkshopController extends Controller
 
     public function store(Request $request)
     {
-        $data = $request->validate($this->rules());
-        $processIds = $data['processIds'] ?? null;
-        unset($data['processIds']);
-        $w = MfgWorkshop::create($data);
-        if ($processIds !== null) {
-            $w->processes()->sync($processIds);
-        }
-
-        return $this->created($w->load('processes:id,name'), 'Taller creado');
+        return $this->created($this->catalogs->saveWorkshop($request->validate($this->rules())), 'Taller creado');
     }
 
     public function update(Request $request, int $id)
@@ -53,15 +48,8 @@ class MfgWorkshopController extends Controller
         if (! $w) {
             return $this->error('Taller no encontrado', 404);
         }
-        $data = $request->validate($this->rules($id));
-        $processIds = $data['processIds'] ?? null;
-        unset($data['processIds']);
-        $w->fill($data)->save();
-        if ($processIds !== null) {
-            $w->processes()->sync($processIds);
-        }
 
-        return $this->success($w->load('processes:id,name'), 'Taller actualizado');
+        return $this->success($this->catalogs->saveWorkshop($request->validate($this->rules($id)), $w), 'Taller actualizado');
     }
 
     public function destroy(int $id)

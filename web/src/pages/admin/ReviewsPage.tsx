@@ -65,8 +65,8 @@ export default function ReviewsPage() {
       if (statusFilter) params.status = statusFilter;
       if (ratingFilter) params.rating = ratingFilter;
 
-      const response = await api.get('/reviews/admin/all', params);
-      const reviewsData: AdminReview[] = (response as any).data || [];
+      const response = await api.get<AdminReview[]>('/reviews/admin/all', params);
+      const reviewsData: AdminReview[] = response.data || [];
       setReviews(reviewsData);
       setPage(1);
 

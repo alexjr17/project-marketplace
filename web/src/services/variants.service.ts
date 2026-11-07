@@ -36,17 +36,6 @@ export interface ProductVariant {
   finalPrice: number;
 }
 
-export interface CreateVariantInput {
-  productId: number;
-  colorId?: number | null;
-  sizeId?: number | null;
-  sku?: string;
-  barcode?: string;
-  stock?: number;
-  minStock?: number;
-  priceAdjustment?: number;
-}
-
 export interface UpdateVariantInput {
   sku?: string;
   barcode?: string;
@@ -102,41 +91,6 @@ export async function getVariantById(id: number): Promise<ProductVariant> {
 }
 
 /**
- * Buscar variante por código de barras
- */
-export async function getVariantByBarcode(barcode: string): Promise<ProductVariant | null> {
-  try {
-    return await client.get<ProductVariant | null>(`/variants/barcode/${barcode}`);
-  } catch (error) {
-    if (isApiError(error) && error.status === 404) {
-      return null;
-    }
-    throw error;
-  }
-}
-
-/**
- * Buscar variante por SKU
- */
-export async function getVariantBySku(sku: string): Promise<ProductVariant | null> {
-  try {
-    return await client.get<ProductVariant | null>(`/variants/sku/${sku}`);
-  } catch (error) {
-    if (isApiError(error) && error.status === 404) {
-      return null;
-    }
-    throw error;
-  }
-}
-
-/**
- * Crear una variante manualmente
- */
-export async function createVariant(data: CreateVariantInput): Promise<ProductVariant> {
-  return client.post<ProductVariant>(`/variants`, data);
-}
-
-/**
  * Actualizar una variante
  */
 export async function updateVariant(id: number, data: UpdateVariantInput): Promise<ProductVariant> {
@@ -150,32 +104,21 @@ export async function deleteVariant(id: number): Promise<void> {
   await client.delete(`/variants/${id}`);
 }
 
+/** Resultado de generar variantes: las creadas, las combinaciones que fallaron y el total. */
+export interface GenerateVariantsResult {
+  created: ProductVariant[];
+  errors: unknown[];
+  total: number;
+}
+
 /**
  * Generar variantes automáticamente para un producto
  */
 export async function generateVariantsForProduct(
   productId: number,
   initialStock: number = 0
-): Promise<{ created: ProductVariant[]; errors: any[]; total: number }> {
-  return client.post<{ created: ProductVariant[]; errors: any[]; total: number }>(`/variants/generate/${productId}`, { initialStock });
-}
-
-/**
- * Ajustar stock de una variante
- */
-export async function adjustStock(
-  id: number,
-  quantity: number,
-  reason?: string
-): Promise<ProductVariant> {
-  return client.post<ProductVariant>(`/variants/${id}/adjust-stock`, { quantity, reason });
-}
-
-/**
- * Obtener variantes con stock bajo
- */
-export async function getLowStockVariants(): Promise<ProductVariant[]> {
-  return client.get<ProductVariant[]>(`/variants/low-stock`);
+): Promise<GenerateVariantsResult> {
+  return client.post<GenerateVariantsResult>(`/variants/generate/${productId}`, { initialStock });
 }
 
 const toPaginatedResult = <T,>({ items, page, limit, total, totalPages }: Paged<T>): PaginatedResult<T> => ({

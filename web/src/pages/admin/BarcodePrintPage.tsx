@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { errorMessage } from '../../lib/http';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Download, Layers, Minus, Plus, Printer, Tags } from 'lucide-react';
 import * as variantsService from '../../services/variants.service';
@@ -59,8 +60,8 @@ export default function BarcodePrintPage() {
       } else if (activeTemplates.length > 0) {
         setSelectedTemplate(activeTemplates[0].id);
       }
-    } catch (error: any) {
-      toast.error('Error al cargar variantes: ' + (error?.message));
+    } catch (error) {
+      toast.error('Error al cargar variantes: ' + errorMessage(error));
       navigate(BACK);
     } finally {
       setLoading(false);
@@ -97,9 +98,9 @@ export default function BarcodePrintPage() {
       setShowPreviewModal(true);
 
       toast.success('Etiquetas generadas exitosamente');
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error generating labels:', error);
-      toast.error('Error al generar etiquetas: ' + (error?.message));
+      toast.error('Error al generar etiquetas: ' + errorMessage(error));
     } finally {
       setPrinting(false);
     }

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { errorMessage } from '../../lib/http';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Save, Trash2, Send, CheckCircle, Package, ClipboardList } from 'lucide-react';
 import {
@@ -109,7 +110,7 @@ export default function PurchaseOrderDetailPage() {
           quantityReceived: Number(item.quantity) - Number(item.quantityReceived),
         })));
       }
-    } catch (error) {
+    } catch {
       toast.error('Error al cargar datos');
       navigate(LIST);
     } finally {
@@ -183,8 +184,8 @@ export default function PurchaseOrderDetailPage() {
         toast.success('Orden de compra actualizada');
       }
       navigate(LIST);
-    } catch (error: any) {
-      toast.error(error.message || 'Error al guardar');
+    } catch (error) {
+      toast.error(errorMessage(error, 'Error al guardar'));
     } finally {
       setSaving(false);
     }
@@ -197,8 +198,8 @@ export default function PurchaseOrderDetailPage() {
       await purchaseOrdersService.updateStatus(order.id, newStatus);
       toast.success('Estado actualizado');
       loadData();
-    } catch (error: any) {
-      toast.error(error.message || 'Error al cambiar estado');
+    } catch (error) {
+      toast.error(errorMessage(error, 'Error al cambiar estado'));
     } finally {
       setSaving(false);
     }
@@ -226,8 +227,8 @@ export default function PurchaseOrderDetailPage() {
       toast.success('Ítems recibidos correctamente');
       setShowReceiveModal(false);
       loadData();
-    } catch (error: any) {
-      toast.error(error.message || 'Error al recibir');
+    } catch (error) {
+      toast.error(errorMessage(error, 'Error al recibir'));
     } finally {
       setSaving(false);
     }
@@ -246,8 +247,8 @@ export default function PurchaseOrderDetailPage() {
       await purchaseOrdersService.deletePurchaseOrder(order.id);
       toast.success('Orden eliminada');
       navigate(LIST);
-    } catch (error: any) {
-      toast.error(error.message || 'Error al eliminar');
+    } catch (error) {
+      toast.error(errorMessage(error, 'Error al eliminar'));
     } finally {
       setSaving(false);
     }

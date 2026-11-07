@@ -8,6 +8,7 @@ import { useLocalStorage } from '../hooks/useLocalStorage';
 import { STORAGE_KEYS } from '../services/storage.service';
 import { settingsService } from '../services/settings.service';
 import { cartService, type CartItemDB } from '../services/cart.service';
+import { ApiError } from '../lib/http';
 import { getVariantByProductColorSize } from '../services/variants.service';
 import { useAuth } from './AuthContext';
 
@@ -48,6 +49,8 @@ interface CartContextType {
   clearCart: () => Promise<void> | void;
   getCartSummary: () => CartSummary;
   isSyncing: boolean;
+  /** El carrito ya se cargó (de la DB si hay sesión): antes de esto, vacío no significa vacío. */
+  isReady: boolean;
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
@@ -146,8 +149,13 @@ const normalizeCartItem = (item: CartItemType): CartItemType => {
   return item;
 };
 
+/** Error de negocio del API (400/404/409/422): la línea no se puede agregar; no hay que caer a local. */
+function isRejectedByServer(error: unknown): boolean {
+  return error instanceof ApiError && [400, 404, 409, 422].includes(error.status);
+}
+
 export const CartProvider = ({ children }: { children: ReactNode }) => {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
   const [rawCartItems, setRawCartItems] = useLocalStorage<CartItemType[]>(STORAGE_KEYS.CART, []);
 
   // Normalizar items cuando se cargan desde localStorage
@@ -160,6 +168,9 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
 
   // Estado para controlar la sincronizacion con DB
   const [isSyncingWithDB, setIsSyncingWithDB] = useState(false);
+  const [dbLoaded, setDbLoaded] = useState(false);
+  // Se fija junto con el carrito calculado (mismo render) para que "listo" nunca vea el carrito anterior.
+  const [isReady, setIsReady] = useState(false);
   const [dbCartItems, setDbCartItems] = useState<CartItemDB[]>([]);
   const prevAuthRef = useRef<boolean>(false);
   const hasSyncedRef = useRef<boolean>(false);
@@ -188,6 +199,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
       console.error('[Cart] Error al cargar carrito desde DB:', error);
     } finally {
       setIsSyncingWithDB(false);
+      setDbLoaded(true);
     }
   }, [isAuthenticated]);
 
@@ -234,6 +246,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
           console.error('[Cart] Error al sincronizar con DB:', error);
         } finally {
           setIsSyncingWithDB(false);
+          setDbLoaded(true);
         }
       }
       // Si usuario ya estaba autenticado al cargar la pagina, cargar desde DB
@@ -248,6 +261,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
       // Si el usuario se desloguea, limpiar items de DB y resetear flags
       if (!isAuthenticated) {
         setDbCartItems([]);
+        setDbLoaded(false);
         hasSyncedRef.current = false;
         isInitialLoadRef.current = true;
       }
@@ -390,7 +404,8 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
       total,
       updatedAt: new Date(),
     });
-  }, [cartItems, orderConfig, isAuthenticated, dbItemsAsLocal]);
+    setIsReady(!authLoading && (!isAuthenticated || dbLoaded));
+  }, [cartItems, orderConfig, isAuthenticated, dbItemsAsLocal, authLoading, dbLoaded]);
 
   useEffect(() => {
     recalculateTotals();
@@ -444,6 +459,8 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
         // Recargar carrito desde DB
         await loadCartFromDB();
       } catch (error) {
+        // El servidor rechazó la línea (sin stock, producto inexistente…): no se guarda en local.
+        if (isRejectedByServer(error)) throw error;
         console.error('[Cart] Error al agregar a DB:', error);
         // Fallback a localStorage
         setRawCartItems((prev) => [...prev, newItem]);
@@ -481,6 +498,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
         // Recargar carrito desde DB
         await loadCartFromDB();
       } catch (error) {
+        if (isRejectedByServer(error)) throw error;
         console.error('[Cart] Error al agregar a DB:', error);
         // Fallback a localStorage (con las imágenes livianas para que quepan)
         const local = await fitForLocalCart(customizedProduct);
@@ -630,6 +648,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
         clearCart,
         getCartSummary,
         isSyncing: isSyncingWithDB,
+        isReady,
       }}
     >
       {children}

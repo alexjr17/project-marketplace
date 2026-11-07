@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Concerns\ApiResponse;
 use App\Models\MfgInput;
 use App\Models\MfgInputBatch;
+use App\Services\Manufacturing\MfgPlantCatalogService;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
@@ -14,6 +15,8 @@ use Illuminate\Validation\Rule;
 class MfgInputController extends Controller
 {
     use ApiResponse;
+
+    public function __construct(private MfgPlantCatalogService $catalogs) {}
 
     private function rules(int $ignoreId = 0): array
     {
@@ -65,16 +68,13 @@ class MfgInputController extends Controller
     /** Lotes del insumo + precio promedio (para decidir el precio en la referencia). */
     public function batches(int $id)
     {
-        $batches = MfgInputBatch::with('color:id,name,hexCode')
-            ->where('inputId', $id)->orderByDesc('purchasedAt')->orderByDesc('id')->get();
-        $avg = $batches->count() ? round((float) $batches->avg('unitCost'), 2) : 0;
-
-        return $this->success(['batches' => $batches, 'average' => $avg]);
+        return $this->success($this->catalogs->inputBatches($id));
     }
 
     public function storeBatch(Request $request, int $id)
     {
-        if (! MfgInput::whereKey($id)->exists()) {
+        $input = MfgInput::find($id);
+        if (! $input) {
             return $this->error('Insumo no encontrado', 404);
         }
         $data = $request->validate([
@@ -84,9 +84,8 @@ class MfgInputController extends Controller
             'purchasedAt' => 'nullable|date',
             'reference' => 'nullable|string|max:60',
         ]);
-        $data['inputId'] = $id;
 
-        return $this->created(MfgInputBatch::create($data)->load('color:id,name,hexCode'), 'Lote registrado');
+        return $this->created($this->catalogs->addInputBatch($input, $data), 'Lote registrado');
     }
 
     public function deleteBatch(int $id, int $batchId)

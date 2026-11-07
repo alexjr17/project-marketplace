@@ -10,6 +10,7 @@ import {
   FormGrid, FormActions, Alert, Spinner, Tabs, useConfirm, toast,
 } from '../../components/ui';
 import { InputVariantsPanel } from './InputVariantsPanel';
+import { errorMessage } from '../../lib/http';
 
 const LIST = '/admin-panel/inputs';
 
@@ -164,8 +165,8 @@ export default function InputDetailPage() {
       await inputsService.delete(parseInt(id!));
       toast.success('Insumo eliminado');
       navigate(LIST);
-    } catch (err: any) {
-      const msg = err?.message || 'Error al eliminar el insumo';
+    } catch (err) {
+      const msg = errorMessage(err, 'Error al eliminar el insumo');
       setError(msg);
       toast.error(msg);
       console.error(err);
@@ -206,8 +207,8 @@ export default function InputDetailPage() {
       const updated = await inputsService.addColor(currentInput.id, colorId);
       setCurrentInput(updated);
       toast.success('Color agregado');
-    } catch (err: any) {
-      toast.error(err?.message || 'Error al agregar color');
+    } catch (err) {
+      toast.error(errorMessage(err, 'Error al agregar color'));
     } finally {
       setSavingColor(false);
     }
@@ -227,8 +228,8 @@ export default function InputDetailPage() {
       const updated = await inputsService.removeColor(currentInput.id, colorId);
       setCurrentInput(updated);
       toast.success('Color eliminado');
-    } catch (err: any) {
-      toast.error(err?.message || 'Error al eliminar color');
+    } catch (err) {
+      toast.error(errorMessage(err, 'Error al eliminar color'));
     } finally {
       setSavingColor(false);
     }
@@ -241,8 +242,8 @@ export default function InputDetailPage() {
       const updated = await inputsService.addSize(currentInput.id, sizeId);
       setCurrentInput(updated);
       toast.success('Talla agregada');
-    } catch (err: any) {
-      toast.error(err?.message || 'Error al agregar talla');
+    } catch (err) {
+      toast.error(errorMessage(err, 'Error al agregar talla'));
     } finally {
       setSavingSize(false);
     }
@@ -262,8 +263,8 @@ export default function InputDetailPage() {
       const updated = await inputsService.removeSize(currentInput.id, sizeId);
       setCurrentInput(updated);
       toast.success('Talla eliminada');
-    } catch (err: any) {
-      toast.error(err?.message || 'Error al eliminar talla');
+    } catch (err) {
+      toast.error(errorMessage(err, 'Error al eliminar talla'));
     } finally {
       setSavingSize(false);
     }

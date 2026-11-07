@@ -36,6 +36,7 @@ import {
   type ConversionStats,
 } from '../../services/inventory-conversions.service';
 import { CONVERSION_STATUS, formatCOP } from './InventoryConversionShared';
+import { errorMessage } from '../../lib/http';
 
 type CreateType = 'manual' | 'template';
 
@@ -109,8 +110,8 @@ export default function InventoryConversionsPage() {
           state: { formData },
         });
       }
-    } catch (error: any) {
-      toast.error(error.message || 'Error al crear conversión');
+    } catch (error) {
+      toast.error(errorMessage(error, 'Error al crear conversión'));
     } finally {
       setCreating(false);
     }

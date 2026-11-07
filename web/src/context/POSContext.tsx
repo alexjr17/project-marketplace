@@ -7,6 +7,7 @@ import { useToast } from './ToastContext';
 import { useSettings } from './SettingsContext';
 import { useAuth } from './AuthContext';
 
+import { errorMessage } from '../lib/http';
 // ==================== TYPES ====================
 
 // Product cart item (variant-based)
@@ -39,7 +40,8 @@ interface POSContextType {
   // Session
   currentSession: CashSession | null;
   isLoadingSession: boolean;
-  loadSession: () => Promise<void>;
+  /** Recarga la sesión de caja. silent: sin pasar por "cargando" (no desmonta la pantalla). */
+  loadSession: (opts?: { silent?: boolean }) => Promise<void>;
 
   // Cart
   cart: PosCartItem[];
@@ -113,21 +115,21 @@ export function POSProvider({ children }: { children: React.ReactNode }) {
   /**
    * Load current session
    */
-  const loadSession = useCallback(async () => {
+  const loadSession = useCallback(async (opts?: { silent?: boolean }) => {
     if (!canUsePOS) {
       setCurrentSession(null);
       setIsLoadingSession(false);
       return;
     }
     try {
-      setIsLoadingSession(true);
+      if (!opts?.silent) setIsLoadingSession(true);
       const session = await cashRegisterService.getMySession();
       setCurrentSession(session);
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error loading session:', error);
       setCurrentSession(null);
     } finally {
-      setIsLoadingSession(false);
+      if (!opts?.silent) setIsLoadingSession(false);
     }
   }, [canUsePOS]);
 
@@ -325,10 +327,10 @@ export function POSProvider({ children }: { children: React.ReactNode }) {
         setIsScanningProduct(true);
         const product = await posService.scanProduct(barcode);
         addToCart(product, 1);
-      } catch (error: any) {
+      } catch (error) {
         console.error('Error scanning product:', error);
         showToast(
-          error?.message || 'Producto no encontrado',
+          errorMessage(error, 'Producto no encontrado'),
           'error'
         );
       } finally {
@@ -397,16 +399,17 @@ export function POSProvider({ children }: { children: React.ReactNode }) {
         // Clear cart on success
         clearCart();
 
-        // Reload session to update counters
-        await loadSession();
+        // Actualiza los contadores de la caja sin pasar por "cargando": eso desmontaba la
+        // pantalla de venta y el cobro volvía al primer paso en vez de mostrar "Venta exitosa".
+        await loadSession({ silent: true });
 
         showToast(editingSaleId ? 'Venta actualizada exitosamente' : 'Venta procesada exitosamente', 'success');
 
         return sale;
-      } catch (error: any) {
+      } catch (error) {
         console.error('Error processing sale:', error);
         showToast(
-          error?.message || 'Error al procesar la venta',
+          errorMessage(error, 'Error al procesar la venta'),
           'error'
         );
         throw error;

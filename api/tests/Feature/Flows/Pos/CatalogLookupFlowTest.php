@@ -114,9 +114,13 @@ class CatalogLookupFlowTest extends PosFlowTestCase
         $this->assertSame(50000.0, (float) $row['basePrice']);
         $this->assertTrue($row['hasDiscount']);
 
-        // ACTUAL: el código exacto (single) y scan NO aplican la oferta: devuelven 50.000.
-        $this->assertSame(50000.0, (float) $this->postJson('/api/pos/search', ['query' => $a->barcode])->json('data.result.price'));
-        $this->assertSame(50000.0, (float) $this->postJson('/api/pos/scan', ['barcode' => $a->barcode])->json('data.price'));
+        // Corregido (fase 3): el código exacto (single) y el escaneo aplican la misma oferta que
+        // el listado (antes mostraban 50.000 y la venta cobraba otro precio).
+        $single = $this->postJson('/api/pos/search', ['query' => $a->barcode])->json('data.result');
+        $this->assertSame(45000.0, (float) $single['price']);
+        $this->assertSame(50000.0, (float) $single['basePrice']);
+        $this->assertTrue($single['hasDiscount']);
+        $this->assertSame(45000.0, (float) $this->postJson('/api/pos/scan', ['barcode' => $a->barcode])->json('data.price'));
 
         $variants = $this->getJson("/api/pos/product/{$a->productId}/variants")->assertOk();
         $this->assertSame(45000.0, (float) $variants->json('data.0.price'));
@@ -194,13 +198,15 @@ class CatalogLookupFlowTest extends PosFlowTestCase
         $res->assertJsonStructure(['data' => ['subtotal', 'discount', 'tax', 'total', 'items' => [[
             'variantId', 'productName', 'color', 'size', 'quantity', 'unitPrice', 'discount', 'subtotal',
         ]]]]);
-        $this->assertSame(121000.0, (float) $res->json('data.subtotal'));
+        // Corregido (fase 3): el precio unitario lo pone el servidor; los 25.000 enviados para la
+        // gorra se ignoran y vale 30.000. El descuento por ítem sí se respeta.
+        $this->assertSame(126000.0, (float) $res->json('data.subtotal'));
         $this->assertSame(1000.0, (float) $res->json('data.discount'));
         $this->assertSame(0.0, (float) $res->json('data.tax'));
-        $this->assertSame(120000.0, (float) $res->json('data.total'));
+        $this->assertSame(125000.0, (float) $res->json('data.total'));
         $this->assertSame(96000.0, (float) $res->json('data.items.0.subtotal'));
         // calculate no verifica stock (las variantes tienen 0).
-        $this->assertSame(25000.0, (float) $res->json('data.items.1.unitPrice'));
+        $this->assertSame(30000.0, (float) $res->json('data.items.1.unitPrice'));
 
         $this->postJson('/api/pos/calculate', ['items' => [['variantId' => 999999, 'quantity' => 1, 'price' => 1]]])
             ->assertStatus(400)->assertJsonPath('message', 'Variante 999999 no encontrada');

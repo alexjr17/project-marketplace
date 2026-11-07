@@ -44,9 +44,13 @@ class CartTest extends TestCase
         $first = $this->postJson('/api/cart/items', ['productId' => $p->id, 'variantId' => $v->id, 'quantity' => 2, 'unitPrice' => 1])
             ->assertCreated()->assertJsonPath('success', true)->json('item');
         // Misma combinación: suma cantidad (sigue respondiendo 201).
-        $this->postJson('/api/cart/items', ['productId' => $p->id, 'variantId' => $v->id, 'quantity' => 2, 'unitPrice' => 1])
-            ->assertCreated()->assertJsonPath('item.id', $first['id'])->assertJsonPath('item.quantity', 4);
+        $this->postJson('/api/cart/items', ['productId' => $p->id, 'variantId' => $v->id, 'quantity' => 1, 'unitPrice' => 1])
+            ->assertCreated()->assertJsonPath('item.id', $first['id'])->assertJsonPath('item.quantity', 3);
         $this->assertSame(1, CartItem::count());
+        // Corregido: la línea no puede superar el stock (3); antes se aceptaba cualquier cantidad.
+        $this->postJson('/api/cart/items', ['productId' => $p->id, 'variantId' => $v->id, 'quantity' => 1, 'unitPrice' => 1])
+            ->assertStatus(400)->assertJsonPath('message', 'Stock insuficiente. Disponible: 3');
+        $this->assertSame(3, CartItem::sole()->quantity);
 
         $item = $this->getJson('/api/cart')->assertOk()->json('items.0');
         $this->assertSame([
@@ -55,13 +59,21 @@ class CartTest extends TestCase
         ], array_keys($item));
         // El precio mostrado es el del producto (no el que mandó el cliente).
         $this->assertEquals(58000, $item['unitPrice']);
-        $this->assertSame([4, 3, false], [$item['quantity'], $item['availableStock'], $item['hasStock']]);
+        $this->assertSame([3, 3, true], [$item['quantity'], $item['availableStock'], $item['hasStock']]);
         $this->assertSame(['id', 'name', 'description', 'images', 'basePrice', 'salePrice', 'hasDiscount'], array_keys($item['product']));
         $this->assertSame(['id', 'colorName', 'colorHex', 'sizeName', 'sizeAbbreviation'], array_keys($item['variant']));
         $this->assertSame(['Negro', 'M'], [$item['variant']['colorName'], $item['variant']['sizeAbbreviation']]);
 
-        // ACTUAL (posible bug): agregar no valida el stock ni que el producto exista.
-        $this->postJson('/api/cart/items', ['productId' => 99999, 'quantity' => 50, 'unitPrice' => 0])->assertCreated();
+        // Corregido: un producto que no existe (o inactivo) o una variante ajena responden 404.
+        $this->postJson('/api/cart/items', ['productId' => 99999, 'quantity' => 1, 'unitPrice' => 0])
+            ->assertStatus(404)->assertJsonPath('message', 'Producto no encontrado');
+        $otro = $this->makeProduct('Otro', 1000, [['negro', 'M', 5]]);
+        $this->postJson('/api/cart/items', ['productId' => $p->id, 'variantId' => $this->variantOf($otro, 'negro', 'M')->id, 'quantity' => 1, 'unitPrice' => 0])
+            ->assertStatus(404)->assertJsonPath('message', 'Variante no encontrada');
+        $sinStock = $this->makeProduct('Agotado', 1000, [['negro', 'M', 0]]);
+        $this->postJson('/api/cart/items', ['productId' => $sinStock->id, 'variantId' => $this->variantOf($sinStock, 'negro', 'M')->id, 'quantity' => 1, 'unitPrice' => 0])
+            ->assertStatus(400)->assertJsonPath('message', 'Producto sin stock');
+        $this->assertSame(1, CartItem::count());
     }
 
     public function test_el_carrito_refleja_la_oferta_automatica_vigente(): void
@@ -100,7 +112,7 @@ class CartTest extends TestCase
     public function test_actualizar_quitar_y_vaciar(): void
     {
         $this->actingAsCliente();
-        $p = $this->makeProduct('Tote', 25000, [], ['category' => 'accesorios']);
+        $p = $this->makeProduct('Tote', 25000, [[null, null, 10]], ['category' => 'accesorios', 'stock' => 10]);
         $id = $this->postJson('/api/cart/items', ['productId' => $p->id, 'variantId' => $this->variantOf($p)->id, 'quantity' => 1, 'unitPrice' => 25000])->json('item.id');
         $id2 = $this->postJson('/api/cart/items', ['productId' => $p->id, 'quantity' => 1, 'unitPrice' => 25000])->json('item.id');
         $this->assertNotSame($id, $id2); // sin variantId es otra combinación
@@ -110,10 +122,13 @@ class CartTest extends TestCase
         $this->putJson("/api/cart/items/{$id2}", ['quantity' => 0])->assertOk()->assertExactJson(['success' => true, 'item' => null]);
         $this->assertSame(1, CartItem::count());
 
-        // ACTUAL (posible bug): un ítem inexistente (o de otro carrito) responde 500, no 404.
-        $this->putJson('/api/cart/items/99999', ['quantity' => 1])->assertStatus(500)
+        // Corregido: un ítem inexistente (o de otro carrito) responde 404 (antes 500).
+        $this->putJson('/api/cart/items/99999', ['quantity' => 1])->assertStatus(404)
             ->assertExactJson(['success' => false, 'message' => 'Item no encontrado en el carrito']);
-        $this->deleteJson('/api/cart/items/99999')->assertStatus(500);
+        $this->deleteJson('/api/cart/items/99999')->assertStatus(404);
+        // Subir la cantidad por encima del stock (10) no se permite.
+        $this->putJson("/api/cart/items/{$id}", ['quantity' => 11])->assertStatus(400)
+            ->assertJsonPath('message', 'Stock insuficiente. Disponible: 10');
 
         $this->deleteJson("/api/cart/items/{$id}")->assertOk()->assertExactJson(['success' => true, 'message' => 'Item eliminado']);
         $this->postJson('/api/cart/items', ['productId' => $p->id, 'quantity' => 1, 'unitPrice' => 1]);
@@ -124,11 +139,11 @@ class CartTest extends TestCase
     public function test_el_carrito_de_otro_usuario_no_se_toca(): void
     {
         $this->actingAsCliente();
-        $p = $this->makeProduct('Tote', 25000, [], ['category' => 'accesorios']);
+        $p = $this->makeProduct('Tote', 25000, [[null, null, 10]], ['category' => 'accesorios', 'stock' => 10]);
         $id = $this->postJson('/api/cart/items', ['productId' => $p->id, 'quantity' => 1, 'unitPrice' => 1])->json('item.id');
 
         $this->actingAs($this->otroCliente(), 'sanctum');
-        $this->putJson("/api/cart/items/{$id}", ['quantity' => 9])->assertStatus(500);
+        $this->putJson("/api/cart/items/{$id}", ['quantity' => 9])->assertStatus(404);
         $this->getJson('/api/cart')->assertExactJson(['success' => true, 'items' => []]);
         $this->assertSame(1, CartItem::find($id)->quantity);
     }

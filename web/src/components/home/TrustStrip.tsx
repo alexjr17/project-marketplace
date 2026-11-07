@@ -11,7 +11,7 @@ export function TrustStrip({ features }: { features: FeatureCard[] }) {
 
   return (
     <section aria-label="Beneficios" className="pb-2">
-      <div className="max-w-7xl mx-auto px-4">
+      <div className="max-w-7xl mx-auto px-3 md:px-6">
         {/* gap-px sobre fondo gris = separadores finos entre celdas, sin bordes dobles */}
         <ul className={`grid grid-cols-2 ${LG_COLS[n]} gap-px bg-gray-200 rounded-xl border border-gray-200 overflow-hidden`}>
           {items.map((f, i) => {

@@ -10,6 +10,7 @@ import {
 } from '../../components/ui';
 import { MarketBadge, matchText } from '../../components/manufacturing/mfgUi';
 
+import { errorMessage } from '../../lib/http';
 export const PED_STATUS_META: Record<MfgPurchaseStatus, { label: string; tone: Tone }> = {
   DRAFT: { label: 'Borrador', tone: 'gray' },
   APPROVED: { label: 'Aprobado', tone: 'blue' },
@@ -37,7 +38,7 @@ export default function PurchaseOrdersPage() {
   const remove = async (o: MfgPurchaseOrder) => {
     if (!(await confirm({ title: `¿Eliminar el pedido ${o.code}?`, message: 'No se puede deshacer.', tone: 'danger' }))) return;
     try { await manufacturingService.deletePurchaseOrder(o.id); toast.success('Pedido eliminado'); load(); }
-    catch (e: any) { toast.error(e?.message || 'No se pudo eliminar'); }
+    catch (e) { toast.error(errorMessage(e, 'No se pudo eliminar')); }
   };
 
   const rows = items.filter((o) => matchText(q, o.code, o.client?.name, o.collection?.name));

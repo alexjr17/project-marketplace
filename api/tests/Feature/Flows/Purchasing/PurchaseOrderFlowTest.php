@@ -85,7 +85,7 @@ class PurchaseOrderFlowTest extends TestCase
         $this->getJson('/api/purchase-orders/generate-number')->assertOk()->assertJsonPath('data.orderNumber', "OC-{$year}-0003");
     }
 
-    public function test_orden_de_las_lineas_guardadas_sigue_el_orden_de_las_reglas_de_validacion(): void
+    public function test_las_lineas_se_guardan_en_el_orden_enviado(): void
     {
         $input = $this->makeInput();
         ['variant' => $iv] = $this->makeVariantInput(0);
@@ -97,10 +97,8 @@ class PurchaseOrderFlowTest extends TestCase
             ['variantId' => $pv->id, 'quantity' => 3, 'unitCost' => 1],
         ])->assertStatus(201)->json('data.id');
 
-        // ACTUAL (posible bug): $request->validate() arma 'items' en el orden en que aparecen las
-        // claves según las reglas (variantId, inputId, inputVariantId), así que las líneas se
-        // insertan en otro orden que el enviado (PurchaseOrderController.php:280-322).
-        $this->assertSame([3, 1, 2], PurchaseOrderItem::where('purchaseOrderId', $id)->orderBy('id')->pluck('quantity')->map(fn ($q) => (int) $q)->all());
+        // Corregido (fase 3): antes la validación las reordenaba según sus reglas ([3, 1, 2]).
+        $this->assertSame([1, 2, 3], PurchaseOrderItem::where('purchaseOrderId', $id)->orderBy('id')->pluck('quantity')->map(fn ($q) => (int) $q)->all());
     }
 
     public function test_crear_orden_valida(): void
@@ -109,10 +107,9 @@ class PurchaseOrderFlowTest extends TestCase
         $this->postJson('/api/purchase-orders', ['supplierId' => 1, 'items' => []])->assertStatus(422)->assertJsonValidationErrors(['items']);
         $this->postJson('/api/purchase-orders', ['supplierId' => 1, 'items' => [['quantity' => -1]]])->assertStatus(422)
             ->assertJsonValidationErrors(['items.0.quantity', 'items.0.unitCost']);
-        // ACTUAL (posible bug): no se valida que el proveedor exista; la FK revienta con 500
-        // (PurchaseOrderController.php:281).
+        // Corregido (fase 3): un proveedor inexistente es un error de validación (antes, 500 por la FK).
         $this->postJson('/api/purchase-orders', ['supplierId' => 9999, 'items' => [['quantity' => 1, 'unitCost' => 1]]])
-            ->assertStatus(500);
+            ->assertStatus(422)->assertJsonValidationErrors(['supplierId']);
     }
 
     public function test_editar_solo_en_borrador_y_reemplaza_items(): void
@@ -152,22 +149,27 @@ class PurchaseOrderFlowTest extends TestCase
             ->assertJsonPath('message', 'No se puede cambiar de CANCELLED a SENT');
     }
 
-    public function test_marcar_recibida_por_estado_no_mueve_stock(): void
+    public function test_recibida_o_parcial_solo_se_alcanzan_recibiendo_mercancia(): void
     {
         $input = $this->makeInput();
         $id = $this->createOrder([['inputId' => $input->id, 'quantity' => 10, 'unitCost' => 1]])->json('data.id');
         $this->confirm($id);
 
-        // ACTUAL (posible bug): el cambio manual a RECEIVED (o PARTIAL) cierra la orden sin
-        // ingresar stock ni registrar movimientos (PurchaseOrderController.php:389-409, transición CONFIRMED→RECEIVED).
+        // Corregido (fase 3): antes el cambio manual a RECEIVED/PARTIAL cerraba la orden sin
+        // ingresar stock. Ahora esos estados solo los pone la recepción.
+        $this->patchJson("/api/purchase-orders/{$id}/status", ['status' => 'RECEIVED'])->assertStatus(400)
+            ->assertJsonPath('message', 'No se puede cambiar de CONFIRMED a RECEIVED');
+        $this->patchJson("/api/purchase-orders/{$id}/status", ['status' => 'PARTIAL'])->assertStatus(400);
+        $this->assertSame('CONFIRMED', PurchaseOrder::find($id)->status);
+
+        // Una orden parcial sí se puede cerrar como recibida sin esperar el resto.
+        $this->postJson("/api/purchase-orders/{$id}/receive", ['items' => [['itemId' => $this->itemId($id), 'quantityReceived' => 4]]])
+            ->assertOk()->assertJsonPath('data.status', 'PARTIAL');
         $this->patchJson("/api/purchase-orders/{$id}/status", ['status' => 'RECEIVED'])->assertOk();
         $order = PurchaseOrder::find($id);
         $this->assertSame('RECEIVED', $order->status);
         $this->assertNotNull($order->receivedDate);
-        $this->assertEquals(0, $input->fresh()->currentStock);
-        $this->assertSame(0, InputBatchMovement::count());
-        $this->postJson("/api/purchase-orders/{$id}/receive", ['items' => [['itemId' => $this->itemId($id), 'quantityReceived' => 1]]])
-            ->assertStatus(400);
+        $this->assertEquals(4, $input->fresh()->currentStock);
     }
 
     public function test_recibir_exige_orden_confirmada(): void
@@ -343,9 +345,8 @@ class PurchaseOrderFlowTest extends TestCase
         $this->assertEquals(1, $mov->previousStock);
         $this->assertEquals(7, $mov->newStock);
         $this->assertEquals(15000, $mov->unitCost);
-        // ACTUAL (posible bug): products.stock no se recalcula al recibir variantes de producto
-        // (PurchaseOrderController.php:503-525), a diferencia de la conversión aprobada.
-        $this->assertSame(0, (int) $product->fresh()->stock);
+        // Corregido (fase 3): products.stock se recalcula con sus variantes activas (antes quedaba en 0).
+        $this->assertSame(7, (int) $product->fresh()->stock);
     }
 
     public function test_borrar_orden_y_borrado_forzado_no_revierte_stock(): void

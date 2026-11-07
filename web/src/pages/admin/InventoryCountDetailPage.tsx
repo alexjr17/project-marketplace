@@ -13,6 +13,7 @@ import { inputsService } from '../../services/inputs.service';
 import type { InventoryCount, InventoryCountType } from '../../services/inventory-counts.service';
 import { CountStatusBadge, fmtDate } from './InventoryCountShared';
 import { StepCard } from './InventoryStepCard';
+import { errorMessage } from '../../lib/http';
 
 const LIST = '/admin-panel/inventory-counts';
 const money = (n: number) => '$' + Math.round(Math.abs(Number(n || 0))).toLocaleString('es-CO');
@@ -71,7 +72,7 @@ export default function InventoryCountDetailPage() {
         });
         setCountItems(items);
       }
-    } catch (error) {
+    } catch {
       toast.error('Error al cargar datos');
       navigate(LIST);
     } finally {
@@ -95,8 +96,8 @@ export default function InventoryCountDetailPage() {
       });
       toast.success('Conteo de inventario creado');
       navigate(`${LIST}/${newCount.id}`);
-    } catch (error: any) {
-      toast.error(error.message || 'Error al crear conteo');
+    } catch (error) {
+      toast.error(errorMessage(error, 'Error al crear conteo'));
     } finally {
       setSaving(false);
     }
@@ -114,8 +115,8 @@ export default function InventoryCountDetailPage() {
       });
       toast.success('Cantidad actualizada');
       loadData();
-    } catch (error: any) {
-      toast.error(error.message || 'Error al actualizar');
+    } catch (error) {
+      toast.error(errorMessage(error, 'Error al actualizar'));
     }
   };
 
@@ -126,8 +127,8 @@ export default function InventoryCountDetailPage() {
       await inventoryCountsService.submitForApproval(count.id);
       toast.success('Conteo enviado a aprobación');
       loadData();
-    } catch (error: any) {
-      toast.error(error.message || 'Error al enviar');
+    } catch (error) {
+      toast.error(errorMessage(error, 'Error al enviar'));
     } finally {
       setSaving(false);
     }
@@ -179,8 +180,8 @@ export default function InventoryCountDetailPage() {
       await inventoryCountsService.approveCount(count.id);
       toast.success('Conteo aprobado y ajustes aplicados');
       loadData();
-    } catch (error: any) {
-      toast.error(error.message || 'Error al aprobar');
+    } catch (error) {
+      toast.error(errorMessage(error, 'Error al aprobar'));
     } finally {
       setSaving(false);
     }
@@ -201,8 +202,8 @@ export default function InventoryCountDetailPage() {
       await inventoryCountsService.cancelCount(count.id);
       toast.success('Conteo cancelado');
       loadData();
-    } catch (error: any) {
-      toast.error(error.message || 'Error al cancelar');
+    } catch (error) {
+      toast.error(errorMessage(error, 'Error al cancelar'));
     } finally {
       setSaving(false);
     }
@@ -221,8 +222,8 @@ export default function InventoryCountDetailPage() {
       await inventoryCountsService.deleteInventoryCount(count.id);
       toast.success('Conteo eliminado');
       navigate(LIST);
-    } catch (error: any) {
-      toast.error(error.message || 'Error al eliminar');
+    } catch (error) {
+      toast.error(errorMessage(error, 'Error al eliminar'));
     } finally {
       setSaving(false);
     }

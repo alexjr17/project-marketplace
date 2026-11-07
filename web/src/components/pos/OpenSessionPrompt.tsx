@@ -5,6 +5,7 @@ import { usePOS } from '../../context/POSContext';
 import * as cashRegisterService from '../../services/cash-register.service';
 import { Button, Card, Dialog, EmptyState, Field, MoneyInput, SelectInput, TextArea } from '../ui';
 
+import { errorMessage } from '../../lib/http';
 interface OpenSessionPromptProps {
   title?: string;
   message?: string;
@@ -58,9 +59,9 @@ export default function OpenSessionPrompt({
       setSelectedCashRegister(null);
       setInitialCash('');
       setNotes('');
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error opening session:', error);
-      showToast(error?.message || 'Error al abrir sesión', 'error');
+      showToast(errorMessage(error, 'Error al abrir sesión'), 'error');
     } finally {
       setIsLoading(false);
     }

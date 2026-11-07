@@ -5,7 +5,9 @@ namespace Tests\Feature\Flows\Pos;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\POSCustomer;
+use App\Models\Setting;
 use App\Models\VariantMovement;
+use Illuminate\Support\Carbon;
 
 /**
  * Caracterización de lo que pasa después de la venta: historial, detalle,
@@ -83,12 +85,17 @@ class SaleLifecycleFlowTest extends PosFlowTestCase
             ->assertJsonStructure(['data' => array_merge($this->orderShape(), ['items'])]);
 
         $this->assertSame(10, $this->stockOf($a));
-        // ACTUAL (posible bug): la anulación no deja movimiento de inventario (solo el SALE
-        // original) ni agrega entrada a statusHistory / editHistory.
-        $this->assertSame(1, VariantMovement::where('variantId', $a->id)->count());
+        // Corregido (fase 3): la anulación deja su movimiento RETURN y entradas en los historiales.
+        $ret = VariantMovement::where('variantId', $a->id)->where('movementType', 'RETURN')->sole();
+        $this->assertSame(3, (int) $ret->quantity);
+        $this->assertSame(7, (int) $ret->previousStock);
+        $this->assertSame(10, (int) $ret->newStock);
+        $this->assertSame($order->id, (int) $ret->referenceId);
         $fresh = Order::find($order->id);
-        $this->assertCount(1, $fresh->statusHistory);
-        $this->assertCount(1, $fresh->editHistory);
+        $this->assertCount(2, $fresh->statusHistory);
+        $this->assertSame('CANCELLED', $fresh->statusHistory[1]['status']);
+        $this->assertCount(2, $fresh->editHistory);
+        $this->assertSame('cancelled', $fresh->editHistory[1]['action']);
 
         $session->refresh();
         $this->assertSame(0, (int) $session->salesCount);
@@ -229,8 +236,8 @@ class SaleLifecycleFlowTest extends PosFlowTestCase
         // Al devolver 1, el total baja a 50.000 = lo abonado: queda PAID.
         $this->postJson("/api/pos/sale/{$order->id}/return", ['items' => [['variantId' => $a->id, 'quantity' => 1]]])
             ->assertOk()->assertJsonPath('data.status', 'PAID');
-        // ACTUAL (posible bug): paidAt no se llena al saldarse por devolución.
-        $this->assertNull(Order::find($order->id)->paidAt);
+        // Corregido (fase 3): al saldarse por la devolución queda registrado paidAt.
+        $this->assertNotNull(Order::find($order->id)->paidAt);
     }
 
     public function test_editar_venta_reemplaza_items_ajusta_stock_totales_y_caja(): void
@@ -273,13 +280,16 @@ class SaleLifecycleFlowTest extends PosFlowTestCase
 
         $this->assertSame(9, $this->stockOf($a));
         $this->assertSame(8, $this->stockOf($b));
-        // ACTUAL (posible bug): la restitución del stock viejo no deja movimiento; solo hay
-        // movimientos SALE nuevos ("Edición de venta POS"), con previousStock ya restituido.
+        // Corregido (fase 3): la restitución del stock viejo deja su movimiento RETURN y luego el
+        // SALE nuevo ("Edición de venta POS"). SALE original → RETURN 8→10 → SALE 10→9.
         $movA = VariantMovement::where('variantId', $a->id)->orderBy('id')->get();
-        $this->assertCount(2, $movA);
-        $this->assertSame('Edición de venta POS', $movA[1]->reason);
-        $this->assertSame(10, (int) $movA[1]->previousStock);
-        $this->assertSame(9, (int) $movA[1]->newStock);
+        $this->assertCount(3, $movA);
+        $this->assertSame('RETURN', $movA[1]->movementType);
+        $this->assertSame(8, (int) $movA[1]->previousStock);
+        $this->assertSame(10, (int) $movA[1]->newStock);
+        $this->assertSame('Edición de venta POS', $movA[2]->reason);
+        $this->assertSame(10, (int) $movA[2]->previousStock);
+        $this->assertSame(9, (int) $movA[2]->newStock);
 
         $session->refresh();
         $this->assertSame(1, (int) $session->salesCount);
@@ -451,7 +461,7 @@ class SaleLifecycleFlowTest extends PosFlowTestCase
         $this->travel(-1)->days();
         $this->sellOk($register, [[$a, 1]]);
         $this->travelBack();
-        \Illuminate\Support\Carbon::setTestNow(\Illuminate\Support\Carbon::parse(self::NOW));
+        Carbon::setTestNow(Carbon::parse(self::NOW));
 
         $res = $this->getJson('/api/pos/stats')->assertOk();
         $res->assertJsonStructure(['data' => [
@@ -520,12 +530,11 @@ class SaleLifecycleFlowTest extends PosFlowTestCase
         $a = $this->makeVariant('Camiseta', 50000, 10);
         $order = $this->sellOk($register, [[$a, 1]]);
 
-        // ACTUAL (posible bug): sin la setting "printing_settings" (o sin su clave ticketLogo)
-        // printConfig() lee $printing['ticketLogo'] sin "??" y el recibo responde 500.
-        $this->getJson("/api/pos/sale/{$order->id}/invoice-pdf")->assertStatus(500);
-        $this->postJson("/api/pos/sale/{$order->id}/send-invoice", ['email' => 'a@b.com'])->assertStatus(500);
+        // Corregido (fase 3): sin la setting "printing_settings" el recibo usa el formato por
+        // defecto (antes respondía 500 por leer ticketLogo sin valor por defecto).
+        $this->get("/api/pos/sale/{$order->id}/invoice-pdf")->assertOk();
 
-        \App\Models\Setting::updateOrCreate(['key' => 'printing_settings'], ['value' => ['ticketLogo' => '', 'ticketWidth' => 80]]);
+        Setting::updateOrCreate(['key' => 'printing_settings'], ['value' => ['ticketLogo' => '', 'ticketWidth' => 80]]);
 
         $pdf = $this->get("/api/pos/sale/{$order->id}/invoice-pdf");
         $pdf->assertOk();

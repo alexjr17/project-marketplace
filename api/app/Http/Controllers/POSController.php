@@ -3,26 +3,22 @@
 namespace App\Http\Controllers;
 
 use App\Http\Concerns\ApiResponse;
-use App\Models\Setting;
-use App\Services\POSService;
-use Barryvdh\DomPDF\Facade\Pdf;
+use App\Services\Pos\PosInvoiceService;
+use App\Services\Pos\POSService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Mail;
 
+/**
+ * Punto de venta (POS). Valida y responde; las ventas, el stock y los fiados los maneja
+ * POSService y el recibo (PDF/correo) PosInvoiceService.
+ */
 class POSController extends Controller
 {
     use ApiResponse;
 
-    public function __construct(private POSService $pos) {}
-
-    /** Etiquetas legibles de método de pago para la factura. */
-    private const PAYMENT_LABELS = [
-        'cash' => 'Efectivo',
-        'card' => 'Tarjeta',
-        'mixed' => 'Mixto (Efectivo + Tarjeta)',
-        'transfer' => 'Transferencia',
-        'debe' => 'Debe (fiado)',
-    ];
+    public function __construct(
+        private POSService $pos,
+        private PosInvoiceService $invoices,
+    ) {}
 
     /** POST /api/pos/scan */
     public function scan(Request $request)
@@ -118,7 +114,7 @@ class POSController extends Controller
             'cardReference' => 'nullable|string',
             'cardType' => 'nullable|string',
             'cardLastFour' => 'nullable|string',
-            'discount' => 'nullable|numeric',
+            'discount' => 'nullable|numeric|min:0',
             'notes' => 'nullable|string',
         ]);
         $data['sellerId'] = $request->user()->id;
@@ -301,142 +297,6 @@ class POSController extends Controller
         return $this->success($data);
     }
 
-    /** Arma los datos de la factura a partir de la orden. */
-    private function invoiceData($order): array
-    {
-        return [
-            'orderNumber' => $order->orderNumber,
-            'customerName' => $order->customerName ?: ($order->user->name ?? 'Cliente'),
-            'customerEmail' => $order->customerEmail ?: '',
-            'date' => $order->createdAt,
-            'items' => $order->items->map(function ($item) {
-                $name = $item->variant
-                    ? $item->variant->product->name.' ('
-                        .($item->variant->color->name ?? '').' - '
-                        .($item->variant->size->abbreviation ?? $item->variant->size->name ?? '').')'
-                    : $item->productName;
-
-                // Precio original del producto para mostrar el ahorro por oferta.
-                $base = $item->variant?->product?->basePrice
-                    ?? optional(\App\Models\Product::find($item->productId))->basePrice;
-                $base = (float) ($base ?? $item->unitPrice);
-                $unit = (float) $item->unitPrice;
-                $saved = $base > $unit ? ($base - $unit) * $item->quantity : 0;
-
-                return [
-                    'name' => $name,
-                    'quantity' => $item->quantity,
-                    'unitPrice' => $unit,
-                    'basePrice' => $base,
-                    'hasDiscount' => $base > $unit,
-                    'saved' => $saved,
-                    'subtotal' => $unit * $item->quantity,
-                ];
-            })->all(),
-            'subtotal' => (float) $order->subtotal,
-            'discount' => (float) ($order->discount ?? 0),
-            'savings' => (float) $order->items->sum(function ($item) {
-                $base = $item->variant?->product?->basePrice
-                    ?? optional(\App\Models\Product::find($item->productId))->basePrice;
-                $base = (float) ($base ?? $item->unitPrice);
-
-                return $base > (float) $item->unitPrice ? ($base - (float) $item->unitPrice) * $item->quantity : 0;
-            }),
-            'tax' => (float) ($order->tax ?? 0),
-            'total' => (float) $order->total,
-            'paymentMethod' => self::PAYMENT_LABELS[$order->paymentMethod ?? 'cash'] ?? 'Efectivo',
-            'isCredit' => ($order->paymentMethod === 'debe'),
-            'paid' => (float) ($order->cashAmount ?? 0) + (float) ($order->cardAmount ?? 0),
-            'remaining' => max(0, (float) $order->total - ((float) ($order->cashAmount ?? 0) + (float) ($order->cardAmount ?? 0))),
-            'sellerName' => $order->seller->name ?? 'Vendedor',
-        ];
-    }
-
-    /**
-     * Configuración de impresión del recibo a partir de las settings guardadas
-     * (Configuración → Impresión + datos generales de la empresa).
-     */
-    private function printConfig(): array
-    {
-        $printing = $this->readSettingValue('printing_settings');
-        $general = $this->readSettingValue('general_settings');
-        $fiscal = is_array($general['fiscal'] ?? null) ? $general['fiscal'] : [];
-
-        $width = (float) ($printing['ticketWidth'] ?? 80);
-        $height = (float) ($printing['ticketHeight'] ?? 0); // 0 = continuo (térmico)
-        $thermal = $width <= 80;
-
-        $margins = is_array($printing['ticketMargins'] ?? null)
-            ? $printing['ticketMargins']
-            : ['top' => 5, 'right' => 5, 'bottom' => 10, 'left' => 5];
-
-        $fontMap = ['small' => 10, 'medium' => 12, 'large' => 14];
-        $baseFont = $fontMap[$printing['fontSize'] ?? 'medium'] ?? 12;
-
-        return [
-            'width' => $width,
-            'height' => $height,
-            'thermal' => $thermal,
-            'margins' => [
-                'top' => (float) ($margins['top'] ?? 5),
-                'right' => (float) ($margins['right'] ?? 5),
-                'bottom' => (float) ($margins['bottom'] ?? 10),
-                'left' => (float) ($margins['left'] ?? 5),
-            ],
-            'baseFont' => $baseFont,
-            'showLogo' => (bool) ($printing['showLogo'] ?? true),
-            'showStoreName' => (bool) ($printing['showStoreName'] ?? true),
-            'showNit' => (bool) ($printing['showNit'] ?? true),
-            'showQR' => (bool) ($printing['showQR'] ?? false),
-            'logo' => $printing['ticketLogo'] ?: ($general['logo'] ?? ''),
-            'storeName' => $general['siteName'] ?? '',
-            'nit' => $fiscal['nit'] ?? '',
-            'address' => $general['address'] ?? '',
-            'phone' => $general['contactPhone'] ?? '',
-        ];
-    }
-
-    private function readSettingValue(string $key): array
-    {
-        $setting = Setting::where('key', $key)->first();
-
-        return is_array($setting?->value) ? $setting->value : [];
-    }
-
-    /** Genera el PDF del recibo aplicando el formato de papel configurado. */
-    private function buildInvoicePdf(array $invoiceData, array $cfg)
-    {
-        // Código escaneable del recibo (Code128) si está activado en la config.
-        $cfg['codeImg'] = '';
-        if ($cfg['showQR']) {
-            try {
-                $generator = new \Picqer\Barcode\BarcodeGeneratorPNG();
-                $png = $generator->getBarcode((string) $invoiceData['orderNumber'], $generator::TYPE_CODE_128, 2, 50);
-                $cfg['codeImg'] = 'data:image/png;base64,'.base64_encode($png);
-            } catch (\Throwable $e) {
-                $cfg['codeImg'] = '';
-            }
-        }
-
-        $pdf = Pdf::loadView('pdf.pos-invoice', ['invoice' => $invoiceData, 'cfg' => $cfg]);
-
-        $mmToPt = 2.834645669;
-        $wPt = $cfg['width'] * $mmToPt;
-        if ($cfg['height'] > 0) {
-            $hPt = $cfg['height'] * $mmToPt;
-        } else {
-            // Térmico continuo: estimar alto según contenido para no dejar
-            // una hoja enorme en blanco.
-            $lines = count($invoiceData['items']);
-            $mm = 70 + ($lines * 7) + (! empty($invoiceData['isCredit']) ? 14 : 0)
-                + ($cfg['showLogo'] && $cfg['logo'] ? 20 : 0)
-                + ($cfg['showQR'] ? 22 : 0);
-            $hPt = max(180, $mm) * $mmToPt;
-        }
-
-        return $pdf->setPaper([0, 0, $wPt, $hPt]);
-    }
-
     /** POST /api/pos/sale/{id}/send-invoice */
     public function sendInvoice(Request $request, int $id)
     {
@@ -450,26 +310,7 @@ class POSController extends Controller
         } catch (\RuntimeException $e) {
             return $this->error($e->getMessage(), 400);
         }
-
-        $data = $this->invoiceData($order);
-        $pdf = $this->buildInvoicePdf($data, $this->printConfig());
-
-        try {
-            Mail::send('emails.pos-invoice', ['invoice' => $data], function ($message) use ($email, $data, $pdf) {
-                $message->to($email)
-                    ->subject('Recibo '.$data['orderNumber'])
-                    ->attachData($pdf->output(), 'Recibo_'.$data['orderNumber'].'.pdf', [
-                        'mime' => 'application/pdf',
-                    ]);
-            });
-        } catch (\Throwable $e) {
-            return $this->error('Error al enviar el email: '.$e->getMessage(), 400);
-        }
-
-        if (! $order->customerEmail) {
-            $order->customerEmail = $email;
-            $order->save();
-        }
+        $this->invoices->send($order, (string) $email);
 
         return $this->success(null, 'Recibo enviado correctamente');
     }
@@ -482,8 +323,7 @@ class POSController extends Controller
         } catch (\RuntimeException $e) {
             return $this->error($e->getMessage(), 400);
         }
-
-        $pdf = $this->buildInvoicePdf($this->invoiceData($order), $this->printConfig());
+        [$pdf] = $this->invoices->pdf($order);
 
         return $pdf->stream('Recibo_'.$order->orderNumber.'.pdf');
     }

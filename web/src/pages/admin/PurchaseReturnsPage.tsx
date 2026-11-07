@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { errorMessage } from '../../lib/http';
 import { useNavigate } from 'react-router-dom';
 import { RotateCcw, Plus, PackageX, DollarSign } from 'lucide-react';
 import {
@@ -26,8 +27,8 @@ export default function PurchaseReturnsPage() {
       const [list, st] = await Promise.all([returnsService.getReturns(), returnsService.getStats()]);
       setReturns(list);
       setStats(st);
-    } catch (error: any) {
-      toast.error(error.message || 'Error al cargar devoluciones');
+    } catch (error) {
+      toast.error(errorMessage(error, 'Error al cargar devoluciones'));
     } finally {
       setLoading(false);
     }

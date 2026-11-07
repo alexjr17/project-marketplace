@@ -1,9 +1,11 @@
 <?php
 
-namespace App\Services;
+namespace App\Services\Payments;
 
 use App\Models\Order;
 use App\Models\Payment;
+use App\Services\Orders\OrderService;
+use App\Services\PaymentGatewayConfig;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Throwable;

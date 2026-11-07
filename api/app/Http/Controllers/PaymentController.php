@@ -3,10 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Http\Concerns\ApiResponse;
-use App\Models\Order;
-use App\Models\Payment;
-use App\Services\MercadoPagoService;
-use App\Services\PaymentService;
+use App\Services\Payments\MercadoPagoService;
+use App\Services\Payments\PaymentService;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use RuntimeException;
@@ -25,14 +23,8 @@ class PaymentController extends Controller
     {
         $data = $request->validate(['orderId' => 'required|integer']);
 
-        $order = Order::find($data['orderId']);
-        if (! $order) {
-            return $this->error('Pedido no encontrado', 404);
-        }
         // Solo pedidos propios: antes un pedido sin usuario (venta POS) aceptaba a cualquiera.
-        if ((int) $order->userId !== (int) $request->user()->id) {
-            return $this->error('Pedido no encontrado', 404);
-        }
+        $order = $this->payments->ownOrder((int) $data['orderId'], $request->user());
 
         $result = $this->mercadoPago->createPreference($order);
         if (! ($result['success'] ?? false)) {
@@ -65,10 +57,7 @@ class PaymentController extends Controller
 
         // Solo sobre pedidos propios (el SuperAdmin puede sobre cualquiera). Antes se podía
         // registrar un pago sobre el pedido de otro usuario.
-        $order = Order::find($data['orderId']);
-        if (! $order || ($order->userId !== $request->user()->id && (int) $request->user()->roleId !== 1)) {
-            return $this->error('Pedido no encontrado', 404);
-        }
+        $this->payments->ownOrder((int) $data['orderId'], $request->user(), superAdminToo: true);
 
         try {
             $payment = $this->payments->createPayment($data);
@@ -81,20 +70,14 @@ class PaymentController extends Controller
 
     public function myOrderPayments(Request $request, int $orderId)
     {
-        $order = Order::find($orderId);
-        if (! $order || $order->userId !== $request->user()->id) {
-            return $this->error('Pedido no encontrado', 404);
-        }
+        $this->payments->ownOrder($orderId, $request->user());
 
         return $this->success($this->payments->getByOrderId($orderId));
     }
 
     public function updateMyPayment(Request $request, int $id)
     {
-        $payment = Payment::with('order')->find($id);
-        if (! $payment || $payment->order?->userId !== $request->user()->id) {
-            return $this->error('Pago no encontrado', 404);
-        }
+        $this->payments->ownPayment($id, $request->user());
 
         $data = $request->validate([
             'receiptUrl' => 'nullable|string',

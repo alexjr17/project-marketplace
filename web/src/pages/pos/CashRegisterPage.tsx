@@ -7,6 +7,7 @@ import * as cashRegisterService from '../../services/cash-register.service';
 import OpenSessionPrompt from '../../components/pos/OpenSessionPrompt';
 import PosReports from '../../components/pos/PosReports';
 
+import { errorMessage } from '../../lib/http';
 export default function CashRegisterPage() {
   const { currentSession, loadSession, isLoadingSession } = usePOS();
   const { showToast } = useToast();
@@ -58,9 +59,9 @@ export default function CashRegisterPage() {
       setFinalCash('');
       setNotes('');
       await loadSession(); // Reload to clear session
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error closing session:', error);
-      showToast(error?.message || 'Error al cerrar la sesión', 'error');
+      showToast(errorMessage(error, 'Error al cerrar la sesión'), 'error');
     } finally {
       setIsClosing(false);
     }

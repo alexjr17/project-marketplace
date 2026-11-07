@@ -8,6 +8,7 @@ import { productsService } from '../services';
 import type { Product } from '../types/product';
 import { ProductGrid } from '../components/products/ProductGrid';
 import { Seo } from '../components/seo/Seo';
+import { AccountLayout } from '../components/profile/AccountLayout';
 
 export default function FavoritesPage() {
   const { favorites } = useFavorites();
@@ -39,9 +40,9 @@ export default function FavoritesPage() {
         backTo="/"
       />
 
-      <div className="max-w-7xl mx-auto px-4 py-8">
+      <AccountLayout>
         {loading && favorites.length > 0 ? (
-          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-5">
+          <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
             {favorites.slice(0, 8).map((id) => (
               <div key={id} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
                 <Skeleton className="aspect-square w-full rounded-none" />
@@ -65,7 +66,7 @@ export default function FavoritesPage() {
         ) : (
           <ProductGrid products={products} />
         )}
-      </div>
+      </AccountLayout>
     </div>
   );
 }

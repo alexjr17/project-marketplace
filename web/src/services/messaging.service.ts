@@ -41,11 +41,6 @@ class MessagingService {
     };
   }
 
-  async getConversation(id: number): Promise<Conversation | null> {
-    const response = await api.get<Conversation>(`/messaging/conversations/${id}`);
-    return response.data ?? null;
-  }
-
   async getMessages(conversationId: number, sinceId?: number): Promise<Message[]> {
     const response = await api.get<Message[]>(
       `/messaging/conversations/${conversationId}/messages`,

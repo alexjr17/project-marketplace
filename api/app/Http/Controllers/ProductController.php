@@ -4,20 +4,14 @@ namespace App\Http\Controllers;
 
 use App\Http\Concerns\ApiResponse;
 use App\Models\Category;
-use App\Models\OrderItem;
 use App\Models\Product;
-use App\Models\ProductColor;
-use App\Models\ProductSize;
 use App\Models\ProductType;
-use App\Models\ProductVariant;
+use App\Services\Catalog\ProductAdminService;
 use App\Services\DiscountService;
-use App\Services\NumberSequenceService;
 use App\Services\ProductCatalogService;
-use App\Services\VariantService;
+use App\Support\ImageUrls;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 class ProductController extends Controller
@@ -25,10 +19,9 @@ class ProductController extends Controller
     use ApiResponse;
 
     public function __construct(
-        private VariantService $variants,
         private DiscountService $discounts,
-        private NumberSequenceService $numbers,
         private ProductCatalogService $catalog,
+        private ProductAdminService $admin,
     ) {}
 
     /** Descuentos automáticos vigentes (tienda), cacheados por request. */
@@ -84,13 +77,13 @@ class ProductController extends Controller
             'stock' => (int) $product->variants()->where('isActive', true)->sum('stock'),
             'featured' => $product->featured,
             'isActive' => $product->isActive,
-            'images' => \App\Support\ImageUrls::forModel($product->images, 'product', $product->id, $product->updatedAt),
+            'images' => ImageUrls::forModel($product->images, 'product', $product->id, $product->updatedAt),
             'colors' => $product->productColors->map(fn ($pc) => [
                 'id' => $pc->color?->id,
                 'name' => $pc->color?->name,
                 'slug' => $pc->color?->slug,
                 'hexCode' => $pc->color?->hexCode,
-                'image' => \App\Support\ImageUrls::forColor($pc->image, $pc->id, $product->updatedAt),
+                'image' => ImageUrls::forColor($pc->image, $pc->id, $product->updatedAt),
             ])->filter(fn ($c) => $c['id'] !== null)->values(),
             'sizes' => $product->productSizes->map(fn ($ps) => [
                 'id' => $ps->size?->id,
@@ -285,52 +278,7 @@ class ProductController extends Controller
             'slug' => 'nullable|string',
         ]);
 
-        $colors = collect($data['colors'] ?? [])->filter(fn ($c) => ! empty($c['id']))->values();
-        $colorIds = $colors->pluck('id')->all();
-        $sizeIds = collect($data['sizes'] ?? [])->pluck('id')->filter()->all();
-
-        $product = DB::transaction(function () use ($data, $colors, $colorIds, $sizeIds) {
-            $sku = $data['sku'] ?? $this->generateProductSku($data['typeId'] ?? null);
-            $slug = $data['slug'] ?? Str::slug($data['name']);
-            if (Product::where('slug', $slug)->exists()) {
-                $slug .= '-'.strtolower(base_convert((string) now()->timestamp, 10, 36));
-            }
-
-            $product = Product::create([
-                'sku' => $sku,
-                'slug' => $slug,
-                'name' => $data['name'],
-                'description' => $data['description'],
-                'categoryId' => $data['categoryId'] ?? null,
-                'typeId' => $data['typeId'] ?? null,
-                'basePrice' => $data['basePrice'],
-                'stock' => $data['stock'] ?? 0,
-                'featured' => $data['featured'] ?? false,
-                'isActive' => $data['isActive'] ?? true,
-                'isTemplate' => $data['isTemplate'] ?? false,
-                'images' => $data['images'] ?? [],
-                'tags' => $data['tags'] ?? [],
-            ]);
-
-            foreach ($colors as $c) {
-                ProductColor::create([
-                    'productId' => $product->id,
-                    'colorId' => $c['id'],
-                    'image' => $c['image'] ?? null,
-                ]);
-            }
-            foreach ($sizeIds as $sizeId) {
-                ProductSize::create(['productId' => $product->id, 'sizeId' => $sizeId]);
-            }
-
-            return $product;
-        });
-
-        // Siempre se generan variantes. Con color/talla se crean las combinaciones
-        // (stock inicial 0, se ajusta luego). Sin color/talla se crea UNA variante
-        // simple [null, null] con el stock del producto, para que sea vendible.
-        $initialStock = ($colorIds || $sizeIds) ? 0 : (int) ($data['stock'] ?? 0);
-        $this->variants->generateVariantsForProduct($product->id, $initialStock);
+        $product = $this->admin->create($data);
 
         return $this->created(
             $this->formatProduct($product->fresh(self::PRODUCT_RELATIONS)),
@@ -361,49 +309,7 @@ class ProductController extends Controller
             'sizes' => 'nullable|array',
         ]);
 
-        $colors = collect($data['colors'] ?? [])->filter(fn ($c) => ! empty($c['id']))->values();
-        $colorIds = $colors->pluck('id')->all();
-        $sizeIds = collect($data['sizes'] ?? [])->pluck('id')->filter()->all();
-        $variantsNeedUpdate = false;
-
-        DB::transaction(function () use ($product, $data, $colors, $sizeIds, &$variantsNeedUpdate) {
-            foreach (['name', 'description', 'categoryId', 'typeId', 'basePrice', 'stock',
-                'featured', 'isActive', 'isTemplate', 'images', 'tags'] as $field) {
-                if (array_key_exists($field, $data) && $data[$field] !== null) {
-                    $product->{$field} = $data[$field];
-                }
-            }
-            $product->save();
-
-            // Si se envía la clave 'colors' (aunque sea []), se reemplaza el set
-            // completo: una lista vacía deja el producto SIN colores. Si no se
-            // envía la clave, no se tocan los colores existentes.
-            if (array_key_exists('colors', $data)) {
-                ProductColor::where('productId', $product->id)->delete();
-                foreach ($colors as $c) {
-                    ProductColor::create([
-                        'productId' => $product->id,
-                        'colorId' => $c['id'],
-                        'image' => $c['image'] ?? null,
-                    ]);
-                }
-                $variantsNeedUpdate = true;
-            }
-            if (array_key_exists('sizes', $data)) {
-                ProductSize::where('productId', $product->id)->delete();
-                foreach ($sizeIds as $sizeId) {
-                    ProductSize::create(['productId' => $product->id, 'sizeId' => $sizeId]);
-                }
-                $variantsNeedUpdate = true;
-            }
-        });
-
-        if ($variantsNeedUpdate) {
-            // Sin color/talla (producto simple) la variante [null,null] toma el
-            // stock del producto; con variantes, stock inicial 0 (se ajusta luego).
-            $initialStock = ($colorIds || $sizeIds) ? 0 : (int) ($product->stock ?? 0);
-            $this->variants->generateVariantsForProduct($product->id, $initialStock);
-        }
+        $this->admin->update($product, $data);
 
         return $this->success(
             $this->formatProduct($product->fresh(self::PRODUCT_RELATIONS)),
@@ -417,30 +323,7 @@ class ProductController extends Controller
         if (! $product) {
             return $this->error('Producto no encontrado', 404);
         }
-
-        if (OrderItem::where('productId', $id)->exists()) {
-            return $this->error(
-                'No se puede eliminar el producto porque tiene pedidos asociados. Desactívalo en su lugar.',
-                400
-            );
-        }
-
-        $hasRelations = ProductVariant::where('productId', $id)
-            ->where(function ($q) {
-                $q->whereHas('orderItems')
-                    ->orWhereHas('movements')
-                    ->orWhereHas('templateRecipes');
-            })
-            ->exists();
-
-        if ($hasRelations) {
-            return $this->error(
-                'No se puede eliminar el producto porque tiene variantes con ventas, movimientos de inventario o recetas asociadas. Desactívalo en su lugar.',
-                400
-            );
-        }
-
-        $product->delete();
+        $this->admin->delete($product);
 
         return $this->success(null, 'Producto eliminado exitosamente');
     }
@@ -457,40 +340,11 @@ class ProductController extends Controller
             'operation' => ['nullable', Rule::in(['set', 'add', 'subtract'])],
         ]);
 
-        $operation = $data['operation'] ?? 'set';
-        $newStock = match ($operation) {
-            'add' => $product->stock + $data['quantity'],
-            'subtract' => $product->stock - $data['quantity'],
-            default => $data['quantity'],
-        };
-
-        if ($newStock < 0) {
-            return $this->error('El stock no puede ser negativo', 400);
-        }
-
-        $product->stock = $newStock;
-        $product->save();
+        $this->admin->updateStock($product, (int) $data['quantity'], $data['operation'] ?? 'set');
 
         return $this->success(
             $this->formatProduct($product->fresh(self::PRODUCT_RELATIONS)),
             'Stock actualizado exitosamente'
         );
-    }
-
-    /** Genera un SKU de producto: PREFIJO-NNNN-TIMESTAMP. */
-    private function generateProductSku(?int $typeId): string
-    {
-        $prefix = 'PRD';
-        if ($typeId) {
-            $slug = ProductType::where('id', $typeId)->value('slug');
-            if ($slug) {
-                $prefix = strtoupper(substr($slug, 0, 3));
-            }
-        }
-        // Consecutivo global atómico; nunca por debajo de la cantidad de productos (como antes).
-        $count = $this->numbers->nextValue(NumberSequenceService::PRODUCT_SKU, fn () => Product::count());
-        $timestamp = strtoupper(base_convert((string) (now()->timestamp * 1000), 10, 36));
-
-        return $prefix.'-'.str_pad((string) $count, 4, '0', STR_PAD_LEFT).'-'.$timestamp;
     }
 }

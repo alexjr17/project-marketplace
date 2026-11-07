@@ -35,13 +35,14 @@ const mapApiRoleToRole = (apiRole: ApiRole): Role => {
 };
 
 export const RolesProvider = ({ children }: { children: ReactNode }) => {
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated, user, hasPermission } = useAuth();
   const [roles, setRoles] = useState<Role[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Verificar si es admin (roleId !== 2 significa que no es cliente)
-  const isAdmin = isAuthenticated && user && user.roleId !== 2;
+  // Los roles solo los consulta quien los administra (la API los limita a roles.view; antes
+  // cualquier usuario del panel los pedía y recibía 403 en cada pantalla).
+  const isAdmin = Boolean(isAuthenticated && user && hasPermission('roles.view'));
 
   // Cargar roles desde la API (solo para admins)
   const loadRoles = useCallback(async () => {

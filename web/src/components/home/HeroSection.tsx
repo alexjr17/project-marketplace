@@ -63,7 +63,7 @@ export const HeroSection = ({ className = '' }: HeroSectionProps) => {
 
   return (
     <div className={`py-4 md:py-6 ${className}`}>
-      <div className="max-w-7xl mx-auto px-4">
+      <div className="max-w-7xl mx-auto px-3 md:px-6">
         <div className="flex flex-col xl:flex-row gap-3 md:gap-4 xl:h-[420px]">
           {waitingSlides ? (
             <div className={`${sideCards.length ? 'xl:flex-[2]' : 'xl:flex-1'} min-w-0 h-[460px] sm:h-[480px] md:h-[380px] xl:h-full rounded-2xl border border-gray-200 bg-white overflow-hidden flex flex-col-reverse md:flex-row`} aria-busy="true" aria-label="Cargando vitrina">

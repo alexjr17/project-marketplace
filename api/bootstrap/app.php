@@ -1,5 +1,6 @@
 <?php
 
+use App\Exceptions\BusinessRuleException;
 use App\Http\Middleware\CheckPermission;
 use App\Http\Middleware\ForceJsonResponse;
 use App\Http\Middleware\OptionalAuth;
@@ -47,6 +48,15 @@ return Application::configure(basePath: dirname(__DIR__))
             }
 
             $debug = (bool) config('app.debug');
+
+            // Regla de negocio de un servicio → su código (422 por defecto)
+            if ($e instanceof BusinessRuleException) {
+                return response()->json(array_filter([
+                    'success' => false,
+                    'message' => $e->getMessage(),
+                    'errors' => $e->errors,
+                ], fn ($v) => $v !== null), $e->status);
+            }
 
             // Validación → 422
             if ($e instanceof ValidationException) {

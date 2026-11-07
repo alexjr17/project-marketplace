@@ -10,6 +10,7 @@ import { inputsService } from '../../services/inputs.service';
 import { getVariants, type ProductVariant } from '../../services/variants.service';
 import { CONVERSION_STATUS, formatCOP } from './InventoryConversionShared';
 import { AddInputDialog, AddOutputDialog, variantLabel, type InputBase, type InputVariantOption } from './InventoryConversionAddDialogs';
+import { errorMessage } from '../../lib/http';
 
 const LIST = '/admin-panel/inventory-conversions';
 const qty = (n: number) => Number(n || 0).toLocaleString('es-CO', { maximumFractionDigits: 2 });
@@ -68,7 +69,7 @@ export default function InventoryConversionDetailPage() {
 
       const conversionData = await inventoryConversionsService.getConversionById(Number(id));
       setConversion(conversionData);
-    } catch (error) {
+    } catch {
       toast.error('Error al cargar datos');
       navigate(LIST);
     } finally {
@@ -114,8 +115,8 @@ export default function InventoryConversionDetailPage() {
       setConversion(updated);
       closeAddInput();
       toast.success('Insumo agregado');
-    } catch (error: any) {
-      toast.error(error.message || 'Error al agregar insumo');
+    } catch (error) {
+      toast.error(errorMessage(error, 'Error al agregar insumo'));
     } finally {
       setSaving(false);
     }
@@ -127,8 +128,8 @@ export default function InventoryConversionDetailPage() {
       const updated = await inventoryConversionsService.removeInputItem(conversion.id, itemId);
       setConversion(updated);
       toast.success('Insumo eliminado');
-    } catch (error: any) {
-      toast.error(error.message || 'Error al eliminar');
+    } catch (error) {
+      toast.error(errorMessage(error, 'Error al eliminar'));
     }
   };
 
@@ -148,8 +149,8 @@ export default function InventoryConversionDetailPage() {
       setConversion(updated);
       closeAddOutput();
       toast.success('Producto agregado');
-    } catch (error: any) {
-      toast.error(error.message || 'Error al agregar producto');
+    } catch (error) {
+      toast.error(errorMessage(error, 'Error al agregar producto'));
     } finally {
       setSaving(false);
     }
@@ -161,8 +162,8 @@ export default function InventoryConversionDetailPage() {
       const updated = await inventoryConversionsService.removeOutputItem(conversion.id, itemId);
       setConversion(updated);
       toast.success('Producto eliminado');
-    } catch (error: any) {
-      toast.error(error.message || 'Error al eliminar');
+    } catch (error) {
+      toast.error(errorMessage(error, 'Error al eliminar'));
     }
   };
 
@@ -173,8 +174,8 @@ export default function InventoryConversionDetailPage() {
       const updated = await inventoryConversionsService.submitForApproval(conversion.id);
       setConversion(updated);
       toast.success('Conversión enviada a aprobación');
-    } catch (error: any) {
-      toast.error(error.message || 'Error al enviar');
+    } catch (error) {
+      toast.error(errorMessage(error, 'Error al enviar'));
     } finally {
       setSaving(false);
     }
@@ -198,8 +199,8 @@ export default function InventoryConversionDetailPage() {
       const updated = await inventoryConversionsService.approveConversion(conversion.id);
       setConversion(updated);
       toast.success('Conversión aprobada: inventario actualizado');
-    } catch (error: any) {
-      toast.error(error.message || 'Error al aprobar');
+    } catch (error) {
+      toast.error(errorMessage(error, 'Error al aprobar'));
     } finally {
       setSaving(false);
     }
@@ -220,8 +221,8 @@ export default function InventoryConversionDetailPage() {
       const updated = await inventoryConversionsService.cancelConversion(conversion.id);
       setConversion(updated);
       toast.success('Conversión cancelada');
-    } catch (error: any) {
-      toast.error(error.message || 'Error al cancelar');
+    } catch (error) {
+      toast.error(errorMessage(error, 'Error al cancelar'));
     } finally {
       setSaving(false);
     }
@@ -236,8 +237,8 @@ export default function InventoryConversionDetailPage() {
       await inventoryConversionsService.deleteConversion(conversion.id);
       toast.success('Conversión eliminada');
       navigate(LIST);
-    } catch (error: any) {
-      toast.error(error.message || 'Error al eliminar');
+    } catch (error) {
+      toast.error(errorMessage(error, 'Error al eliminar'));
     } finally {
       setSaving(false);
     }

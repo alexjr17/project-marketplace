@@ -86,24 +86,22 @@ class ShippingQuoteService
             return null;
         }
 
+        // Transportadora: la predeterminada activa y, si no cubre la zona o el peso, la primera
+        // activa que sí (antes daba null aunque otra la cubriera, y se ignoraba el peso máximo).
+        // Debe coincidir con web/src/utils/shippingQuote.ts, que muestra el estimado.
+        $weight = max($totalWeightKg, 0.1);
         $carriers = array_values(array_filter($shipping['carriers'] ?? [], fn ($c) => ! empty($c['isActive'])));
-        $carrier = null;
-        foreach ($carriers as $c) {
-            if (($c['id'] ?? null) === ($shipping['defaultCarrierId'] ?? null)) {
-                $carrier = $c;
-                break;
-            }
-        }
-        $carrier ??= $carriers[0] ?? null;
-        if ($carrier === null) {
-            return null;
-        }
+        $defaultId = $shipping['defaultCarrierId'] ?? null;
+        usort($carriers, fn ($a, $b) => (($b['id'] ?? null) === $defaultId) <=> (($a['id'] ?? null) === $defaultId));
 
         $rate = null;
-        foreach ($carrier['zoneRates'] ?? [] as $r) {
-            if (($r['zoneId'] ?? null) === ($zone['id'] ?? null)) {
-                $rate = $r;
-                break;
+        foreach ($carriers as $c) {
+            foreach ($c['zoneRates'] ?? [] as $r) {
+                $fits = ! isset($r['maxWeight']) || $r['maxWeight'] === null || $weight <= (float) $r['maxWeight'];
+                if (($r['zoneId'] ?? null) === ($zone['id'] ?? null) && $fits) {
+                    $rate = $r;
+                    break 2;
+                }
             }
         }
         if ($rate === null) {
@@ -114,7 +112,6 @@ class ShippingQuoteService
         if ($threshold !== null && $subtotal >= (float) $threshold) {
             return 0;
         }
-        $weight = max($totalWeightKg, 0.1);
 
         return (int) round((float) ($rate['baseCost'] ?? 0) + $weight * (float) ($rate['costPerKg'] ?? 0));
     }

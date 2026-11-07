@@ -3,90 +3,16 @@
 namespace App\Http\Controllers;
 
 use App\Http\Concerns\ApiResponse;
-use App\Models\Role;
-use App\Models\User;
+use App\Services\Users\RoleService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
+/** Roles y permisos (solo SuperAdmin). Las reglas y el catálogo viven en Users\RoleService. */
 class RoleController extends Controller
 {
     use ApiResponse;
 
-    /**
-     * Permisos disponibles para roles personalizados.
-     * Organizados por aplicación/módulo, deben coincidir con el catálogo del
-     * frontend (web/src/types/roles.ts) y con lo que enforce el sidebar/rutas.
-     */
-    private const AVAILABLE_PERMISSIONS = [
-        'store.access', 'admin.access', 'messaging.access', 'manufacturing.access',
-        'messaging.inbox', 'messaging.posts', 'messaging.pages',
-        'messaging.knowledge', 'messaging.channels',
-        'manufacturing.references.view', 'manufacturing.catalogs.view', 'manufacturing.orders.view',
-        'pos.access', 'pos.create_sale', 'pos.view_sales', 'pos.cancel_sale',
-        'pos.cash_register', 'pos.open_close_session', 'pos.view_reports',
-        'dashboard.view',
-        'orders.view', 'reviews.view', 'payments.view',
-        'shipping.carriers', 'shipping.zones', 'shipping.connections', 'shipping.config', 'shipping.dispatch',
-        'variants.view',
-        'products.view', 'products.manage', 'templates.view', 'categories.view', 'product_types.view', 'sizes.view', 'colors.view',
-        'zone_types.view', 'design_images.view',
-        'inputs.view', 'input_types.view',
-        'suppliers.view', 'purchase_orders.view', 'purchase_returns.view',
-        'conversions.view', 'inventory_counts.view', 'inventory_movements.view',
-        'users.view',
-        'discounts.view', 'announcements.view',
-        'settings.general', 'settings.appearance', 'settings.home', 'settings.catalog',
-        'settings.payment', 'settings.legal', 'settings.printing', 'settings.label_templates',
-    ];
-
-    private const PERMISSION_GROUPS = [
-        'apps' => ['store.access', 'pos.access', 'admin.access', 'messaging.access', 'manufacturing.access'],
-        'manufacturing' => ['manufacturing.references.view', 'manufacturing.orders.view', 'manufacturing.catalogs.view'],
-        'messaging' => ['messaging.inbox', 'messaging.posts', 'messaging.pages', 'messaging.knowledge', 'messaging.channels'],
-        'pos' => ['pos.create_sale', 'pos.view_sales', 'pos.cancel_sale', 'pos.cash_register', 'pos.open_close_session', 'pos.view_reports'],
-        'dashboard' => ['dashboard.view'],
-        'sales' => ['orders.view', 'reviews.view', 'payments.view'],
-        'shipping' => ['shipping.carriers', 'shipping.zones', 'shipping.connections', 'shipping.config', 'shipping.dispatch'],
-        'catalog' => ['products.view', 'products.manage', 'variants.view', 'templates.view', 'categories.view', 'product_types.view', 'sizes.view', 'colors.view'],
-        'production' => ['zone_types.view', 'design_images.view'],
-        'supplies' => ['inputs.view', 'input_types.view'],
-        'purchases' => ['suppliers.view', 'purchase_orders.view', 'purchase_returns.view', 'conversions.view', 'inventory_counts.view', 'inventory_movements.view'],
-        // Administradores y Roles: solo SuperAdmin (no se asignan a otros roles).
-        'users' => ['users.view'],
-        'marketing' => ['discounts.view', 'announcements.view'],
-        'settings' => ['settings.general', 'settings.appearance', 'settings.home', 'settings.catalog', 'settings.payment', 'settings.legal', 'settings.printing', 'settings.label_templates'],
-    ];
-
-    /** Roles del sistema: no se pueden eliminar ni cambiar nombre/permisos. */
-    private const SYSTEM_ROLE_IDS = [1, 2, 3];
-
-    private function formatRole(Role $role, bool $includeUsers = false): array
-    {
-        $data = [
-            'id' => $role->id,
-            'name' => $role->name,
-            'slug' => $role->slug,
-            'description' => $role->description,
-            'permissions' => is_array($role->permissions) ? $role->permissions : [],
-            'isSystem' => $role->isSystem,
-            'isActive' => $role->isActive,
-            '_count' => ['users' => $role->users_count ?? $role->users()->count()],
-            'createdAt' => $role->createdAt,
-            'updatedAt' => $role->updatedAt,
-        ];
-
-        if ($includeUsers && $role->relationLoaded('users')) {
-            $data['users'] = $role->users->map(fn ($u) => [
-                'id' => $u->id,
-                'name' => $u->name,
-                'email' => $u->email,
-                'avatar' => $u->avatar,
-            ])->all();
-        }
-
-        return $data;
-    }
+    public function __construct(private RoleService $roles) {}
 
     public function index(Request $request)
     {
@@ -98,59 +24,14 @@ class RoleController extends Controller
             'includeUsers' => 'nullable',
         ]);
 
-        $page = (int) ($data['page'] ?? 1);
-        $limit = (int) ($data['limit'] ?? 10);
-        $includeUsers = filter_var($data['includeUsers'] ?? false, FILTER_VALIDATE_BOOLEAN);
-
-        $query = Role::withCount('users');
-
-        if (! empty($data['search'])) {
-            $search = $data['search'];
-            $query->where(function ($q) use ($search) {
-                $q->where('name', 'like', "%{$search}%")
-                    ->orWhere('description', 'like', "%{$search}%");
-            });
-        }
-        if (array_key_exists('isActive', $data) && $data['isActive'] !== null) {
-            $query->where('isActive', filter_var($data['isActive'], FILTER_VALIDATE_BOOLEAN));
-        }
-        if ($includeUsers) {
-            $query->with('users');
-        }
-
-        $total = $query->count();
-        $roles = $query->orderBy('id')
-            ->skip(($page - 1) * $limit)
-            ->take($limit)
-            ->get();
-
-        return response()->json([
-            'success' => true,
-            'data' => $roles->map(fn ($r) => $this->formatRole($r, $includeUsers))->all(),
-            'pagination' => [
-                'page' => $page,
-                'limit' => $limit,
-                'total' => $total,
-                'totalPages' => $limit > 0 ? (int) ceil($total / $limit) : 0,
-            ],
-        ]);
+        return response()->json(['success' => true] + $this->roles->paginate($data));
     }
 
     public function show(Request $request, int $id)
     {
         $includeUsers = filter_var($request->query('includeUsers', false), FILTER_VALIDATE_BOOLEAN);
 
-        $query = Role::withCount('users');
-        if ($includeUsers) {
-            $query->with('users');
-        }
-        $role = $query->find($id);
-
-        if (! $role) {
-            return $this->error('Rol no encontrado', 404);
-        }
-
-        return $this->success($this->formatRole($role, $includeUsers));
+        return $this->success($this->roles->format($this->roles->find($id, $includeUsers), $includeUsers));
     }
 
     public function store(Request $request)
@@ -159,89 +40,31 @@ class RoleController extends Controller
             'name' => 'required|string|min:2|max:50',
             'description' => 'required|string|min:5|max:200',
             'permissions' => 'required|array|min:1',
-            'permissions.*' => ['string', Rule::in(self::AVAILABLE_PERMISSIONS)],
+            'permissions.*' => ['string', Rule::in(RoleService::AVAILABLE_PERMISSIONS)],
             'isActive' => 'nullable|boolean',
         ]);
 
-        if (Role::where('name', $data['name'])->exists()) {
-            return $this->error("Ya existe un rol con el nombre \"{$data['name']}\"", 409);
-        }
-
-        $role = Role::create([
-            'name' => $data['name'],
-            'slug' => Str::slug($data['name']),
-            'description' => $data['description'],
-            'permissions' => $data['permissions'],
-            'isActive' => $data['isActive'] ?? true,
-            'isSystem' => false,
-        ]);
-
-        return $this->created($this->formatRole($role), 'Rol creado exitosamente');
+        return $this->created($this->roles->format($this->roles->create($data)), 'Rol creado exitosamente');
     }
 
     public function update(Request $request, int $id)
     {
-        $role = Role::find($id);
-
-        if (! $role) {
-            return $this->error('Rol no encontrado', 404);
-        }
+        $role = $this->roles->find($id);
 
         $data = $request->validate([
             'name' => 'nullable|string|min:2|max:50',
             'description' => 'nullable|string|min:5|max:200',
             'permissions' => 'nullable|array|min:1',
-            'permissions.*' => ['string', Rule::in(self::AVAILABLE_PERMISSIONS)],
+            'permissions.*' => ['string', Rule::in(RoleService::AVAILABLE_PERMISSIONS)],
             'isActive' => 'nullable|boolean',
         ]);
 
-        // Los roles del sistema no permiten cambiar nombre ni permisos.
-        if ($role->isSystem && (! empty($data['name']) || ! empty($data['permissions']))) {
-            return $this->error('No se pueden modificar los roles del sistema', 403);
-        }
-
-        if (! empty($data['name']) && $data['name'] !== $role->name
-            && Role::where('name', $data['name'])->where('id', '!=', $id)->exists()) {
-            return $this->error("Ya existe un rol con el nombre \"{$data['name']}\"", 409);
-        }
-
-        if (! empty($data['name'])) {
-            $role->name = $data['name'];
-        }
-        if (! empty($data['description'])) {
-            $role->description = $data['description'];
-        }
-        if (! empty($data['permissions'])) {
-            $role->permissions = $data['permissions'];
-        }
-        if (array_key_exists('isActive', $data) && $data['isActive'] !== null) {
-            $role->isActive = $data['isActive'];
-        }
-        $role->save();
-
-        return $this->success($this->formatRole($role), 'Rol actualizado exitosamente');
+        return $this->success($this->roles->format($this->roles->update($role, $data)), 'Rol actualizado exitosamente');
     }
 
     public function destroy(int $id)
     {
-        $role = Role::withCount('users')->find($id);
-
-        if (! $role) {
-            return $this->error('Rol no encontrado', 404);
-        }
-
-        if ($role->isSystem) {
-            return $this->error('No se pueden eliminar los roles del sistema', 403);
-        }
-
-        if ($role->users_count > 0) {
-            return $this->error(
-                "No se puede eliminar el rol porque tiene {$role->users_count} usuario(s) asignado(s)",
-                409
-            );
-        }
-
-        $role->delete();
+        $this->roles->delete($id);
 
         return $this->success(null, 'Rol eliminado exitosamente');
     }
@@ -253,89 +76,28 @@ class RoleController extends Controller
             'roleId' => 'required|integer',
         ]);
 
-        $role = Role::find($data['roleId']);
-        if (! $role) {
-            return $this->error('Rol no encontrado', 404);
-        }
-        if (! $role->isActive) {
-            return $this->error('No se puede asignar un rol inactivo', 403);
-        }
-
-        $user = User::find($data['userId']);
-        if (! $user) {
-            return $this->error('Usuario no encontrado', 404);
-        }
-
-        $user->roleId = $role->id;
-        $user->save();
-
-        return $this->success([
-            'id' => $user->id,
-            'name' => $user->name,
-            'email' => $user->email,
-            'role' => [
-                'id' => $role->id,
-                'name' => $role->name,
-                'permissions' => $role->permissions,
-            ],
-        ], 'Rol asignado exitosamente');
+        return $this->success($this->roles->assign($data['userId'], (int) $data['roleId']), 'Rol asignado exitosamente');
     }
 
     public function usersByRole(Request $request, int $id)
     {
-        $role = Role::find($id);
-        if (! $role) {
-            return $this->error('Rol no encontrado', 404);
-        }
-
-        $page = max(1, (int) $request->query('page', 1));
-        $limit = max(1, (int) $request->query('limit', 20));
-
-        $total = User::where('roleId', $id)->count();
-        $users = User::where('roleId', $id)
-            ->orderByDesc('createdAt')
-            ->skip(($page - 1) * $limit)
-            ->take($limit)
-            ->get(['id', 'name', 'email', 'phone', 'avatar', 'status', 'createdAt']);
-
-        return response()->json([
-            'success' => true,
-            'role' => ['id' => $role->id, 'name' => $role->name],
-            'users' => $users,
-            'pagination' => [
-                'page' => $page,
-                'limit' => $limit,
-                'total' => $total,
-                'totalPages' => (int) ceil($total / $limit),
-            ],
-        ]);
+        return response()->json(['success' => true] + $this->roles->usersOf(
+            $id,
+            (int) $request->query('page', 1),
+            (int) $request->query('limit', 20),
+        ));
     }
 
     public function permissions()
     {
         return $this->success([
-            'permissions' => self::AVAILABLE_PERMISSIONS,
-            'groups' => self::PERMISSION_GROUPS,
+            'permissions' => RoleService::AVAILABLE_PERMISSIONS,
+            'groups' => RoleService::PERMISSION_GROUPS,
         ]);
     }
 
     public function stats()
     {
-        $roles = Role::withCount('users')->orderBy('id')->get();
-        $total = $roles->count();
-        $active = $roles->where('isActive', true)->count();
-
-        return $this->success([
-            'totalRoles' => $total,
-            'activeRoles' => $active,
-            'inactiveRoles' => $total - $active,
-            'distribution' => $roles->map(fn ($r) => [
-                'id' => $r->id,
-                'name' => $r->name,
-                'isSystem' => $r->isSystem,
-                'isActive' => $r->isActive,
-                'userCount' => $r->users_count,
-            ])->all(),
-        ]);
+        return $this->success($this->roles->stats());
     }
 }

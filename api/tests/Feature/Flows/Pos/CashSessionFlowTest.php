@@ -69,18 +69,19 @@ class CashSessionFlowTest extends PosFlowTestCase
             ->assertJsonPath('message', 'Ya existe una sesión abierta en esta caja');
     }
 
-    public function test_un_mismo_cajero_puede_abrir_sesion_en_dos_cajas_a_la_vez(): void
+    public function test_un_cajero_no_puede_tener_dos_sesiones_abiertas(): void
     {
         $this->actingAsCajero();
         $a = $this->makeRegister('CAJA-A');
         $b = $this->makeRegister('CAJA-B');
 
         $this->postJson("/api/cash-registers/{$a->id}/open-session", ['initialCash' => 0])->assertCreated();
-        // ACTUAL (posible bug): solo se valida que la CAJA no tenga sesión abierta, no que el
-        // cajero ya tenga otra; el POS (currentSession) toma luego la primera que encuentre.
-        $this->postJson("/api/cash-registers/{$b->id}/open-session", ['initialCash' => 0])->assertCreated();
+        // Corregido (fase 3): antes abría la segunda y el POS vendía en la primera que encontraba.
+        $this->postJson("/api/cash-registers/{$b->id}/open-session", ['initialCash' => 0])
+            ->assertStatus(400)
+            ->assertJsonPath('message', 'Ya tienes una sesión abierta en la caja '.$a->name.'. Ciérrala antes de abrir otra.');
 
-        $this->assertSame(2, CashSession::where('status', 'OPEN')->count());
+        $this->assertSame(1, CashSession::where('status', 'OPEN')->count());
     }
 
     public function test_my_session_devuelve_404_sin_sesion_y_la_sesion_abierta_si_existe(): void
@@ -139,10 +140,10 @@ class CashSessionFlowTest extends PosFlowTestCase
         // cuenta efectivo + tarjeta + mixta (3), excluye el fiado PENDING y la anulada.
         $this->assertSame(3, (int) $res->json('data.salesCount'));
         $this->assertSame(175000.0, (float) $res->json('data.totalSales'));
-        // ACTUAL (posible bug): el efectivo esperado solo suma ventas con paymentMethod "cash"
-        // (por su TOTAL); los 20.000 en efectivo de la venta mixta no entran. 50.000 + 95.000.
-        $this->assertSame(145000.0, (float) $res->json('data.expectedCash'));
-        $this->assertSame(-5000.0, (float) $res->json('data.difference'));
+        // Corregido (fase 3): el efectivo esperado suma la venta en efectivo por su total y la
+        // parte en efectivo de la mixta: 50.000 + 95.000 + 20.000 (antes faltaban los 20.000).
+        $this->assertSame(165000.0, (float) $res->json('data.expectedCash'));
+        $this->assertSame(-25000.0, (float) $res->json('data.difference'));
         $this->assertSame(140000.0, (float) $res->json('data.finalCash'));
         $this->assertSame('Cierre de prueba', $res->json('data.notes'));
 
@@ -177,10 +178,10 @@ class CashSessionFlowTest extends PosFlowTestCase
         // El fiado ya saldado (PAID) cuenta en ventas...
         $this->assertSame(1, (int) $res->json('data.salesCount'));
         $this->assertSame(40000.0, (float) $res->json('data.totalSales'));
-        // ACTUAL (posible bug): ...pero como su paymentMethod sigue siendo "debe", los 40.000
-        // cobrados en efectivo no suman al efectivo esperado; el cuadre da +40.000 de sobrante.
-        $this->assertSame(0.0, (float) $res->json('data.expectedCash'));
-        $this->assertSame(40000.0, (float) $res->json('data.difference'));
+        // Corregido (fase 3): ...y los 40.000 cobrados en efectivo entran al efectivo esperado
+        // (antes el cuadre daba +40.000 de sobrante).
+        $this->assertSame(40000.0, (float) $res->json('data.expectedCash'));
+        $this->assertSame(0.0, (float) $res->json('data.difference'));
     }
 
     public function test_el_admin_puede_cerrar_la_sesion_de_otro(): void
@@ -217,12 +218,13 @@ class CashSessionFlowTest extends PosFlowTestCase
             'sales' => [['id', 'orderNumber', 'total', 'paymentMethod', 'status']],
             'summary' => ['totalSales', 'totalAmount', 'paymentMethods', 'duration'],
         ]]);
-        // ACTUAL (posible bug): el reporte NO filtra por estado: incluye la venta anulada
-        // (3 ventas, 200.000), a diferencia del cierre de caja que solo suma las pagadas.
-        $this->assertSame(3, $res->json('data.summary.totalSales'));
-        $this->assertSame(200000.0, (float) $res->json('data.summary.totalAmount'));
-        $this->assertSame(2, $res->json('data.summary.paymentMethods.cash.count'));
-        $this->assertSame(100000.0, (float) $res->json('data.summary.paymentMethods.cash.total'));
+        // Corregido (fase 3): la lista trae las 3 ventas (también la anulada, para verla), pero
+        // el resumen suma solo las efectivas, igual que el cierre (antes 3 ventas y 200.000).
+        $this->assertCount(3, $res->json('data.sales'));
+        $this->assertSame(2, $res->json('data.summary.totalSales'));
+        $this->assertSame(150000.0, (float) $res->json('data.summary.totalAmount'));
+        $this->assertSame(1, $res->json('data.summary.paymentMethods.cash.count'));
+        $this->assertSame(50000.0, (float) $res->json('data.summary.paymentMethods.cash.total'));
         $this->assertSame(1, $res->json('data.summary.paymentMethods.card.count'));
         $this->assertNull($res->json('data.summary.duration'));
 

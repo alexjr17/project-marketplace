@@ -13,10 +13,16 @@ export function CategoryTiles({ title, subtitle }: { title: string; subtitle?: s
 
   if (!loading && categories.length === 0) return null;
 
+  // Con pocas categorías las tarjetas ocupan todo el ancho en vez de quedar pegadas a la izquierda.
+  const n = loading ? 6 : categories.length;
+  const cols = n === 1 ? 'grid-cols-1 max-w-sm' : n === 2 ? 'grid-cols-2' : 'grid-cols-3';
+  const colsLg = ['', 'lg:grid-cols-1', 'lg:grid-cols-2', 'lg:grid-cols-3', 'lg:grid-cols-4', 'lg:grid-cols-5', 'lg:grid-cols-6'][Math.min(n, 6)];
+  const aspect = n <= 3 ? 'aspect-[16/9]' : 'aspect-[4/3]';
+
   return (
     <HomeBlock>
       <SectionHeader title={title} subtitle={subtitle} to="/catalog" linkLabel="Ver catálogo" />
-      <div className="grid grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3 md:gap-4">
+      <div className={`grid ${cols} ${colsLg} gap-2 sm:gap-3 md:gap-4`}>
         {loading
           ? Array.from({ length: 6 }).map((_, i) => (
               <div key={i} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
@@ -33,7 +39,7 @@ export function CategoryTiles({ title, subtitle }: { title: string; subtitle?: s
                 to={`/catalog?category=${encodeURIComponent(c.slug)}`}
                 className="group bg-white rounded-xl border border-gray-200 overflow-hidden hover:shadow-md transition-shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-app-500"
               >
-                <div className="aspect-[4/3] bg-gray-100 overflow-hidden">
+                <div className={`${aspect} bg-gray-100 overflow-hidden`}>
                   <ProductImage src={c.image} alt={c.name} width={320} iconClassName="w-7 h-7" />
                 </div>
                 <div className="p-2 sm:p-3">

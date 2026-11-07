@@ -13,6 +13,7 @@ import {
 import QtyMatrix from '../../components/manufacturing/QtyMatrix';
 import { MarketBadge } from '../../components/manufacturing/mfgUi';
 
+import { errorMessage } from '../../lib/http';
 const STAGE_META: Record<MfgStageStatus, { label: string; tone: Tone }> = {
   PENDING: { label: 'Pendiente', tone: 'gray' },
   IN_PROCESS: { label: 'En proceso', tone: 'yellow' },
@@ -385,7 +386,7 @@ export default function ProductionOrderDetailPage() {
       });
       setOrder(updated); closeStage();
       toast.success(status === 'COMPLETED' ? 'Etapa completada' : 'Etapa guardada');
-    } catch (e: any) { toast.error(e?.message || 'No se pudo guardar'); }
+    } catch (e) { toast.error(errorMessage(e, 'No se pudo guardar')); }
     finally { setBusy(false); }
   };
 

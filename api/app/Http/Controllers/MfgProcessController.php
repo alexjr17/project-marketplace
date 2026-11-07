@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Concerns\ApiResponse;
 use App\Models\MfgProcess;
+use App\Services\Manufacturing\MfgPlantCatalogService;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
@@ -13,6 +14,8 @@ use Illuminate\Validation\Rule;
 class MfgProcessController extends Controller
 {
     use ApiResponse;
+
+    public function __construct(private MfgPlantCatalogService $catalogs) {}
 
     private function rules(int $ignoreId = 0): array
     {
@@ -30,40 +33,16 @@ class MfgProcessController extends Controller
         ];
     }
 
-    private const RELATIONS = ['consumptions.inputType:id,name,classification', 'consumptions.input:id,code,name'];
-
     public function index()
     {
         return $this->success(
-            MfgProcess::with(self::RELATIONS)->orderBy('sequence')->orderBy('id')->get()
+            MfgProcess::with(MfgPlantCatalogService::PROCESS_RELATIONS)->orderBy('sequence')->orderBy('id')->get()
         );
-    }
-
-    private function syncConsumptions(MfgProcess $p, ?array $consumptions): void
-    {
-        if ($consumptions === null) {
-            return;
-        }
-        $p->consumptions()->delete();
-        foreach ($consumptions as $c) {
-            $kind = $c['kind'];
-            $p->consumptions()->create([
-                'kind' => $kind,
-                'inputTypeId' => $kind === 'TYPE' ? ($c['inputTypeId'] ?? null) : null,
-                'inputId' => $kind === 'INPUT' ? ($c['inputId'] ?? null) : null,
-            ]);
-        }
     }
 
     public function store(Request $request)
     {
-        $data = $request->validate($this->rules());
-        $consumptions = $data['consumptions'] ?? null;
-        unset($data['consumptions']);
-        $p = MfgProcess::create($data);
-        $this->syncConsumptions($p, $consumptions);
-
-        return $this->created($p->load(self::RELATIONS), 'Proceso creado');
+        return $this->created($this->catalogs->saveProcess($request->validate($this->rules())), 'Proceso creado');
     }
 
     public function update(Request $request, int $id)
@@ -72,13 +51,8 @@ class MfgProcessController extends Controller
         if (! $p) {
             return $this->error('Proceso no encontrado', 404);
         }
-        $data = $request->validate($this->rules($id));
-        $consumptions = $data['consumptions'] ?? null;
-        unset($data['consumptions']);
-        $p->fill($data)->save();
-        $this->syncConsumptions($p, $consumptions);
 
-        return $this->success($p->load(self::RELATIONS), 'Proceso actualizado');
+        return $this->success($this->catalogs->saveProcess($request->validate($this->rules($id)), $p), 'Proceso actualizado');
     }
 
     public function destroy(int $id)

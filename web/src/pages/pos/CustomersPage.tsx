@@ -4,6 +4,7 @@ import type { POSCustomerListItem, POSCustomerDetail } from '../../services/pos.
 import { Users, ShoppingBag, Clock, CheckCircle, ChevronRight } from 'lucide-react';
 import { Alert, Avatar, Badge, Drawer, EmptyState, FilterBar, Page, PageHeader, SearchInput, Spinner, StatCard, TableCard, Table, THead, TBody, Th, Tr, Td, TableMessage, type Tone } from '../../components/ui';
 
+import { errorMessage } from '../../lib/http';
 function statusInfo(status: string): { label: string; tone: Tone } {
   switch (status) {
     case 'PAID': return { label: 'Pagado', tone: 'green' };
@@ -27,8 +28,8 @@ export default function CustomersPage() {
     setError('');
     try {
       setCustomers(await posService.listCustomers(q));
-    } catch (e: any) {
-      setError(e?.message || 'Error al cargar los clientes');
+    } catch (e) {
+      setError(errorMessage(e, 'Error al cargar los clientes'));
     } finally {
       setLoading(false);
     }

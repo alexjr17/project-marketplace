@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Concerns\ApiResponse;
 use App\Models\MfgClient;
+use App\Services\Manufacturing\MfgPlantCatalogService;
 use Illuminate\Http\Request;
 
 /** Catálogo de clientes de la app Fábrica. */
@@ -49,16 +50,13 @@ class MfgClientController extends Controller
         return $this->success($c, 'Cliente actualizado');
     }
 
-    public function destroy(int $id)
+    public function destroy(int $id, MfgPlantCatalogService $catalogs)
     {
         $c = MfgClient::find($id);
         if (! $c) {
             return $this->error('Cliente no encontrado', 404);
         }
-        if ($c->purchaseOrders()->exists()) {
-            return $this->error('No se puede eliminar: el cliente tiene pedidos.', 422);
-        }
-        $c->delete();
+        $catalogs->deleteClient($c);
 
         return $this->success(null, 'Cliente eliminado');
     }

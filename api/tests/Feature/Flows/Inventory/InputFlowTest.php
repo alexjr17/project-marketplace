@@ -196,9 +196,8 @@ class InputFlowTest extends TestCase
             $this->assertEquals(8000, $v->unitCost);
             $this->assertEquals(0, $v->currentStock);
         }
-        // ACTUAL (posible bug): store() crea InputColor pero NO crea InputSize aunque reciba sizeIds
-        // (InputController.php:152-171), así que inputSizes queda vacío.
-        $res->assertJsonCount(0, 'data.inputSizes');
+        // Corregido: las tallas recibidas también quedan asignadas (antes inputSizes quedaba vacío).
+        $res->assertJsonCount(2, 'data.inputSizes');
     }
 
     public function test_crear_insumo_solo_con_colores_no_genera_variantes(): void
@@ -313,11 +312,15 @@ class InputFlowTest extends TestCase
         $this->postJson("/api/inputs/variants/{$variant->id}/stock", ['quantity' => 1, 'operation' => 'otra'])
             ->assertStatus(422);
 
-        // ACTUAL (posible bug): el cambio manual de stock de variante no deja movimiento
-        // ni recalcula inputs.currentStock (InputController.php:374-394).
-        $this->assertSame(0, InputVariantMovement::count());
+        // Corregido: cada cambio manual deja su movimiento (ENTRADA / SALIDA) con el stock anterior.
+        $movs = InputVariantMovement::orderBy('id')->get();
+        $this->assertSame(['ENTRADA', 'SALIDA'], $movs->pluck('movementType')->all());
+        $this->assertEquals([10, -4], $movs->pluck('quantity')->map(fn ($q) => (float) $q)->all());
+        $this->assertEquals([0, 10], $movs->pluck('previousStock')->map(fn ($q) => (float) $q)->all());
+        $this->getJson("/api/inputs/variants/{$variant->id}/movements")->assertOk()->assertJsonCount(2, 'data');
+        // ACTUAL (posible bug, no se cambia): inputs.currentStock se calcula con los lotes y no
+        // con las variantes, así que no cambia. Son dos modelos de stock del insumo.
         $this->assertEquals(0, $input->fresh()->currentStock);
-        $this->getJson("/api/inputs/variants/{$variant->id}/movements")->assertOk()->assertJsonCount(0, 'data');
     }
 
     public function test_actualizar_variante_y_consultas_de_variantes(): void

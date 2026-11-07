@@ -1,10 +1,16 @@
 import { ShoppingBag, Plus, Palette } from 'lucide-react';
 import { PageHeader } from '../components/shared/PageHeader';
+import { StoreContainer } from '../components/shared/StoreContainer';
 import { useNavigate } from 'react-router-dom';
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { useCart } from '../context/CartContext';
-import { Alert, Button, EmptyState } from '../components/ui';
+import { Alert, Button } from '../components/ui';
 import { CartItem, CustomizedCartItem, CartSummary } from '../components/cart';
+import { ProductRail } from '../components/products/ProductRail';
+import { excludeIds } from '../components/products/recommendations';
+import { useStoreData } from '../hooks/useStoreData';
+import { fetchShowcase } from '../components/home/storeQueries';
+import { Seo } from '../components/seo/Seo';
 
 interface StockStatus {
   hasStock: boolean;
@@ -40,6 +46,15 @@ export const CartPage = () => {
 
   const availableItemsCount = availableItems.reduce((sum, item) => sum + item.quantity, 0);
 
+  // Recomendaciones: los más valorados (misma consulta y caché que la vitrina de la portada),
+  // sin los que ya están en el carrito.
+  const { data: topProducts, loading: loadingTop } = useStoreData('showcase:top', fetchShowcase('top'));
+  const inCartIds = useMemo(
+    () => cart.items.map((i) => (i.type === 'standard' ? i.product.id : Number(i.customizedProduct.productId))),
+    [cart.items],
+  );
+  const suggestions = useMemo(() => excludeIds(topProducts ?? [], inCartIds, 10), [topProducts, inCartIds]);
+
   const handleCheckout = () => {
     // Solo ir al checkout si hay items disponibles
     if (availableItems.length > 0) {
@@ -64,7 +79,7 @@ export const CartPage = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Encabezado de la tienda (gradiente de marca) */}
+      <Seo title="Carrito" />
       <PageHeader
         title="Carrito"
         subtitle={isEmpty ? 'Tu carrito de compras' : `${cart.totalItems} ${cart.totalItems === 1 ? 'producto' : 'productos'}`}
@@ -72,22 +87,20 @@ export const CartPage = () => {
         onBack={handleContinueShopping}
       />
 
-      <div className="max-w-7xl mx-auto px-4 py-6 lg:py-8">
+      <StoreContainer>
         {isEmpty ? (
-          <div className="bg-white rounded-xl border border-gray-200 max-w-2xl mx-auto">
-            <EmptyState
-              icon={ShoppingBag}
-              title="Tu carrito está vacío"
-              description="Explora nuestro catálogo y encuentra productos increíbles."
-              action={
-                <div className="flex flex-col sm:flex-row gap-2">
-                  <Button onClick={handleContinueShopping}>Ir al catálogo</Button>
-                  <Button variant="secondary" icon={<Palette className="w-4 h-4" />} onClick={() => navigate('/customize')}>
-                    Personalizar producto
-                  </Button>
-                </div>
-              }
-            />
+          <div className="bg-white rounded-xl border border-gray-200 px-6 py-12 text-center">
+            <div className="w-14 h-14 mx-auto rounded-full bg-app-50 text-app-600 flex items-center justify-center">
+              <ShoppingBag className="w-7 h-7" />
+            </div>
+            <h2 className="mt-4 text-lg font-semibold text-gray-900">Tu carrito está vacío</h2>
+            <p className="mt-1 text-sm text-gray-500">Explora el catálogo o crea una prenda con tu propio diseño.</p>
+            <div className="mt-6 flex flex-col sm:flex-row justify-center gap-2">
+              <Button onClick={handleContinueShopping}>Ir al catálogo</Button>
+              <Button variant="secondary" icon={<Palette className="w-4 h-4" />} onClick={() => navigate('/customize')}>
+                Personalizar una prenda
+              </Button>
+            </div>
           </div>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8 items-start">
@@ -116,8 +129,8 @@ export const CartPage = () => {
               </Button>
             </div>
 
-            {/* Resumen de compra */}
-            <div className="lg:col-span-1 space-y-4 lg:sticky lg:top-24">
+            {/* Resumen de compra: acompaña el scroll en escritorio */}
+            <div className="lg:col-span-1 space-y-4 lg:sticky" style={{ top: 'calc(var(--store-header-h, 120px) + 1rem)' }}>
               <CartSummary cart={cart} onCheckout={hasAvailableItems ? handleCheckout : undefined} />
 
               {hasUnavailableItems && (
@@ -128,7 +141,16 @@ export const CartPage = () => {
             </div>
           </div>
         )}
-      </div>
+
+        <div className="mt-10">
+          <ProductRail
+            title={isEmpty ? 'Te pueden gustar' : 'Completa tu compra'}
+            products={suggestions}
+            loading={loadingTop}
+            viewAllTo="/catalog"
+          />
+        </div>
+      </StoreContainer>
     </div>
   );
 };

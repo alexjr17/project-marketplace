@@ -1,197 +1,211 @@
-import { useState, useMemo, useEffect, useRef } from 'react';
-import { Percent, Search, X } from 'lucide-react';
-import { SearchInput, Spinner } from '../components/ui';
-import { PageHeader } from '../components/shared/PageHeader';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { PackageSearch, SlidersHorizontal, X } from 'lucide-react';
+import { Button, Drawer, Skeleton } from '../components/ui';
+import { PageHeader } from '../components/shared/PageHeader';
+import { StoreContainer } from '../components/shared/StoreContainer';
 import { useProducts } from '../context/ProductsContext';
-
-import { ProductGrid } from '../components/products/ProductGrid';
+import { useCatalogs } from '../context/CatalogsContext';
+import { useCurrency } from '../hooks/useCurrency';
+import { ProductCard } from '../components/products/ProductCard';
+import { DesignYourOwnCard } from '../components/products/DesignYourOwnCard';
+import { useSettings } from '../context/SettingsContext';
 import { Seo } from '../components/seo/Seo';
 import { ProductFilters, type FilterValues } from '../components/products/ProductFilters';
 import { ProductSort } from '../components/products/ProductSort';
 import { Pagination } from '../components/common/Pagination';
-import type { ProductCategory, ProductTypeSlug } from '../types/product';
+import {
+  activeChips,
+  compactFilters,
+  readCatalogParams,
+  removeChip,
+  writeCatalogParams,
+  type CatalogState,
+  type ChipKey,
+} from '../components/products/catalogParams';
 
-const SORT_FROM_URL: Record<string, 'price-asc' | 'price-desc' | 'newest' | 'rating' | 'popular'> = {
-  price: 'price-asc',
-  'price-asc': 'price-asc',
-  'price-desc': 'price-desc',
-  newest: 'newest',
-  rating: 'rating',
-  reviewsCount: 'popular',
-  bestsellers: 'popular',
-};
-
-/** Filtros del panel lateral que vienen en la URL (sin buscador ni ofertas). */
-function sidebarFiltersFromUrl(params: URLSearchParams): FilterValues {
-  const f: FilterValues = {};
-  const category = params.get('category');
-  const type = params.get('type');
-  if (category) f.category = category as ProductCategory;
-  if (type) f.type = type as ProductTypeSlug;
-  if (params.get('featured') === 'true') f.featured = true;
-  if (params.get('inStock') === 'true') f.inStock = true;
-  if (params.get('bestsellers') === 'true') f.bestsellers = true;
-  if (params.get('newArrivals') === 'true') f.newArrivals = true;
-  return f;
-}
-
-const isOn = (v: string | null) => v === '1' || v === 'true';
+const GRID = 'grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4';
 
 export const CatalogPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
-  const { filteredProducts, filters, setFilters, sortOption, setSortOption, isLoading } = useProducts();
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(12);
+  const { filteredProducts, filters, setFilters, sortOption, setSortOption, setPage, pagination, isLoading } = useProducts();
+  const { categories, productTypes } = useCatalogs();
+  const { format } = useCurrency();
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const { settings } = useSettings();
+  const enableCustomizer = settings.home?.enableCustomizer ?? true;
 
-  // La URL manda: ?search= (buscador del encabezado), ?onSale=1 (Ofertas) y los filtros.
-  const urlSearch = searchParams.get('search') ?? '';
-  const urlOnSale = isOn(searchParams.get('onSale'));
+  // La URL es la fuente de verdad (se puede compartir y "atrás" deshace el último filtro).
   const urlKey = searchParams.toString();
-  const initialFilters = useMemo(() => sidebarFiltersFromUrl(new URLSearchParams(urlKey)), [urlKey]);
+  const state = useMemo(() => readCatalogParams(new URLSearchParams(urlKey)), [urlKey]);
 
-  // Texto del buscador de la barra (se sincroniza con la URL con una pequeña espera).
-  const [searchText, setSearchText] = useState(urlSearch);
-  useEffect(() => { setSearchText(urlSearch); }, [urlSearch]);
-
-  // Aplicar la URL a los filtros del listado (el backend filtra búsqueda y ofertas).
-  const lastApplied = useRef<string | null>(null);
+  // URL → listado (el API filtra, ordena y pagina).
   useEffect(() => {
-    const params = new URLSearchParams(urlKey);
-    const next: FilterValues = { ...sidebarFiltersFromUrl(params) };
-    if (urlSearch.trim()) next.search = urlSearch.trim();
-    if (urlOnSale) next.onSale = true;
-
-    const sort = params.get('sort');
-    if (sort && SORT_FROM_URL[sort]) setSortOption(SORT_FROM_URL[sort]);
-
-    const serialized = JSON.stringify(next);
-    if (serialized !== lastApplied.current && serialized !== JSON.stringify(filters)) {
-      setFilters(next);
-      setCurrentPage(1);
-    }
-    lastApplied.current = serialized;
+    const next = compactFilters(state.filters);
+    if (JSON.stringify(next) !== JSON.stringify(compactFilters(filters))) setFilters(next);
+    if (state.sort !== sortOption) setSortOption(state.sort);
+    setPage(state.page);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [urlKey]);
 
-  // Escribir en la URL lo que se teclea en la barra del catálogo.
-  useEffect(() => {
-    if (searchText.trim() === urlSearch.trim()) return;
-    const t = setTimeout(() => {
-      const params = new URLSearchParams(urlKey);
-      if (searchText.trim()) params.set('search', searchText.trim());
-      else params.delete('search');
-      setSearchParams(params, { replace: true });
-    }, 350);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchText]);
-
-  const clearParam = (name: string) => {
-    const params = new URLSearchParams(urlKey);
-    params.delete(name);
-    setSearchParams(params);
+  const go = (next: Partial<CatalogState>, opts?: { replace?: boolean }) => {
+    // Cambiar filtros u orden vuelve a la primera página.
+    const merged: CatalogState = { ...state, page: 1, ...next };
+    setSearchParams(writeCatalogParams(merged), opts);
   };
+  const changeFilters = (f: FilterValues) => go({ filters: compactFilters(f) });
 
-  // Paginación local sobre la página que devuelve el API.
-  const totalPages = Math.ceil(filteredProducts.length / itemsPerPage);
-  const paginatedProducts = useMemo(() => {
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    return filteredProducts.slice(startIndex, startIndex + itemsPerPage);
-  }, [filteredProducts, currentPage, itemsPerPage]);
+  const categoryName = (slug: string) => categories.find((c) => c.slug === slug)?.name;
+  const typeName = (slug: string) => productTypes.find((t) => t.slug === slug)?.name;
+  const chips = activeChips(state.filters, { category: categoryName, type: typeName }, format);
+  const removeOne = (key: ChipKey) => go({ filters: removeChip(state.filters, key) });
+  const clearAll = () => go({ filters: {} });
 
-  // El panel lateral solo conoce sus filtros: se conservan búsqueda y ofertas de la URL.
-  const handleFilterChange = (sidebar: FilterValues) => {
-    const next: FilterValues = { ...sidebar };
-    if (urlSearch.trim()) next.search = urlSearch.trim();
-    if (urlOnSale) next.onSale = true;
-    setFilters(next);
-    setCurrentPage(1);
-  };
+  const { search, onSale, category } = state.filters;
+  const title = search ? `Resultados para «${search}»` : category ? categoryName(category) ?? 'Catálogo' : onSale ? 'Ofertas' : 'Catálogo';
+  const total = pagination.total || filteredProducts.length;
+  const countLabel = isLoading ? 'Buscando productos…' : `${total} ${total === 1 ? 'producto' : 'productos'}`;
+  const filterCount = chips.filter((c) => c.key !== 'search').length;
+  const showDesignCard = enableCustomizer && state.page <= 1 && !search;
 
   const handlePageChange = (page: number) => {
-    setCurrentPage(page);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    go({ page });
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    window.scrollTo({ top: 0, behavior: reduce ? 'auto' : 'smooth' });
   };
-
-  const handleItemsPerPageChange = (newItemsPerPage: number) => {
-    setItemsPerPage(newItemsPerPage);
-    setCurrentPage(1);
-  };
-
-  const title = urlSearch ? `Resultados para “${urlSearch}”` : urlOnSale ? 'Ofertas' : 'Catálogo de Productos';
-  const subtitle = urlSearch
-    ? 'Productos que coinciden con tu búsqueda'
-    : urlOnSale ? 'Productos con descuento vigente' : 'Explora nuestra colección completa de productos personalizables';
-
-  const chip = 'inline-flex items-center gap-1.5 h-7 pl-2.5 pr-1.5 rounded-full bg-app-50 text-app-700 text-xs font-medium';
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Seo title={urlSearch ? `Buscar: ${urlSearch}` : urlOnSale ? 'Ofertas' : 'Catálogo'} description="Explora todos nuestros productos y personalízalos a tu gusto." />
-      <PageHeader title={title} subtitle={subtitle} backLabel="Inicio" backTo="/" />
+      <Seo title={search ? `Buscar: ${search}` : title} description="Explora todos nuestros productos y personalízalos a tu gusto." />
+      <PageHeader title={title} subtitle={countLabel} backLabel="Catálogo" backTo={search || category || onSale ? '/catalog' : '/'} />
 
-      <div className="max-w-7xl mx-auto px-4 py-6 md:py-8">
-        {/* Barra: contador + buscador + ordenar */}
-        <div className="bg-white rounded-xl border border-gray-200 p-3 flex items-center justify-between mb-6 flex-wrap gap-3">
-          <div className="text-sm text-gray-500 order-2 sm:order-1 w-full sm:w-auto px-1 flex items-center gap-2 flex-wrap">
-            {isLoading ? (
-              <span>Cargando productos...</span>
-            ) : (
-              <span>
-                Mostrando <span className="font-semibold text-gray-900">{paginatedProducts.length}</span> de{' '}
-                <span className="font-semibold text-gray-900">{filteredProducts.length}</span> productos
-              </span>
-            )}
-            {urlSearch && (
-              <span className={chip}>
-                <Search className="w-3.5 h-3.5" />
-                <span className="max-w-[160px] truncate">{urlSearch}</span>
-                <button type="button" title="Quitar búsqueda" aria-label="Quitar búsqueda" onClick={() => clearParam('search')} className="p-0.5 rounded-full hover:bg-app-100">
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              </span>
-            )}
-            {urlOnSale && (
-              <span className={chip}>
-                <Percent className="w-3.5 h-3.5" />
-                Ofertas
-                <button type="button" title="Quitar filtro de ofertas" aria-label="Quitar filtro de ofertas" onClick={() => clearParam('onSale')} className="p-0.5 rounded-full hover:bg-app-100">
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              </span>
-            )}
-          </div>
-          <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 order-1 sm:order-2 w-full sm:w-auto">
-            <SearchInput value={searchText} onChange={setSearchText} placeholder="Buscar productos…" className="flex-1 sm:w-64" />
-            <ProductSort value={sortOption} onChange={setSortOption} />
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          <aside className="lg:col-span-1">
-            <ProductFilters onFilterChange={handleFilterChange} initialFilters={initialFilters} />
+      <StoreContainer>
+        <div className="grid grid-cols-1 lg:grid-cols-[240px_minmax(0,1fr)] gap-6 items-start">
+          {/* Filtros (escritorio): columna fija que acompaña el scroll */}
+          <aside
+            className="hidden lg:block sticky bg-white rounded-xl border border-gray-200 p-4 max-h-[calc(100vh-var(--store-header-h,120px)-2rem)] overflow-y-auto"
+            style={{ top: 'calc(var(--store-header-h, 120px) + 1rem)' }}
+            aria-label="Filtros"
+          >
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-sm font-semibold text-gray-900">Filtros</h2>
+              {filterCount > 0 && (
+                <button type="button" onClick={clearAll} className="text-xs font-medium text-app-700 hover:underline">Limpiar</button>
+              )}
+            </div>
+            <ProductFilters value={state.filters} onChange={changeFilters} />
           </aside>
 
-          <main className="lg:col-span-3 min-w-0">
+          <div className="min-w-0 space-y-4">
+            {/* Barra: filtros (celular), filtros activos y orden */}
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                className="lg:hidden"
+                icon={<SlidersHorizontal className="w-4 h-4" />}
+                onClick={() => setFiltersOpen(true)}
+              >
+                Filtros{filterCount > 0 ? ` (${filterCount})` : ''}
+              </Button>
+              <p className="hidden lg:block text-sm text-gray-500" aria-live="polite">{countLabel}</p>
+              <div className="ml-auto">
+                <ProductSort value={state.sort} onChange={(sort) => go({ sort })} />
+              </div>
+            </div>
+
+            {chips.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2" aria-label="Filtros activos">
+                {chips.map((c) => (
+                  <span key={c.key} className="inline-flex items-center gap-1 h-8 pl-3 pr-1 rounded-full bg-white border border-gray-200 text-sm text-gray-700">
+                    <span className="max-w-[180px] truncate">{c.label}</span>
+                    <button
+                      type="button"
+                      onClick={() => removeOne(c.key)}
+                      aria-label={`Quitar filtro ${c.label}`}
+                      title="Quitar"
+                      className="w-6 h-6 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-100"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </span>
+                ))}
+                {chips.length > 1 && (
+                  <button type="button" onClick={clearAll} className="text-sm font-medium text-app-700 hover:underline px-1">
+                    Limpiar todo
+                  </button>
+                )}
+              </div>
+            )}
+
             {isLoading ? (
-              <Spinner label="Cargando productos…" className="py-20" />
+              <div className={GRID}>
+                {Array.from({ length: 8 }).map((_, i) => (
+                  <div key={i} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                    <Skeleton className="aspect-square w-full rounded-none" />
+                    <div className="p-4 space-y-2">
+                      <Skeleton className="h-3 w-1/3" />
+                      <Skeleton className="h-4 w-3/4" />
+                      <Skeleton className="h-4 w-1/4" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : filteredProducts.length === 0 ? (
+              <div className="bg-white rounded-xl border border-gray-200 px-6 py-14 text-center">
+                <PackageSearch className="w-10 h-10 text-gray-300 mx-auto" strokeWidth={1.5} />
+                <h2 className="mt-3 text-base font-semibold text-gray-900">No encontramos productos</h2>
+                <p className="mt-1 text-sm text-gray-500 max-w-md mx-auto">
+                  {search
+                    ? 'Revisa la ortografía o prueba con una palabra más general.'
+                    : 'Ningún producto coincide con estos filtros. Quita alguno para ver más resultados.'}
+                </p>
+                <div className="mt-5 flex flex-col sm:flex-row justify-center gap-2">
+                  {chips.length > 0 && <Button onClick={clearAll}>Quitar filtros</Button>}
+                  <Button variant="secondary" onClick={() => setSearchParams(new URLSearchParams())}>Ver todo el catálogo</Button>
+                </div>
+              </div>
             ) : (
               <>
-                <ProductGrid products={paginatedProducts} />
-                <Pagination
-                  currentPage={currentPage}
-                  totalPages={totalPages}
-                  onPageChange={handlePageChange}
-                  itemsPerPage={itemsPerPage}
-                  totalItems={filteredProducts.length}
-                  onItemsPerPageChange={handleItemsPerPageChange}
-                />
+                <div className={GRID}>
+                  {filteredProducts.map((product, i) => (
+                    <Fragment key={product.id}>
+                      <ProductCard product={product} priority={i < 4} />
+                      {/* "Diseña la tuya" en la primera página, tras el 3.er producto (o al final si hay menos) */}
+                      {showDesignCard && i === Math.min(2, filteredProducts.length - 1) && <DesignYourOwnCard />}
+                    </Fragment>
+                  ))}
+                </div>
+                {pagination.totalPages > 1 && (
+                  <Pagination
+                    currentPage={pagination.page}
+                    totalPages={pagination.totalPages}
+                    onPageChange={handlePageChange}
+                    itemsPerPage={pagination.limit}
+                    totalItems={total}
+                  />
+                )}
               </>
             )}
-          </main>
+          </div>
         </div>
-      </div>
+      </StoreContainer>
+
+      {/* Filtros (celular y tableta) */}
+      <Drawer
+        open={filtersOpen}
+        onClose={() => setFiltersOpen(false)}
+        title="Filtros"
+        width="sm"
+        footer={
+          <>
+            {filterCount > 0 && <Button variant="secondary" onClick={clearAll}>Limpiar</Button>}
+            <Button onClick={() => setFiltersOpen(false)}>{isLoading ? 'Ver resultados' : `Ver ${total} ${total === 1 ? 'resultado' : 'resultados'}`}</Button>
+          </>
+        }
+      >
+        <ProductFilters value={state.filters} onChange={changeFilters} />
+      </Drawer>
     </div>
   );
 };

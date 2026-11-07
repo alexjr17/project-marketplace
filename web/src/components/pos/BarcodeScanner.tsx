@@ -3,6 +3,7 @@ import { Html5Qrcode } from 'html5-qrcode';
 import { X, Camera, Loader2, SwitchCamera, CheckCircle } from 'lucide-react';
 import { Button } from '../ui';
 
+import { errorMessage } from '../../lib/http';
 interface BarcodeScannerProps {
   isOpen: boolean;
   onClose: () => void;
@@ -63,9 +64,9 @@ export default function BarcodeScanner({ isOpen, onClose, onScan }: BarcodeScann
         setError('No se encontraron cámaras disponibles');
         setIsScanning(false);
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error initializing scanner:', err);
-      setError(err.message || 'Error al inicializar la cámara');
+      setError(errorMessage(err, 'Error al inicializar la cámara'));
       setIsScanning(false);
     }
   };
@@ -134,7 +135,7 @@ export default function BarcodeScanner({ isOpen, onClose, onScan }: BarcodeScann
 
       setIsScanning(true);
       setError(null);
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error starting scanner:', err);
       setError('Error al iniciar el escáner');
       setIsScanning(false);

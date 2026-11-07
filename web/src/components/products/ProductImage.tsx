@@ -17,6 +17,10 @@ interface ProductImageProps extends Omit<ImgHTMLAttributes<HTMLImageElement>, 's
   priority?: boolean;
   /** Tamaño del icono del respaldo. */
   iconClassName?: string;
+  /** cover (tarjetas, por defecto) o contain (galería: se ve la prenda completa). */
+  fit?: 'cover' | 'contain';
+  /** Avisa cuando la imagen no carga (p. ej. para apagar el zoom). */
+  onFailed?: () => void;
 }
 
 /**
@@ -24,7 +28,7 @@ interface ProductImageProps extends Omit<ImgHTMLAttributes<HTMLImageElement>, 's
  * Si no hay URL o la imagen falla, muestra un respaldo limpio (fondo gris con icono) en vez
  * del texto alternativo o el icono roto del navegador.
  */
-export function ProductImage({ src, alt, width = 400, priority = false, className = '', iconClassName = 'w-8 h-8', ...rest }: ProductImageProps) {
+export function ProductImage({ src, alt, width = 400, priority = false, className = '', iconClassName = 'w-8 h-8', fit = 'cover', onFailed, ...rest }: ProductImageProps) {
   const url = sizedImage(src, width);
   const [failed, setFailed] = useState<string | null>(null);
 
@@ -41,13 +45,12 @@ export function ProductImage({ src, alt, width = 400, priority = false, classNam
       src={url}
       alt={alt}
       loading={priority ? 'eager' : 'lazy'}
-      // @ts-expect-error fetchpriority es válido en HTML pero falta en los tipos de React
-      fetchpriority={priority ? 'high' : 'auto'}
+      fetchPriority={priority ? 'high' : 'auto'}
       decoding="async"
       width={width}
       height={width}
-      onError={() => setFailed(url)}
-      className={`w-full h-full object-cover bg-gray-100 text-transparent ${className}`}
+      onError={() => { setFailed(url); onFailed?.(); }}
+      className={`w-full h-full ${fit === 'contain' ? 'object-contain' : 'object-cover'} bg-gray-100 text-transparent ${className}`}
       {...rest}
     />
   );

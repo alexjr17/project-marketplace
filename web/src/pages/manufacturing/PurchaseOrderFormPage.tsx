@@ -10,6 +10,7 @@ import {
 } from '../../components/ui';
 import QtyMatrix from '../../components/manufacturing/QtyMatrix';
 
+import { errorMessage } from '../../lib/http';
 interface Line { ref: MfgReference; qty: Record<number, Record<number, string>>; } // qty[sizeId][colorId]
 
 export default function PurchaseOrderFormPage() {
@@ -96,7 +97,7 @@ export default function PurchaseOrderFormPage() {
       });
       toast.success('Pedido creado');
       navigate(`/manufacturing/purchase-orders/${order.id}`);
-    } catch (e: any) { toast.error(e?.message || 'No se pudo crear el pedido'); }
+    } catch (e) { toast.error(errorMessage(e, 'No se pudo crear el pedido')); }
     finally { setSaving(false); }
   };
 

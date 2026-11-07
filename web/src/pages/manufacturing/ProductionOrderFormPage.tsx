@@ -10,6 +10,7 @@ import {
 } from '../../components/ui';
 import QtyMatrix from '../../components/manufacturing/QtyMatrix';
 
+import { errorMessage } from '../../lib/http';
 export default function ProductionOrderFormPage() {
   const navigate = useNavigate();
   const [references, setReferences] = useState<MfgReference[]>([]);
@@ -98,8 +99,8 @@ export default function ProductionOrderFormPage() {
       });
       toast.success('Orden creada');
       navigate(`/manufacturing/orders/${order.id}`);
-    } catch (e: any) {
-      toast.error(e?.message || 'No se pudo crear la orden');
+    } catch (e) {
+      toast.error(errorMessage(e, 'No se pudo crear la orden'));
     } finally {
       setSaving(false);
     }

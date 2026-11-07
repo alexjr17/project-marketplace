@@ -53,9 +53,10 @@ class InventoryMovementFlowTest extends TestCase
             $this->assertSame($expected, (int) $variant->fresh()->stock, $type);
         }
 
-        // ACTUAL (posible bug): products.stock (stock agregado) no se recalcula con los
-        // movimientos manuales (InventoryMovementController.php:535-582).
-        $this->assertSame(0, (int) $product->fresh()->stock);
+        // Corregido: products.stock se recalcula con las variantes activas tras cada movimiento.
+        $this->assertSame(15, (int) $product->fresh()->stock);
+        // La cantidad del movimiento queda con signo (+ entra, - sale), como en POS y pedidos.
+        $this->assertSame([5, 2, 2, 2, -2, -2, -2], VariantMovement::orderBy('id')->pluck('quantity')->map(fn ($q) => (int) $q)->all());
     }
 
     public function test_salida_mayor_al_stock_responde_400_sin_movimiento(): void
@@ -77,12 +78,11 @@ class InventoryMovementFlowTest extends TestCase
         $this->postJson('/api/inventory/movements', ['variantId' => $variant->id, 'movementType' => 'ADJUSTMENT', 'quantity' => -7])
             ->assertStatus(400)->assertJsonPath('message', 'El ajuste resultaría en stock negativo');
 
-        // En los tipos que no son ADJUSTMENT la cantidad se guarda en valor absoluto,
-        // pero el cálculo usa el signo recibido: una SALE con -2 SUMA 2.
-        // ACTUAL (posible bug): SALE con cantidad negativa aumenta el stock
-        // (InventoryMovementController.php:546-551, sin min:0 en la validación).
+        // Corregido: fuera de ADJUSTMENT la dirección la da el tipo; una cantidad negativa
+        // responde 422 (antes una SALE con -2 SUMABA 2).
         $this->postJson('/api/inventory/movements', ['variantId' => $variant->id, 'movementType' => 'SALE', 'quantity' => -2])
-            ->assertStatus(201)->assertJsonPath('data.quantity', 2)->assertJsonPath('data.newStock', 8);
+            ->assertStatus(422)->assertJsonValidationErrors(['quantity']);
+        $this->assertSame(6, (int) $variant->fresh()->stock);
     }
 
     public function test_validaciones_del_movimiento(): void

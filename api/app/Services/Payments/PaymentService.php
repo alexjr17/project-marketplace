@@ -1,9 +1,11 @@
 <?php
 
-namespace App\Services;
+namespace App\Services\Payments;
 
+use App\Exceptions\BusinessRuleException;
 use App\Models\Order;
 use App\Models\Payment;
+use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
@@ -59,6 +61,32 @@ class PaymentService
             'createdAt' => $payment->createdAt,
             'updatedAt' => $payment->updatedAt,
         ];
+    }
+
+    /**
+     * Pedido del usuario (o cualquiera para el SuperAdmin si $superAdminToo). Uno ajeno responde
+     * 404, igual que uno inexistente, para no revelar que existe.
+     */
+    public function ownOrder(int $orderId, User $user, bool $superAdminToo = false): Order
+    {
+        $order = Order::find($orderId);
+        $allowed = $order && ((int) $order->userId === (int) $user->id || ($superAdminToo && (int) $user->roleId === 1));
+        if (! $allowed) {
+            throw new BusinessRuleException('Pedido no encontrado', 404);
+        }
+
+        return $order;
+    }
+
+    /** Pago de un pedido del usuario (404 si no). */
+    public function ownPayment(int $id, User $user): Payment
+    {
+        $payment = Payment::with('order')->find($id);
+        if (! $payment || (int) $payment->order?->userId !== (int) $user->id) {
+            throw new BusinessRuleException('Pago no encontrado', 404);
+        }
+
+        return $payment;
     }
 
     public function createPayment(array $data): Payment

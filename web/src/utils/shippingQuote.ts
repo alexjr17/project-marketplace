@@ -56,15 +56,27 @@ export function quoteShipping(
   }
   if (!zone) return null;
 
-  // Transportadora: la predeterminada activa, o la primera activa.
-  const carriers = (shipping.carriers || []).filter((c) => c.isActive);
-  const carrier = carriers.find((c) => c.id === shipping.defaultCarrierId) ?? carriers[0];
-  if (!carrier) return null;
-
-  const rate = (carrier.zoneRates || []).find((r) => r.zoneId === zone!.id);
-  if (!rate) return null;
-
+  // Transportadora: la predeterminada activa y, si no cubre la zona o el peso, la primera activa
+  // que sí (antes daba null aunque otra la cubriera, y se ignoraba el peso máximo de la tarifa).
+  // Debe coincidir con ShippingQuoteService del API, que es el que cobra.
   const weight = Math.max(totalWeightKg, 0.1);
+  const active = (shipping.carriers || []).filter((c) => c.isActive);
+  const ordered = [
+    ...active.filter((c) => c.id === shipping.defaultCarrierId),
+    ...active.filter((c) => c.id !== shipping.defaultCarrierId),
+  ];
+  let carrier: (typeof active)[number] | undefined;
+  let rate: (typeof active)[number]['zoneRates'][number] | undefined;
+  for (const c of ordered) {
+    const r = (c.zoneRates || []).find((zr) => zr.zoneId === zone!.id);
+    if (r && (r.maxWeight == null || weight <= r.maxWeight)) {
+      carrier = c;
+      rate = r;
+      break;
+    }
+  }
+  if (!carrier || !rate) return null;
+
   const cost = Math.round(rate.baseCost + weight * rate.costPerKg);
   const free = rate.freeShippingThreshold != null && subtotal >= rate.freeShippingThreshold;
 

@@ -9,6 +9,7 @@ import {
 } from '../../components/ui';
 import { ActiveBadge, RowActions, matchText } from '../../components/manufacturing/mfgUi';
 
+import { errorMessage } from '../../lib/http';
 const empty = { name: '', documentId: '', documentType: '', businessName: '', email: '', phone: '', city: '', invoiceAddress: '', dispatchAddress: '', creditDays: null as number | null, isActive: true };
 
 export default function ClientsPage() {
@@ -46,7 +47,7 @@ export default function ClientsPage() {
   const remove = async (c: MfgClient) => {
     if (!(await confirm({ title: `¿Eliminar el cliente "${c.name}"?`, message: 'No se puede deshacer.', tone: 'danger' }))) return;
     try { await manufacturingService.deleteClient(c.id); toast.success('Cliente eliminado'); load(); }
-    catch (e: any) { toast.error(e?.message || 'No se pudo eliminar'); }
+    catch (e) { toast.error(errorMessage(e, 'No se pudo eliminar')); }
   };
 
   const set = (patch: Partial<MfgClient>) => setForm({ ...form, ...patch });

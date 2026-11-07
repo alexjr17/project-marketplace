@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { errorMessage } from '../../lib/http';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { AlertTriangle, ArrowDown, ArrowLeft, ArrowUp, ArrowUpDown, Grid3x3, Package, PackageX, Pencil, Plus, Printer, Star, Trash2 } from 'lucide-react';
@@ -15,15 +16,19 @@ type ViewMode = 'list' | 'add' | 'edit';
 type SortKey = 'name' | 'basePrice' | 'stock';
 type StockFilter = 'all' | 'available' | 'low' | 'out';
 
+const text = (v: unknown) => (typeof v === 'string' ? v : '');
+
 // Helper para obtener la primera imagen del producto
-function getFirstImage(images: any): string {
+function getFirstImage(images: unknown): string {
   if (!images) return '';
-  if (Array.isArray(images)) return images[0] || '';
-  if (typeof images === 'object') return images.front || images.back || images.side || '';
+  if (Array.isArray(images)) return text(images[0]);
+  if (typeof images === 'object') {
+    const { front, back, side } = images as Record<string, unknown>;
+    return text(front) || text(back) || text(side);
+  }
   return '';
 }
 
-const text = (v: unknown) => (typeof v === 'string' ? v : '');
 const money = (n: number) => '$' + Number(n || 0).toLocaleString('es-CO', { maximumFractionDigits: 2 });
 const LOW_STOCK = 20;
 // Nombre de la categoría (la API manda categoryName; `category` es el slug)
@@ -102,8 +107,8 @@ export const ProductsPage = () => {
       await addProduct(productData);
       toast.success('Producto creado correctamente');
       setViewMode('list');
-    } catch (error: any) {
-      toast.error('No se pudo crear el producto: ' + (error?.message || 'error desconocido'));
+    } catch (error) {
+      toast.error('No se pudo crear el producto: ' + errorMessage(error, 'error desconocido'));
     } finally {
       setSaving(false);
     }
@@ -115,8 +120,8 @@ export const ProductsPage = () => {
       setSaving(true);
       await updateProduct(selectedProduct.id, productData);
       toast.success('Producto actualizado correctamente');
-    } catch (error: any) {
-      toast.error('No se pudo actualizar el producto: ' + (error?.message || 'error desconocido'));
+    } catch (error) {
+      toast.error('No se pudo actualizar el producto: ' + errorMessage(error, 'error desconocido'));
     } finally {
       setSaving(false);
     }
@@ -129,8 +134,8 @@ export const ProductsPage = () => {
       toast.success('Producto eliminado correctamente');
       setSelectedProduct(null);
       setViewMode('list');
-    } catch (error: any) {
-      toast.error('No se pudo eliminar el producto: ' + (error?.message || 'error desconocido'));
+    } catch (error) {
+      toast.error('No se pudo eliminar el producto: ' + errorMessage(error, 'error desconocido'));
     }
   };
 
@@ -192,8 +197,8 @@ export const ProductsPage = () => {
       }
 
       setGeneratingVariantsFor(null);
-    } catch (error: any) {
-      toast.error('Error al generar variantes: ' + (error?.message));
+    } catch (error) {
+      toast.error('Error al generar variantes: ' + errorMessage(error));
     } finally {
       setIsGenerating(false);
     }

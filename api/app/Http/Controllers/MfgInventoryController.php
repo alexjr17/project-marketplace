@@ -3,7 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Concerns\ApiResponse;
-use App\Models\MfgWarehouseStock;
+use App\Services\Manufacturing\MfgDispatchService;
 use Illuminate\Http\Request;
 
 /**
@@ -13,19 +13,10 @@ class MfgInventoryController extends Controller
 {
     use ApiResponse;
 
+    public function __construct(private MfgDispatchService $dispatches) {}
+
     public function index(Request $request)
     {
-        $query = MfgWarehouseStock::with([
-            'warehouse:id,name',
-            'reference:id,code,name',
-            'color:id,name,hexCode',
-            'size:id,name,abbreviation,sortOrder',
-        ])->where('quantity', '>', 0);
-
-        if ($request->filled('warehouseId')) {
-            $query->where('warehouseId', $request->integer('warehouseId'));
-        }
-
-        return $this->success($query->get());
+        return $this->success($this->dispatches->warehouseStock($request->filled('warehouseId') ? $request->integer('warehouseId') : null));
     }
 }

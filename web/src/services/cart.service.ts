@@ -1,4 +1,11 @@
 import api from './api.service';
+import type { CustomizedProduct } from '../types/design';
+
+/** El carrito responde con su propia forma: { success, items } o { success, item }. */
+interface CartEnvelope {
+  items?: CartItemDB[];
+  item?: CartItemDB | null;
+}
 
 export interface ProductInfo {
   id: number;
@@ -30,7 +37,7 @@ export interface CartItemDB {
   productId: number | null;
   variantId: number | null;
   isCustomized: boolean;
-  customization: any;
+  customization: CustomizedProduct | null;
   quantity: number;
   unitPrice: number;
   availableStock: number;
@@ -43,7 +50,7 @@ export interface CartItemInput {
   productId?: number;
   variantId?: number;
   isCustomized: boolean;
-  customization?: any;
+  customization?: CustomizedProduct;
   quantity: number;
   unitPrice: number;
 }
@@ -56,8 +63,7 @@ class CartService {
    */
   async getCart(): Promise<CartItemDB[]> {
     const response = await api.get<CartItemDB[]>(this.baseUrl);
-    // api.service devuelve { success, items } directamente
-    return (response as any).items || [];
+    return (response as CartEnvelope).items || [];
   }
 
   /**
@@ -65,7 +71,7 @@ class CartService {
    */
   async addItem(item: CartItemInput): Promise<CartItemDB> {
     const response = await api.post<CartItemDB>(`${this.baseUrl}/items`, item);
-    return (response as any).item;
+    return (response as CartEnvelope).item as CartItemDB;
   }
 
   /**
@@ -73,18 +79,18 @@ class CartService {
    */
   async updateItem(itemId: number, quantity: number): Promise<CartItemDB | null> {
     const response = await api.put<CartItemDB | null>(`${this.baseUrl}/items/${itemId}`, { quantity });
-    return (response as any).item;
+    return (response as CartEnvelope).item ?? null;
   }
 
   /**
    * Actualizar customization de un item personalizado
    */
-  async updateItemCustomization(itemId: number, customization: any, unitPrice: number): Promise<CartItemDB> {
+  async updateItemCustomization(itemId: number, customization: CustomizedProduct, unitPrice: number): Promise<CartItemDB> {
     const response = await api.patch<CartItemDB>(`${this.baseUrl}/items/${itemId}/customization`, {
       customization,
       unitPrice,
     });
-    return (response as any).item;
+    return (response as CartEnvelope).item as CartItemDB;
   }
 
   /**
@@ -104,9 +110,9 @@ class CartService {
   /**
    * Sincronizar localStorage con carrito en DB
    */
-  async syncCart(items: any[]): Promise<CartItemDB[]> {
+  async syncCart(items: CartItemInput[]): Promise<CartItemDB[]> {
     const response = await api.post<CartItemDB[]>(`${this.baseUrl}/sync`, { items });
-    return (response as any).items || [];
+    return (response as CartEnvelope).items || [];
   }
 }
 

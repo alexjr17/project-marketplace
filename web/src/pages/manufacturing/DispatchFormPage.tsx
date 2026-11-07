@@ -9,6 +9,7 @@ import {
 } from '../../components/ui';
 import QtyMatrix from '../../components/manufacturing/QtyMatrix';
 
+import { errorMessage } from '../../lib/http';
 export default function DispatchFormPage() {
   const navigate = useNavigate();
   const [clients, setClients] = useState<MfgClient[]>([]);
@@ -106,7 +107,7 @@ export default function DispatchFormPage() {
       });
       toast.success('Despacho creado');
       navigate(`/manufacturing/dispatches/${d.id}`);
-    } catch (e: any) { toast.error(e?.message || 'No se pudo crear el despacho'); }
+    } catch (e) { toast.error(errorMessage(e, 'No se pudo crear el despacho')); }
     finally { setSaving(false); }
   };
 

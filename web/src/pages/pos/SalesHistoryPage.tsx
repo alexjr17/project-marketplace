@@ -12,6 +12,7 @@ import { DEFAULT_PRINT_SETTINGS } from '../../types/settings';
 import { History, Receipt, DollarSign, CreditCard, Printer, Mail, X, CheckCircle, Smartphone, Eye, RefreshCw, Camera, Image as ImageIcon, Clock, Pencil, Trash2, Undo2, Minus, Plus, TrendingUp, Ban } from 'lucide-react';
 import { Alert, Badge, Button, Dialog, EmptyState, Field, FileDrop, Page, PageHeader, Pager, RadioGroup, SelectInput, Spinner, StatCard, TableCard, Table, THead, TBody, Th, Tr, Td, TextInput, Timeline, type Tone } from '../../components/ui';
 
+import { errorMessage } from '../../lib/http';
 // Estado de la venta → etiqueta + estilo del badge.
 function statusInfo(status: string): { label: string; tone: Tone } {
   switch (status) {
@@ -157,8 +158,8 @@ export default function SalesHistoryPage() {
       showToast('Venta anulada', 'success');
       setCancelSale(null);
       loadSales();
-    } catch (error: any) {
-      showToast(error?.message || 'No se pudo anular la venta', 'error');
+    } catch (error) {
+      showToast(errorMessage(error, 'No se pudo anular la venta'), 'error');
     } finally {
       setIsCancelling(false);
     }
@@ -202,8 +203,8 @@ export default function SalesHistoryPage() {
       showToast('Devolución registrada correctamente', 'success');
       setReturnModalSale(null);
       loadSales();
-    } catch (error: any) {
-      showToast(error?.message || 'No se pudo registrar la devolución', 'error');
+    } catch (error) {
+      showToast(errorMessage(error, 'No se pudo registrar la devolución'), 'error');
     } finally {
       setIsReturning(false);
     }
@@ -255,9 +256,9 @@ export default function SalesHistoryPage() {
 
       setEmailModalSale(null);
       setEmailInput('');
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error sending invoice:', error);
-      showToast(error?.message || 'Error al enviar recibo', 'error');
+      showToast(errorMessage(error, 'Error al enviar recibo'), 'error');
     } finally {
       setIsSendingEmail(false);
     }
@@ -460,12 +461,11 @@ export default function SalesHistoryPage() {
       // Toast al final
       showToast('Evidencia subida correctamente', 'success');
 
-    } catch (error: any) {
+    } catch (error) {
       // En caso de error, restaurar la imagen para reintentar
       setEvidencePreview(imageToUpload);
       setIsUploadingEvidence(false);
-      const errorMsg = error?.message
-        || 'Error al subir';
+      const errorMsg = errorMessage(error, 'Error al subir');
       showToast(`Error: ${errorMsg}`, 'error');
     }
   };
@@ -839,8 +839,9 @@ export default function SalesHistoryPage() {
                     items={[...summarySale.editHistory].reverse().map((e: any) => ({
                       title: e.action === 'created' ? 'Venta creada'
                         : e.action === 'payment' ? 'Abono recibido'
-                        : e.action === 'return' ? 'Devolución' : 'Venta editada',
-                      tone: e.action === 'created' || e.action === 'payment' ? 'green' as const : e.action === 'return' ? 'red' as const : 'app' as const,
+                        : e.action === 'return' ? 'Devolución'
+                        : e.action === 'cancelled' ? 'Venta anulada' : 'Venta editada',
+                      tone: e.action === 'created' || e.action === 'payment' ? 'green' as const : e.action === 'return' || e.action === 'cancelled' ? 'red' as const : 'app' as const,
                       meta: e.timestamp ? new Date(e.timestamp).toLocaleString('es-CO') : undefined,
                       description: (
                         <>

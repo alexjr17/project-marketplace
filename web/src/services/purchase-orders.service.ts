@@ -171,15 +171,3 @@ export function getStatusLabel(status: PurchaseOrderStatus): string {
   return labels[status] || status;
 }
 
-// Helper para obtener el color del estado
-export function getStatusColor(status: PurchaseOrderStatus): string {
-  const colors: Record<PurchaseOrderStatus, string> = {
-    DRAFT: 'bg-gray-100 text-gray-800',
-    SENT: 'bg-blue-100 text-blue-800',
-    CONFIRMED: 'bg-yellow-100 text-yellow-800',
-    PARTIAL: 'bg-orange-100 text-orange-800',
-    RECEIVED: 'bg-green-100 text-green-800',
-    CANCELLED: 'bg-red-100 text-red-800',
-  };
-  return colors[status] || 'bg-gray-100 text-gray-800';
-}

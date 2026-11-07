@@ -5,17 +5,21 @@ namespace App\Http\Controllers;
 use App\Http\Concerns\ApiResponse;
 use App\Models\Category;
 use App\Models\Color;
-use App\Models\Product;
 use App\Models\ProductType;
-use App\Models\ProductTypeSize;
 use App\Models\Size;
+use App\Services\Catalog\CatalogAttributeService;
 use App\Services\ProductCatalogService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Str;
 
+/**
+ * Catálogos de atributos: tallas, colores, categorías y tipos de producto. Las reglas
+ * (nombres únicos, qué no se borra por estar en uso) viven en Catalog\CatalogAttributeService.
+ */
 class CatalogController extends Controller
 {
     use ApiResponse;
+
+    public function __construct(private CatalogAttributeService $attributes) {}
 
     private function includeInactive(Request $request): bool
     {
@@ -50,18 +54,7 @@ class CatalogController extends Controller
             'isActive' => 'nullable|boolean',
         ]);
 
-        if (Size::where('name', $data['name'])->exists()) {
-            return $this->error('Ya existe una talla con ese nombre', 409);
-        }
-
-        $size = Size::create([
-            'name' => $data['name'],
-            'abbreviation' => $data['abbreviation'],
-            'sortOrder' => $data['sortOrder'] ?? 0,
-            'isActive' => $data['isActive'] ?? true,
-        ]);
-
-        return $this->created($size, 'Talla creada exitosamente');
+        return $this->created($this->attributes->createSize($data), 'Talla creada exitosamente');
     }
 
     public function updateSize(Request $request, int $id)
@@ -78,15 +71,7 @@ class CatalogController extends Controller
             'isActive' => 'nullable|boolean',
         ]);
 
-        if (! empty($data['name']) && $data['name'] !== $size->name
-            && Size::where('name', $data['name'])->where('id', '!=', $id)->exists()) {
-            return $this->error('Ya existe una talla con ese nombre', 409);
-        }
-
-        $size->fill(array_filter($data, fn ($v) => $v !== null));
-        $size->save();
-
-        return $this->success($size, 'Talla actualizada exitosamente');
+        return $this->success($this->attributes->updateSize($size, $data), 'Talla actualizada exitosamente');
     }
 
     public function deleteSize(int $id)
@@ -95,7 +80,7 @@ class CatalogController extends Controller
         if (! $size) {
             return $this->error('Talla no encontrada', 404);
         }
-        $size->delete();
+        $this->attributes->deleteSize($size);
 
         return $this->success(null, 'Talla eliminada exitosamente');
     }
@@ -127,18 +112,7 @@ class CatalogController extends Controller
             'isActive' => 'nullable|boolean',
         ]);
 
-        if (Color::where('name', $data['name'])->orWhere('hexCode', $data['hexCode'])->exists()) {
-            return $this->error('Ya existe un color con ese nombre o código hex', 409);
-        }
-
-        $color = Color::create([
-            'name' => $data['name'],
-            'slug' => Str::slug($data['name']),
-            'hexCode' => $data['hexCode'],
-            'isActive' => $data['isActive'] ?? true,
-        ]);
-
-        return $this->created($color, 'Color creado exitosamente');
+        return $this->created($this->attributes->createColor($data), 'Color creado exitosamente');
     }
 
     public function updateColor(Request $request, int $id)
@@ -154,26 +128,7 @@ class CatalogController extends Controller
             'isActive' => 'nullable|boolean',
         ]);
 
-        if (! empty($data['name']) || ! empty($data['hexCode'])) {
-            $exists = Color::where('id', '!=', $id)
-                ->where(function ($q) use ($data) {
-                    if (! empty($data['name'])) {
-                        $q->orWhere('name', $data['name']);
-                    }
-                    if (! empty($data['hexCode'])) {
-                        $q->orWhere('hexCode', $data['hexCode']);
-                    }
-                })
-                ->exists();
-            if ($exists) {
-                return $this->error('Ya existe un color con ese nombre o código hex', 409);
-            }
-        }
-
-        $color->fill(array_filter($data, fn ($v) => $v !== null));
-        $color->save();
-
-        return $this->success($color, 'Color actualizado exitosamente');
+        return $this->success($this->attributes->updateColor($color, $data), 'Color actualizado exitosamente');
     }
 
     public function deleteColor(int $id)
@@ -182,7 +137,7 @@ class CatalogController extends Controller
         if (! $color) {
             return $this->error('Color no encontrado', 404);
         }
-        $color->delete();
+        $this->attributes->deleteColor($color);
 
         return $this->success(null, 'Color eliminado exitosamente');
     }
@@ -220,18 +175,7 @@ class CatalogController extends Controller
             'isActive' => 'nullable|boolean',
         ]);
 
-        if (Category::where('name', $data['name'])->exists()) {
-            return $this->error('Ya existe una categoría con ese nombre', 409);
-        }
-
-        $category = Category::create([
-            'name' => $data['name'],
-            'slug' => Str::slug($data['name']),
-            'description' => $data['description'] ?? null,
-            'isActive' => $data['isActive'] ?? true,
-        ]);
-
-        return $this->created($category, 'Categoría creada exitosamente');
+        return $this->created($this->attributes->createCategory($data), 'Categoría creada exitosamente');
     }
 
     public function updateCategory(Request $request, int $id)
@@ -247,15 +191,7 @@ class CatalogController extends Controller
             'isActive' => 'nullable|boolean',
         ]);
 
-        if (! empty($data['name']) && $data['name'] !== $category->name
-            && Category::where('name', $data['name'])->where('id', '!=', $id)->exists()) {
-            return $this->error('Ya existe una categoría con ese nombre', 409);
-        }
-
-        $category->fill(array_filter($data, fn ($v) => $v !== null));
-        $category->save();
-
-        return $this->success($category, 'Categoría actualizada exitosamente');
+        return $this->success($this->attributes->updateCategory($category, $data), 'Categoría actualizada exitosamente');
     }
 
     public function deleteCategory(int $id)
@@ -264,13 +200,7 @@ class CatalogController extends Controller
         if (! $category) {
             return $this->error('Categoría no encontrada', 404);
         }
-
-        $count = Product::where('categoryId', $id)->count();
-        if ($count > 0) {
-            return $this->error("No se puede eliminar: hay {$count} productos usando esta categoría", 409);
-        }
-
-        $category->delete();
+        $this->attributes->deleteCategory($category);
 
         return $this->success(null, 'Categoría eliminada exitosamente');
     }
@@ -315,19 +245,7 @@ class CatalogController extends Controller
             'isActive' => 'nullable|boolean',
         ]);
 
-        if (ProductType::where('name', $data['name'])->exists()) {
-            return $this->error('Ya existe un tipo de producto con ese nombre', 409);
-        }
-
-        $type = ProductType::create([
-            'name' => $data['name'],
-            'slug' => Str::slug($data['name']),
-            'description' => $data['description'] ?? null,
-            'categoryId' => $data['categoryId'] ?? null,
-            'isActive' => $data['isActive'] ?? true,
-        ]);
-
-        return $this->created($type, 'Tipo de producto creado exitosamente');
+        return $this->created($this->attributes->createProductType($data), 'Tipo de producto creado exitosamente');
     }
 
     public function updateProductType(Request $request, int $id)
@@ -344,15 +262,7 @@ class CatalogController extends Controller
             'isActive' => 'nullable|boolean',
         ]);
 
-        if (! empty($data['name']) && $data['name'] !== $type->name
-            && ProductType::where('name', $data['name'])->where('id', '!=', $id)->exists()) {
-            return $this->error('Ya existe un tipo de producto con ese nombre', 409);
-        }
-
-        $type->fill(array_filter($data, fn ($v) => $v !== null));
-        $type->save();
-
-        return $this->success($type, 'Tipo de producto actualizado exitosamente');
+        return $this->success($this->attributes->updateProductType($type, $data), 'Tipo de producto actualizado exitosamente');
     }
 
     public function deleteProductType(int $id)
@@ -361,13 +271,7 @@ class CatalogController extends Controller
         if (! $type) {
             return $this->error('Tipo de producto no encontrado', 404);
         }
-
-        $count = Product::where('typeId', $id)->count();
-        if ($count > 0) {
-            return $this->error("No se puede eliminar: hay {$count} productos usando este tipo", 409);
-        }
-
-        $type->delete();
+        $this->attributes->deleteProductType($type);
 
         return $this->success(null, 'Tipo de producto eliminado exitosamente');
     }
@@ -376,16 +280,11 @@ class CatalogController extends Controller
 
     public function sizesByProductType(int $productTypeId)
     {
-        $type = ProductType::find($productTypeId);
-        if (! $type) {
+        if (! ProductType::whereKey($productTypeId)->exists()) {
             return $this->error('Tipo de producto no encontrado', 404);
         }
 
-        $sizes = Size::whereIn('id', ProductTypeSize::where('productTypeId', $productTypeId)->pluck('sizeId'))
-            ->orderBy('sortOrder')
-            ->get();
-
-        return $this->success($sizes);
+        return $this->success($this->attributes->sizesOf($productTypeId));
     }
 
     public function assignSizesToProductType(Request $request, int $productTypeId)
@@ -400,16 +299,6 @@ class CatalogController extends Controller
             'sizeIds.*' => 'integer',
         ]);
 
-        ProductTypeSize::where('productTypeId', $productTypeId)->delete();
-
-        foreach (array_unique($data['sizeIds']) as $sizeId) {
-            ProductTypeSize::create(['productTypeId' => $productTypeId, 'sizeId' => $sizeId]);
-        }
-
-        $sizes = Size::whereIn('id', ProductTypeSize::where('productTypeId', $productTypeId)->pluck('sizeId'))
-            ->orderBy('sortOrder')
-            ->get();
-
-        return $this->success($sizes, 'Tallas asignadas exitosamente');
+        return $this->success($this->attributes->assignSizes($type, $data['sizeIds']), 'Tallas asignadas exitosamente');
     }
 }

@@ -133,6 +133,62 @@ class DiscountService
         return $base;
     }
 
+    /**
+     * Valida un cupón contra los ítems del carrito/venta. El precio de cada producto sale del
+     * backend con su oferta automática (no se confía en el del front); solo los ítems sin
+     * producto conocido usan el precio enviado.
+     *
+     * @param  array<int, array{productId?:?int, price?:mixed, quantity?:mixed}>  $items
+     * @return array{discount: Discount, amount: float}
+     *
+     * @throws RuntimeException con un mensaje legible si el cupón no es válido.
+     */
+    public function validateForItems(string $code, array $items, string $channel, ?int $userId): array
+    {
+        $autos = $this->activeAutoDiscounts($channel);
+        $productIds = collect($items)->pluck('productId')->filter()->unique()->all();
+        $products = Product::whereIn('id', $productIds)->get()->keyBy('id');
+
+        $lines = [];
+        $subtotal = 0;
+        foreach ($items as $it) {
+            $pid = (int) ($it['productId'] ?? 0);
+            $product = $products[$pid] ?? null;
+            $price = $product ? $this->autoPrice($product, $autos) : (float) ($it['price'] ?? 0);
+            $qty = (int) ($it['quantity'] ?? 0);
+            $subtotal += $price * $qty;
+            $lines[] = [
+                'productId' => $pid,
+                'categoryId' => $product?->categoryId,
+                'price' => $price,
+                'quantity' => $qty,
+                // No acumulable: marcar si el producto ya tiene oferta automática.
+                'discounted' => $product ? $price < (float) $product->basePrice : false,
+            ];
+        }
+
+        return $this->validate($code, [
+            'subtotal' => $subtotal,
+            'items' => $lines,
+            'userId' => $userId,
+            'channel' => $channel,
+        ]);
+    }
+
+    /** Crea o actualiza un descuento; el código va en mayúsculas (o null si es automático). */
+    public function save(array $data, ?Discount $discount = null): Discount
+    {
+        $data['code'] = ! empty($data['code']) ? strtoupper(trim($data['code'])) : null;
+
+        if ($discount) {
+            $discount->fill($data)->save();
+
+            return $discount;
+        }
+
+        return Discount::create($data);
+    }
+
     /** Marca el cupón como usado (incrementa el contador de usos). */
     public function redeem(Discount $discount): void
     {

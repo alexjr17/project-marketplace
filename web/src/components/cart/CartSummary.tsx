@@ -8,6 +8,7 @@ import { useAuth } from '../../context/AuthContext';
 import { addressesService } from '../../services/addresses.service';
 import { quoteShipping } from '../../utils/shippingQuote';
 import type { Cart } from '../../types/cart';
+import { FreeShippingBar } from './FreeShippingBar';
 
 interface CartSummaryProps {
   cart: Cart;
@@ -98,22 +99,13 @@ export const CartSummary = ({ cart, onCheckout }: CartSummaryProps) => {
           </p>
         )}
 
-        {/* Envío gratis: umbral de la zona cotizada */}
-        {!loadingShipping &&
-          shippingQuote &&
-          !shippingQuote.free &&
-          shippingQuote.freeShippingThreshold != null &&
-          cart.subtotal < shippingQuote.freeShippingThreshold && (
-            <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 px-3 py-2 rounded-lg">
-              Agrega {format(shippingQuote.freeShippingThreshold - cart.subtotal)} más para envío gratis a {defaultCity}
-            </p>
-          )}
-
-        {/* Envío gratis: umbral global (sin cotización por zona) */}
-        {!loadingShipping && !shippingQuote && cart.subtotal > 0 && cart.subtotal < freeShippingThreshold && (
-          <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 px-3 py-2 rounded-lg">
-            Agrega {format(freeShippingThreshold - cart.subtotal)} más para envío gratis
-          </p>
+        {/* Envío gratis: umbral de la zona cotizada o, sin cotización, el general */}
+        {!loadingShipping && (
+          <FreeShippingBar
+            subtotal={cart.subtotal}
+            threshold={shippingQuote ? shippingQuote.freeShippingThreshold : freeShippingThreshold}
+            city={shippingQuote ? defaultCity : undefined}
+          />
         )}
 
         <div className={row}>

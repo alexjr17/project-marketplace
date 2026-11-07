@@ -85,14 +85,16 @@ class InputBatchFlowTest extends TestCase
         ])->assertStatus(422)->assertJsonValidationErrors(['initialQuantity']);
     }
 
-    public function test_numero_de_lote_repetido_en_el_mismo_insumo_revienta_con_500(): void
+    public function test_numero_de_lote_repetido_en_el_mismo_insumo_responde_422(): void
     {
         $input = $this->makeInput();
         $this->createBatch($input->id, 1, 1, 'REP')->assertStatus(201);
-        // ACTUAL (posible bug): no se valida el número de lote; choca con el índice único
-        // (inputId, batchNumber) y responde 500 (InputBatchController.php:68).
-        $this->createBatch($input->id, 1, 1, 'REP')->assertStatus(500);
+        // Corregido (antes chocaba con el índice único y respondía 500).
+        $this->createBatch($input->id, 1, 1, 'REP')->assertStatus(422)
+            ->assertJsonValidationErrors(['batchNumber']);
         $this->assertSame(1, InputBatch::count());
+        // Otro insumo sí puede usar el mismo número.
+        $this->createBatch($this->makeInput(['code' => 'OTRO'])->id, 1, 1, 'REP')->assertStatus(201);
     }
 
     public function test_ajustar_lote_registra_ajuste_con_valor_absoluto(): void
@@ -156,18 +158,19 @@ class InputBatchFlowTest extends TestCase
         $this->assertSame('Liberación de reserva de orden #77', InputBatchMovement::where('movementType', 'LIBERACION')->sole()->reason);
     }
 
-    public function test_liberar_sin_reserva_deja_reservado_negativo_y_aumenta_stock(): void
+    public function test_liberar_mas_de_lo_reservado_responde_400_sin_cambios(): void
     {
         $input = $this->makeInput();
         $batchId = $this->createBatch($input->id, 10, 100)->json('data.id');
 
-        // ACTUAL (posible bug): release no valida que exista la reserva
-        // (InputBatchController.php:185-213): reservado queda en -5 y el stock sube a 15.
-        $this->postJson("/api/input-batches/{$batchId}/release", ['quantity' => 5, 'orderId' => 1])->assertOk();
+        // Corregido (antes el reservado quedaba en -5 y el stock subía a 15).
+        $this->postJson("/api/input-batches/{$batchId}/release", ['quantity' => 5, 'orderId' => 1])
+            ->assertStatus(400)->assertJsonPath('message', 'La cantidad supera lo reservado. Reservado: 0, Solicitado: 5');
         $batch = InputBatch::find($batchId);
-        $this->assertEquals(-5, $batch->reservedQuantity);
-        $this->assertEquals(15, $batch->currentQuantity);
-        $this->assertEquals(15, $input->fresh()->currentStock);
+        $this->assertEquals(0, $batch->reservedQuantity);
+        $this->assertEquals(10, $batch->currentQuantity);
+        $this->assertEquals(10, $input->fresh()->currentStock);
+        $this->assertSame(0, InputBatchMovement::where('movementType', 'LIBERACION')->count());
     }
 
     public function test_salida_consume_lo_reservado_sin_tocar_el_stock(): void
@@ -190,32 +193,33 @@ class InputBatchFlowTest extends TestCase
         $this->assertSame('Uso en producción #9', $mov->reason);
     }
 
-    public function test_salida_sin_reserva_no_descuenta_stock_y_deja_reservado_negativo(): void
+    public function test_salida_sin_reserva_responde_400_sin_cambios(): void
     {
         $input = $this->makeInput();
         $batchId = $this->createBatch($input->id, 10, 100)->json('data.id');
 
-        // ACTUAL (posible bug): output solo resta de reservedQuantity y no valida nada
-        // (InputBatchController.php:215-242): el stock sigue en 10 y reservado queda en -3.
-        $this->postJson("/api/input-batches/{$batchId}/output", ['quantity' => 3, 'productionId' => 1])->assertOk();
+        // Corregido (antes el reservado quedaba en -3 sin descontar nada).
+        $this->postJson("/api/input-batches/{$batchId}/output", ['quantity' => 3, 'productionId' => 1])
+            ->assertStatus(400)->assertJsonPath('message', 'La cantidad supera lo reservado. Reservado: 0, Solicitado: 3');
         $batch = InputBatch::find($batchId);
         $this->assertEquals(10, $batch->currentQuantity);
-        $this->assertEquals(-3, $batch->reservedQuantity);
+        $this->assertEquals(0, $batch->reservedQuantity);
         $this->assertEquals(10, $input->fresh()->currentStock);
     }
 
-    public function test_actualizar_lote_e_inactivarlo_no_recalcula_stock(): void
+    public function test_actualizar_lote_e_inactivarlo_recalcula_stock(): void
     {
         $input = $this->makeInput();
         $batchId = $this->createBatch($input->id, 10, 100)->json('data.id');
 
         $this->putJson("/api/input-batches/{$batchId}", ['invoiceRef' => 'FAC-1', 'isActive' => false])
             ->assertOk()->assertJsonPath('data.invoiceRef', 'FAC-1');
-        // ACTUAL (posible bug): inactivar un lote no recalcula inputs.currentStock
-        // (InputBatchController.php:100-119); solo lo corrige recalculate-stock.
+        // Corregido: el lote inactivo deja de contar en el stock del insumo.
+        $this->assertEquals(0, $input->fresh()->currentStock);
+        $this->putJson("/api/input-batches/{$batchId}", ['isActive' => true])->assertOk();
         $this->assertEquals(10, $input->fresh()->currentStock);
         $this->postJson("/api/inputs/{$input->id}/recalculate-stock")->assertOk();
-        $this->assertEquals(0, $input->fresh()->currentStock);
+        $this->assertEquals(10, $input->fresh()->currentStock);
     }
 
     public function test_consultas_de_lotes_y_movimientos_forma_json(): void

@@ -224,25 +224,24 @@ class SaleCreationFlowTest extends PosFlowTestCase
         $this->assertSame(50000.0, (float) OrderItem::where('variantId', $a->id)->value('unitPrice'));
     }
 
-    public function test_el_precio_lo_manda_el_cliente_y_el_descuento_global_puede_ser_negativo(): void
+    public function test_el_precio_lo_pone_el_servidor_y_el_descuento_global_esta_acotado(): void
     {
         [, $register] = $this->cajeroConCaja();
         $a = $this->makeVariant('Camiseta', 50000, 10);
 
-        // ACTUAL (posible bug): el precio unitario viene del request y no se compara con el
-        // precio del producto: se puede vender a 1 peso un producto de 50.000.
+        // Corregido (fase 3): el precio unitario del request se ignora; se cobra el del producto
+        // (antes se podía vender a 1 peso un producto de 50.000).
         $cheap = $this->sell($register, [[$a, 1, 1]])->assertCreated();
-        $this->assertSame(1.0, (float) $cheap->json('data.total'));
+        $this->assertSame(50000.0, (float) $cheap->json('data.total'));
+        $this->assertSame(50000.0, (float) OrderItem::where('orderId', $cheap->json('data.id'))->value('unitPrice'));
 
-        // ACTUAL (posible bug): en /pos/sale "discount" es nullable|numeric sin min:0
-        // (en /pos/calculate sí hay min:0): un descuento negativo SUBE el total.
-        $neg = $this->sell($register, [[$a, 1]], ['discount' => -1000])->assertCreated();
-        $this->assertSame(-1000.0, (float) $neg->json('data.discount'));
-        $this->assertSame(51000.0, (float) $neg->json('data.total'));
+        // Corregido: un descuento negativo es inválido (antes subía el total).
+        $this->sell($register, [[$a, 1]], ['discount' => -1000])->assertStatus(422)->assertJsonValidationErrors(['discount']);
 
-        // ACTUAL (posible bug): un descuento mayor que el subtotal deja el total negativo.
-        $over = $this->sell($register, [[$a, 1]], ['discount' => 60000])->assertCreated();
-        $this->assertSame(-10000.0, (float) $over->json('data.total'));
+        // Corregido: un descuento mayor que el subtotal se rechaza (antes dejaba el total negativo).
+        $this->sell($register, [[$a, 1]], ['discount' => 60000])
+            ->assertStatus(400)->assertJsonPath('message', 'El descuento no puede ser mayor que el subtotal');
+        $this->assertSame(9, $this->stockOf($a));
     }
 
     public function test_numeracion_de_ventas(): void

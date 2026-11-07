@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { errorMessage } from '../../lib/http';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useUsers } from '../../context/UsersContext';
 import { useRoles } from '../../context/RolesContext';
@@ -141,8 +142,8 @@ export const AdminDetailPage = () => {
       toast.success('Perfil actualizado correctamente');
       setIsEditing(false);
       await reload();
-    } catch (err: any) {
-      toast.error(err?.message || 'No se pudo actualizar el perfil');
+    } catch (err) {
+      toast.error(errorMessage(err, 'No se pudo actualizar el perfil'));
     } finally {
       setSaving(false);
     }
@@ -158,8 +159,8 @@ export const AdminDetailPage = () => {
       await toggleAdminStatus(admin.id);
       toast.success(isActive ? 'Administrador desactivado correctamente' : 'Administrador activado correctamente');
       await reload();
-    } catch (err: any) {
-      toast.error(err?.message || 'No se pudo cambiar el estado');
+    } catch (err) {
+      toast.error(errorMessage(err, 'No se pudo cambiar el estado'));
     }
   };
 

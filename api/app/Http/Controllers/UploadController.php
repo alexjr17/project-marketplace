@@ -3,77 +3,19 @@
 namespace App\Http\Controllers;
 
 use App\Http\Concerns\ApiResponse;
+use App\Services\Settings\ImageUploadService;
 use App\Support\SafeRemoteFetch;
 use Illuminate\Http\Request;
-use Illuminate\Support\Str;
 
 /**
- * Subida de imágenes a almacenamiento local (carpeta public/uploads).
- *
- * En el backend Node se usaba Cloudinary; aquí se guarda en disco para que
- * funcione en hosting compartido cPanel sin servicios externos. El contrato
- * de respuesta {url, publicId, width, height, format, bytes} se mantiene.
+ * Subida de imágenes a almacenamiento local (public/uploads). El guardado y sus reglas
+ * están en ImageUploadService; aquí se recibe el archivo y se responde.
  */
 class UploadController extends Controller
 {
     use ApiResponse;
 
-    /** Subcarpetas válidas; cualquier otro valor cae en "general". */
-    private const FOLDERS = ['products', 'designs', 'avatars', 'orders', 'templates', 'general'];
-
-    private const MAX_BYTES = 10 * 1024 * 1024; // 10 MB
-
-    private function folder(?string $name): string
-    {
-        return in_array($name, self::FOLDERS, true) ? $name : 'general';
-    }
-
-    /** Directorio absoluto de subidas para una carpeta, creándolo si falta. */
-    private function uploadDir(string $folder): string
-    {
-        $dir = public_path("uploads/{$folder}");
-        // Varias subidas a la vez pueden crear la carpeta al mismo tiempo: solo falla si al final no existe.
-        if (! is_dir($dir) && ! @mkdir($dir, 0775, true) && ! is_dir($dir)) {
-            throw new \RuntimeException("No se pudo crear la carpeta de subidas: {$folder}");
-        }
-
-        return $dir;
-    }
-
-    /** Guarda los bytes de una imagen y devuelve el resultado con metadatos. */
-    private function storeImageBytes(string $bytes, string $folder, ?string $publicId): array
-    {
-        $info = @getimagesizefromstring($bytes);
-        if ($info === false) {
-            throw new \RuntimeException('El archivo no es una imagen válida');
-        }
-        if (strlen($bytes) > self::MAX_BYTES) {
-            throw new \RuntimeException('La imagen supera el tamaño máximo de 10 MB');
-        }
-
-        $ext = match ($info[2]) {
-            IMAGETYPE_JPEG => 'jpg',
-            IMAGETYPE_PNG => 'png',
-            IMAGETYPE_GIF => 'gif',
-            IMAGETYPE_WEBP => 'webp',
-            default => throw new \RuntimeException('Formato de imagen no soportado'),
-        };
-
-        $name = ($publicId ? Str::slug($publicId) : Str::random(20)).'-'.time().'.'.$ext;
-        $path = "uploads/{$folder}/{$name}";
-        file_put_contents($this->uploadDir($folder).'/'.$name, $bytes);
-
-        return [
-            // URL relativa: funciona en el mismo origen del frontend (vía
-            // proxy en desarrollo, mismo dominio en producción).
-            'url' => '/'.$path,
-            'publicId' => $path,
-            'width' => $info[0],
-            'height' => $info[1],
-            'format' => $ext,
-            'bytes' => strlen($bytes),
-        ];
-    }
+    public function __construct(private ImageUploadService $uploads) {}
 
     /** POST /api/uploads/image */
     public function uploadImage(Request $request)
@@ -83,9 +25,9 @@ class UploadController extends Controller
         }
 
         try {
-            $result = $this->storeImageBytes(
+            $result = $this->uploads->store(
                 file_get_contents($request->file('image')->getRealPath()),
-                $this->folder($request->input('folder')),
+                $request->input('folder'),
                 $request->input('publicId'),
             );
         } catch (\RuntimeException $e) {
@@ -103,11 +45,10 @@ class UploadController extends Controller
             return $this->error('No se proporcionaron imágenes', 400);
         }
 
-        $folder = $this->folder($request->input('folder'));
         $results = [];
         try {
             foreach ((array) $files as $file) {
-                $results[] = $this->storeImageBytes(file_get_contents($file->getRealPath()), $folder, null);
+                $results[] = $this->uploads->store(file_get_contents($file->getRealPath()), $request->input('folder'), null);
             }
         } catch (\RuntimeException $e) {
             return $this->error($e->getMessage(), 400);
@@ -127,9 +68,9 @@ class UploadController extends Controller
 
         try {
             // SafeRemoteFetch evita SSRF (IPs internas, redirecciones) y corta por tamaño.
-            $result = $this->storeImageBytes(
-                SafeRemoteFetch::get($data['url'], self::MAX_BYTES),
-                $this->folder($data['folder'] ?? null),
+            $result = $this->uploads->store(
+                SafeRemoteFetch::get($data['url'], ImageUploadService::MAX_BYTES),
+                $data['folder'] ?? null,
                 $data['publicId'] ?? null,
             );
         } catch (\RuntimeException $e) {
@@ -150,19 +91,10 @@ class UploadController extends Controller
             'publicId' => 'nullable|string',
         ]);
 
-        $raw = $data['image'];
-        if (str_starts_with($raw, 'data:')) {
-            $raw = (string) preg_replace('/^data:[^;]+;base64,/', '', $raw);
-        }
-        $bytes = base64_decode($raw, true);
-        if ($bytes === false) {
-            return $this->error('La imagen base64 no es válida', 400);
-        }
-
         try {
-            $result = $this->storeImageBytes(
-                $bytes,
-                $this->folder($data['folder'] ?? null),
+            $result = $this->uploads->store(
+                $this->uploads->decodeBase64($data['image']),
+                $data['folder'] ?? null,
                 $data['publicId'] ?? null,
             );
         } catch (\RuntimeException $e) {
@@ -187,18 +119,7 @@ class UploadController extends Controller
     /** DELETE /api/uploads/{publicId} */
     public function deleteImage(string $publicId)
     {
-        // Solo se permite borrar dentro de uploads/, sin escapar el directorio.
-        $clean = ltrim(str_replace('..', '', $publicId), '/');
-        if (! str_starts_with($clean, 'uploads/')) {
-            return $this->error('Public ID inválido', 400);
-        }
-
-        $path = public_path($clean);
-        if (! is_file($path)) {
-            return $this->error('Imagen no encontrada o ya fue eliminada', 404);
-        }
-
-        unlink($path);
+        $this->uploads->delete($publicId);
 
         return $this->success(null, 'Imagen eliminada exitosamente');
     }

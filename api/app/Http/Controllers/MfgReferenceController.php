@@ -3,47 +3,19 @@
 namespace App\Http\Controllers;
 
 use App\Http\Concerns\ApiResponse;
-use App\Models\MfgExchangeRate;
-use App\Models\MfgGarmentType;
 use App\Models\MfgReference;
-use App\Services\NumberSequenceService;
+use App\Services\Manufacturing\MfgReferenceService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 
 /**
- * Referencias de la app Fábrica con ficha técnica completa (réplica de
- * project-fabrica-ropa, con nuestro estándar): imagen, colores (primario/
- * secundario), componentes, materiales (BOM con valor), grupos de tallas
- * (listas de precio con recargo por color) y cálculo de costos/precio.
- *
- * Precio:
- *   costVariable = Σ (consumption × unitValue) de materiales
- *   costUnit     = costVariable + fixedCost
- *   basePrice    = costUnit × factor
- *   grupo.listPrice (si no se envía) = (costUnit + grupo.fixedCostExtra) × grupo.factor
- *   recargo por color: se define por grupo y se suma en la venta (no altera listPrice).
+ * Referencias de la app Fábrica con su ficha técnica. Valida y responde; el armado de la
+ * ficha, los costos y el código los hace MfgReferenceService.
  */
 class MfgReferenceController extends Controller
 {
     use ApiResponse;
 
-    public function __construct(private NumberSequenceService $numbers) {}
-
-    private const RELATIONS = [
-        'garmentType:id,code,name,brandId,fixedCost,factor,factorExport',
-        'garmentType.brand:id,name',
-        'brand:id,name',
-        'collection:id,name,year,semester',
-        'colors.color:id,name,hexCode,code',
-        'sizes.size:id,name,abbreviation,sortOrder,market',
-        'components',
-        'materials.input:id,code,name,unitOfMeasure,inputTypeId,scope',
-        'materials.input.inputType:id,name,classification',
-        'materials.color:id,name,hexCode,code',
-        'materials.component',
-        'sizeGroups.sizes.size:id,name,abbreviation,sortOrder',
-        'sizeGroups.surcharges.color:id,name,hexCode,code',
-    ];
+    public function __construct(private MfgReferenceService $references) {}
 
     private function rules(): array
     {
@@ -97,69 +69,29 @@ class MfgReferenceController extends Controller
 
     public function index(Request $request)
     {
-        $query = MfgReference::with(self::RELATIONS)->orderByDesc('createdAt');
-
-        if ($request->filled('search')) {
-            $term = '%'.$request->string('search').'%';
-            $query->where(function ($q) use ($term) {
-                $q->where('code', 'like', $term)->orWhere('name', 'like', $term);
-            });
-        }
-        if ($request->filled('isActive')) {
-            $query->where('isActive', $request->boolean('isActive'));
-        }
-
-        return $this->success($query->get());
+        return $this->success($this->references->list([
+            'search' => $request->filled('search') ? (string) $request->string('search') : null,
+            'isActive' => $request->filled('isActive') ? $request->boolean('isActive') : null,
+        ]));
     }
 
     public function show(int $id)
     {
-        $ref = MfgReference::with(self::RELATIONS)->find($id);
-        if (! $ref) {
-            return $this->error('Referencia no encontrada', 404);
-        }
+        $ref = $this->references->find($id);
 
-        return $this->success($ref);
+        return $ref ? $this->success($ref) : $this->error('Referencia no encontrada', 404);
     }
 
     public function generateCode(Request $request)
     {
         $data = $request->validate(['garmentTypeId' => 'required|integer|exists:mfg_garment_types,id']);
 
-        return $this->success(['code' => $this->nextCode((int) $data['garmentTypeId'], false)]);
+        return $this->success(['code' => $this->references->previewCode((int) $data['garmentTypeId'])]);
     }
 
     public function store(Request $request)
     {
-        $data = $request->validate($this->rules());
-        $costs = $this->computeCosts($data);
-        $code = $this->resolveCode((int) $data['garmentTypeId'], $data['code'] ?? null);
-        if (MfgReference::where('code', $code)->exists()) {
-            return $this->error('El código ya existe', 422, ['code' => ['El código ya existe']]);
-        }
-
-        $ref = DB::transaction(function () use ($data, $costs, $code) {
-            $ref = MfgReference::create([
-                'code' => $code,
-                'name' => $data['name'],
-                'garmentTypeId' => $data['garmentTypeId'],
-                'brandId' => \App\Models\MfgGarmentType::whereKey($data['garmentTypeId'])->value('brandId'),
-                'collectionId' => $data['collectionId'] ?? null,
-                'description' => $data['description'] ?? null,
-                'isActive' => $data['isActive'] ?? true,
-                'imagePath' => $data['imagePath'] ?? null,
-                'fixedCost' => $data['fixedCost'] ?? 0,
-                'factor' => $data['factor'] ?? 1,
-                'costVariable' => $costs['costVariable'],
-                'costUnit' => $costs['costUnit'],
-                'basePrice' => $costs['basePrice'],
-            ]);
-            $this->syncTechnicalSheet($ref, $data, $costs);
-
-            return $ref;
-        });
-
-        return $this->created($ref->load(self::RELATIONS), 'Referencia creada');
+        return $this->created($this->references->create($request->validate($this->rules())), 'Referencia creada');
     }
 
     public function update(Request $request, int $id)
@@ -168,33 +100,8 @@ class MfgReferenceController extends Controller
         if (! $ref) {
             return $this->error('Referencia no encontrada', 404);
         }
-        $data = $request->validate($this->rules());
-        $costs = $this->computeCosts($data);
-        $code = $this->resolveCode((int) $data['garmentTypeId'], $data['code'] ?? null, $ref);
-        if (MfgReference::where('code', $code)->where('id', '!=', $ref->id)->exists()) {
-            return $this->error('El código ya existe', 422, ['code' => ['El código ya existe']]);
-        }
 
-        DB::transaction(function () use ($ref, $data, $costs, $code) {
-            $ref->fill([
-                'code' => $code,
-                'name' => $data['name'],
-                'garmentTypeId' => $data['garmentTypeId'],
-                'brandId' => \App\Models\MfgGarmentType::whereKey($data['garmentTypeId'])->value('brandId'),
-                'collectionId' => $data['collectionId'] ?? null,
-                'description' => $data['description'] ?? null,
-                'isActive' => $data['isActive'] ?? true,
-                'imagePath' => $data['imagePath'] ?? null,
-                'fixedCost' => $data['fixedCost'] ?? 0,
-                'factor' => $data['factor'] ?? 1,
-                'costVariable' => $costs['costVariable'],
-                'costUnit' => $costs['costUnit'],
-                'basePrice' => $costs['basePrice'],
-            ])->save();
-            $this->syncTechnicalSheet($ref, $data, $costs);
-        });
-
-        return $this->success($ref->load(self::RELATIONS), 'Referencia actualizada');
+        return $this->success($this->references->update($ref, $request->validate($this->rules())), 'Referencia actualizada');
     }
 
     public function destroy(int $id)
@@ -203,163 +110,8 @@ class MfgReferenceController extends Controller
         if (! $ref) {
             return $this->error('Referencia no encontrada', 404);
         }
-        $ref->delete();
+        $this->references->delete($ref);
 
         return $this->success(null, 'Referencia eliminada');
-    }
-
-    /** costVariable / costUnit / basePrice a partir de materiales + costo fijo + factor. */
-    private function computeCosts(array $data): array
-    {
-        $costVariable = 0.0;
-        foreach ($data['materials'] ?? [] as $m) {
-            $costVariable += ((float) ($m['consumption'] ?? 0)) * ((float) ($m['unitValue'] ?? 0));
-        }
-        $fixedCost = (float) ($data['fixedCost'] ?? 0);
-        $factor = (float) ($data['factor'] ?? 1);
-        $costUnit = $costVariable + $fixedCost;
-
-        return [
-            'costVariable' => round($costVariable, 2),
-            'costUnit' => round($costUnit, 2),
-            'basePrice' => round($costUnit * $factor, 2),
-        ];
-    }
-
-    /** Reescribe toda la ficha técnica (borrar y reinsertar). */
-    private function syncTechnicalSheet(MfgReference $ref, array $data, array $costs): void
-    {
-        // Colores (con tipo).
-        if (array_key_exists('colors', $data)) {
-            $ref->colors()->delete();
-            $seen = [];
-            foreach ($data['colors'] ?? [] as $c) {
-                if (isset($seen[$c['colorId']])) {
-                    continue;
-                }
-                $seen[$c['colorId']] = true;
-                $ref->colors()->create(['colorId' => $c['colorId'], 'colorType' => $c['type'] ?? 'SECONDARY']);
-            }
-        }
-
-        // Tallas base.
-        if (array_key_exists('sizeIds', $data)) {
-            $ref->sizes()->delete();
-            foreach (array_unique($data['sizeIds'] ?? []) as $sizeId) {
-                $ref->sizes()->create(['sizeId' => $sizeId]);
-            }
-        }
-
-        // Componentes (primero, para mapear índice → id en materiales).
-        $componentIds = [];
-        if (array_key_exists('components', $data)) {
-            $ref->components()->delete();
-            foreach ($data['components'] ?? [] as $comp) {
-                $created = $ref->components()->create([
-                    'position' => $comp['position'],
-                    'description' => $comp['description'] ?? null,
-                ]);
-                $componentIds[] = $created->id;
-            }
-        }
-
-        // Materiales (con valor y componente).
-        if (array_key_exists('materials', $data)) {
-            $ref->materials()->delete();
-            foreach ($data['materials'] ?? [] as $m) {
-                $componentId = null;
-                if (isset($m['componentIndex']) && isset($componentIds[$m['componentIndex']])) {
-                    $componentId = $componentIds[$m['componentIndex']];
-                }
-                $ref->materials()->create([
-                    'inputId' => $m['inputId'],
-                    'colorId' => $m['colorId'] ?? null,
-                    'componentId' => $componentId,
-                    'consumptionInitial' => $m['consumptionInitial'] ?? null,
-                    'increment' => $m['increment'] ?? 0,
-                    'consumption' => $m['consumption'] ?? 0,
-                    'unitValue' => $m['unitValue'] ?? 0,
-                    'unitOfMeasure' => $m['unitOfMeasure'] ?? null,
-                    'notes' => $m['notes'] ?? null,
-                ]);
-            }
-        }
-
-        // Grupos de tallas (listas de precio) + tallas + recargos por color.
-        if (array_key_exists('sizeGroups', $data)) {
-            $ref->sizeGroups()->delete();
-            $rate = (float) (MfgExchangeRate::active()?->rate ?? 0);
-            foreach ($data['sizeGroups'] ?? [] as $i => $g) {
-                $market = $g['market'] ?? 'NATIONAL';
-                $factor = (float) ($g['factor'] ?? 1);
-                $extra = (float) ($g['fixedCostExtra'] ?? 0);
-                $provided = (float) ($g['listPrice'] ?? 0);
-                $listPrice = $provided > 0 ? $provided : round(($costs['costUnit'] + $extra) * $factor, 2);
-                // Exportación se guarda en USD: pesos ÷ tasa activa (sin tasa queda en 0, nunca en pesos).
-                if ($provided <= 0 && $market === 'EXPORT') {
-                    $listPrice = $rate > 0 ? round($listPrice / $rate, 2) : 0;
-                }
-
-                $group = $ref->sizeGroups()->create([
-                    'name' => $g['name'],
-                    'market' => $market,
-                    'fixedCostExtra' => $extra,
-                    'factor' => $factor,
-                    'listPrice' => $listPrice,
-                    'isWholesale' => $g['isWholesale'] ?? false,
-                    'sortOrder' => $i,
-                ]);
-                foreach (array_unique($g['sizeIds'] ?? []) as $sizeId) {
-                    $group->sizes()->create(['sizeId' => $sizeId]);
-                }
-                $seenColor = [];
-                foreach ($g['surcharges'] ?? [] as $s) {
-                    $amount = (float) ($s['amount'] ?? 0);
-                    if ($amount <= 0 || isset($seenColor[$s['colorId']])) {
-                        continue;
-                    }
-                    $seenColor[$s['colorId']] = true;
-                    $group->surcharges()->create(['colorId' => $s['colorId'], 'amount' => $amount]);
-                }
-            }
-        }
-    }
-
-    /**
-     * Resuelve el código final: el prefijo siempre es el del tipo de prenda
-     * (no editable); el sufijo lo puede editar el usuario. Si viene vacío,
-     * se autogenera (nuevo) o se conserva el existente (edición).
-     */
-    private function resolveCode(int $garmentTypeId, ?string $provided, ?MfgReference $existing = null): string
-    {
-        $prefix = $this->codePrefix($garmentTypeId);
-        $provided = $provided !== null ? trim($provided) : '';
-
-        if ($provided === '') {
-            return $existing ? $existing->code : $this->nextCode($garmentTypeId);
-        }
-        // El sufijo editable es lo que va después del primer '-'; el prefijo se fuerza.
-        $suffix = str_contains($provided, '-') ? substr($provided, strpos($provided, '-') + 1) : $provided;
-        $suffix = strtoupper((string) preg_replace('/[^A-Za-z0-9._-]/', '', $suffix));
-
-        return $suffix === '' ? ($existing ? $existing->code : $this->nextCode($garmentTypeId)) : $prefix.'-'.$suffix;
-    }
-
-    /** Prefijo del código según el tipo de prenda (CAM, HOO…; REF si no existe). */
-    private function codePrefix(int $garmentTypeId): string
-    {
-        $gt = MfgGarmentType::find($garmentTypeId);
-
-        return $gt ? strtoupper($gt->code) : 'REF';
-    }
-
-    /** Próximo código PREFIJO-####; con $consume=false solo lo muestra (generate-code). */
-    private function nextCode(int $garmentTypeId, bool $consume = true): string
-    {
-        $vars = ['code' => $this->codePrefix($garmentTypeId)];
-
-        return $consume
-            ? $this->numbers->next(NumberSequenceService::MFG_REFERENCE, $vars)
-            : $this->numbers->peek(NumberSequenceService::MFG_REFERENCE, $vars);
     }
 }

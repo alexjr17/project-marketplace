@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { errorMessage } from '../../lib/http';
 import { useNavigate } from 'react-router-dom';
 import {
   useReactTable,
@@ -161,8 +162,8 @@ export const AdminUsersPage = () => {
       });
       toast.success('Administrador creado correctamente');
       setIsFormOpen(false);
-    } catch (err: any) {
-      toast.error(err?.message || 'No se pudo crear el administrador');
+    } catch (err) {
+      toast.error(errorMessage(err, 'No se pudo crear el administrador'));
     } finally {
       setSaving(false);
     }

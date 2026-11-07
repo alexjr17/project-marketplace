@@ -8,6 +8,7 @@ import {
   Page, PageHeader, Button, Card, CardTitle, Field, TextInput, TextArea, NumberInput, FormGrid, FormActions,
   Alert, Spinner, EmptyState, useConfirm, toast,
 } from '../../components/ui';
+import { errorMessage } from '../../lib/http';
 
 const LIST = '/admin-panel/input-types';
 
@@ -122,8 +123,8 @@ export default function InputTypeDetailPage() {
       await inputTypesService.delete(parseInt(id!));
       toast.success('Tipo de insumo eliminado');
       navigate(LIST);
-    } catch (err: any) {
-      const msg = err?.message || 'Error al eliminar el tipo de insumo';
+    } catch (err) {
+      const msg = errorMessage(err, 'Error al eliminar el tipo de insumo');
       setError(msg);
       toast.error(msg);
       console.error(err);

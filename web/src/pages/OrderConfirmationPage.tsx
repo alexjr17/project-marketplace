@@ -22,6 +22,7 @@ import { useToast } from '../context/ToastContext';
 import { Alert, Button, Spinner } from '../components/ui';
 import type { Order } from '../types/order';
 import paymentsService, { type Payment } from '../services/payments.service';
+import { errorMessage } from '../lib/http';
 
 export const OrderConfirmationPage = () => {
   const { orderNumber } = useParams<{ orderNumber: string }>();
@@ -55,7 +56,16 @@ export const OrderConfirmationPage = () => {
         }
       }
 
-      const foundOrder = await getOrderByNumber(orderNumber);
+      let foundOrder: Order | undefined;
+      try {
+        foundOrder = await getOrderByNumber(orderNumber);
+      } catch (e) {
+        // Error del servidor: no es "pedido inexistente"; se lleva a Mis pedidos para reintentar.
+        if (cancelled) return;
+        showToast(errorMessage(e, 'No pudimos cargar tu pedido. Búscalo en Mis pedidos.'), 'error');
+        navigate('/my-orders');
+        return;
+      }
       if (cancelled) return;
       if (foundOrder) {
         setOrder(foundOrder);
@@ -98,7 +108,7 @@ export const OrderConfirmationPage = () => {
         }
       };
       reader.readAsDataURL(file);
-    } catch (error) {
+    } catch {
       showToast('Error al subir comprobante', 'error');
     } finally {
       setUploadingReceipt(false);

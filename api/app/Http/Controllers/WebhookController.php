@@ -3,10 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Http\Concerns\ApiResponse;
-use App\Services\MercadoPagoService;
 use App\Services\Messaging\Channels\MessengerChannel;
 use App\Services\Messaging\Channels\WhatsAppChannel;
-use App\Services\WompiService;
+use App\Services\Payments\MercadoPagoService;
+use App\Services\Payments\WompiService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Throwable;

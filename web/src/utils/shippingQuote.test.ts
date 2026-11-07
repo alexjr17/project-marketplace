@@ -116,19 +116,23 @@ describe('quoteShipping (caracterización)', () => {
     expect(quoteShipping(s2, 'Bogotá', 1, 0)).toBeNull();
   });
 
-  it('la predeterminada sin tarifa para la zona NO cae a otra transportadora que sí la tenga', () => {
+  it('la predeterminada sin tarifa para la zona cae a otra transportadora activa que sí la tenga', () => {
     const s = settings();
     s.carriers.push(carrier({ id: 'c2', name: 'Inter', zoneRates: [] }));
     s.defaultCarrierId = 'c2';
-    // ACTUAL (posible bug): Servi cubre Bogotá pero la cotización da null porque la predeterminada no.
-    expect(quoteShipping(s, 'Bogotá', 1, 0)).toBeNull();
+    // Corregido (antes daba null aunque Servi cubre Bogotá). Igual en ShippingQuoteService del API.
+    expect(quoteShipping(s, 'Bogotá', 1, 0)!.carrierName).toBe('Servi');
   });
 
-  it('maxWeight de la tarifa no se aplica', () => {
+  it('maxWeight de la tarifa se respeta: si ninguna transportadora lo admite, no se cotiza', () => {
     const s = settings();
     s.carriers[0].zoneRates[1].maxWeight = 5;
-    // ACTUAL (posible bug): 50 kg se cotiza aunque la tarifa permite 5 kg máximo.
-    expect(quoteShipping(s, 'Bogotá', 50, 0)!.cost).toBe(58000);
+    // Corregido (antes 50 kg se cotizaba aunque la tarifa permite 5 kg máximo).
+    expect(quoteShipping(s, 'Bogotá', 50, 0)).toBeNull();
+    expect(quoteShipping(s, 'Bogotá', 5, 0)).not.toBeNull();
+    // Otra transportadora que sí admite el peso toma el envío.
+    s.carriers.push(carrier({ id: 'c2', name: 'Inter', zoneRates: [{ zoneId: 'bog', baseCost: 1000, costPerKg: 0, estimatedDays: days }] }));
+    expect(quoteShipping(s, 'Bogotá', 50, 0)!.carrierName).toBe('Inter');
   });
 
   it('ciudad con nombre repetido en dos departamentos: se toma el primero de COLOMBIA_GEO', () => {

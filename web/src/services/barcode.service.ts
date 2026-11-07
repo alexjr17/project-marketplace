@@ -1,17 +1,6 @@
 import { httpKeepUrls as client } from '../lib/http';
 // ==================== TIPOS ====================
 
-export interface BarcodeLabelData {
-  variantId: number;
-  barcode: string;
-  productName: string;
-  sku: string;
-  color: string;
-  size: string;
-  price: number;
-  image: string; // Base64 encoded image
-}
-
 export interface BarcodeImageOptions {
   format?: 'png' | 'svg';
   width?: number;
@@ -44,39 +33,6 @@ export async function getVariantBarcodeImage(
 }
 
 /**
- * Generar imagen de código de barras genérico
- */
-export async function generateBarcodeImage(
-  barcode: string,
-  options: BarcodeImageOptions = {}
-): Promise<string> {
-  const blob = await client.blob('/barcodes/image', { method: 'POST', body: { barcode, ...options } });
-
-  return URL.createObjectURL(blob);
-}
-
-/**
- * Obtener datos completos de etiqueta para una variante
- */
-export async function getVariantBarcodeLabel(variantId: number): Promise<BarcodeLabelData> {
-  return client.get<BarcodeLabelData>(`/barcodes/label/${variantId}`);
-}
-
-/**
- * Generar etiquetas para múltiples variantes
- */
-export async function generateBatchLabels(variantIds: number[]): Promise<BarcodeLabelData[]> {
-  return client.post<BarcodeLabelData[]>(`/barcodes/labels/batch`, { variantIds });
-}
-
-/**
- * Generar etiquetas para todas las variantes de un producto
- */
-export async function generateProductLabels(productId: number): Promise<BarcodeLabelData[]> {
-  return client.get<BarcodeLabelData[]>(`/barcodes/labels/product/${productId}`);
-}
-
-/**
  * Asignar código de barras a una variante
  */
 export async function assignBarcode(
@@ -84,31 +40,6 @@ export async function assignBarcode(
   barcode?: string
 ): Promise<{ variantId: number; barcode: string }> {
   return client.post<{ variantId: number; barcode: string }>(`/barcodes/assign/${variantId}`, { barcode });
-}
-
-/**
- * Asignar códigos de barras a todas las variantes sin código
- */
-export async function assignAllBarcodes(): Promise<{
-  success: number;
-  failed: number;
-  errors: { variantId: number; error: string }[];
-}> {
-  return client.post<{
-  success: number;
-  failed: number;
-  errors: { variantId: number; error: string }[];
-}>(`/barcodes/assign-all`, {});
-}
-
-/**
- * Validar formato de código de barras
- */
-export async function validateBarcode(
-  barcode: string,
-  type: 'ean13' | 'code128' = 'ean13'
-): Promise<{ barcode: string; type: string; isValid: boolean }> {
-  return client.post<{ barcode: string; type: string; isValid: boolean }>(`/barcodes/validate`, { barcode, type });
 }
 
 /**

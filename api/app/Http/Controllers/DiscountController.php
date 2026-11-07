@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Http\Concerns\ApiResponse;
 use App\Models\Discount;
-use App\Models\Product;
 use App\Services\DiscountService;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -41,14 +40,6 @@ class DiscountController extends Controller
         ];
     }
 
-    /** Normaliza el código: mayúsculas, o null si es automático. */
-    private function normalizeCode(array $data): array
-    {
-        $data['code'] = ! empty($data['code']) ? strtoupper(trim($data['code'])) : null;
-
-        return $data;
-    }
-
     // ==================== ADMIN ====================
 
     public function index()
@@ -58,9 +49,7 @@ class DiscountController extends Controller
 
     public function store(Request $request)
     {
-        $data = $this->normalizeCode($request->validate($this->rules($request)));
-
-        return $this->created(Discount::create($data), 'Descuento creado');
+        return $this->created($this->discounts->save($request->validate($this->rules($request))), 'Descuento creado');
     }
 
     public function update(Request $request, int $id)
@@ -69,10 +58,8 @@ class DiscountController extends Controller
         if (! $d) {
             return $this->error('Descuento no encontrado', 404);
         }
-        $data = $this->normalizeCode($request->validate($this->rules($request, $id)));
-        $d->fill($data)->save();
 
-        return $this->success($d, 'Descuento actualizado');
+        return $this->success($this->discounts->save($request->validate($this->rules($request, $id)), $d), 'Descuento actualizado');
     }
 
     public function destroy(int $id)
@@ -103,38 +90,13 @@ class DiscountController extends Controller
             'items.*.quantity' => 'nullable|integer',
         ]);
 
-        // Resolver categoría/oferta y subtotal a partir de los ítems (no confiamos en el front).
-        $items = [];
-        $subtotal = 0;
-        $channel = $data['channel'] ?? 'online';
-        $autos = $this->discounts->activeAutoDiscounts($channel);
-        $productIds = collect($data['items'] ?? [])->pluck('productId')->filter()->unique()->all();
-        $products = Product::whereIn('id', $productIds)->get()->keyBy('id');
-
-        foreach (($data['items'] ?? []) as $it) {
-            $pid = (int) ($it['productId'] ?? 0);
-            $product = $products[$pid] ?? null;
-            // Precio confiable: el del backend con la oferta automática ya aplicada.
-            $price = $product ? $this->discounts->autoPrice($product, $autos) : (float) ($it['price'] ?? 0);
-            $qty = (int) ($it['quantity'] ?? 0);
-            $subtotal += $price * $qty;
-            $items[] = [
-                'productId' => $pid,
-                'categoryId' => $product?->categoryId,
-                'price' => $price,
-                'quantity' => $qty,
-                // No acumulable: marcar si el producto ya tiene oferta automática.
-                'discounted' => $product ? $price < (float) $product->basePrice : false,
-            ];
-        }
-
         try {
-            $result = $this->discounts->validate($data['code'], [
-                'subtotal' => $subtotal,
-                'items' => $items,
-                'userId' => $request->user()?->id,
-                'channel' => $channel,
-            ]);
+            $result = $this->discounts->validateForItems(
+                $data['code'],
+                $data['items'] ?? [],
+                $data['channel'] ?? 'online',
+                $request->user()?->id,
+            );
         } catch (RuntimeException $e) {
             return $this->error($e->getMessage(), 422);
         }

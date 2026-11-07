@@ -129,8 +129,8 @@ export const FeaturedProducts = ({ title, subtitle, section }: FeaturedProductsP
   const viewAllLink = getViewAllLink();
   const showViewAll = section?.showViewAll ?? true;
 
-  // Si no hay productos y ya terminó de cargar, no mostrar la sección
-  if (!isLoading && products.length === 0) {
+  // Con menos de 3 productos la sección se ve vacía (y repite lo de la vitrina): no se muestra.
+  if (!isLoading && products.length < 3) {
     return null;
   }
 

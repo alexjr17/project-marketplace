@@ -2,10 +2,9 @@
 
 namespace App\Models;
 
-use App\Services\NumberSequenceService;
-
 /**
- * Orden de producción manual de la app Fábrica.
+ * Orden de producción de la app Fábrica. La creación (código, matriz y etapas) la hace
+ * App\Services\Manufacturing\MfgProductionOrderService.
  */
 class MfgProductionOrder extends BaseModel
 {
@@ -17,55 +16,6 @@ class MfgProductionOrder extends BaseModel
         'scheduledAt' => 'datetime',
         'estimatedDeliveryAt' => 'datetime',
     ];
-
-    /**
-     * Consume el próximo código OP-{año}-#### (NumberSequenceService). Se conserva aquí
-     * porque createForReference() lo usa; cuando Fábrica pase a su Service, sale del modelo.
-     */
-    public static function nextCode(): string
-    {
-        return app(NumberSequenceService::class)->next(NumberSequenceService::MFG_PRODUCTION_ORDER);
-    }
-
-    /** Genera las etapas de la orden desde el catálogo de procesos activos (en orden). */
-    public function generateStages(): void
-    {
-        $processes = MfgProcess::where('isActive', true)->orderBy('sequence')->orderBy('id')->get();
-        foreach ($processes as $i => $process) {
-            $this->stages()->create([
-                'processId' => $process->id,
-                'sequence' => $process->sequence ?: ($i + 1),
-                'status' => 'PENDING',
-            ]);
-        }
-    }
-
-    /**
-     * Crea una orden de producción para una referencia con su matriz de ítems
-     * ([{colorId,sizeId,quantity}]) y genera sus etapas. Reutilizado por la
-     * creación manual y por la generación desde una orden de pedido.
-     */
-    public static function createForReference(int $referenceId, array $items, array $attrs = []): self
-    {
-        $order = self::create(array_merge([
-            'code' => self::nextCode(),
-            'referenceId' => $referenceId,
-            'status' => 'PROGRAMMED',
-        ], $attrs));
-        foreach ($items as $it) {
-            if ((int) ($it['quantity'] ?? 0) <= 0) {
-                continue;
-            }
-            $order->items()->create([
-                'colorId' => $it['colorId'],
-                'sizeId' => $it['sizeId'],
-                'quantity' => $it['quantity'],
-            ]);
-        }
-        $order->generateStages();
-
-        return $order;
-    }
 
     public function reference()
     {

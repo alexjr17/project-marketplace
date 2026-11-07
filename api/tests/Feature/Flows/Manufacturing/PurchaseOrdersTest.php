@@ -4,6 +4,7 @@ namespace Tests\Feature\Flows\Manufacturing;
 
 use App\Models\MfgCollection;
 use App\Models\MfgProductionOrder;
+use App\Models\MfgPurchaseOrder;
 use App\Models\MfgPurchaseOrderItem;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\Concerns\ActsAsRoles;
@@ -206,10 +207,12 @@ class PurchaseOrdersTest extends TestCase
         $po = $this->createPo();
         $this->patchJson("/api/manufacturing/purchase-orders/{$po['id']}/status", ['status' => 'CANCELLED'])->assertOk();
 
-        // ACTUAL (posible bug): no se valida el estado del pedido; un pedido CANCELADO (o en
-        // borrador) genera producción y pasa a IN_PRODUCTION.
-        $this->postJson("/api/manufacturing/purchase-orders/{$po['id']}/generate-production")->assertOk()
-            ->assertJsonPath('data.purchaseOrder.status', 'IN_PRODUCTION');
+        // Corregido (fase 3): un pedido anulado no genera producción ni cambia de estado.
+        $this->postJson("/api/manufacturing/purchase-orders/{$po['id']}/generate-production")->assertStatus(422)
+            ->assertJsonPath('message', 'El pedido está anulado; no se puede generar producción.');
+        $this->assertSame('CANCELLED', MfgPurchaseOrder::find($po['id'])->status);
+        $this->assertSame(0, MfgProductionOrder::count());
+        // ACTUAL (ambiguo, sin cambiar): un pedido en BORRADOR sí genera producción.
     }
 
     public function test_un_pedido_entregado_conserva_su_estado_al_generar(): void

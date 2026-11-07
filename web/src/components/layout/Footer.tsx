@@ -3,6 +3,8 @@ import { Sparkles, Mail, Phone, MapPin, Clock, Heart } from 'lucide-react';
 import type { ComponentType } from 'react';
 import { useSettings } from '../../context/SettingsContext';
 import { useAuth } from '../../context/AuthContext';
+import { useCatalogs } from '../../context/CatalogsContext';
+import { STORE_CONTAINER } from '../shared/StoreContainer';
 import { InstagramIcon, FacebookIcon, WhatsAppIcon, TwitterIcon } from '../icons/SocialIcons';
 
 /** Icono de red social: enlace activo o deshabilitado si no está configurado. */
@@ -37,13 +39,21 @@ export const Footer = () => {
   const showSocialInFooter = settings.appearance?.showSocialInFooter ?? true;
   const showScheduleInFooter = settings.appearance?.showScheduleInFooter ?? true;
   const social = settings.general.socialLinks;
+  const { categories } = useCatalogs();
+  const shopCategories = categories.filter((c) => c.isActive).slice(0, 6);
+  const enableCustomizer = settings.home?.enableCustomizer ?? true;
+  const legalLinks = [
+    { to: '/legal/terms', label: 'Términos y condiciones', active: settings.legal?.termsAndConditions?.isActive },
+    { to: '/legal/privacy', label: 'Política de privacidad', active: settings.legal?.privacyPolicy?.isActive },
+    { to: '/legal/returns', label: 'Política de devoluciones', active: settings.legal?.returnsPolicy?.isActive },
+  ].filter((l) => l.active !== false);
 
   return (
     <footer className="bg-white border-t border-gray-200 mt-auto">
-      <div className="max-w-7xl mx-auto px-4 py-10 md:py-12">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
+      <div className={`${STORE_CONTAINER} py-10 md:py-12`}>
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-[1.4fr_1fr_1fr_1.2fr_1.2fr] gap-8">
           {/* Marca */}
-          <div>
+          <div className="col-span-2 md:col-span-3 lg:col-span-1">
             <div className="flex items-center gap-2.5 mb-3">
               {settings.general.logo ? (
                 <img src={settings.general.logo} alt={settings.general.siteName} className="h-9 max-w-[60px] object-contain" />
@@ -72,14 +82,26 @@ export const Footer = () => {
             )}
           </div>
 
-          {/* Enlaces rápidos */}
+          {/* Comprar: las categorías activas del catálogo */}
           <div>
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-900 mb-3">Enlaces rápidos</h3>
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-900 mb-3">Comprar</h3>
             <ul className="space-y-2">
-              <li><Link to="/" className={linkClass}>Inicio</Link></li>
-              <li><Link to="/catalog" className={linkClass}>Catálogo</Link></li>
-              <li><Link to="/customize" className={linkClass}>Personalizar</Link></li>
+              {shopCategories.map((c) => (
+                <li key={c.id}><Link to={`/catalog?category=${encodeURIComponent(c.slug)}`} className={linkClass}>{c.name}</Link></li>
+              ))}
+              <li><Link to="/catalog?onSale=1" className={linkClass}>Ofertas</Link></li>
+              <li><Link to="/catalog" className={linkClass}>Todo el catálogo</Link></li>
+            </ul>
+          </div>
+
+          {/* Tu cuenta */}
+          <div>
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-900 mb-3">Tu cuenta</h3>
+            <ul className="space-y-2">
+              <li><Link to="/my-orders" className={linkClass}>Mis pedidos</Link></li>
+              <li><Link to="/favorites" className={linkClass}>Favoritos</Link></li>
               <li><Link to="/cart" className={linkClass}>Carrito</Link></li>
+              {enableCustomizer && <li><Link to="/customize" className={linkClass}>Personaliza tu diseño</Link></li>}
             </ul>
           </div>
 
@@ -136,9 +158,9 @@ export const Footer = () => {
             © {new Date().getFullYear()} <span className="font-semibold text-gray-700">{settings.general.siteName || 'StylePrint'}</span>. Todos los derechos reservados.
           </p>
           <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1">
-            <Link to="/legal/terms" className="hover:text-gray-900 transition-colors">Términos y condiciones</Link>
-            <Link to="/legal/privacy" className="hover:text-gray-900 transition-colors">Política de privacidad</Link>
-            <Link to="/legal/returns" className="hover:text-gray-900 transition-colors">Política de devoluciones</Link>
+            {legalLinks.map((l) => (
+              <Link key={l.to} to={l.to} className="hover:text-gray-900 transition-colors">{l.label}</Link>
+            ))}
           </div>
           <p className="flex items-center gap-1">
             Hecho con <Heart className="w-3 h-3 inline text-red-500 fill-red-500" /> para creativos

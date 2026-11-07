@@ -5,6 +5,7 @@ import { useSettings } from '../context/SettingsContext';
 import type { LegalSettings } from '../types/settings';
 import { PageHeader } from '../components/shared/PageHeader';
 import { Seo } from '../components/seo/Seo';
+import { StoreContainer } from '../components/shared/StoreContainer';
 import { Button, Card, EmptyState } from '../components/ui';
 
 // Mapeo de slugs a keys del objeto legal
@@ -49,7 +50,7 @@ export const LegalPage = () => {
     return (
       <div className="min-h-screen bg-gray-50">
         <PageHeader title="Información legal" backLabel="Inicio" backTo="/" />
-        <div className="max-w-3xl mx-auto px-4 py-8">
+        <StoreContainer>
           <Card padded={false}>
             <EmptyState
               icon={FileText}
@@ -58,7 +59,7 @@ export const LegalPage = () => {
               action={<Button variant="secondary" onClick={() => navigate('/')}>Volver al inicio</Button>}
             />
           </Card>
-        </div>
+        </StoreContainer>
       </div>
     );
   }
@@ -75,9 +76,9 @@ export const LegalPage = () => {
       <Seo title={legalPage.title} />
       <PageHeader title={legalPage.title} subtitle={`Última actualización: ${formattedDate}`} backLabel="Inicio" backTo="/" />
 
-      <div className="max-w-5xl mx-auto px-4 py-6 lg:py-8 grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">
+      <StoreContainer className="py-6 lg:py-8 grid grid-cols-1 lg:grid-cols-[240px_minmax(0,1fr)] gap-6 items-start">
         {/* Otras páginas legales */}
-        <nav className="lg:col-span-1 bg-white rounded-xl border border-gray-200 p-2 lg:sticky lg:top-24" aria-label="Páginas legales">
+        <nav className="bg-white rounded-xl border border-gray-200 p-2 lg:sticky" style={{ top: 'calc(var(--store-header-h, 120px) + 1rem)' }} aria-label="Páginas legales">
           {LEGAL_LINKS.filter((l) => settings.legal[slugToKey[l.slug]]?.isActive).map((l) => {
             const active = l.slug === slug;
             const LinkIcon = pageIcons[slugToKey[l.slug]];
@@ -94,7 +95,7 @@ export const LegalPage = () => {
           })}
         </nav>
 
-        <article className="lg:col-span-3 bg-white rounded-xl border border-gray-200">
+        <article className="bg-white rounded-xl border border-gray-200 max-w-4xl">
           <header className="flex items-center gap-3 px-5 md:px-8 py-5 border-b border-gray-100">
             <div className="w-10 h-10 rounded-lg bg-app-100 text-app-600 flex items-center justify-center flex-shrink-0">
               <Icon className="w-5 h-5" />
@@ -109,7 +110,7 @@ export const LegalPage = () => {
             {settings.general.siteName} · Todos los derechos reservados
           </footer>
         </article>
-      </div>
+      </StoreContainer>
     </div>
   );
 };

@@ -1,9 +1,15 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { ShoppingCart, Check, ZoomIn, Star, Share2, Copy, PackageX, Truck, ShieldCheck, RotateCcw } from 'lucide-react';
-import { Badge, Button, Dialog, EmptyState, Field, IconButton, Skeleton, TextInput } from '../components/ui';
+import { useParams, useNavigate, Link } from 'react-router-dom';
+import { ShoppingCart, Check, ZoomIn, Star, Share2, Copy, PackageX, Truck, ShieldCheck, RotateCcw, Palette, Ruler } from 'lucide-react';
+import { Badge, Button, Dialog, EmptyState, Field, IconButton, Skeleton, Tabs, TextInput } from '../components/ui';
 import { QuantityStepper } from '../components/cart/QuantityStepper';
 import { PageHeader } from '../components/shared/PageHeader';
+import { StoreContainer } from '../components/shared/StoreContainer';
+import { ProductImage } from '../components/products/ProductImage';
+import { useCatalogs } from '../context/CatalogsContext';
+import { useSettings } from '../context/SettingsContext';
+import { getSizeChart } from '../data/sizeCharts';
+import { sizeChartType } from '../components/customizer/customizerModel';
 import { useCurrency } from '../hooks/useCurrency';
 import { useCart } from '../context/CartContext';
 import { getVariantByProductColorSize } from '../services/variants.service';
@@ -13,6 +19,8 @@ import productsService from '../services/products.service';
 import type { Product } from '../types/product';
 import { RelatedProducts } from '../components/products/RelatedProducts';
 import { ProductReviewSection } from '../components/reviews/ProductReviewSection';
+import toast from '../lib/toast';
+import { errorMessage } from '../lib/http';
 
 // Iconos de redes sociales como componentes SVG
 const FacebookIcon = () => (
@@ -53,7 +61,11 @@ export default function ProductDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { format } = useCurrency();
-  const { addStandardProduct } = useCart();
+  const { addStandardProduct, orderConfig } = useCart();
+  const { categories } = useCatalogs();
+  const { settings } = useSettings();
+  const [infoTab, setInfoTab] = useState<'description' | 'sizes' | 'shipping'>('description');
+  const [imageFailed, setImageFailed] = useState(false);
 
   // Estados del producto
   const [product, setProduct] = useState<Product | null>(null);
@@ -194,7 +206,7 @@ export default function ProductDetailPage() {
       setAddedSuccess(true);
       setTimeout(() => setAddedSuccess(false), 2000);
     } catch (error) {
-      console.error('Error adding to cart:', error);
+      toast.error(errorMessage(error, 'No se pudo agregar al carrito'));
     } finally {
       setIsAdding(false);
     }
@@ -271,11 +283,12 @@ export default function ProductDetailPage() {
 
   const handleImageChange = useCallback((index: number) => {
     setCurrentImageIndex(index);
+    setImageFailed(false);
     scrollToThumbnail(index);
   }, [scrollToThumbnail]);
 
   // Handlers para el zoom
-  const handleMouseEnter = () => setIsZooming(true);
+  const handleMouseEnter = () => setIsZooming(!imageFailed && productImages.length > 0);
   const handleMouseLeave = () => setIsZooming(false);
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -298,7 +311,7 @@ export default function ProductDetailPage() {
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50">
-        <div className="max-w-7xl mx-auto px-4 py-8 grid grid-cols-1 md:grid-cols-2 gap-8">
+        <StoreContainer className="py-6 lg:py-8 grid grid-cols-1 md:grid-cols-2 gap-8">
           <Skeleton className="aspect-square w-full rounded-xl" />
           <div className="space-y-4">
             <Skeleton className="h-4 w-24" />
@@ -308,7 +321,7 @@ export default function ProductDetailPage() {
             <Skeleton className="h-10 w-2/3" />
             <Skeleton className="h-12 w-full" />
           </div>
-        </div>
+        </StoreContainer>
       </div>
     );
   }
@@ -317,7 +330,7 @@ export default function ProductDetailPage() {
   if (error || !product) {
     return (
       <div className="min-h-screen bg-gray-50">
-        <div className="max-w-2xl mx-auto px-4 py-16">
+        <div className="max-w-2xl mx-auto px-3 md:px-6 py-16">
           <div className="bg-white rounded-xl border border-gray-200">
             <EmptyState
               icon={PackageX}
@@ -331,8 +344,19 @@ export default function ProductDetailPage() {
     );
   }
 
-  // Nombre de categoría para el encabezado
-  const categoryName = product.categorySlug || product.category || 'Productos';
+  // Categoría por nombre (no el slug), con enlace al catálogo filtrado.
+  const categorySlug = product.categorySlug || (typeof product.category === 'string' ? product.category : '');
+  const categoryName = product.categoryName || categories.find((c) => c.slug === categorySlug)?.name || 'Catálogo';
+  const categoryLink = categorySlug ? `/catalog?category=${encodeURIComponent(categorySlug)}` : '/catalog';
+  // Guía de tallas solo si la tabla del tipo tiene alguna de las tallas del producto
+  // (un bolso de talla única no muestra la tabla de camisetas).
+  const chartCandidate = needsSize ? getSizeChart(sizeChartType(product.typeSlug, product.typeName)) : undefined;
+  const productSizes = product.sizes.map((sz) => (typeof sz === 'string' ? sz : sz.abbreviation));
+  const sizeChart = chartCandidate?.sizes.some((r) => productSizes.includes(r.size)) ? chartCandidate : undefined;
+  const freeShipping = orderConfig.freeShippingThreshold;
+  const returnsActive = settings.legal?.returnsPolicy?.isActive;
+  const unitPrice = product.salePrice ?? product.basePrice;
+  const addLabel = isAdding ? 'Agregando…' : addedSuccess ? 'Agregado' : 'Agregar al carrito';
   const onSale = product.hasDiscount && product.salePrice != null;
   const selectedColorName = product.colors.find((c) => c.hexCode === selectedColor)?.name;
   const optionLabel = 'text-sm font-medium text-gray-900';
@@ -345,13 +369,13 @@ export default function ProductDetailPage() {
         image={product.images.front}
         type="product"
       />
-      {/* Cabecera estándar compacta */}
-      <PageHeader title="Detalle del producto" subtitle={categoryName} />
+      {/* Migas: Inicio › Categoría › Producto (el título va junto al precio) */}
+      <PageHeader variant="crumbs" title={product.name} backTo={categoryLink} backLabel={categoryName} />
 
-      <div className="max-w-7xl w-full mx-auto px-4 py-6 lg:py-8">
+      <StoreContainer className="py-6 lg:py-8 pb-28 md:pb-8">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 lg:gap-10 items-start">
           {/* Galería */}
-          <div className="md:sticky md:top-24">
+          <div className="md:sticky" style={{ top: 'calc(var(--store-header-h, 120px) + 1rem)' }}>
             <div
               ref={imageContainerRef}
               className="relative aspect-square rounded-xl overflow-hidden bg-white border border-gray-200 cursor-zoom-in"
@@ -359,10 +383,16 @@ export default function ProductDetailPage() {
               onMouseLeave={handleMouseLeave}
               onMouseMove={handleMouseMove}
             >
-              <img
+              <ProductImage
+                key={productImages[currentImageIndex]?.url ?? 'none'}
                 src={productImages[currentImageIndex]?.url}
-                alt={productImages[currentImageIndex]?.label}
-                className={`w-full h-full object-contain transition-opacity duration-200 ${isZooming ? 'opacity-0' : 'opacity-100'}`}
+                alt={`${product.name} · ${productImages[currentImageIndex]?.label ?? 'imagen'}`}
+                width={900}
+                priority
+                fit="contain"
+                iconClassName="w-14 h-14"
+                onFailed={() => { setImageFailed(true); setIsZooming(false); }}
+                className={`bg-white transition-opacity duration-200 ${isZooming ? 'opacity-0' : 'opacity-100'}`}
                 draggable={false}
               />
 
@@ -386,7 +416,7 @@ export default function ProductDetailPage() {
                 </div>
               )}
 
-              {!isZooming && (
+              {!isZooming && !imageFailed && productImages.length > 0 && (
                 <div className="absolute bottom-3 right-3 hidden md:flex items-center gap-1 bg-white/90 border border-gray-200 text-gray-600 text-xs px-2 py-1 rounded-full">
                   <ZoomIn className="w-3.5 h-3.5" />
                   <span>Pasa el cursor para ampliar</span>
@@ -412,7 +442,7 @@ export default function ProductDetailPage() {
                       currentImageIndex === index ? 'border-app-600' : 'border-gray-200 hover:border-gray-300'
                     }`}
                   >
-                    <img src={img.url} alt={img.label} className="w-full h-full object-cover" draggable={false} />
+                    <ProductImage src={img.url} alt={img.label} width={120} iconClassName="w-5 h-5" draggable={false} />
                   </button>
                 ))}
               </div>
@@ -423,7 +453,7 @@ export default function ProductDetailPage() {
           <div className="bg-white rounded-xl border border-gray-200 p-5 md:p-6">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <p className="text-xs font-medium uppercase tracking-wide text-gray-500">{categoryName}</p>
+                <Link to={categoryLink} className="text-xs font-medium uppercase tracking-wide text-gray-500 hover:text-app-700">{categoryName}</Link>
                 <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mt-1">{product.name}</h1>
               </div>
               <div className="flex items-center gap-1 flex-shrink-0 -mr-2">
@@ -462,19 +492,9 @@ export default function ProductDetailPage() {
               )}
             </div>
 
-            {/* Descripción */}
+            {/* Descripción corta (la completa está en la pestaña Descripción) */}
             {product.description && (
-              <p className="text-sm text-gray-600 leading-relaxed mt-4">{product.description}</p>
-            )}
-
-            {/* Etiquetas */}
-            {product.tags && product.tags.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 mt-3">
-                {product.tags.slice(0, 6).map((tag) => (
-                  <Badge key={tag}>{tag}</Badge>
-                ))}
-                {product.tags.length > 6 && <span className="text-xs text-gray-400">+{product.tags.length - 6}</span>}
-              </div>
+              <p className="text-sm text-gray-600 leading-relaxed mt-4 line-clamp-3">{product.description}</p>
             )}
 
             <div className="border-t border-gray-100 my-5" />
@@ -518,7 +538,21 @@ export default function ProductDetailPage() {
             {/* Talla */}
             {needsSize && (
               <div className="mb-5">
-                <p className={optionLabel}>Talla</p>
+                <div className="flex items-center justify-between gap-2">
+                  <p className={optionLabel}>Talla</p>
+                  {sizeChart && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setInfoTab('sizes');
+                        document.getElementById('product-info')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                      }}
+                      className="inline-flex items-center gap-1 text-xs font-medium text-app-700 hover:underline"
+                    >
+                      <Ruler className="w-3.5 h-3.5" />Guía de tallas
+                    </button>
+                  )}
+                </div>
                 <div className="flex flex-wrap gap-2 mt-2">
                   {product.sizes.map((size) => {
                     const sizeValue = typeof size === 'string' ? size : size.abbreviation;
@@ -578,8 +612,20 @@ export default function ProductDetailPage() {
                 ? 'Agregando…'
                 : addedSuccess
                   ? 'Agregado al carrito'
-                  : `Agregar al carrito · ${format((product.salePrice ?? product.basePrice) * quantity)}`}
+                  : `Agregar al carrito · ${format(unitPrice * quantity)}`}
             </Button>
+            {product.isTemplate && (
+              <Button
+                size="lg"
+                fullWidth
+                variant="secondary"
+                className="mt-2"
+                icon={<Palette className="w-5 h-5" />}
+                onClick={() => navigate(`/customize?template=${product.id}`)}
+              >
+                Personalizar con tu diseño
+              </Button>
+            )}
             {!hasRequiredSelection && (
               <p className="text-xs text-gray-500 text-center mt-2">
                 Selecciona {[needsColor && !selectedColor && 'un color', needsSize && !selectedSize && 'una talla'].filter(Boolean).join(' y ')} para continuar
@@ -594,14 +640,101 @@ export default function ProductDetailPage() {
           </div>
         </div>
 
+        {/* Descripción · Guía de tallas · Envío y devoluciones */}
+        <section id="product-info" className="mt-8 bg-white rounded-xl border border-gray-200 scroll-mt-40">
+          <div className="px-4 md:px-6 pt-2">
+            <Tabs
+              value={infoTab}
+              onChange={setInfoTab}
+              tabs={[
+                { value: 'description', label: 'Descripción' },
+                { value: 'sizes', label: 'Guía de tallas', hidden: !sizeChart },
+                { value: 'shipping', label: 'Envío y devoluciones' },
+              ]}
+            />
+          </div>
+          <div className="p-4 md:p-6 text-sm text-gray-600 leading-relaxed">
+            {infoTab === 'description' && (
+              <div className="space-y-3 max-w-3xl">
+                {product.description ? <p className="whitespace-pre-line">{product.description}</p> : <p className="text-gray-400">Este producto aún no tiene descripción.</p>}
+                {product.tags && product.tags.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">{product.tags.map((t) => <Badge key={t}>{t}</Badge>)}</div>
+                )}
+                {product.sku && <p className="text-xs text-gray-400">Referencia: {product.sku}</p>}
+              </div>
+            )}
+            {infoTab === 'sizes' && sizeChart && (
+              <div className="space-y-3">
+                <p className="max-w-3xl">{sizeChart.guide}</p>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-gray-200 text-left text-xs uppercase tracking-wide text-gray-500">
+                        <th className="py-2 pr-4 font-semibold">Talla</th>
+                        {sizeChart.sizes.some((r) => r.chest) && <th className="py-2 pr-4 font-semibold">Pecho (cm)</th>}
+                        {sizeChart.sizes.some((r) => r.length) && <th className="py-2 pr-4 font-semibold">Largo (cm)</th>}
+                        {sizeChart.sizes.some((r) => r.shoulders) && <th className="py-2 pr-4 font-semibold">Hombros (cm)</th>}
+                        {sizeChart.sizes.some((r) => r.sleeves) && <th className="py-2 pr-4 font-semibold">Manga (cm)</th>}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sizeChart.sizes.map((r) => (
+                        <tr key={r.size} className={`border-b border-gray-100 ${r.size === selectedSize ? 'bg-app-50 text-app-800 font-medium' : ''}`}>
+                          <td className="py-2 pr-4 font-semibold text-gray-900">{r.size}</td>
+                          {sizeChart.sizes.some((x) => x.chest) && <td className="py-2 pr-4">{r.chest ?? '—'}</td>}
+                          {sizeChart.sizes.some((x) => x.length) && <td className="py-2 pr-4">{r.length ?? '—'}</td>}
+                          {sizeChart.sizes.some((x) => x.shoulders) && <td className="py-2 pr-4">{r.shoulders ?? '—'}</td>}
+                          {sizeChart.sizes.some((x) => x.sleeves) && <td className="py-2 pr-4">{r.sleeves ?? '—'}</td>}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <p className="text-xs text-gray-400">Medidas aproximadas de la prenda.</p>
+              </div>
+            )}
+            {infoTab === 'shipping' && (
+              <ul className="space-y-3 max-w-3xl">
+                <li className="flex gap-2.5"><Truck className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" /><span>Enviamos a todo el país. El costo exacto se calcula en el pago según tu ciudad{freeShipping > 0 ? <>, y es <strong className="text-gray-900">gratis desde {format(freeShipping)}</strong></> : null}.</span></li>
+                <li className="flex gap-2.5"><RotateCcw className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" /><span>Tienes 30 días para cambios y devoluciones.{returnsActive && <> Revisa la <Link to="/legal/returns" className="text-app-700 hover:underline">política de devoluciones</Link>.</>}</span></li>
+                <li className="flex gap-2.5"><ShieldCheck className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" /><span>Pago seguro: tus datos viajan cifrados.</span></li>
+              </ul>
+            )}
+          </div>
+        </section>
+
         {/* Productos relacionados */}
-        <div className="mt-8">
+        <div className="mt-10">
           <RelatedProducts product={product} />
         </div>
 
         {/* Reseñas */}
-        <div className="mt-8 bg-white rounded-xl border border-gray-200 p-4 md:p-6">
+        <div className="mt-10 bg-white rounded-xl border border-gray-200 p-4 md:p-6">
           <ProductReviewSection productId={product.id} />
+        </div>
+      </StoreContainer>
+
+      {/* Celular: precio y "Agregar" siempre a mano, encima de la navegación inferior.
+          El espaciador evita que la barra tape el final de la página. */}
+      <div className="md:hidden h-[72px]" aria-hidden="true" />
+      <div className="md:hidden fixed inset-x-0 bottom-[var(--store-bottom-nav)] z-40 bg-white border-t border-gray-200 px-3 py-2.5 shadow-[0_-4px_12px_rgba(0,0,0,0.04)]">
+        <div className="flex items-center gap-3">
+          <div className="min-w-0">
+            <p className="text-base font-bold text-gray-900 leading-tight">{format(unitPrice * quantity)}</p>
+            <p className={`text-xs truncate ${isOutOfStock ? 'text-red-600' : 'text-gray-500'}`}>
+              {isOutOfStock ? 'Sin stock' : [selectedColorName, selectedSize && `Talla ${selectedSize}`, quantity > 1 && `${quantity} u.`].filter(Boolean).join(' · ') || product.name}
+            </p>
+          </div>
+          <Button
+            className="flex-1"
+            onClick={handleAddToCart}
+            disabled={!canAddToCart}
+            isLoading={isAdding}
+            variant={addedSuccess ? 'success' : 'primary'}
+            icon={addedSuccess ? <Check className="w-4 h-4" /> : isAdding ? undefined : <ShoppingCart className="w-4 h-4" />}
+          >
+            {addLabel}
+          </Button>
         </div>
       </div>
 

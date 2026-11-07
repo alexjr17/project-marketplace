@@ -13,8 +13,8 @@ import { homeBlock } from '../types/settings';
 import { Seo } from '../components/seo/Seo';
 
 /**
- * Portada de la tienda ("Tienda guiada"): hero, beneficios, categorías, vitrina con pestañas,
- * personaliza en 3 pasos, secciones y banners configurados, reseñas reales y CTA final.
+ * Portada de la tienda ("Tienda guiada"): hero, estudio de diseño (personaliza en 3 pasos),
+ * beneficios, categorías, vitrina con pestañas, secciones y banners configurados, reseñas reales y CTA final.
  * Todo se configura en Ajustes > Página de inicio.
  */
 export const HomePage = () => {
@@ -50,8 +50,12 @@ export const HomePage = () => {
   return (
     <div className="bg-gray-50 min-h-screen">
       <Seo />
+      {/* Título de la página para lectores de pantalla y buscadores (el hero usa h2 por diapositiva). */}
+      <h1 className="sr-only">{[settings.general.siteName || 'StylePrint', settings.general.slogan].filter(Boolean).join(' — ')}</h1>
 
       <HeroSection />
+
+      {enableCustomizer && howItWorks.isActive && <HowItWorks title={howItWorks.title} subtitle={howItWorks.subtitle} />}
 
       {showFeatures && <TrustStrip features={features} />}
 
@@ -59,14 +63,12 @@ export const HomePage = () => {
 
       {showcase.isActive && <ProductShowcase title={showcase.title} subtitle={showcase.subtitle} />}
 
-      {enableCustomizer && howItWorks.isActive && <HowItWorks title={howItWorks.title} subtitle={howItWorks.subtitle} />}
-
       {content.map((item) =>
         item.type === 'section' ? (
           <FeaturedProducts key={`section-${item.data.id}`} section={item.data} />
         ) : (
           <div key={`banner-${item.data.id}`} className="py-4 md:py-6">
-            <div className="max-w-7xl mx-auto px-4">
+            <div className="max-w-7xl mx-auto px-3 md:px-6">
               <PromoBanner banner={item.data} />
             </div>
           </div>

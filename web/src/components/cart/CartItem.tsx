@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Trash2 } from 'lucide-react';
 import { Alert, Badge, IconButton } from '../ui';
 import { QuantityStepper } from './QuantityStepper';
+import { ProductImage } from '../products/ProductImage';
 import { useCurrency } from '../../hooks/useCurrency';
 import { getVariantByProductColorSize } from '../../services/variants.service';
 import type { CartItem as CartItemType } from '../../types/cart';
@@ -108,12 +109,11 @@ export const CartItem = ({ item, onUpdateQuantity, onRemove, onStockChange }: Ca
       <div className="flex gap-3 sm:gap-4">
         {/* Imagen */}
         <div className={`w-20 h-20 sm:w-24 sm:h-24 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0 ${isOutOfStock ? 'opacity-50' : ''}`}>
-          <img
+          <ProductImage
             src={item.product.colors?.find((c) => c.hexCode === item.selectedColor)?.image || item.product.images.front}
             alt={item.product.name}
-            loading="lazy"
-            decoding="async"
-            className="w-full h-full object-cover"
+            width={200}
+            iconClassName="w-6 h-6"
           />
         </div>
 
@@ -127,7 +127,7 @@ export const CartItem = ({ item, onUpdateQuantity, onRemove, onStockChange }: Ca
                 {item.selectedColor && (
                   <span className="inline-flex items-center gap-1">
                     <span className="w-3.5 h-3.5 rounded-full ring-1 ring-gray-300" style={{ backgroundColor: item.selectedColor }} />
-                    Color
+                    {item.product.colors?.find((c) => c.hexCode === item.selectedColor)?.name ?? 'Color'}
                   </span>
                 )}
                 {item.selectedSize && <span>Talla {item.selectedSize}</span>}

@@ -27,7 +27,7 @@ export function HeroSideCard({ item, className = '' }: { item: ResolvedSideCard;
         {item.price && (
           <p className="flex items-baseline gap-1.5 flex-wrap">
             <span className="text-sm md:text-base font-semibold text-gray-900">{item.price.current}</span>
-            {item.price.before && <span className="text-xs text-gray-400 line-through">{item.price.before}</span>}
+            {item.price.before && <span className="text-xs text-gray-500 line-through"><span className="sr-only">Antes: </span>{item.price.before}</span>}
           </p>
         )}
         {item.cta && (

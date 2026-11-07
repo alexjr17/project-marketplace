@@ -215,9 +215,6 @@ export const manufacturingService = {
   async getProductionOrder(id: number): Promise<MfgProductionOrder> {
     return (await api.get<MfgProductionOrder>(`/manufacturing/production-orders/${id}`)).data!;
   },
-  async generateOrderNumber(): Promise<string> {
-    return (await api.get<{ code: string }>('/manufacturing/production-orders/generate-number')).data?.code ?? '';
-  },
   async createProductionOrder(data: MfgProductionOrderInput): Promise<MfgProductionOrder> {
     return (await api.post<MfgProductionOrder>('/manufacturing/production-orders', data)).data!;
   },
@@ -274,9 +271,6 @@ export const manufacturingService = {
   },
   async getPurchaseOrder(id: number): Promise<import('../types/manufacturing').MfgPurchaseOrder> {
     return (await api.get<import('../types/manufacturing').MfgPurchaseOrder>(`/manufacturing/purchase-orders/${id}`)).data!;
-  },
-  async generatePurchaseNumber(): Promise<string> {
-    return (await api.get<{ code: string }>('/manufacturing/purchase-orders/generate-number')).data?.code ?? '';
   },
   async createPurchaseOrder(data: import('../types/manufacturing').MfgPurchaseOrderInput): Promise<import('../types/manufacturing').MfgPurchaseOrder> {
     return (await api.post<import('../types/manufacturing').MfgPurchaseOrder>('/manufacturing/purchase-orders', data)).data!;

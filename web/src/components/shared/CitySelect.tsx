@@ -44,6 +44,7 @@ export function CitySelect({
         <select
           value={dept}
           onChange={(e) => { setDept(e.target.value); onChange('', e.target.value); }}
+          aria-invalid={(!!error && !dept) || undefined}
           className={baseCls}
         >
           <option value="">Selecciona…</option>
@@ -60,6 +61,7 @@ export function CitySelect({
           value={city}
           onChange={(e) => onChange(e.target.value, dept)}
           disabled={!dept}
+          aria-invalid={(!!error && !!dept) || undefined}
           className={`${baseCls} disabled:bg-gray-100 disabled:text-gray-400`}
         >
           <option value="">{dept ? 'Selecciona…' : 'Elige departamento'}</option>
@@ -67,7 +69,7 @@ export function CitySelect({
             <option key={c} value={c}>{c}</option>
           ))}
         </select>
-        {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
+        {error && <p className="text-xs text-red-600 mt-1">{error}</p>}
       </div>
     </div>
   );

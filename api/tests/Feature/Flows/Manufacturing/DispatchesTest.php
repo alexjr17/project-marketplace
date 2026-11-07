@@ -262,7 +262,7 @@ class DispatchesTest extends TestCase
         $this->assertSame(4, $this->stockOf('negro', 's'));
     }
 
-    public function test_anular_un_borrador_de_un_pedido_aprobado_lo_pasa_a_produccion(): void
+    public function test_anular_un_borrador_no_cambia_el_estado_del_pedido(): void
     {
         $c = $this->mfg;
         $po = MfgPurchaseOrder::create(['code' => 'PED-X-1', 'clientId' => $c['cliente']->id, 'status' => 'APPROVED']);
@@ -271,9 +271,8 @@ class DispatchesTest extends TestCase
 
         $this->postJson("/api/manufacturing/dispatches/{$d['id']}/cancel")->assertOk();
 
-        // ACTUAL (posible bug): anular un despacho que nunca se confirmó cambia el pedido
-        // APPROVED (sin producción) a IN_PRODUCTION.
-        $this->assertSame('IN_PRODUCTION', $po->fresh()->status);
+        // Corregido (fase 3): el borrador no movió stock ni entregas; el pedido sigue APPROVED.
+        $this->assertSame('APPROVED', $po->fresh()->status);
     }
 
     public function test_editar_listar_y_eliminar_borradores(): void

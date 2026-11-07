@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Flows\Purchasing;
 
+use App\Models\InputBatch;
 use App\Models\InputBatchMovement;
 use App\Models\InputVariantMovement;
 use App\Models\PurchaseOrder;
@@ -51,8 +52,7 @@ class PurchaseReturnFlowTest extends TestCase
     }
 
     /**
-     * Ids de los ítems de la OC en el orden en que se enviaron. Se buscan por su referencia
-     * porque el orden de inserción NO es el del request (ver PurchaseOrderFlowTest).
+     * Ids de los ítems de la OC en el orden en que se enviaron, buscados por su referencia.
      */
     private function poItemIds(int $orderId): array
     {
@@ -124,7 +124,7 @@ class PurchaseReturnFlowTest extends TestCase
         $this->assertSame('purchase_return', $mi->referenceType);
         $this->assertEquals($returnId, $mi->referenceId);
         $this->assertSame("Devolución DEV-{$year}-0001", $mi->reason);
-        $this->assertEquals(7, \App\Models\InputBatch::where('inputId', $input->id)->value('currentQuantity'));
+        $this->assertEquals(7, InputBatch::where('inputId', $input->id)->value('currentQuantity'));
 
         // Variante de insumo: baja 2 y el total del insumo se recalcula.
         $this->assertEquals(4, $iv->fresh()->currentStock);
@@ -175,33 +175,41 @@ class PurchaseReturnFlowTest extends TestCase
         $orderId = $this->receivedOrder([['inputId' => $input->id, 'quantity' => 5, 'unitCost' => 100]], [5]);
         [$it] = $this->poItemIds($orderId);
 
-        // ACTUAL (posible bug): la validación compara cada fila por separado contra lo disponible,
-        // así que la misma línea dos veces (4 + 4) pasa aunque solo se recibieron 5
-        // (PurchaseReturnController.php:147-157). El stock se recorta a 0 con max(0, …).
+        // Corregido (fase 3): las filas del mismo ítem se suman antes de validar. Antes 4 + 4
+        // pasaba aunque solo se recibieron 5 y el stock se recortaba a 0.
         $this->postJson('/api/purchase-returns', ['purchaseOrderId' => $orderId, 'reason' => 'r', 'items' => [
             ['purchaseOrderItemId' => $it, 'quantity' => 4],
             ['purchaseOrderItemId' => $it, 'quantity' => 4],
-        ]])->assertStatus(201)->assertJsonPath('data.total', 800);
-        $this->assertEquals(8, PurchaseReturnItem::sum('quantity'));
+        ]])->assertStatus(400)->assertJsonPath('message', 'No se puede devolver más de 5 del ítem '.$input->name);
+        $this->assertSame(0, PurchaseReturn::count());
+        $this->assertEquals(5, $input->fresh()->currentStock);
+
+        $this->postJson('/api/purchase-returns', ['purchaseOrderId' => $orderId, 'reason' => 'r', 'items' => [
+            ['purchaseOrderItemId' => $it, 'quantity' => 2],
+            ['purchaseOrderItemId' => $it, 'quantity' => 3],
+        ]])->assertStatus(201)->assertJsonPath('data.total', 500);
         $this->assertEquals(0, $input->fresh()->currentStock);
     }
 
-    public function test_devolver_mercancia_ya_consumida_recorta_el_stock_a_cero(): void
+    public function test_no_se_devuelve_mercancia_ya_consumida(): void
     {
         ['variant' => $iv] = $this->makeVariantInput(0);
         $orderId = $this->receivedOrder([['inputVariantId' => $iv->id, 'quantity' => 5, 'unitCost' => 100]], [5]);
         [$it] = $this->poItemIds($orderId);
         $iv->update(['currentStock' => 1]); // se consumieron 4
 
+        // Corregido (fase 3): antes se registraba la devolución de 5 (cobrando 500) pero el stock
+        // solo bajaba 1. Ahora se rechaza y no se registra nada.
         $this->postJson('/api/purchase-returns', ['purchaseOrderId' => $orderId, 'reason' => 'r', 'items' => [['purchaseOrderItemId' => $it, 'quantity' => 5]]])
-            ->assertStatus(201)->assertJsonPath('data.total', 500);
-        // ACTUAL (posible bug): se devuelven 5 y se cobra 500, pero el stock solo baja 1 (max(0, …))
-        // y el movimiento queda con newStock 0 (PurchaseReturnController.php:306-321).
+            ->assertStatus(400)->assertJsonPath('message', "Stock insuficiente para {$iv->sku}. Disponible: 1, Solicitado: 5");
+        $this->assertSame(0, PurchaseReturn::count());
+        $this->assertEquals(1, $iv->fresh()->currentStock);
+        $this->assertSame(0, InputVariantMovement::where('movementType', 'DEVOLUCION')->count());
+
+        // Lo que sí queda se puede devolver.
+        $this->postJson('/api/purchase-returns', ['purchaseOrderId' => $orderId, 'reason' => 'r', 'items' => [['purchaseOrderItemId' => $it, 'quantity' => 1]]])
+            ->assertStatus(201)->assertJsonPath('data.total', 100);
         $this->assertEquals(0, $iv->fresh()->currentStock);
-        $mov = InputVariantMovement::where('movementType', 'DEVOLUCION')->sole();
-        $this->assertEquals(-5, $mov->quantity);
-        $this->assertEquals(1, $mov->previousStock);
-        $this->assertEquals(0, $mov->newStock);
     }
 
     public function test_devolucion_desde_orden_parcial_y_estado_invalido(): void

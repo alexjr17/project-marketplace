@@ -1,24 +1,32 @@
 <?php
 
-namespace App\Services;
+namespace App\Services\Pos;
 
 use App\Models\CashRegister;
 use App\Models\CashSession;
-use App\Models\InputVariant;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\POSCustomer;
 use App\Models\Product;
+use App\Models\ProductColor;
 use App\Models\ProductVariant;
-use App\Models\TemplateRecipe;
-use App\Models\VariantMovement;
+use App\Services\DiscountService;
+use App\Services\NumberSequenceService;
+use App\Services\StockService;
+use App\Services\TemplateStockService;
+use App\Support\ImageUrls;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
 /**
- * Lógica de ventas presenciales (POS): escaneo, búsqueda, cálculo, venta y
- * cancelación. Migrado de backend/src/services/pos.service.ts.
+ * Lógica de ventas presenciales (POS): escaneo, búsqueda, cálculo, venta, anulación,
+ * devolución, edición, fiados y clientes POS.
+ *
+ * Precio: lo pone el servidor (base + ajuste de la variante − oferta automática del canal POS),
+ * el mismo que muestran el escaneo y el catálogo del POS; el precio que manda el navegador se
+ * ignora. El stock de cada línea lo mueve PosSaleStock (variante, receta o insumo asociado).
  */
 class POSService
 {
@@ -27,6 +35,7 @@ class POSService
         private DiscountService $discounts,
         private NumberSequenceService $numbers,
         private StockService $stock,
+        private PosSaleStock $saleStock,
     ) {}
 
     /** Ofertas automáticas vigentes para el POS, cacheadas por request. */
@@ -90,8 +99,7 @@ class POSService
             throw new RuntimeException('Producto sin stock disponible');
         }
 
-        $base = (float) $variant->product->basePrice;
-        $price = $base + (float) ($variant->priceAdjustment ?? 0);
+        $price = $this->unitPriceFor($variant);
 
         return [
             'variantId' => $variant->id,
@@ -186,8 +194,8 @@ class POSService
         // Imagen por color de la variante (si existe); si no, la del producto.
         $image = $this->firstImage($product->images);
         if ($v->colorId) {
-            $pc = \App\Models\ProductColor::where('productId', $product->id)->where('colorId', $v->colorId)->first();
-            $colorImg = $pc ? \App\Support\ImageUrls::forColor($pc->image, $pc->id, $product->updatedAt) : null;
+            $pc = ProductColor::where('productId', $product->id)->where('colorId', $v->colorId)->first();
+            $colorImg = $pc ? ImageUrls::forColor($pc->image, $pc->id, $product->updatedAt) : null;
             if ($colorImg) {
                 $image = $colorImg;
             }
@@ -230,8 +238,8 @@ class POSService
             $base = (float) $product->basePrice + (float) ($v->priceAdjustment ?? 0);
             $image = $this->firstImage($product->images);
             if ($v->colorId) {
-                $pc = \App\Models\ProductColor::where('productId', $product->id)->where('colorId', $v->colorId)->first();
-                $colorImg = $pc ? \App\Support\ImageUrls::forColor($pc->image, $pc->id, $product->updatedAt) : null;
+                $pc = ProductColor::where('productId', $product->id)->where('colorId', $v->colorId)->first();
+                $colorImg = $pc ? ImageUrls::forColor($pc->image, $pc->id, $product->updatedAt) : null;
                 if ($colorImg) {
                     $image = $colorImg;
                 }
@@ -355,7 +363,8 @@ class POSService
                 }
             }
 
-            $base = (float) $variant->product->basePrice;
+            $base = (float) $variant->product->basePrice + (float) ($variant->priceAdjustment ?? 0);
+            $price = $this->unitPriceFor($variant);
 
             return [
                 'type' => 'single',
@@ -369,7 +378,9 @@ class POSService
                     'size' => $variant->size?->abbreviation ?? $variant->size?->name ?? 'N/A',
                     'sku' => $variant->sku,
                     'barcode' => $variant->barcode,
-                    'price' => $base + (float) ($variant->priceAdjustment ?? 0),
+                    'price' => $price,
+                    'basePrice' => $base,
+                    'hasDiscount' => $price < $base,
                     'stock' => (int) $variant->stock,
                     'available' => (int) $variant->stock > 0,
                 ],
@@ -423,8 +434,31 @@ class POSService
         return ['type' => 'list', 'results' => $results];
     }
 
-    /** Calcula totales de una venta (POST /pos/calculate). */
-    public function calculateSale(array $items, float $globalDiscount = 0): array
+    /**
+     * Precio unitario de venta de una variante en el POS: base + ajuste − oferta automática
+     * vigente (canal POS). Las plantillas se venden sin oferta (como las muestra el escaneo).
+     */
+    public function unitPriceFor(ProductVariant $variant): float
+    {
+        $product = $variant->product;
+        $base = (float) $product->basePrice + (float) ($variant->priceAdjustment ?? 0);
+        if ($product->isTemplate) {
+            return $base;
+        }
+        $best = $this->discounts->bestAutoFor($product, $this->posAutoDiscounts());
+
+        return max(0.0, $base - ($best ? $best['amount'] : 0.0));
+    }
+
+    /**
+     * Calcula totales de una venta (POST /pos/calculate). El precio unitario lo pone el servidor
+     * (unitPriceFor) salvo en $keepPrices (variantId => precio), que conserva el precio con que se
+     * vendió una línea al editar la venta. El descuento global no puede ser negativo ni mayor que
+     * el subtotal (antes un descuento negativo subía el total o lo dejaba negativo).
+     *
+     * @param  array<int, float>  $keepPrices
+     */
+    public function calculateSale(array $items, float $globalDiscount = 0, array $keepPrices = []): array
     {
         $subtotal = 0;
         $calculated = [];
@@ -435,7 +469,7 @@ class POSService
                 throw new RuntimeException("Variante {$item['variantId']} no encontrada");
             }
 
-            $unitPrice = (float) $item['price'];
+            $unitPrice = $keepPrices[$variant->id] ?? $this->unitPriceFor($variant);
             $itemDiscount = (float) ($item['discount'] ?? 0);
             $itemSubtotal = $unitPrice * $item['quantity'] - $itemDiscount;
             $subtotal += $itemSubtotal;
@@ -450,6 +484,13 @@ class POSService
                 'discount' => $itemDiscount,
                 'subtotal' => $itemSubtotal,
             ];
+        }
+
+        if ($globalDiscount < 0) {
+            throw new RuntimeException('El descuento no puede ser negativo');
+        }
+        if ($globalDiscount > $subtotal + 0.01) {
+            throw new RuntimeException('El descuento no puede ser mayor que el subtotal');
         }
 
         $tax = 0;
@@ -525,24 +566,27 @@ class POSService
         foreach ($data['items'] as $item) {
             $requested[$item['variantId']] = ($requested[$item['variantId']] ?? 0) + $item['quantity'];
         }
+        // Las líneas que salen de la variante (productos y plantillas sin receta ni insumo) se
+        // validan y bloquean juntas; las plantillas de insumos, contra su receta o insumo.
         $regular = [];
         foreach ($requested as $variantId => $quantity) {
             $variant = ProductVariant::with('product')->find($variantId);
             if (! $variant) {
                 throw new RuntimeException("Variante {$variantId} no encontrada");
             }
-            if (! $variant->product->isTemplate) {
+            if ($this->saleStock->fromVariant($variant)) {
                 $regular[$variantId] = $quantity;
 
                 continue;
             }
-            $available = $this->templateStock->getAvailableStockForTemplate($variant->id);
+            $available = $this->saleStock->availableFromInputs($variant);
             if ($available < $quantity) {
                 throw new RuntimeException("Stock insuficiente para {$variant->sku}. Disponible: {$available}, Solicitado: {$quantity}");
             }
         }
+        $prices = collect($calculation['items'])->pluck('unitPrice', 'variantId')->all();
 
-        return DB::transaction(function () use ($data, $calculation, $session, $regular) {
+        return DB::transaction(function () use ($data, $calculation, $session, $regular, $prices) {
             // Bloquea las variantes y revalida dentro de la transacción (dos cajas a la vez).
             $this->stock->assertVariantsAvailable($regular);
 
@@ -632,31 +676,10 @@ class POSService
                     'size' => $variant->size?->abbreviation ?? $variant->size?->name ?? 'N/A',
                     'color' => $variant->color?->name ?? 'N/A',
                     'quantity' => $item['quantity'],
-                    'unitPrice' => $item['price'],
+                    'unitPrice' => $prices[$variant->id],
                 ]);
 
-                if ($variant->product->isTemplate) {
-                    $recipes = TemplateRecipe::where('variantId', $variant->id)->get();
-                    foreach ($recipes as $recipe) {
-                        $consume = (float) $recipe->quantity * $item['quantity'];
-                        if (! InputVariant::whereKey($recipe->inputVariantId)->exists()) {
-                            continue;
-                        }
-                        // El disponible de la plantilla ya se validó arriba; el consumo de
-                        // insumos conserva su comportamiento (no bloquea la venta).
-                        $this->stock->inputVariantOut($recipe->inputVariantId, $consume, 'SALIDA', [
-                            'referenceType' => 'sale',
-                            'referenceId' => $order->id,
-                            'reason' => 'Venta POS - Template '.$variant->product->name,
-                        ], allowNegative: true);
-                    }
-                } else {
-                    $this->stock->variantOut($variant->id, $item['quantity'], 'SALE', [
-                        'referenceType' => 'sale',
-                        'referenceId' => $order->id,
-                        'reason' => 'Venta POS',
-                    ]);
-                }
+                $this->saleStock->out($order, $variant, (int) $item['quantity'], 'Venta POS');
             }
 
             $session->salesCount = (int) $session->salesCount + 1;
@@ -684,18 +707,36 @@ class POSService
             throw new RuntimeException('La venta ya está cancelada');
         }
 
-        return DB::transaction(function () use ($order, $reason) {
+        return DB::transaction(function () use ($order, $reason, $sellerId) {
+            // Devuelve lo que salió con cada línea (variante o insumos), con su movimiento.
+            foreach ($order->items as $item) {
+                if ($item->variantId) {
+                    $this->saleStock->back($order, $item->variantId, (int) $item->quantity, 'Anulación venta POS: '.$reason);
+                }
+            }
+
+            $previous = $order->status;
             $order->status = 'CANCELLED';
             $order->notes = $order->notes
                 ? $order->notes."\nCANCELADO: ".$reason
                 : 'CANCELADO: '.$reason;
+            $order->statusHistory = array_merge($order->statusHistory ?? [], [[
+                'status' => 'CANCELLED',
+                'timestamp' => now()->toIso8601String(),
+                'note' => 'Venta anulada: '.$reason,
+            ]]);
+            $order->editHistory = array_merge($order->editHistory ?? [], [[
+                'action' => 'cancelled',
+                'timestamp' => now()->toIso8601String(),
+                'userId' => $sellerId,
+                'changes' => [[
+                    'field' => 'status',
+                    'label' => 'Estado',
+                    'from' => $previous,
+                    'to' => 'Anulada · '.$reason,
+                ]],
+            ]]);
             $order->save();
-
-            foreach ($order->items as $item) {
-                if ($item->variantId) {
-                    ProductVariant::where('id', $item->variantId)->increment('stock', $item->quantity);
-                }
-            }
 
             if ($order->cashRegisterId && $order->sellerId) {
                 $session = CashSession::where('cashRegisterId', $order->cashRegisterId)
@@ -768,23 +809,8 @@ class POSService
                 }
                 $qty = $ret[$vid];
 
-                // Reintegrar stock + movimiento.
-                $v = ProductVariant::find($vid);
-                if ($v) {
-                    $prev = (int) $v->stock;
-                    $v->stock = $prev + $qty;
-                    $v->save();
-                    VariantMovement::create([
-                        'variantId' => $vid,
-                        'movementType' => 'RETURN',
-                        'quantity' => $qty,
-                        'previousStock' => $prev,
-                        'newStock' => $prev + $qty,
-                        'referenceType' => 'return',
-                        'referenceId' => $order->id,
-                        'reason' => 'Devolución POS'.($reason ? ': '.$reason : ''),
-                    ]);
-                }
+                // Reintegrar lo que salió (variante o insumos) con su movimiento.
+                $this->saleStock->back($order, $vid, $qty, 'Devolución POS'.($reason ? ': '.$reason : ''), 'return');
                 $returnedDetail[] = $item->productName.' x'.$qty;
 
                 // Reducir o eliminar el ítem de la orden.
@@ -813,7 +839,8 @@ class POSService
                 ])->all();
                 $newSubtotal = array_sum(array_map(fn ($i) => $i['price'] * $i['quantity'], $calcItems));
                 $disc = min((float) $order->discount, $newSubtotal);
-                $calc = $this->calculateSale($calcItems, $disc);
+                $keep = $remaining->pluck('unitPrice', 'variantId')->map(fn ($p) => (float) $p)->all();
+                $calc = $this->calculateSale($calcItems, $disc, $keep);
                 $order->subtotal = $calc['subtotal'];
                 $order->discount = $calc['discount'];
                 $order->tax = $calc['tax'];
@@ -828,6 +855,10 @@ class POSService
                 $order->status = ($order->paymentMethod === 'debe')
                     ? (($paid + 0.01 >= (float) $order->total) ? 'PAID' : 'PENDING')
                     : 'PAID';
+                // Un fiado que queda saldado por la devolución registra cuándo se saldó.
+                if ($order->status === 'PAID' && ! $order->paidAt) {
+                    $order->paidAt = now();
+                }
             }
 
             $order->notes = $order->notes
@@ -904,13 +935,18 @@ class POSService
                     $current[$old->variantId] = ($current[$old->variantId] ?? 0) + $old->quantity;
                 }
             }
+            $wanted = [];
             foreach ($data['items'] as $it) {
-                $v = ProductVariant::find($it['variantId']);
+                $wanted[$it['variantId']] = ($wanted[$it['variantId']] ?? 0) + (int) $it['quantity'];
+            }
+            foreach ($wanted as $variantId => $quantity) {
+                $v = ProductVariant::with('product')->find($variantId);
                 if (! $v) {
-                    throw new RuntimeException("Variante {$it['variantId']} no encontrada");
+                    throw new RuntimeException("Variante {$variantId} no encontrada");
                 }
-                $available = (int) $v->stock + ($current[$v->id] ?? 0);
-                if ($available < $it['quantity']) {
+                $own = $this->saleStock->fromVariant($v) ? (int) $v->stock : $this->saleStock->availableFromInputs($v);
+                $available = $own + ($current[$v->id] ?? 0);
+                if ($available < $quantity) {
                     throw new RuntimeException("Stock insuficiente para {$v->sku}. Disponible: {$available}");
                 }
             }
@@ -935,15 +971,18 @@ class POSService
             ];
 
             if ($editItems) {
-                // Restituir stock de los ítems actuales y reemplazarlos.
+                // Las líneas que ya estaban conservan el precio con que se vendieron.
+                $keep = $order->items->whereNotNull('variantId')->pluck('unitPrice', 'variantId')->map(fn ($p) => (float) $p)->all();
+                $calc = $this->calculateSale($data['items'], (float) ($data['discount'] ?? $order->discount ?? 0), $keep);
+                $prices = collect($calc['items'])->pluck('unitPrice', 'variantId')->all();
+
+                // Restituir lo que salió con los ítems actuales (con movimiento) y reemplazarlos.
                 foreach ($order->items as $old) {
                     if ($old->variantId) {
-                        ProductVariant::where('id', $old->variantId)->increment('stock', $old->quantity);
+                        $this->saleStock->back($order, $old->variantId, (int) $old->quantity, 'Edición de venta POS (reverso)');
                     }
                 }
                 OrderItem::where('orderId', $order->id)->delete();
-
-                $calc = $this->calculateSale($data['items'], (float) ($data['discount'] ?? $order->discount ?? 0));
 
                 foreach ($data['items'] as $it) {
                     $v = ProductVariant::with(['product', 'color', 'size'])->find($it['variantId']);
@@ -956,21 +995,9 @@ class POSService
                         'size' => $v->size?->abbreviation ?? $v->size?->name ?? 'N/A',
                         'color' => $v->color?->name ?? 'N/A',
                         'quantity' => $it['quantity'],
-                        'unitPrice' => $it['price'],
+                        'unitPrice' => $prices[$v->id],
                     ]);
-                    $prev = (int) $v->stock;
-                    $v->stock = $prev - $it['quantity'];
-                    $v->save();
-                    VariantMovement::create([
-                        'variantId' => $v->id,
-                        'movementType' => 'SALE',
-                        'quantity' => -$it['quantity'],
-                        'previousStock' => $prev,
-                        'newStock' => $prev - $it['quantity'],
-                        'referenceType' => 'sale',
-                        'referenceId' => $order->id,
-                        'reason' => 'Edición de venta POS',
-                    ]);
+                    $this->saleStock->out($order, $v, (int) $it['quantity'], 'Edición de venta POS');
                 }
 
                 $order->subtotal = $calc['subtotal'];
@@ -1217,7 +1244,7 @@ class POSService
             $methods[$m]['count']++;
             $methods[$m]['total'] += (float) $o->total;
 
-            $h = (int) \Illuminate\Support\Carbon::parse($o->createdAt)->format('G');
+            $h = (int) Carbon::parse($o->createdAt)->format('G');
             $hours[$h]['total'] += (float) $o->total;
             $hours[$h]['count']++;
 

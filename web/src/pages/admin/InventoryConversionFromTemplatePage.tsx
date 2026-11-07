@@ -7,8 +7,9 @@ import {
 } from '../../components/ui';
 import { inventoryConversionsService } from '../../services/inventory-conversions.service';
 import { getVariants, type ProductVariant } from '../../services/variants.service';
-import { templateRecipesService } from '../../services/template-recipes.service';
+import { templateRecipesService, type TemplateRecipe } from '../../services/template-recipes.service';
 import { StepCard } from './InventoryStepCard';
+import { errorMessage } from '../../lib/http';
 
 const LIST = '/admin-panel/inventory-conversions';
 
@@ -19,7 +20,7 @@ interface FormData {
 }
 
 /** Variante con la receta de la plantilla (se carga al elegir la plantilla). */
-type TemplateVariant = ProductVariant & { templateRecipes?: any[] };
+type TemplateVariant = ProductVariant & { templateRecipes?: TemplateRecipe[] };
 
 interface Product {
   id: number;
@@ -149,7 +150,7 @@ export default function InventoryConversionFromTemplatePage() {
       const allProducts = Array.from(productMap.values());
       setTemplates(allProducts.filter((p) => p.isTemplate));
       setProducts(allProducts.filter((p) => !p.isTemplate));
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error loading data:', error);
       toast.error('Error al cargar datos');
     } finally {
@@ -160,10 +161,10 @@ export default function InventoryConversionFromTemplatePage() {
   const loadTemplateRecipes = async (templateId: number) => {
     try {
       setLoadingRecipes(true);
-      const recipes: any[] = await templateRecipesService.getRecipesByProduct(templateId);
+      const recipes = await templateRecipesService.getRecipesByProduct(templateId);
 
-      const recipesByVariant = new Map<number, any[]>();
-      recipes.forEach((recipe: any) => {
+      const recipesByVariant = new Map<number, TemplateRecipe[]>();
+      recipes.forEach((recipe) => {
         if (!recipesByVariant.has(recipe.variantId)) recipesByVariant.set(recipe.variantId, []);
         recipesByVariant.get(recipe.variantId)!.push(recipe);
       });
@@ -175,7 +176,7 @@ export default function InventoryConversionFromTemplatePage() {
           variants: prev.variants.map((variant) => ({ ...variant, templateRecipes: recipesByVariant.get(variant.id) || [] })),
         };
       });
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error loading template recipes:', error);
       toast.error('Error al cargar recetas de la plantilla');
     } finally {
@@ -316,7 +317,7 @@ export default function InventoryConversionFromTemplatePage() {
       const inputMap = new Map<number, number>();
       selectedCombinations.forEach((combo) => {
         if (combo.templateVariant.templateRecipes && combo.templateVariant.templateRecipes.length > 0) {
-          combo.templateVariant.templateRecipes.forEach((recipe: any) => {
+          combo.templateVariant.templateRecipes.forEach((recipe) => {
             // Saltar los insumos que el usuario deseleccionó de la receta.
             const insumoId = recipe.inputVariant?.input?.id;
             if (insumoId && excludedInsumoIds.has(insumoId)) return;
@@ -339,8 +340,8 @@ export default function InventoryConversionFromTemplatePage() {
 
       toast.success(`Conversión creada con ${selectedCombinations.length} variantes`);
       navigate(`${LIST}/${conversion.id}`);
-    } catch (error: any) {
-      toast.error(error.message || 'Error al crear conversión');
+    } catch (error) {
+      toast.error(errorMessage(error, 'Error al crear conversión'));
     } finally {
       setCreating(false);
     }

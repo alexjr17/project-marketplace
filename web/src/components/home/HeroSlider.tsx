@@ -206,7 +206,7 @@ function Slide({ slide, active, playing, position, total, loadImage, priority, b
           {slide.price && (
             <p className="flex items-baseline gap-2">
               <span className={`text-xl md:text-2xl font-semibold ${titleCls}`}>{slide.price.current}</span>
-              {slide.price.before && <span className={`text-sm line-through ${onImage ? 'text-white/70' : 'text-gray-400'}`}>{slide.price.before}</span>}
+              {slide.price.before && <span className={`text-sm line-through ${onImage ? 'text-white/80' : 'text-gray-500'}`}><span className="sr-only">Antes: </span>{slide.price.before}</span>}
             </p>
           )}
           {slide.buttons.length > 0 && (

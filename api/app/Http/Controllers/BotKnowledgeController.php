@@ -5,24 +5,25 @@ namespace App\Http\Controllers;
 use App\Http\Concerns\ApiResponse;
 use App\Models\BotKnowledge;
 use App\Services\Ai\AiAssistantService;
+use App\Services\Messaging\BotKnowledgeService;
 use Illuminate\Http\Request;
 
+/** Entradas de la base de conocimiento del bot y la prueba de respuesta. */
 class BotKnowledgeController extends Controller
 {
     use ApiResponse;
 
+    public function __construct(private BotKnowledgeService $knowledge) {}
+
     public function index(Request $request)
     {
-        $query = BotKnowledge::query()->orderBy('category')->orderBy('sortOrder')->orderBy('id');
+        $entries = BotKnowledge::query()
+            ->when($request->filled('category'), fn ($q) => $q->where('category', $request->query('category')))
+            ->when($request->filled('active'), fn ($q) => $q->where('isActive', filter_var($request->query('active'), FILTER_VALIDATE_BOOLEAN)))
+            ->orderBy('category')->orderBy('sortOrder')->orderBy('id')
+            ->get();
 
-        if ($request->filled('category')) {
-            $query->where('category', $request->query('category'));
-        }
-        if ($request->filled('active')) {
-            $query->where('isActive', filter_var($request->query('active'), FILTER_VALIDATE_BOOLEAN));
-        }
-
-        return $this->success($query->get()->map(fn ($k) => $this->format($k))->all());
+        return $this->success($entries->map(fn ($k) => $this->knowledge->formatEntry($k))->all());
     }
 
     public function store(Request $request)
@@ -35,15 +36,7 @@ class BotKnowledgeController extends Controller
             'sortOrder' => 'nullable|integer|min:0',
         ]);
 
-        $k = new BotKnowledge;
-        $k->category = $data['category'];
-        $k->title = $data['title'];
-        $k->content = $data['content'];
-        $k->isActive = $data['isActive'] ?? true;
-        $k->sortOrder = $data['sortOrder'] ?? 0;
-        $k->save();
-
-        return $this->created($this->format($k), 'Conocimiento agregado');
+        return $this->created($this->knowledge->formatEntry($this->knowledge->saveEntry($data)), 'Conocimiento agregado');
     }
 
     public function update(int $id, Request $request)
@@ -61,14 +54,7 @@ class BotKnowledgeController extends Controller
             'sortOrder' => 'nullable|integer|min:0',
         ]);
 
-        foreach (['category', 'title', 'content', 'isActive', 'sortOrder'] as $f) {
-            if (array_key_exists($f, $data)) {
-                $k->{$f} = $data[$f];
-            }
-        }
-        $k->save();
-
-        return $this->success($this->format($k), 'Conocimiento actualizado');
+        return $this->success($this->knowledge->formatEntry($this->knowledge->saveEntry($data, $k)), 'Conocimiento actualizado');
     }
 
     public function destroy(int $id)
@@ -99,19 +85,5 @@ class BotKnowledgeController extends Controller
             'provider' => $ai->providerName(),
             'reply' => $reply,
         ]);
-    }
-
-    private function format(BotKnowledge $k): array
-    {
-        return [
-            'id' => $k->id,
-            'category' => $k->category,
-            'title' => $k->title,
-            'content' => $k->content,
-            'isActive' => (bool) $k->isActive,
-            'sortOrder' => (int) $k->sortOrder,
-            'createdAt' => optional($k->createdAt)->toIso8601String(),
-            'updatedAt' => optional($k->updatedAt)->toIso8601String(),
-        ];
     }
 }

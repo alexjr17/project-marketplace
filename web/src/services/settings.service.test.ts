@@ -34,12 +34,13 @@ describe('settings.service (caracterización)', () => {
     expect(res.store.logo).toBe(`${API_ORIGIN}/uploads/logo.png`);
   });
 
-  it('el tipo PublicSettings declara tax y paymentMethods que el backend no envía', async () => {
-    server.use(http.get(`${API}/settings/public`, () => ok(publicSettings)));
+  it('los impuestos llegan en payment (el tipo ya no declara tax ni paymentMethods)', async () => {
+    const withTax = { ...publicSettings, payment: { ...publicSettings.payment, taxEnabled: true, taxRate: 19, taxIncluded: false } };
+    server.use(http.get(`${API}/settings/public`, () => ok(withTax)));
     const res = await settingsService.getPublicSettings();
-    // ACTUAL (posible bug): campos obligatorios en el tipo que llegan undefined.
-    expect(res.tax).toBeUndefined();
-    expect(res.paymentMethods).toBeUndefined();
+    expect(res.payment).toMatchObject({ taxEnabled: true, taxRate: 19, taxIncluded: false });
+    expect(res).not.toHaveProperty('tax');
+    expect(res).not.toHaveProperty('paymentMethods');
   });
 
   it('sin data: lanza "Error obteniendo configuración"', async () => {

@@ -3,6 +3,7 @@
 namespace Tests\Feature\Flows\Pos;
 
 use App\Models\InputVariantMovement;
+use App\Models\TemplateRecipe;
 use App\Models\VariantMovement;
 
 /**
@@ -61,7 +62,7 @@ class TemplateSaleFlowTest extends PosFlowTestCase
         $this->assertSame(10.0, (float) $iv->fresh()->currentStock);
     }
 
-    public function test_anular_venta_de_plantilla_suma_a_la_variante_y_no_devuelve_insumos(): void
+    public function test_anular_venta_de_plantilla_devuelve_los_insumos_y_no_toca_la_variante(): void
     {
         [, $register] = $this->cajeroConCaja();
         [$tpl, $iv] = $this->makeTemplateWithRecipe(70000, 10, 2);
@@ -69,14 +70,17 @@ class TemplateSaleFlowTest extends PosFlowTestCase
 
         $this->postJson("/api/pos/sale/{$order->id}/cancel", ['reason' => 'cliente desiste'])->assertOk();
 
-        // ACTUAL (posible bug): la anulación incrementa product_variants.stock (0 -> 2) de la
-        // plantilla, que nunca se descontó, y NO devuelve los 4 insumos consumidos.
-        $this->assertSame(2, $this->stockOf($tpl));
-        $this->assertSame(6.0, (float) $iv->fresh()->currentStock);
-        $this->assertSame(1, InputVariantMovement::count());
+        // Corregido (fase 3): vuelven los 4 insumos consumidos y la variante (que nunca se
+        // descontó) sigue en 0. Antes sumaba 2 a la variante y los insumos no volvían.
+        $this->assertSame(0, $this->stockOf($tpl));
+        $this->assertSame(10.0, (float) $iv->fresh()->currentStock);
+        $back = InputVariantMovement::where('movementType', 'DEVOLUCION')->sole();
+        $this->assertSame(4.0, (float) $back->quantity);
+        $this->assertSame($order->id, (int) $back->referenceId);
+        $this->assertSame(0, VariantMovement::count());
     }
 
-    public function test_devolucion_de_plantilla_suma_a_la_variante_y_no_devuelve_insumos(): void
+    public function test_devolucion_de_plantilla_devuelve_los_insumos_de_lo_devuelto(): void
     {
         [, $register] = $this->cajeroConCaja();
         [$tpl, $iv] = $this->makeTemplateWithRecipe(70000, 10, 2);
@@ -85,10 +89,29 @@ class TemplateSaleFlowTest extends PosFlowTestCase
         $this->postJson("/api/pos/sale/{$order->id}/return", ['items' => [['variantId' => $tpl->id, 'quantity' => 1]]])
             ->assertOk();
 
-        // ACTUAL (posible bug): igual que al anular, la devolución suma a la variante y deja
-        // un movimiento RETURN de producto; los insumos no vuelven.
+        // Corregido (fase 3): vuelve el insumo de la unidad devuelta (2) y la variante no cambia.
+        $this->assertSame(0, $this->stockOf($tpl));
+        $this->assertSame(8.0, (float) $iv->fresh()->currentStock);
+        $this->assertSame(0, VariantMovement::count());
+    }
+
+    public function test_plantilla_sin_receta_ni_insumo_se_vende_del_stock_de_la_variante(): void
+    {
+        [, $register] = $this->cajeroConCaja();
+        [$tpl] = $this->makeTemplateWithRecipe(70000, 10, 2);
+        TemplateRecipe::where('variantId', $tpl->id)->delete();
+        $tpl->update(['stock' => 3]);
+
+        // Misma regla que el pedido online: sin receta ni insumo asociado manda la variante.
+        $this->postJson('/api/pos/scan', ['barcode' => $tpl->barcode])->assertOk()->assertJsonPath('data.stock', 3);
+        $this->sell($register, [[$tpl, 4]])->assertStatus(400);
+        $order = $this->sellOk($register, [[$tpl, 2]]);
         $this->assertSame(1, $this->stockOf($tpl));
-        $this->assertSame(6.0, (float) $iv->fresh()->currentStock);
-        $this->assertSame('RETURN', VariantMovement::where('variantId', $tpl->id)->value('movementType'));
+        $this->assertSame('SALE', VariantMovement::where('variantId', $tpl->id)->value('movementType'));
+        $this->assertSame(0, InputVariantMovement::count());
+
+        // Al anular vuelve a la variante.
+        $this->postJson("/api/pos/sale/{$order->id}/cancel", ['reason' => 'x'])->assertOk();
+        $this->assertSame(3, $this->stockOf($tpl));
     }
 }

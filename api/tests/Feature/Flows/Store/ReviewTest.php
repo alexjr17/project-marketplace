@@ -8,6 +8,7 @@ use App\Models\Product;
 use App\Models\Review;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Testing\TestResponse;
 use Tests\Concerns\ActsAsRoles;
 use Tests\Feature\Flows\Store\Concerns\StoreFixtures;
 use Tests\TestCase;
@@ -45,7 +46,7 @@ class ReviewTest extends TestCase
         return $order;
     }
 
-    private function review(int $rating = 5, string $comment = 'Excelente'): \Illuminate\Testing\TestResponse
+    private function review(int $rating = 5, string $comment = 'Excelente'): TestResponse
     {
         return $this->postJson('/api/reviews', ['productId' => $this->product->id, 'rating' => $rating, 'title' => 'Bueno', 'comment' => $comment]);
     }
@@ -123,9 +124,18 @@ class ReviewTest extends TestCase
         $this->getJson("/api/reviews/product/{$this->product->id}?rating=5")->assertOk()->assertJsonCount(1, 'data');
         $this->getJson('/api/reviews/product/99999')->assertNotFound()->assertJsonPath('message', 'Producto no encontrado');
 
-        // ACTUAL (posible bug): el detalle público por id devuelve también reseñas rechazadas.
+        // Corregido (fase 3): una reseña rechazada ya no es pública (antes el detalle por id la
+        // devolvía a cualquiera). La ven su autor y quien modera reseñas.
         $rejected = Review::where('status', 'REJECTED')->value('id');
-        $this->getJson("/api/reviews/{$rejected}")->assertOk()->assertJsonPath('data.status', 'REJECTED');
+        $this->getJson("/api/reviews/{$rejected}")->assertOk()->assertJsonPath('data.status', 'REJECTED'); // autor
+        $this->actingAs($users[0], 'sanctum');
+        $this->getJson("/api/reviews/{$rejected}")->assertNotFound()->assertJsonPath('message', 'Review no encontrada');
+        $approved = Review::where('status', 'APPROVED')->value('id');
+        $this->getJson("/api/reviews/{$approved}")->assertOk();
+        $this->actingAsAdmin();
+        $this->getJson("/api/reviews/{$rejected}")->assertOk();
+        $this->actingAsCajero(); // sin reviews.view
+        $this->getJson("/api/reviews/{$rejected}")->assertNotFound();
     }
 
     public function test_votar_util(): void

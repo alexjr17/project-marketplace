@@ -111,7 +111,7 @@ const mapApiUserToUser = (apiUser: ApiUser): User => {
 };
 
 export const UsersProvider = ({ children }: { children: ReactNode }) => {
-  const { isAuthenticated, user: authUser } = useAuth();
+  const { isAuthenticated, user: authUser, hasPermission } = useAuth();
   const [allUsers, setAllUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -122,8 +122,8 @@ export const UsersProvider = ({ children }: { children: ReactNode }) => {
     totalPages: 0,
   });
 
-  // Verificar si es admin (roleId !== 2 significa que no es cliente)
-  const isAdmin = isAuthenticated && authUser && authUser.roleId !== 2;
+  // Solo quien administra usuarios los carga (antes el cajero pedía /users y recibía 403).
+  const isAdmin = Boolean(isAuthenticated && authUser && authUser.roleId !== 2 && hasPermission('users.view'));
 
   // Cargar usuarios desde la API (solo para admins)
   const loadUsers = useCallback(async () => {

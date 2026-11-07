@@ -33,7 +33,7 @@ type InputProps = InputHTMLAttributes<HTMLInputElement> & { error?: boolean };
 type AddonProps = Omit<InputProps, 'prefix'> & { prefix?: ReactNode; suffix?: ReactNode };
 
 export const TextInput = forwardRef<HTMLInputElement, InputProps>(
-  ({ error, className = '', ...props }, ref) => <input ref={ref} className={`${fieldClass(error)} ${className}`} {...props} />,
+  ({ error, className = '', ...props }, ref) => <input ref={ref} aria-invalid={error || undefined} className={`${fieldClass(error)} ${className}`} {...props} />,
 );
 TextInput.displayName = 'TextInput';
 

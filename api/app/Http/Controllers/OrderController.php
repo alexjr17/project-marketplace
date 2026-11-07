@@ -3,10 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Http\Concerns\ApiResponse;
-use App\Services\OrderService;
-use App\Services\WompiService;
+use App\Services\Orders\OrderService;
+use App\Services\Payments\WompiService;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use RuntimeException;
 
 class OrderController extends Controller
@@ -51,7 +52,7 @@ class OrderController extends Controller
             $order = $this->orders->createOrder($request->user()->id, $data);
         } catch (RuntimeException $e) {
             return $this->fail($e);
-        } catch (\Illuminate\Validation\ValidationException $e) {
+        } catch (ValidationException $e) {
             throw $e; // 422: personalización con zonas o color/talla no válidos
         } catch (\Throwable $e) {
             \Log::error('Error creando pedido', ['error' => $e->getMessage()]);
@@ -107,17 +108,7 @@ class OrderController extends Controller
     /** Datos para el widget de Wompi de un pedido propio y pendiente (firma calculada en el servidor). */
     public function wompiCheckout(Request $request, int $id)
     {
-        try {
-            $order = $this->orders->getOrderById($id, $request->user()->id);
-        } catch (RuntimeException $e) {
-            return $this->error('Orden no encontrada', 404);
-        }
-        if ($order->status !== 'PENDING') {
-            return $this->error('El pedido no está pendiente de pago', 409);
-        }
-        if ($order->paymentMethod !== 'wompi') {
-            return $this->error('El pedido no es de pago con Wompi', 409);
-        }
+        $order = $this->orders->payableWithWompi($id, $request->user()->id);
 
         try {
             return $this->success($this->wompi->checkoutData($order));

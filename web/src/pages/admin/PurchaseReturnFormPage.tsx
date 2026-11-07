@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { errorMessage } from '../../lib/http';
 import { useNavigate } from 'react-router-dom';
 import { RotateCcw, Save } from 'lucide-react';
 import {
@@ -42,8 +43,8 @@ export default function PurchaseReturnFormPage() {
       try {
         const all = await purchaseOrdersService.getPurchaseOrders();
         setOrders(all.filter((o) => ['RECEIVED', 'PARTIAL'].includes(o.status)));
-      } catch (error: any) {
-        toast.error(error.message || 'Error al cargar órdenes');
+      } catch (error) {
+        toast.error(errorMessage(error, 'Error al cargar órdenes'));
       }
     })();
   }, []);
@@ -58,8 +59,8 @@ export default function PurchaseReturnFormPage() {
       const data = await returnsService.getReturnable(id);
       setReturnable(data);
       setQuantities(Object.fromEntries(data.items.map((i) => [i.purchaseOrderItemId, 0])));
-    } catch (error: any) {
-      toast.error(error.message || 'Error al cargar ítems devolubles');
+    } catch (error) {
+      toast.error(errorMessage(error, 'Error al cargar ítems devolubles'));
     } finally {
       setLoadingItems(false);
     }
@@ -140,8 +141,8 @@ export default function PurchaseReturnFormPage() {
       });
       toast.success('Devolución registrada y stock revertido');
       navigate(LIST);
-    } catch (error: any) {
-      toast.error(error.message || 'Error al registrar la devolución');
+    } catch (error) {
+      toast.error(errorMessage(error, 'Error al registrar la devolución'));
     } finally {
       setSaving(false);
     }

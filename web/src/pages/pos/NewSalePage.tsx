@@ -33,6 +33,8 @@ import {
 } from 'lucide-react';
 import { Alert, Button, Dialog, EmptyState, Field, MoneyInput, RadioGroup, Spinner, Thumb } from '../../components/ui';
 
+import { errorMessage } from '../../lib/http';
+import { ProductImage } from '../../components/products/ProductImage';
 // Cliente por defecto (consumidor final): siempre hay un cliente seleccionado
 // para poder cobrar. El cajero puede cambiarlo o crear otro.
 const DEFAULT_CUSTOMER: SelectedCustomer = { name: 'Consumidor Final' };
@@ -227,9 +229,9 @@ export default function NewSalePage() {
         runCatalogSearch(barcodeInput.trim());
         setBarcodeInput('');
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error searching:', error);
-      showToast(error?.message || 'Error al buscar', 'error');
+      showToast(errorMessage(error, 'Error al buscar'), 'error');
     } finally {
       setIsSearching(false);
       barcodeInputRef.current?.focus();
@@ -420,9 +422,9 @@ export default function NewSalePage() {
         // Sin coincidencia exacta: filtrar el catálogo de productos.
         runCatalogSearch(barcode.trim());
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error searching:', error);
-      showToast(error?.message || 'Error al buscar', 'error');
+      showToast(errorMessage(error, 'Error al buscar'), 'error');
     } finally {
       setIsSearching(false);
     }
@@ -742,13 +744,8 @@ export default function NewSalePage() {
                     >
                       {/* Imagen cuadrada */}
                       <div className="relative aspect-square bg-gray-50 overflow-hidden">
-                        {item.image ? (
-                          <img src={item.image} alt={item.name} loading="lazy" className="w-full h-full object-cover" />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center">
-                            <Package className="w-10 h-10 text-gray-300" />
-                          </div>
-                        )}
+                        {/* Con respaldo si no hay foto o falla (antes se veía el texto alternativo). */}
+                        <ProductImage src={item.image} alt={item.name} width={300} iconClassName="w-10 h-10" />
                         {onSale ? (
                           <span className="absolute top-1.5 left-1.5 bg-green-600 text-white text-[11px] font-bold px-1.5 py-0.5 rounded-md">-{offPct}%</span>
                         ) : !isProduct ? (

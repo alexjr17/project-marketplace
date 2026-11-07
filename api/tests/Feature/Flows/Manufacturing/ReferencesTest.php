@@ -140,19 +140,19 @@ class ReferencesTest extends TestCase
             ->assertJsonCount(1, 'data.materials');
     }
 
-    public function test_editar_sin_materiales_pone_el_costo_en_cero_pero_conserva_el_bom(): void
+    public function test_editar_sin_materiales_conserva_el_bom_y_su_costo(): void
     {
         $ref = $this->createReference();
         $res = $this->putJson("/api/manufacturing/references/{$ref['id']}", [
             'name' => 'Solo nombre', 'garmentTypeId' => $this->mfg['cam']->id, 'fixedCost' => 1000, 'factor' => 2,
         ])->assertOk();
 
-        // ACTUAL (posible bug): sin 'materials' en el PUT el BOM se conserva (2 materiales),
-        // pero computeCosts() lo trata como vacío y deja costVariable = 0 (costUnit = solo el fijo).
+        // Corregido (antes dejaba costVariable = 0): sin 'materials' en el PUT el BOM se conserva
+        // y el costo se calcula con él (1.5×4000 + 0.1×500 = 6050; + fijo 1000; × factor 2).
         $res->assertJsonCount(2, 'data.materials')
-            ->assertJsonPath('data.costVariable', '0.00')
-            ->assertJsonPath('data.costUnit', '1000.00')
-            ->assertJsonPath('data.basePrice', '2000.00');
+            ->assertJsonPath('data.costVariable', '6050.00')
+            ->assertJsonPath('data.costUnit', '7050.00')
+            ->assertJsonPath('data.basePrice', '14100.00');
     }
 
     public function test_listado_con_busqueda_y_filtro_activo(): void

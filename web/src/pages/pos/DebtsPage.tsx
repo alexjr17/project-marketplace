@@ -4,6 +4,7 @@ import type { PendingDebt } from '../../services/pos.service';
 import { Clock, Phone, CheckCircle, DollarSign, Smartphone, Wallet } from 'lucide-react';
 import { Alert, Avatar, Button, Card, EmptyState, MoneyInput, Page, PageHeader, Spinner, StatCard } from '../../components/ui';
 
+import { errorMessage } from '../../lib/http';
 export default function DebtsPage() {
   const [debts, setDebts] = useState<PendingDebt[]>([]);
   const [loading, setLoading] = useState(true);
@@ -17,8 +18,8 @@ export default function DebtsPage() {
     setError('');
     try {
       setDebts(await posService.getDebts());
-    } catch (e: any) {
-      setError(e?.message || 'Error al cargar los fiados');
+    } catch (e) {
+      setError(errorMessage(e, 'Error al cargar los fiados'));
     } finally {
       setLoading(false);
     }
@@ -46,8 +47,8 @@ export default function DebtsPage() {
       setChoosingId(null);
       setAbonoInput('');
       await load();
-    } catch (e: any) {
-      setError(e?.message || 'No se pudo registrar el abono');
+    } catch (e) {
+      setError(errorMessage(e, 'No se pudo registrar el abono'));
     } finally {
       setCollectingId(null);
     }

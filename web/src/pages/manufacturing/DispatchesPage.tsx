@@ -10,6 +10,7 @@ import {
 } from '../../components/ui';
 import { matchText } from '../../components/manufacturing/mfgUi';
 
+import { errorMessage } from '../../lib/http';
 export const DES_STATUS_META: Record<MfgDispatchStatus, { label: string; tone: Tone }> = {
   DRAFT: { label: 'Borrador', tone: 'gray' },
   CONFIRMED: { label: 'Confirmado', tone: 'green' },
@@ -35,7 +36,7 @@ export default function DispatchesPage() {
   const remove = async (o: MfgDispatch) => {
     if (!(await confirm({ title: `¿Eliminar el despacho ${o.code}?`, message: 'No se puede deshacer.', tone: 'danger' }))) return;
     try { await manufacturingService.deleteDispatch(o.id); toast.success('Despacho eliminado'); load(); }
-    catch (e: any) { toast.error(e?.message || 'No se pudo eliminar'); }
+    catch (e) { toast.error(errorMessage(e, 'No se pudo eliminar')); }
   };
 
   const rows = items.filter((o) => matchText(q, o.code, o.client?.name, o.purchaseOrder?.code));

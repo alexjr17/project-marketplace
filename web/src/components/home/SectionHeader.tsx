@@ -31,7 +31,7 @@ export function SectionHeader({ title, subtitle, to, linkLabel = 'Ver todo', chi
 export function HomeBlock({ children, className = '', id }: { children: ReactNode; className?: string; id?: string }) {
   return (
     <section id={id} className={`py-5 md:py-7 ${className}`}>
-      <div className="max-w-7xl mx-auto px-4">{children}</div>
+      <div className="max-w-7xl mx-auto px-3 md:px-6">{children}</div>
     </section>
   );
 }

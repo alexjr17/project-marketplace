@@ -1,21 +1,28 @@
 <?php
 
-namespace App\Services;
+namespace App\Services\Orders;
 
-use App\Models\Payment;
+use App\Exceptions\BusinessRuleException;
 use App\Models\Discount;
 use App\Models\InputVariant;
 use App\Models\Notification;
 use App\Models\Order;
 use App\Models\OrderItem;
+use App\Models\Payment;
 use App\Models\Product;
 use App\Models\ProductInput;
 use App\Models\ProductVariant;
 use App\Models\Setting;
 use App\Models\TemplateRecipe;
 use App\Models\VariantMovement;
-use Illuminate\Support\Facades\Log;
+use App\Services\CustomizationPricingService;
+use App\Services\DiscountService;
+use App\Services\NumberSequenceService;
+use App\Services\ShippingQuoteService;
+use App\Services\StockService;
+use App\Services\TemplateStockService;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 use RuntimeException;
 
@@ -337,6 +344,7 @@ class OrderService
                     'reason' => "Venta online - Orden {$orderNumber}",
                 ]);
             }
+            $this->syncProductsOf(array_column(array_filter($stockUpdates, fn ($su) => ! $su['fromInputs']), 'variantId'));
 
             return $order->load(['items.product:id,images', 'user']);
         });
@@ -602,9 +610,9 @@ class OrderService
     /** Restaura stock al cancelar un pedido. */
     private function restoreStock(Order $order): void
     {
-        $wasPaid = in_array($order->status === 'CANCELLED' ? '' : $order->status, [], true);
         // El estado anterior se conserva: cuando llega aquí, $order->status aún es el previo.
         $wasPaid = in_array($order->getOriginal('status'), ['PAID', 'PROCESSING', 'SHIPPED'], true);
+        $returned = [];
 
         foreach (OrderItem::where('orderId', $order->id)->get() as $item) {
             $product = Product::with('variants.color', 'variants.size')->find($item->productId);
@@ -648,8 +656,42 @@ class OrderService
                     'referenceId' => $order->id,
                     'reason' => "Cancelación orden {$order->orderNumber}",
                 ]);
+                $returned[] = $variant->id;
             }
         }
+        $this->syncProductsOf($returned);
+    }
+
+    /** Recalcula products.stock de los productos de esas variantes (la lista muestra ese total). */
+    private function syncProductsOf(array $variantIds): void
+    {
+        if ($variantIds === []) {
+            return;
+        }
+        foreach (ProductVariant::whereIn('id', array_unique($variantIds))->distinct()->pluck('productId') as $productId) {
+            $this->stock->syncProductStock((int) $productId);
+        }
+    }
+
+    /**
+     * Pedido propio que se puede pagar con Wompi: pendiente y creado con ese medio de pago
+     * (404 si no es del usuario, 409 si no se puede pagar).
+     */
+    public function payableWithWompi(int $id, int $userId): Order
+    {
+        try {
+            $order = $this->getOrderById($id, $userId);
+        } catch (RuntimeException) {
+            throw new BusinessRuleException('Orden no encontrada', 404);
+        }
+        if ($order->status !== 'PENDING') {
+            throw new BusinessRuleException('El pedido no está pendiente de pago', 409);
+        }
+        if ($order->paymentMethod !== 'wompi') {
+            throw new BusinessRuleException('El pedido no es de pago con Wompi', 409);
+        }
+
+        return $order;
     }
 
     /**

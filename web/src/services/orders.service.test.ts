@@ -111,10 +111,10 @@ describe('orders.service (caracterización)', () => {
       expect(await ordersService.getMyByNumber('X')).toBeNull();
     });
 
-    it('un 500 también se ve como "no existe"', async () => {
+    it('un 500 se propaga (no se confunde con "no existe")', async () => {
       server.use(http.get(`${API}/orders/my/number/X`, () => fail('Error interno', 500)));
-      // ACTUAL (posible bug): el error del servidor se traga y la pantalla diría "pedido no encontrado".
-      expect(await ordersService.getMyByNumber('X')).toBeNull();
+      // Corregido: antes el error del servidor se tragaba y la pantalla decía "pedido no encontrado".
+      await expect(ordersService.getMyByNumber('X')).rejects.toThrow('Error interno');
     });
   });
 
@@ -228,12 +228,6 @@ describe('orders.service (caracterización)', () => {
     it('create: lanza el message si no viene data', async () => {
       server.use(http.post(`${API}/orders`, () => HttpResponse.json({ success: true, message: 'Sin stock' })));
       await expect(ordersService.create({} as never)).rejects.toThrow('Sin stock');
-    });
-
-    it('getByEmail usa GET /orders?search= (ruta de admin) y traga errores', async () => {
-      server.use(http.get(`${API}/orders`, () => fail('No tienes permiso', 403)));
-      // ACTUAL (posible bug): "para usuarios no autenticados" pero /orders exige orders.view; siempre [] para clientes.
-      expect(await ordersService.getByEmail('a@b.co')).toEqual([]);
     });
   });
 });

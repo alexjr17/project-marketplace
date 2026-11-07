@@ -3,217 +3,75 @@
 namespace App\Http\Controllers;
 
 use App\Http\Concerns\ApiResponse;
-use App\Models\MfgProductionOrder;
-use App\Models\MfgPurchaseOrder;
-use App\Services\NumberSequenceService;
+use App\Services\Manufacturing\MfgPurchaseOrderService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 
 /**
- * Órdenes de pedido de la app Fábrica (como `OrdenPedido`). Un cliente pide
- * varias referencias (matriz talla×color). Desde un pedido se generan las
- * órdenes de producción (una por referencia), copiando la matriz.
+ * Pedidos de clientes de la app Fábrica. Valida y responde; el detalle y la generación de
+ * producción los hace MfgPurchaseOrderService.
  */
 class MfgPurchaseOrderController extends Controller
 {
     use ApiResponse;
 
-    public function __construct(private NumberSequenceService $numbers) {}
-
-    private const RELATIONS = [
-        'client:id,name,businessName,city,phone',
-        'collection:id,name,year,semester',
-        'items.reference:id,code,name,imagePath',
-        'items.color:id,name,hexCode',
-        'items.size:id,name,abbreviation,sortOrder',
-        'productionOrders:id,code,referenceId,purchaseOrderId,status',
-        'productionOrders.reference:id,code,name',
-    ];
+    public function __construct(private MfgPurchaseOrderService $orders) {}
 
     public function index(Request $request)
     {
-        $query = MfgPurchaseOrder::with(['client:id,name,businessName', 'collection:id,name'])
-            ->withCount('items')
-            ->orderByDesc('createdAt');
-        if ($request->filled('status')) {
-            $query->where('status', $request->string('status'));
-        }
-        if ($request->filled('search')) {
-            $query->where('code', 'like', '%'.$request->string('search').'%');
-        }
-
-        return $this->success($query->get());
+        return $this->success($this->orders->list([
+            'status' => $request->filled('status') ? (string) $request->string('status') : null,
+            'search' => $request->filled('search') ? (string) $request->string('search') : null,
+        ]));
     }
 
     public function show(int $id)
     {
-        $order = MfgPurchaseOrder::with(self::RELATIONS)->find($id);
-        if (! $order) {
-            return $this->error('Pedido no encontrado', 404);
-        }
-
-        return $this->success($order);
+        return $this->success($this->orders->detail($id));
     }
 
     public function generateNumber()
     {
-        return $this->success(['code' => $this->numbers->peek(NumberSequenceService::MFG_PURCHASE_ORDER)]);
+        return $this->success(['code' => $this->orders->peekCode()]);
     }
 
     public function store(Request $request)
     {
         $data = $this->validateData($request);
 
-        $order = DB::transaction(function () use ($data, $request) {
-            $order = MfgPurchaseOrder::create([
-                'code' => $this->numbers->next(NumberSequenceService::MFG_PURCHASE_ORDER),
-                'clientId' => $data['clientId'],
-                'collectionId' => $data['collectionId'] ?? null,
-                'semester' => $this->semesterFrom($data),
-                'market' => $data['market'] ?? 'NATIONAL',
-                'status' => $data['status'] ?? 'DRAFT',
-                'dispatchStartDate' => $data['dispatchStartDate'] ?? null,
-                'deliveryDate' => $data['deliveryDate'] ?? null,
-                'partialDates' => $this->cleanDates($data['partialDates'] ?? null),
-                'notes' => $data['notes'] ?? null,
-                'createdBy' => $request->user()?->id,
-            ]);
-            $this->syncItems($order, $data['references']);
-
-            return $order;
-        });
-
-        return $this->created($order->load(self::RELATIONS), 'Pedido creado');
+        return $this->created($this->orders->create($data, $request->user()?->id), 'Pedido creado');
     }
 
     public function update(Request $request, int $id)
     {
-        $order = MfgPurchaseOrder::find($id);
-        if (! $order) {
-            return $this->error('Pedido no encontrado', 404);
-        }
-        if ($order->productionOrders()->exists()) {
-            return $this->error('El pedido ya tiene producción generada; no se puede editar.', 422);
-        }
+        $this->orders->assertEditable($id);
         $data = $this->validateData($request);
 
-        DB::transaction(function () use ($order, $data) {
-            $order->update([
-                'clientId' => $data['clientId'],
-                'collectionId' => $data['collectionId'] ?? null,
-                'semester' => $this->semesterFrom($data),
-                // Sin market en el PUT se conserva el actual (no se reinicia a Nacional).
-                'market' => $data['market'] ?? $order->market,
-                'dispatchStartDate' => $data['dispatchStartDate'] ?? null,
-                'deliveryDate' => $data['deliveryDate'] ?? null,
-                'partialDates' => $this->cleanDates($data['partialDates'] ?? null),
-                'notes' => $data['notes'] ?? null,
-            ]);
-            // Reemplaza el detalle (solo celdas > 0).
-            $order->items()->delete();
-            $this->syncItems($order, $data['references']);
-        });
-
-        return $this->success($order->load(self::RELATIONS), 'Pedido actualizado');
+        return $this->success($this->orders->update($id, $data), 'Pedido actualizado');
     }
 
     public function changeStatus(Request $request, int $id)
     {
-        $order = MfgPurchaseOrder::find($id);
-        if (! $order) {
-            return $this->error('Pedido no encontrado', 404);
-        }
+        $this->orders->findOrFail($id);
         $data = $request->validate(['status' => 'required|in:DRAFT,APPROVED,IN_PRODUCTION,DELIVERED,CANCELLED']);
-        $order->status = $data['status'];
-        $order->save();
 
-        return $this->success($order->load(self::RELATIONS), 'Estado actualizado');
+        return $this->success($this->orders->changeStatus($id, $data['status']), 'Estado actualizado');
     }
 
     public function destroy(int $id)
     {
-        $order = MfgPurchaseOrder::find($id);
-        if (! $order) {
-            return $this->error('Pedido no encontrado', 404);
-        }
-        if ($order->productionOrders()->exists()) {
-            return $this->error('No se puede eliminar: el pedido tiene producción generada.', 422);
-        }
-        $order->delete();
+        $this->orders->delete($id);
 
         return $this->success(null, 'Pedido eliminado');
     }
 
-    /**
-     * Genera órdenes de producción desde el pedido: una por cada referencia con
-     * celdas aún no enviadas a producción, copiando su matriz talla×color.
-     */
+    /** Genera las órdenes de producción del pedido (todas las referencias pendientes o las elegidas). */
     public function generateProduction(Request $request, int $id)
     {
-        $order = MfgPurchaseOrder::with('items')->find($id);
-        if (! $order) {
-            return $this->error('Pedido no encontrado', 404);
-        }
+        $onlyRefs = $request->input('referenceIds');
+        $result = $this->orders->generateProduction($id, is_array($onlyRefs) ? $onlyRefs : null, $request->user()?->id);
 
-        // Filtra por referencias opcionales; por defecto todas las pendientes.
-        $onlyRefs = $request->input('referenceIds'); // array | null
-
-        $created = DB::transaction(function () use ($order, $request, $onlyRefs) {
-            $pending = $order->items->whereNull('productionOrderId')->where('quantity', '>', 0);
-            $byRef = $pending->groupBy('referenceId');
-            $created = [];
-
-            foreach ($byRef as $referenceId => $items) {
-                if (is_array($onlyRefs) && ! in_array((int) $referenceId, array_map('intval', $onlyRefs), true)) {
-                    continue;
-                }
-                // Agrega por color×talla (por si hubiera duplicados).
-                $agg = [];
-                foreach ($items as $it) {
-                    $key = $it->colorId.'-'.$it->sizeId;
-                    $agg[$key] = [
-                        'colorId' => $it->colorId,
-                        'sizeId' => $it->sizeId,
-                        'quantity' => ($agg[$key]['quantity'] ?? 0) + $it->quantity,
-                    ];
-                }
-                $prod = MfgProductionOrder::createForReference(
-                    (int) $referenceId,
-                    array_values($agg),
-                    [
-                        'purchaseOrderId' => $order->id,
-                        'collectionId' => $order->collectionId,
-                        'semester' => $order->semester,
-                        'market' => $order->market,
-                        'notes' => 'Generada desde pedido '.$order->code,
-                        'createdBy' => $request->user()?->id,
-                    ],
-                );
-                // Marca las celdas del pedido como enviadas a producción.
-                $order->items()->where('referenceId', $referenceId)->whereNull('productionOrderId')
-                    ->update(['productionOrderId' => $prod->id]);
-                $created[] = $prod;
-            }
-
-            if (! empty($created) && $order->status !== 'DELIVERED') {
-                $order->status = 'IN_PRODUCTION';
-                $order->save();
-            }
-
-            return $created;
-        });
-
-        if (empty($created)) {
-            return $this->error('No hay referencias pendientes por producir en este pedido.', 422);
-        }
-
-        return $this->success([
-            'purchaseOrder' => $order->load(self::RELATIONS),
-            'created' => count($created),
-        ], 'Se generaron '.count($created).' orden(es) de producción');
+        return $this->success($result, 'Se generaron '.$result['created'].' orden(es) de producción');
     }
-
-    // ---- helpers ----
 
     private function validateData(Request $request): array
     {
@@ -235,46 +93,5 @@ class MfgPurchaseOrderController extends Controller
             'references.*.items.*.sizeId' => 'required|integer|exists:mfg_sizes,id',
             'references.*.items.*.quantity' => 'required|integer|min:0',
         ]);
-    }
-
-    /** Limpia la lista de fechas parciales (quita vacías, reindexada). */
-    private function cleanDates(?array $dates): ?array
-    {
-        if (empty($dates)) {
-            return null;
-        }
-        $clean = array_values(array_filter($dates, fn ($d) => ! empty($d)));
-
-        return $clean ?: null;
-    }
-
-    /** El semestre se toma de la colección (que ya incluye año+semestre). */
-    private function semesterFrom(array $data): ?string
-    {
-        if (! empty($data['collectionId'])) {
-            $sem = \App\Models\MfgCollection::whereKey($data['collectionId'])->value('semester');
-            if ($sem) {
-                return $sem;
-            }
-        }
-
-        return $data['semester'] ?? null;
-    }
-
-    private function syncItems(MfgPurchaseOrder $order, array $references): void
-    {
-        foreach ($references as $ref) {
-            foreach ($ref['items'] as $it) {
-                if ((int) $it['quantity'] <= 0) {
-                    continue;
-                }
-                $order->items()->create([
-                    'referenceId' => $ref['referenceId'],
-                    'colorId' => $it['colorId'],
-                    'sizeId' => $it['sizeId'],
-                    'quantity' => $it['quantity'],
-                ]);
-            }
-        }
     }
 }

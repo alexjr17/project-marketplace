@@ -4,6 +4,7 @@ import { PageHeader } from '../components/shared/PageHeader';
 import { Seo } from '../components/seo/Seo';
 import { Badge, Button, Card, CardTitle, DescriptionList, EmptyState, Field, FormActions, Tabs, TextInput } from '../components/ui';
 import { AddressesSection } from '../components/profile/AddressesSection';
+import { AccountLayout } from '../components/profile/AccountLayout';
 import { useToast } from '../context/ToastContext';
 import { User, Calendar, Shield, Edit2, Save, Lock, LogIn } from 'lucide-react';
 
@@ -26,11 +27,11 @@ export const ProfilePage = () => {
     return (
       <div className="min-h-screen bg-gray-50">
         <PageHeader title="Mi perfil" backLabel="Inicio" backTo="/" />
-        <div className="max-w-4xl mx-auto px-4 py-8">
+        <AccountLayout>
           <Card padded={false}>
-            <EmptyState icon={LogIn} title="No has iniciado sesión" description="Por favor inicia sesión para ver tu perfil." />
+            <EmptyState icon={LogIn} title="No has iniciado sesión" description="Inicia sesión desde el ícono de usuario para ver tu perfil." />
           </Card>
-        </div>
+        </AccountLayout>
       </div>
     );
   }
@@ -75,7 +76,7 @@ export const ProfilePage = () => {
       <Seo title="Mi perfil" />
       <PageHeader title="Mi perfil" subtitle="Gestiona tu información personal" backLabel="Inicio" backTo="/" />
 
-      <div className="max-w-4xl mx-auto px-4 py-6 lg:py-8 space-y-5">
+      <AccountLayout>
         {/* Identidad */}
         <Card>
           <div className="flex items-center gap-4">
@@ -179,7 +180,7 @@ export const ProfilePage = () => {
             <AddressesSection />
           </Card>
         )}
-      </div>
+      </AccountLayout>
     </div>
   );
 };

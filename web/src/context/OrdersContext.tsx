@@ -68,7 +68,6 @@ interface OrdersContextType {
   getOrdersByStatus: (status: OrderStatus) => Order[];
   getOrdersReadyToShip: () => Order[];
   createOrder: (data: CreateOrderData) => Promise<Order>;
-  getOrdersByUserEmail: (email: string) => Promise<Order[]>;
   getMyOrders: () => Promise<Order[]>;
   refreshOrders: () => Promise<void>;
   setPage: (page: number) => void;
@@ -143,7 +142,7 @@ const mapApiOrderToOrder = (apiOrder: ApiOrder): Order => {
 };
 
 export const OrdersProvider = ({ children }: { children: ReactNode }) => {
-  const { isAuthenticated, isAdmin, isLoading: authLoading } = useAuth();
+  const { isAuthenticated, isAdmin, isLoading: authLoading, hasPermission } = useAuth();
   const [orders, setOrders] = useState<Order[]>([]);
   // Empezar en true para mostrar loading mientras auth carga
   const [isLoading, setIsLoading] = useState(true);
@@ -197,14 +196,15 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
       return;
     }
 
-    if (isAuthenticated && isAdmin) {
+    // Solo quien ve pedidos los carga (antes el cajero pedía /orders y recibía 403).
+    if (isAuthenticated && isAdmin && hasPermission('orders.view')) {
       loadOrders();
     } else {
       // Si no es admin, marcar como cargado sin pedidos
       setIsLoading(false);
       setOrders([]);
     }
-  }, [authLoading, isAuthenticated, isAdmin, loadOrders]);
+  }, [authLoading, isAuthenticated, isAdmin, hasPermission, loadOrders]);
 
   const getOrderById = async (id: string): Promise<Order | undefined> => {
     const numericId = Number(id);
@@ -231,16 +231,10 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
 
     // Si no está en cache, buscar en API. Primero como "mi pedido" (lo usa el cliente en la
     // confirmación); la ruta /orders/number es solo de admin y al cliente le daba 403.
-    try {
-      const apiOrder = (await ordersService.getMyByNumber(orderNumber))
-        ?? (isAdmin ? await ordersService.getByNumber(orderNumber) : null);
-      if (apiOrder) {
-        return mapApiOrderToOrder(apiOrder);
-      }
-      return undefined;
-    } catch {
-      return undefined;
-    }
+    // undefined = no existe; un error del servidor se propaga (la pantalla lo distingue).
+    const apiOrder = (await ordersService.getMyByNumber(orderNumber))
+      ?? (isAdmin ? await ordersService.getByNumber(orderNumber) : null);
+    return apiOrder ? mapApiOrderToOrder(apiOrder) : undefined;
   };
 
   const changeOrderStatus = async ({
@@ -354,15 +348,6 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
     return newOrder;
   };
 
-  const getOrdersByUserEmail = async (email: string): Promise<Order[]> => {
-    try {
-      const apiOrders = await ordersService.getByEmail(email);
-      return apiOrders.map(mapApiOrderToOrder);
-    } catch {
-      return [];
-    }
-  };
-
   const getMyOrders = async (): Promise<Order[]> => {
     try {
       const response = await ordersService.getMyOrders();
@@ -400,7 +385,6 @@ export const OrdersProvider = ({ children }: { children: ReactNode }) => {
         getOrdersByStatus,
         getOrdersReadyToShip,
         createOrder,
-        getOrdersByUserEmail,
         getMyOrders,
         refreshOrders,
         setPage,

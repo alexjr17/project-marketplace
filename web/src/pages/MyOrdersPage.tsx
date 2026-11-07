@@ -9,6 +9,8 @@ import type { Order, OrderStatus } from '../types/order';
 import type { Payment, PaymentStatus } from '../services/payments.service';
 import { PageHeader } from '../components/shared/PageHeader';
 import { Seo } from '../components/seo/Seo';
+import { AccountLayout } from '../components/profile/AccountLayout';
+import { ProductImage } from '../components/products/ProductImage';
 import { Badge, Button, Card, Dialog, EmptyState, SearchInput, SelectInput, Skeleton, Spinner, type Tone } from '../components/ui';
 
 /** Estado del pedido → icono y tono del Badge (tonos con significado del estándar). */
@@ -68,7 +70,9 @@ function OrderProgress({ status }: { status: OrderStatus }) {
 
 function ItemThumb({ src, alt, size = 'w-12 h-12' }: { src?: string; alt: string; size?: string }) {
   return src ? (
-    <img src={src} alt={alt} className={`${size} object-cover rounded-lg border border-gray-200 bg-gray-50 flex-shrink-0`} />
+    <span className={`${size} block rounded-lg border border-gray-200 overflow-hidden flex-shrink-0`}>
+      <ProductImage src={src} alt={alt} width={120} iconClassName="w-5 h-5" />
+    </span>
   ) : (
     <div className={`${size} bg-gray-100 rounded-lg border border-gray-200 flex items-center justify-center flex-shrink-0`}>
       <Package className="w-5 h-5 text-gray-400" />
@@ -134,11 +138,11 @@ export const MyOrdersPage = () => {
       <div className="min-h-screen bg-gray-50">
         <Seo title="Mis pedidos" />
         {header}
-        <div className="max-w-5xl mx-auto px-4 py-8">
+        <AccountLayout>
           <Card padded={false}>
-            <EmptyState icon={LogIn} title="Inicia sesión" description="Para ver tus pedidos debes iniciar sesión." />
+            <EmptyState icon={LogIn} title="Inicia sesión" description="Para ver tus pedidos inicia sesión desde el ícono de usuario." />
           </Card>
-        </div>
+        </AccountLayout>
       </div>
     );
   }
@@ -157,7 +161,7 @@ export const MyOrdersPage = () => {
       <Seo title="Mis pedidos" />
       {header}
 
-      <div className="max-w-5xl mx-auto px-4 py-6 lg:py-8 space-y-4">
+      <AccountLayout>
         {/* Filtros */}
         <div className="bg-white rounded-xl border border-gray-200 p-3 flex flex-col sm:flex-row gap-2">
           <SearchInput value={searchQuery} onChange={setSearchQuery} placeholder="Buscar por número de pedido o producto…" className="flex-1" />
@@ -226,7 +230,7 @@ export const MyOrdersPage = () => {
             ))}
           </div>
         )}
-      </div>
+      </AccountLayout>
 
       <Dialog
         open={!!selectedOrder}

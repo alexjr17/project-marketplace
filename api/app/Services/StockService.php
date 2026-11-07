@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Exceptions\InsufficientStockException;
 use App\Models\InputVariant;
 use App\Models\InputVariantMovement;
+use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\VariantMovement;
 use Illuminate\Support\Collection;
@@ -41,8 +42,9 @@ use RuntimeException;
  * insumos ENTRADA, SALIDA, AJUSTE, RESERVA, LIBERACION, DEVOLUCION, MERMA.
  *
  * Migrados: venta POS (POSService::createSale), pedido online (OrderService), recepción de
- * orden de compra (PurchaseOrderService::receive). El resto de módulos (anulación/devolución
- * POS, conteos, conversiones, devoluciones de compra, ajustes manuales) se pasa por módulo.
+ * orden de compra (Purchasing\PurchaseOrderService::receive) y devoluciones de compra
+ * (Purchasing\PurchaseReturnService). El resto de módulos (anulación/devolución POS,
+ * conteos, conversiones, ajustes manuales) se pasa por módulo.
  */
 class StockService
 {
@@ -129,6 +131,20 @@ class StockService
                 'newStock' => $new,
             ] + $this->movementAttrs($attrs));
         });
+    }
+
+    /**
+     * Recalcula products.stock como la suma de sus variantes activas (lo mismo que muestra la
+     * API del producto). Llamarlo después de mover el stock de variantes de un producto.
+     */
+    public function syncProductStock(int $productId): void
+    {
+        if ($productId <= 0) {
+            return;
+        }
+        Product::whereKey($productId)->update([
+            'stock' => (int) ProductVariant::where('productId', $productId)->where('isActive', true)->sum('stock'),
+        ]);
     }
 
     // ==================== Variantes de insumo ====================

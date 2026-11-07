@@ -10,6 +10,7 @@ import {
 } from '../../components/ui';
 import QtyMatrix from '../../components/manufacturing/QtyMatrix';
 
+import { errorMessage } from '../../lib/http';
 const TYPE_LABEL: Record<string, string> = { VENTA: 'Venta', CONSIGNACION: 'Consignación', TRASLADO: 'Traslado', MUESTRA: 'Muestra' };
 
 export default function DispatchDetailPage() {
@@ -42,7 +43,7 @@ export default function DispatchDetailPage() {
         invoicedAt: bill.invoicedAt || null,
       });
       setD(dd); toast.success('Facturación guardada');
-    } catch (e: any) { toast.error(e?.message || 'No se pudo guardar'); }
+    } catch (e) { toast.error(errorMessage(e, 'No se pudo guardar')); }
     finally { setBusy(false); }
   };
   useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [dispatchId]);
@@ -77,14 +78,14 @@ export default function DispatchDetailPage() {
     if (!(await ask({ title: '¿Confirmar el despacho?', message: 'Se descontará el inventario de producto terminado.', confirmText: 'Confirmar' }))) return;
     setBusy(true);
     try { setD(await manufacturingService.confirmDispatch(dispatchId)); toast.success('Despacho confirmado'); }
-    catch (e: any) { toast.error(e?.message || 'No se pudo confirmar'); }
+    catch (e) { toast.error(errorMessage(e, 'No se pudo confirmar')); }
     finally { setBusy(false); }
   };
   const cancel = async () => {
     if (!(await ask({ title: '¿Anular el despacho?', message: 'Si estaba confirmado, se devuelve el inventario.', confirmText: 'Anular', tone: 'danger' }))) return;
     setBusy(true);
     try { setD(await manufacturingService.cancelDispatch(dispatchId)); toast.success('Despacho anulado'); }
-    catch (e: any) { toast.error(e?.message || 'No se pudo anular'); }
+    catch (e) { toast.error(errorMessage(e, 'No se pudo anular')); }
     finally { setBusy(false); }
   };
 

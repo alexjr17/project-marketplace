@@ -1,4 +1,5 @@
 import api from './api.service';
+import type { PageMeta } from '../lib/http';
 
 /** Devuelve `data` de la respuesta o lanza con el mensaje del backend. api.service ya
  *  desenvuelve el sobre {success, data}: leer `response.data.data` daba undefined. */
@@ -186,11 +187,11 @@ class PaymentsService {
    * Listar todos los pagos (Admin)
    */
   async listPayments(query?: ListPaymentsQuery): Promise<PaginatedPayments> {
-    const response = await api.get<Payment[]>('/payments/all', query) as any;
+    const response = await api.get<Payment[]>('/payments/all', query);
 
     // El backend retorna { success, data, meta }
     // api.get() ya parsea esto, así que accedemos directamente
-    const meta = response.meta || response.pagination || {
+    const meta = (response.meta as PageMeta | undefined) || response.pagination || {
       page: 1,
       limit: 20,
       total: 0,

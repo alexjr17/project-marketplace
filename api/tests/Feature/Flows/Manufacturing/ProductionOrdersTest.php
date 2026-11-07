@@ -88,10 +88,9 @@ class ProductionOrdersTest extends TestCase
         MfgProcess::where('code', 'EMP')->update(['sequence' => 0]);
 
         $op = $this->createProductionOrder($this->ref['id']);
-        // Orden por sequence: EMP(0) queda primero y toma la secuencia 1 (su índice + 1),
-        // igual que Corte (1).
-        // ACTUAL (posible bug): dos etapas con la misma secuencia (1); isLastStage() usa max(sequence).
-        $this->assertSame([1, 1, 2], collect($op['stages'])->pluck('sequence')->sort()->values()->all());
+        // Orden por sequence: EMP(0) queda primero. Corregido (fase 3): la secuencia de la
+        // etapa es su posición (1, 2, 3), sin duplicados; antes EMP y Corte quedaban en 1.
+        $this->assertSame([1, 2, 3], collect($op['stages'])->pluck('sequence')->sort()->values()->all());
     }
 
     public function test_validacion_de_la_orden(): void

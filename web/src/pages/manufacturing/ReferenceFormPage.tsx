@@ -16,6 +16,7 @@ import {
 } from '../../components/ui';
 import { MarketBadge } from '../../components/manufacturing/mfgUi';
 
+import { errorMessage } from '../../lib/http';
 const money = (n: number) => '$' + n.toLocaleString('es-CO', { maximumFractionDigits: 2 });
 // Indicadores en pesos: sin decimales.
 const money0 = (n: number) => '$' + Math.round(n).toLocaleString('es-CO');
@@ -144,7 +145,7 @@ export default function ReferenceFormPage() {
 
   const uploadImg = async (file: File) => {
     setUploading(true);
-    try { setImagePath(await socialService.uploadImage(file, 'referencias')); }
+    try { setImagePath(await socialService.uploadImage(file, 'references')); }
     catch { toast.error('No se pudo subir la imagen'); }
     finally { setUploading(false); }
   };
@@ -326,7 +327,7 @@ export default function ReferenceFormPage() {
       if (isEdit) { await manufacturingService.updateReference(refId, payload); toast.success('Referencia actualizada'); }
       else { await manufacturingService.createReference(payload); toast.success('Referencia creada'); }
       navigate('/manufacturing/references');
-    } catch (e: any) { toast.error(e?.message || 'No se pudo guardar'); }
+    } catch (e) { toast.error(errorMessage(e, 'No se pudo guardar')); }
     finally { setSaving(false); }
   };
 

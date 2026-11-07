@@ -76,12 +76,6 @@ export async function getReturns(): Promise<PurchaseReturn[]> {
   return response.data ?? [];
 }
 
-// Detalle de una devolución
-export async function getReturnById(id: number): Promise<PurchaseReturn> {
-  const response = await api.get<PurchaseReturn>(`${baseUrl}/${id}`);
-  return response.data!;
-}
-
 // Estadísticas
 export async function getStats(): Promise<PurchaseReturnStats> {
   const response = await api.get<PurchaseReturnStats>(`${baseUrl}/stats`);
