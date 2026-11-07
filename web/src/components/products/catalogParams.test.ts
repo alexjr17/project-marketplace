@@ -14,6 +14,14 @@ describe('catálogo ↔ URL', () => {
     expect(s.page).toBe(3);
   });
 
+  it('lee y escribe la temática (?tag=) y la muestra como chip', () => {
+    const s = readCatalogParams(new URLSearchParams('tag=dragon%20ball&category=camisetas'));
+    expect(s.filters).toEqual({ tag: 'dragon ball', category: 'camisetas' });
+    expect(writeCatalogParams(s).get('tag')).toBe('dragon ball');
+    expect(activeChips(s.filters, {}, money)).toContainEqual({ key: 'tag', label: 'Dragon Ball' });
+    expect(removeChip(s.filters, 'tag')).toEqual({ category: 'camisetas' });
+  });
+
   it('sin parámetros: sin filtros, más recientes, página 1', () => {
     expect(readCatalogParams(new URLSearchParams(''))).toEqual({ filters: {}, sort: 'newest', page: 1 });
   });

@@ -17,6 +17,7 @@ import {
   compactFilters,
   readCatalogParams,
   removeChip,
+  tagLabel,
   writeCatalogParams,
   type CatalogState,
   type ChipKey,
@@ -57,8 +58,10 @@ export const CatalogPage = () => {
   const removeOne = (key: ChipKey) => go({ filters: removeChip(state.filters, key) });
   const clearAll = () => go({ filters: {} });
 
-  const { search, onSale, category } = state.filters;
-  const title = search ? `Resultados para «${search}»` : category ? categoryName(category) ?? 'Catálogo' : onSale ? 'Ofertas' : 'Catálogo';
+  const { search, onSale, category, tag } = state.filters;
+  const title = search
+    ? `Resultados para «${search}»`
+    : tag ? tagLabel(tag) : category ? categoryName(category) ?? 'Catálogo' : onSale ? 'Ofertas' : 'Catálogo';
   const total = pagination.total || filteredProducts.length;
   const countLabel = isLoading ? 'Buscando productos…' : `${total} ${total === 1 ? 'producto' : 'productos'}`;
   const filterCount = chips.filter((c) => c.key !== 'search').length;
@@ -71,7 +74,7 @@ export const CatalogPage = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       <Seo title={search ? `Buscar: ${search}` : title} description="Explora todos nuestros productos y personalízalos a tu gusto." />
-      <PageHeader title={title} subtitle={countLabel} backLabel="Catálogo" backTo={search || category || onSale ? '/catalog' : '/'} />
+      <PageHeader title={title} subtitle={countLabel} backLabel="Catálogo" backTo={search || category || onSale || tag ? '/catalog' : '/'} />
 
       <StoreContainer>
         <div className="grid grid-cols-1 lg:grid-cols-[240px_minmax(0,1fr)] gap-6 items-start">

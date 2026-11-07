@@ -39,6 +39,7 @@ export function Seo({ title, description, image, type = 'website' }: SeoProps) {
   const { settings } = useSettings();
   const siteName = settings.general?.siteName || 'Vexa';
   const desc = clean(description) || clean(settings.general?.siteDescription);
+  const favicon = settings.general?.favicon;
   const ogImage = isHttpUrl(image) ? image : (isHttpUrl(settings.general?.logo) ? settings.general!.logo! : '');
 
   useEffect(() => {
@@ -64,7 +65,15 @@ export function Seo({ title, description, image, type = 'website' }: SeoProps) {
       document.head.appendChild(link);
     }
     link.href = window.location.href.split('?')[0].split('#')[0];
-  }, [title, desc, ogImage, type, siteName]);
+
+    // Ícono de la pestaña: el de Ajustes > General (si hay uno).
+    if (favicon) {
+      const icon = document.head.querySelector<HTMLLinkElement>('link[rel="icon"]') ?? document.head.appendChild(document.createElement('link'));
+      icon.rel = 'icon';
+      icon.type = favicon.endsWith('.svg') ? 'image/svg+xml' : 'image/png';
+      icon.href = favicon;
+    }
+  }, [title, desc, ogImage, type, siteName, favicon]);
 
   return null;
 }

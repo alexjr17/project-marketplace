@@ -53,6 +53,16 @@ export function paletteVars(hex: string, fallback = DEFAULT_STORE_COLOR): Record
   return vars;
 }
 
+/**
+ * Color de acento de la marca (brandColors.accent) para detalles de la tienda: --accent y
+ * --accent-ink (el texto que se lee encima: oscuro sobre acentos claros, blanco sobre oscuros).
+ */
+export function accentVars(hex: string | undefined, fallback = '#ABD04C'): Record<string, string> {
+  const rgb = parseHex(hex ?? '') ?? parseHex(fallback)!;
+  const lum = (0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2]) / 255;
+  return { '--accent': rgb.join(' '), '--accent-ink': lum > 0.6 ? '31 29 30' : '255 255 255' };
+}
+
 /** Color efectivo de una app según la configuración guardada. */
 export function resolveAppColor(
   app: AppKey,

@@ -198,6 +198,46 @@ class CatalogTest extends TestCase
         $this->assertSame(['Hoodie Azul', 'Suéter Rojo', 'Tote Bag'], $names());
     }
 
+    public function test_filtro_por_tematica_con_las_etiquetas(): void
+    {
+        $this->seedProducts();
+        $this->makeProduct('Camiseta Goku', 59000, [], ['tags' => ['anime', 'dragon ball']]);
+        $this->makeProduct('Buso Naruto', 95000, [], ['category' => 'busos', 'tags' => ['Anime']]);
+        $this->makeProduct('Camiseta Freddie', 59000, [], ['tags' => ['celebridades']]);
+        $this->makeProduct('Anime inactivo', 59000, [], ['tags' => ['anime'], 'isActive' => false]);
+        $names = fn (string $qs) => array_column($this->getJson("/api/products?{$qs}&sortBy=name&sortOrder=asc")->assertOk()->json('data'), 'name');
+
+        // La etiqueta se encuentra aunque esté escrita con mayúscula inicial; los inactivos no salen.
+        $this->assertSame(['Buso Naruto', 'Camiseta Goku'], $names('tag=anime'));
+        $this->assertSame(['Buso Naruto', 'Camiseta Goku'], $names('tag=Anime'));
+        $this->assertSame(['Camiseta Freddie'], $names('tag=celebridades'));
+        $this->assertSame(['Buso Naruto'], $names('tag=anime&category=busos'));
+        $this->assertSame([], $names('tag=no-existe'));
+        $this->getJson('/api/products?tag='.str_repeat('a', 61))->assertStatus(422);
+    }
+
+    public function test_tematicas_con_conteo_e_imagen_para_la_portada(): void
+    {
+        $this->seedProducts(); // todos con la etiqueta "test" (inactivo y plantilla no cuentan)
+        $this->makeProduct('Camiseta Goku', 59000, [], ['tags' => ['anime', ' Anime ', 'dragon ball'], 'featured' => true]);
+        $this->makeProduct('Buso Naruto', 95000, [], ['tags' => ['Anime'], 'images' => []]);
+        $this->makeProduct('Camiseta Freddie', 59000, [], ['tags' => ['celebridades']]);
+
+        $tags = collect($this->getJson('/api/catalogs/tags/stats')->assertOk()->json('data'));
+
+        $this->assertSame(['tag', 'name', 'productCount', 'image'], array_keys($tags->first()));
+        // Ordenadas por nº de productos: test (3 activos), anime (2), luego las de 1.
+        $this->assertSame(['test', 'anime', 'celebridades', 'dragon ball'], $tags->pluck('tag')->all());
+        $anime = $tags->firstWhere('tag', 'anime');
+        $this->assertSame(2, $anime['productCount']); // " Anime " y "anime" en un mismo producto cuentan una vez
+        $this->assertSame('Anime', $anime['name']);
+        $this->assertSame('Dragon Ball', $tags->firstWhere('tag', 'dragon ball')['name']);
+        $this->assertStringStartsWith('https://img.test/', $anime['image']); // la del destacado con foto
+
+        $this->assertCount(2, $this->getJson('/api/catalogs/tags/stats?limit=2')->assertOk()->json('data'));
+        $this->getJson('/api/catalogs/tags/stats?limit=50')->assertStatus(422);
+    }
+
     public function test_categorias_con_conteo_e_imagen_para_la_portada(): void
     {
         $this->seedProducts();

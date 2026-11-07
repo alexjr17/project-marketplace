@@ -93,6 +93,8 @@ export interface ProductFilters {
   search?: string;
   /** Solo productos con descuento automático vigente (lo resuelve el backend). */
   onSale?: boolean;
+  /** Temática: etiqueta de los productos (?tag=anime). */
+  tag?: string;
   /** La tienda manda isActive=true para que el equipo con sesión no vea inactivos en la portada. */
   isActive?: boolean;
   sortBy?: string;

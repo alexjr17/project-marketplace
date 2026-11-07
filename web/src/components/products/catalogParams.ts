@@ -6,7 +6,7 @@ import type { ProductCategory, ProductSortOption, ProductTypeSlug } from '../../
  * se puede compartir o guardar, y "atrás" del navegador deshace el último cambio.
  *
  *   ?search=buso&category=ropa&type=hoodie&minPrice=20000&maxPrice=90000
- *    &inStock=1&featured=1&onSale=1&sort=price-asc&page=2
+ *    &inStock=1&featured=1&onSale=1&tag=anime&sort=price-asc&page=2
  */
 export interface CatalogState {
   filters: FilterValues;
@@ -48,6 +48,8 @@ export function readCatalogParams(params: URLSearchParams): CatalogState {
   if (isOn(params.get('inStock'))) filters.inStock = true;
   if (isOn(params.get('featured'))) filters.featured = true;
   if (isOn(params.get('onSale'))) filters.onSale = true;
+  const tag = params.get('tag')?.trim();
+  if (tag) filters.tag = tag;
 
   const rawSort = params.get('sort') ?? '';
   let sort: ProductSortOption = SORTS.includes(rawSort as ProductSortOption)
@@ -72,6 +74,7 @@ export function writeCatalogParams({ filters, sort, page }: CatalogState): URLSe
   if (filters.inStock) p.set('inStock', '1');
   if (filters.featured) p.set('featured', '1');
   if (filters.onSale) p.set('onSale', '1');
+  if (filters.tag) p.set('tag', filters.tag);
   if (sort !== DEFAULT_SORT) p.set('sort', sort);
   if (page > 1) p.set('page', String(page));
   return p;
@@ -88,12 +91,15 @@ export function compactFilters(filters: FilterValues): FilterValues {
   return out;
 }
 
-export type ChipKey = 'search' | 'category' | 'type' | 'price' | 'inStock' | 'featured' | 'onSale';
+export type ChipKey = 'search' | 'category' | 'type' | 'price' | 'inStock' | 'featured' | 'onSale' | 'tag';
 
 export interface ActiveChip {
   key: ChipKey;
   label: string;
 }
+
+/** Nombre visible de una temática: "dragon ball" → "Dragon Ball". */
+export const tagLabel = (tag: string) => tag.trim().toLowerCase().replace(/(^|\s)\S/g, (c) => c.toUpperCase());
 
 /** Filtros activos como "chips" (para mostrarlos y quitarlos uno a uno). */
 export function activeChips(
@@ -103,6 +109,7 @@ export function activeChips(
 ): ActiveChip[] {
   const chips: ActiveChip[] = [];
   if (filters.search) chips.push({ key: 'search', label: `«${filters.search}»` });
+  if (filters.tag) chips.push({ key: 'tag', label: tagLabel(filters.tag) });
   if (filters.category) chips.push({ key: 'category', label: names.category?.(filters.category) ?? filters.category });
   if (filters.type) chips.push({ key: 'type', label: names.type?.(filters.type) ?? filters.type });
   if (filters.minPrice != null || filters.maxPrice != null) {

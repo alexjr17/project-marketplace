@@ -5,9 +5,24 @@
 /* Paleta del color de la app (la sobrescribe <AppTheme> según la app y los Ajustes).
    Por defecto: violeta de marca (#7c3aed como tono 600). */
 :root {
+  /* Acento de la marca y su texto, y el fondo "papel" de la tienda (los sobrescribe AppTheme). */
+  --accent: 171 208 76; --accent-ink: 31 29 30;
+  --paper: 243 243 238;
   --app-50: 248 245 254; --app-100: 241 233 253; --app-200: 222 206 251; --app-300: 196 163 248;
   --app-400: 169 120 244; --app-500: 144 80 241; --app-600: 124 58 237; --app-700: 105 49 201;
   --app-800: 87 41 166; --app-900: 68 32 130;
+}
+
+/* Avance de la colección del hero hasta la siguiente. */
+@keyframes heroProgress {
+  from { width: 0; }
+  to { width: 100%; }
+}
+
+/* Tira de temáticas de la portada: dos copias iguales que se desplazan la mitad del ancho. */
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
 }
 
 @layer utilities {

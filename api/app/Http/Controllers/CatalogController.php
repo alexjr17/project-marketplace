@@ -154,6 +154,14 @@ class CatalogController extends Controller
         return $this->success($query->orderBy('name')->get());
     }
 
+    /** Temáticas (etiquetas de producto) con nº de productos e imagen, para la portada. */
+    public function tagsWithStats(Request $request, ProductCatalogService $catalog)
+    {
+        $data = $request->validate(['limit' => 'nullable|integer|min:1|max:30']);
+
+        return $this->success($catalog->tagsWithStats((int) ($data['limit'] ?? 12)));
+    }
+
     /** Categorías activas con nº de productos e imagen, para las tarjetas de la portada. */
     public function categoriesWithStats(ProductCatalogService $catalog)
     {

@@ -88,6 +88,61 @@ class ProductCatalogService
     }
 
     /**
+     * Temáticas de la tienda (anime, personajes…): salen de las etiquetas de los productos.
+     * Filtra por la etiqueta tal cual, en minúsculas o con mayúscula inicial, porque las
+     * etiquetas se escriben a mano en cada producto.
+     */
+    public function applyTag(Builder $query, string $tag): void
+    {
+        $t = trim($tag);
+        $variants = array_values(array_unique([$t, mb_strtolower($t), mb_convert_case(mb_strtolower($t), MB_CASE_TITLE)]));
+        $query->where(function ($q) use ($variants) {
+            foreach ($variants as $v) {
+                $q->orWhereJsonContains('tags', $v);
+            }
+        });
+    }
+
+    /**
+     * Temáticas para la portada: cada etiqueta de los productos activos (no plantillas), con
+     * cuántos productos la tienen y la foto del primero que tenga (los destacados primero).
+     * Las etiquetas se agrupan en minúsculas. Ordenadas por nº de productos.
+     *
+     * @return array<int, array{tag:string, name:string, productCount:int, image:?string}>
+     */
+    public function tagsWithStats(int $limit = 12): array
+    {
+        $products = Product::where('isActive', true)->where('isTemplate', false)
+            ->orderByDesc('featured')->orderByDesc('createdAt')
+            ->get(['id', 'tags', 'images', 'updatedAt']);
+
+        $stats = [];
+        foreach ($products as $p) {
+            $seen = [];
+            foreach ((array) $p->tags as $raw) {
+                if (! is_string($raw)) {
+                    continue;
+                }
+                $tag = mb_strtolower(trim($raw));
+                if ($tag === '' || isset($seen[$tag])) {
+                    continue;
+                }
+                $seen[$tag] = true;
+                $stats[$tag] ??= ['tag' => $tag, 'name' => mb_convert_case($tag, MB_CASE_TITLE), 'productCount' => 0, 'image' => null];
+                $stats[$tag]['productCount']++;
+                if ($stats[$tag]['image'] === null) {
+                    $front = ImageUrls::forModel($p->images, 'product', $p->id, $p->updatedAt)['front'] ?? '';
+                    $stats[$tag]['image'] = $front !== '' ? $front : null;
+                }
+            }
+        }
+
+        uasort($stats, fn ($a, $b) => [$b['productCount'], $a['tag']] <=> [$a['productCount'], $b['tag']]);
+
+        return array_slice(array_values($stats), 0, max(1, $limit));
+    }
+
+    /**
      * Categorías activas para las tarjetas de la portada: cuántos productos activos (no
      * plantillas) tiene cada una y la imagen del producto activo más reciente que tenga foto.
      *

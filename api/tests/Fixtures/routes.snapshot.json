@@ -288,6 +288,9 @@
     "GET api/catalogs/product-types/{productTypeId}/sizes": [],
     "GET api/catalogs/sizes": [],
     "GET api/catalogs/sizes/{id}": [],
+    "GET api/catalogs/tags/stats": [
+        "throttle:storefront"
+    ],
     "GET api/design-images": [],
     "GET api/design-images/categories": [],
     "GET api/design-images/{id}": [],

@@ -6,6 +6,10 @@ export default {
       colors: {
         // Color de la app actual (Tienda, Administración, POS, Social, Fábrica). Lo publica <AppTheme>
         // como variables --app-* desde la configuración; ver src/theme/appTheme.ts y DESIGN_SYSTEM.md.
+        // Acento de la marca en la tienda (brandColors.accent) y el texto que va encima. Ver AppTheme.
+        accent: { DEFAULT: 'rgb(var(--accent) / <alpha-value>)', ink: 'rgb(var(--accent-ink) / <alpha-value>)' },
+        // Fondo "papel" de la tienda (blanco hueso).
+        paper: 'rgb(var(--paper) / <alpha-value>)',
         app: Object.fromEntries(
           [50, 100, 200, 300, 400, 500, 600, 700, 800, 900].map((s) => [s, `rgb(var(--app-${s}) / <alpha-value>)`]),
         ),
@@ -36,23 +40,12 @@ export default {
           800: '#9D174D',
           900: '#831843',
         },
-        accent: {
-          DEFAULT: '#F59E0B', // amber-500
-          50: '#FFFBEB',
-          100: '#FEF3C7',
-          200: '#FDE68A',
-          300: '#FCD34D',
-          400: '#FBBF24',
-          500: '#F59E0B',
-          600: '#D97706',
-          700: '#B45309',
-          800: '#92400E',
-          900: '#78350F',
-        },
       },
       fontFamily: {
         sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
         display: ['Poppins', 'Inter', 'sans-serif'],
+        // Titulares de la portada (Inter en peso alto y espaciado cerrado). Ver components/home/pro.
+        poster: ['Inter', 'system-ui', 'sans-serif'],
         mono: ['JetBrains Mono', 'Courier New', 'monospace'],
       },
       boxShadow: {

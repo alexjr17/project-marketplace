@@ -28,6 +28,8 @@ export interface GeneralSettings {
   siteDescription: string;
   slogan?: string; // Subtexto que aparece debajo del nombre (ej: "Tu Estilo, Tu Diseño")
   logo?: string;
+  /** Versión clara del logo para fondos oscuros (pie de página). Si falta, se usa `logo`. */
+  logoOnDark?: string;
   favicon?: string;
   brandColors?: BrandColors; // Colores del gradiente de la marca
   contactEmail: string;
@@ -85,6 +87,13 @@ export interface AppearanceSettings {
 
 // Presets de temas completos
 export const THEME_PRESETS = [
+  {
+    name: 'TOCLEX (Carbón y lima)',
+    brandColors: { primary: '#1F1D1E', secondary: '#747474', accent: '#ABD04C' },
+    buttonColor: '#1F1D1E',
+    headerBgColor: '#F3F3EE',
+    footerBgColor: '#1F1D1E',
+  },
   {
     name: 'Moderno (Violeta)',
     brandColors: { primary: '#7c3aed', secondary: '#ec4899', accent: '#f59e0b' },

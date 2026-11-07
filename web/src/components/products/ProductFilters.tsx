@@ -18,6 +18,8 @@ export interface FilterValues {
   search?: string;
   /** Solo ofertas (?onSale=1). */
   onSale?: boolean;
+  /** Temática: etiqueta de los productos (?tag=anime). La pone la portada o el chip. */
+  tag?: string;
 }
 
 interface ProductFiltersProps {

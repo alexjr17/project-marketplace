@@ -89,6 +89,7 @@ export const ProductsProvider = ({ children }: { children: ReactNode }) => {
         maxPrice: filters.maxPrice,
         search: filters.search?.trim() || undefined,
         onSale: filters.onSale || undefined,
+        tag: filters.tag || undefined,
         ...sortParams,
       });
 

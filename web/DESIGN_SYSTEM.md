@@ -186,6 +186,19 @@ La tienda usa el mismo kit. Su color de app es el **color de marca primario**, a
 - Tarjeta de producto: `bg-white rounded-xl border border-gray-200 overflow-hidden`, imagen arriba con proporción fija, nombre `font-medium text-gray-900` y precio `font-semibold text-gray-900`. En hover solo sombra (`hover:shadow-md`), sin escalar.
 - Botones de compra: `Button` `primary` `lg` y `fullWidth` en móvil.
 
+### Portada (excepción) y marca de la tienda
+
+La portada (`/`, `components/home/pro`) tiene su propio estilo, separado del kit del panel, para que la tienda se sienta como una marca y no como un software de gestión. El catálogo, el producto, el carrito y el checkout siguen con el kit.
+
+- **Colores de marca** (Ajustes → Apariencia; tema "TOCLEX (Carbón y lima)"): `brandColors.primary` es el color de la tienda (`app-*`: botones, bloques oscuros), `brandColors.accent` es el acento (`bg-accent` / `text-accent-ink`) y el fondo es el "papel" (`bg-paper`). TOCLEX: carbón `#1F1D1E`, grafito `#747474`, lima `#ABD04C`, papel `#F3F3EE`.
+- **El acento va solo en detalles:** insignias de descuento, pestaña activa, subrayados, contador del carrito, flechas. Nunca como texto sobre fondo claro (el lima sobre blanco no se lee); sobre él va `text-accent-ink`.
+- **Tipografía:** Inter (cargada en `index.html`). Titulares de la portada con `font-poster font-bold tracking-[-0.035em] uppercase`.
+- **Logo:** Ajustes → General → Logo (encabezado) y "Logo para fondo oscuro" (pie). Un logotipo ancho (ícono + nombre) se muestra solo; un ícono va con el nombre. El favicon sale de `general.favicon`. Los archivos de TOCLEX están en `public/brand/`.
+- **Encabezado y pie:** el encabezado usa `appearance.headerBgColor` (papel si es blanco) y el pie `appearance.footerBgColor` (oscuro, textos claros).
+- **Estructura de la portada:** colección destacada (hero) → tira de temáticas → productos con pestañas → compra por temática → "Personaliza la tuya" (prenda 3D) → lookbook → tipos de prenda → reseñas.
+- **Temáticas:** salen de las etiquetas de los productos (`GET /api/catalogs/tags/stats`) y el catálogo filtra con `?tag=`. Para que una temática aparezca, basta con poner la etiqueta en minúsculas en sus productos (`anime`, `celebridades`…).
+- **Movimiento:** scroll suave (Lenis) y animaciones con GSAP solo en la portada; con "reducir movimiento" se apagan. La prenda 3D (`Shirt3D`, Three.js) se carga aparte y se pausa fuera de pantalla.
+- **Fotos:** `public/home/*.webp` son provisionales de Unsplash (ver `components/home/pro/photos.ts`); se cambian por fotos propias.
 ---
 
 ## 10. Tipografía, espacios e iconos

@@ -115,6 +115,7 @@ class ProductController extends Controller
             'onSale' => 'nullable',
             'color' => 'nullable|string',
             'size' => 'nullable|string',
+            'tag' => 'nullable|string|max:60',
             'sortBy' => ['nullable', Rule::in(['name', 'basePrice', 'createdAt', 'rating', 'reviewsCount', 'stock'])],
             'sortOrder' => ['nullable', Rule::in(['asc', 'desc'])],
         ]);
@@ -164,6 +165,9 @@ class ProductController extends Controller
         }
         if (! empty($data['size'])) {
             $query->whereHas('productSizes.size', fn ($q) => $q->where('abbreviation', $data['size']));
+        }
+        if (! empty($data['tag'])) {
+            $this->catalog->applyTag($query, $data['tag']);
         }
 
         $total = $query->count();

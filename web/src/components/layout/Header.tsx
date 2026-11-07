@@ -47,7 +47,7 @@ function HeaderSearch({ autoFocus = false, onDone, className = '' }: { autoFocus
         placeholder="Buscar productos…"
         enterKeyHint="search"
         autoComplete="off"
-        className="w-full h-11 pl-4 pr-14 bg-white border border-gray-300 rounded-full text-sm text-gray-900 placeholder-gray-500 focus:outline-none focus:border-app-500 focus:ring-2 focus:ring-app-200 transition-colors [&::-webkit-search-cancel-button]:hidden"
+        className="w-full h-11 pl-5 pr-14 bg-white/80 border border-black/10 rounded-full text-sm text-gray-900 placeholder-gray-500 focus:outline-none focus:border-app-500 focus:ring-2 focus:ring-app-200 transition-colors [&::-webkit-search-cancel-button]:hidden"
       />
       <button
         type="submit"
@@ -75,11 +75,16 @@ export const Header = () => {
   const [showMobileUserMenu, setShowMobileUserMenu] = useState(false);
 
   const isActive = (path: string) => location.pathname === path;
+  const [wideLogo, setWideLogo] = useState(false);
 
   // El acento de la tienda es el color de marca primario (clases app-*, ver AppTheme).
   const showSlogan = settings.appearance?.showSlogan ?? true;
   const enableCustomizer = settings.home?.enableCustomizer ?? true;
   const siteName = settings.general.siteName || 'StylePrint';
+  // Fondo del encabezado: el de Ajustes > Apariencia o el "papel" de la tienda (algo translúcido).
+  const headerBg = settings.appearance?.headerBgColor && settings.appearance.headerBgColor.toLowerCase() !== '#ffffff'
+    ? settings.appearance.headerBgColor
+    : 'rgb(var(--paper) / 0.92)';
   const iconBtn = (active: boolean) =>
     `relative p-2 rounded-lg transition-colors ${active ? 'bg-app-50 text-app-700' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'}`;
   const countBadge = 'absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-semibold flex items-center justify-center ring-2 ring-white';
@@ -91,8 +96,8 @@ export const Header = () => {
   const onSale = onCatalog && (params.get('onSale') === '1' || params.get('onSale') === 'true');
   // Enlace de la banda de categorías: subrayado en la sección activa.
   const tab = (active: boolean) =>
-    `relative flex-shrink-0 inline-flex items-center gap-1.5 h-11 px-3 text-sm font-medium whitespace-nowrap transition-colors after:absolute after:inset-x-3 after:bottom-0 after:h-0.5 after:rounded-full ${
-      active ? 'text-app-700 after:bg-app-600' : 'text-gray-600 hover:text-gray-900 after:bg-transparent hover:after:bg-gray-300'
+    `relative flex-shrink-0 inline-flex items-center gap-1.5 h-11 px-3 text-sm font-medium whitespace-nowrap transition-colors after:absolute after:inset-x-3 after:bottom-0 after:h-[3px] after:rounded-full ${
+      active ? 'text-gray-900 font-semibold after:bg-accent' : 'text-gray-600 hover:text-gray-900 after:bg-transparent hover:after:bg-gray-300'
     }`;
   const formatMoney = (n: number) =>
     new Intl.NumberFormat('es-CO', { style: 'currency', currency: settings.general.currency || 'COP', maximumFractionDigits: 0 }).format(n || 0);
@@ -109,9 +114,17 @@ export const Header = () => {
     }
   };
 
+  // Un logotipo ancho (ícono + nombre) se muestra solo; un ícono va junto al nombre.
   const logo = (size: 'md' | 'sm') =>
     settings.general.logo ? (
-      <img src={settings.general.logo} alt={siteName} className={size === 'md' ? 'h-10 max-w-[80px] object-contain' : 'h-8 max-w-[40px] object-contain'} />
+      <img
+        src={settings.general.logo}
+        alt={siteName}
+        onLoad={(e) => setWideLogo(e.currentTarget.naturalWidth / Math.max(1, e.currentTarget.naturalHeight) > 2.2)}
+        className={wideLogo
+          ? (size === 'md' ? 'h-8 w-auto max-w-[200px] object-contain' : 'h-7 w-auto max-w-[140px] object-contain')
+          : (size === 'md' ? 'h-10 max-w-[80px] object-contain' : 'h-8 max-w-[40px] object-contain')}
+      />
     ) : (
       <div className={`${size === 'md' ? 'p-2' : 'p-1.5'} rounded-lg bg-app-600`}>
         <Shirt className={`${size === 'md' ? 'w-6 h-6' : 'w-5 h-5'} text-white`} strokeWidth={2.25} />
@@ -120,14 +133,17 @@ export const Header = () => {
 
   return (
     <>
-      <header className="bg-white fixed top-0 left-0 right-0 z-50 shadow-[0_1px_0_0_rgb(229_231_235)]">
+      <header
+        className="fixed top-0 left-0 right-0 z-50 shadow-[0_1px_0_0_rgb(0_0_0/0.08)] backdrop-blur-md"
+        style={{ backgroundColor: headerBg }}
+      >
         {/* Fila principal: logo · buscador · acciones */}
         <div className="max-w-7xl mx-auto px-3 md:px-6">
           <div className="flex items-center gap-3 md:gap-6 h-14 md:h-[72px]">
             <Link to="/" className="flex items-center gap-2 md:gap-2.5 flex-shrink-0 min-w-0" aria-label={`${siteName} — inicio`}>
               <span className="hidden md:block">{logo('md')}</span>
               <span className="md:hidden">{logo('sm')}</span>
-              <span className="flex flex-col leading-tight min-w-0">
+              <span className={`flex flex-col leading-tight min-w-0 ${wideLogo ? 'sr-only' : ''}`}>
                 <span className="text-base md:text-xl font-bold tracking-tight text-gray-900 truncate max-w-[140px] md:max-w-[200px]">{siteName}</span>
                 {showSlogan && settings.general.slogan && (
                   <span className="hidden lg:block text-[10px] text-gray-500 font-medium tracking-wider uppercase truncate max-w-[200px]">
@@ -171,7 +187,7 @@ export const Header = () => {
               >
                 <span className="relative">
                   <ShoppingCart className="w-5 h-5" />
-                  {cart.totalItems > 0 && <span className={`${countBadge} -top-2 -right-2.5 bg-app-600 text-white`}>{cart.totalItems}</span>}
+                  {cart.totalItems > 0 && <span className={`${countBadge} -top-2 -right-2.5 bg-accent text-accent-ink`}>{cart.totalItems}</span>}
                 </span>
                 <span className="hidden lg:flex flex-col leading-tight text-left pl-1">
                   <span className="text-[11px] text-gray-500">Carrito</span>
@@ -216,18 +232,18 @@ export const Header = () => {
                   {c.name}
                 </Link>
               ))}
-              <Link to="/catalog?onSale=1" className={`${tab(onSale)} ${onSale ? '' : '!text-red-600 hover:!text-red-700'}`}>
+              <Link to="/catalog?onSale=1" className={tab(onSale)}>
                 <Percent className="w-4 h-4" />
                 Ofertas
               </Link>
               {enableCustomizer && (
                 <Link
                   to="/customize"
-                  className={`flex-shrink-0 md:ml-auto inline-flex items-center gap-1.5 h-8 px-3.5 rounded-full text-sm font-semibold whitespace-nowrap transition-colors ${
-                    isActive('/customize') ? 'bg-app-600 text-white' : 'bg-app-50 text-app-700 hover:bg-app-100'
+                  className={`flex-shrink-0 md:ml-auto inline-flex items-center gap-2 h-8 px-4 rounded-full text-sm font-semibold whitespace-nowrap text-white transition-colors ${
+                    isActive('/customize') ? 'bg-app-800' : 'bg-app-600 hover:bg-app-800'
                   }`}
                 >
-                  <Palette className="w-4 h-4" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-accent" aria-hidden="true" />
                   Personaliza tu diseño
                 </Link>
               )}
@@ -246,7 +262,7 @@ export const Header = () => {
       />
 
       {/* Barra inferior (solo celular) */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200 pb-safe">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-paper/95 backdrop-blur-md border-t border-black/10 pb-safe">
         <div className="flex items-center justify-around px-2 py-1.5">
           <Link to="/" className={`flex flex-col items-center justify-center gap-0.5 px-3 py-1.5 rounded-lg transition-colors ${isActive('/') ? 'text-app-700' : 'text-gray-500 hover:text-gray-900'}`}>
             <Home className="w-6 h-6" strokeWidth={isActive('/') ? 2.25 : 1.75} />
@@ -260,8 +276,8 @@ export const Header = () => {
 
           {enableCustomizer && (
             <Link to="/customize" className="flex flex-col items-center justify-center -mt-5">
-              <div className="p-3.5 rounded-full bg-app-600 ring-4 ring-white shadow-md">
-                <Palette className="w-6 h-6 text-white" strokeWidth={2.25} />
+              <div className="p-3.5 rounded-full bg-app-600 ring-4 ring-paper shadow-md">
+                <Palette className="w-6 h-6 text-accent" strokeWidth={2.25} />
               </div>
               <span className="text-[11px] font-semibold mt-0.5 text-app-700">Diseñar</span>
             </Link>
@@ -270,7 +286,7 @@ export const Header = () => {
           <Link to="/cart" className={`flex flex-col items-center justify-center gap-0.5 px-3 py-1.5 rounded-lg transition-colors relative ${isActive('/cart') ? 'text-app-700' : 'text-gray-500 hover:text-gray-900'}`}>
             <ShoppingCart className="w-6 h-6" strokeWidth={isActive('/cart') ? 2.25 : 1.75} />
             <span className="text-[11px] font-medium">Carrito</span>
-            {cart.totalItems > 0 && <span className={`${countBadge} top-0 right-1.5 bg-app-600 text-white`}>{cart.totalItems}</span>}
+            {cart.totalItems > 0 && <span className={`${countBadge} top-0 right-1.5 bg-accent text-accent-ink`}>{cart.totalItems}</span>}
           </Link>
 
           <button

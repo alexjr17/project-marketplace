@@ -71,8 +71,15 @@ export const SettingsGeneralPage = () => {
           </FormGrid>
         </SettingsSection>
 
-        <SettingsSection title="Logo" description="Se muestra junto al nombre en el encabezado y el pie. Recomendado: PNG transparente, máximo 200×60 px.">
-          <ImageInput value={generalForm.logo} onChange={(logo) => setGeneralForm({ ...generalForm, logo })} ratio="landscape" maxSizeMB={1} />
+        <SettingsSection title="Logo" description="PNG transparente. Si es un logotipo ancho (ícono + nombre) se muestra solo; si es un ícono, va junto al nombre de la tienda.">
+          <FormGrid>
+            <Field label="Logo" hint="Para el encabezado, sobre fondo claro.">
+              <ImageInput value={generalForm.logo} onChange={(logo) => setGeneralForm({ ...generalForm, logo })} ratio="landscape" maxSizeMB={1} />
+            </Field>
+            <Field label="Logo para fondo oscuro" hint="Versión clara para el pie de página. Si no la subes, se usa el logo normal.">
+              <ImageInput value={generalForm.logoOnDark} onChange={(logoOnDark) => setGeneralForm({ ...generalForm, logoOnDark })} ratio="landscape" maxSizeMB={1} />
+            </Field>
+          </FormGrid>
         </SettingsSection>
 
         <SettingsSection title="Contacto" description="Datos que ven los clientes para comunicarse con la tienda.">
