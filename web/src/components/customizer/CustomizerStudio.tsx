@@ -9,6 +9,7 @@ import { useCurrency } from '../../hooks/useCurrency';
 import { getSizeChart } from '../../data/sizeCharts';
 import { SizeGuideModal } from './SizeGuideModal';
 import { Stage } from './Stage';
+import { Stage3D } from './Stage3D';
 import { ColorSwatches, DesignStep, OptionsStep, StockText, SubmitButton, SummaryStep } from './StudioPanels';
 import { ACCEPTED_TYPES } from './designImage';
 import { sizeChartType } from './customizerModel';
@@ -87,7 +88,11 @@ export function CustomizerStudio({ api }: { api: CustomizerApi }) {
           </div>
 
           <div className="rounded-xl bg-gradient-to-b from-gray-50 to-gray-100/80 px-4 pt-9 pb-4 md:px-8 md:pt-10 md:pb-6">
-            <div className="[--stage-h:44vh] lg:[--stage-h:60vh]"><Stage api={api} maxHeight="var(--stage-h)" onRequestUpload={requestUpload} /></div>
+            <div className="[--stage-h:44vh] lg:[--stage-h:60vh]">
+              {api.model3d
+                ? <Stage3D api={api} onRequestUpload={requestUpload} />
+                : <Stage api={api} maxHeight="var(--stage-h)" onRequestUpload={requestUpload} />}
+            </div>
           </div>
 
           <div className="mt-3 md:mt-4"><ColorSwatches api={api} /></div>

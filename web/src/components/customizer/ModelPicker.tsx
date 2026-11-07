@@ -11,7 +11,7 @@ import { silhouetteDataUrl } from './garment';
 export function GarmentThumb({ src, alt, className = '' }: { src?: string; alt: string; className?: string }) {
   const [failed, setFailed] = useState(false);
   const url = src && !failed ? assetUrl(src) : silhouetteDataUrl('front', '#F3F4F6');
-  return <img src={url} alt={alt} loading="lazy" onError={() => setFailed(true)} className={`w-full h-full ${src && !failed ? 'object-cover' : 'object-contain p-6'} ${className}`} />;
+  return <img src={url} alt={alt} loading="lazy" onError={() => setFailed(true)} className={`w-full h-full ${src && !failed && !src.includes('/models/') ? 'object-cover' : 'object-contain p-6'} ${className}`} />;
 }
 
 /** Paso 0: elegir el modelo a personalizar. */

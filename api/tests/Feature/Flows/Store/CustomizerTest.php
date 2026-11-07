@@ -298,6 +298,28 @@ class CustomizerTest extends TestCase
         $this->assertSame(['front' => 'n.png', 'back' => '', 'side' => ''], $tpl->fresh()->images);
     }
 
+    public function test_el_maniqui_3d_se_configura_desde_el_admin_y_llega_a_la_tienda(): void
+    {
+        $tpl = $this->makeProduct('Plantilla 3D', 50000, [['negro', 'M', 0]], ['isTemplate' => true]);
+
+        // Solo quien administra plantillas lo cambia.
+        $this->actingAsCliente();
+        $this->putJson("/api/templates/{$tpl->id}", ['model3d' => 'basica'])->assertForbidden();
+
+        $this->actingAsAdmin();
+        $this->putJson("/api/templates/{$tpl->id}", ['model3d' => 'maniqui-raro'])->assertUnprocessable();
+        $this->putJson("/api/templates/{$tpl->id}", ['model3d' => 'oversize'])->assertOk()->assertJsonPath('data.model3d', 'oversize');
+
+        // La tienda (sin sesión) lo recibe en la plantilla y en la lista pública.
+        $this->app['auth']->forgetGuards();
+        $this->getJson("/api/templates/{$tpl->id}")->assertOk()->assertJsonPath('data.model3d', 'oversize');
+        $this->assertContains('oversize', collect($this->getJson('/api/templates/public')->assertOk()->json('data'))->where('id', $tpl->id)->pluck('model3d')->all());
+
+        // Null = editor con fotos.
+        $this->actingAsAdmin();
+        $this->putJson("/api/templates/{$tpl->id}", ['model3d' => null])->assertOk()->assertJsonPath('data.model3d', null);
+    }
+
     public function test_una_plantilla_inactiva_solo_la_ve_quien_administra_plantillas(): void
     {
         $tpl = $this->makeProduct('Plantilla Oculta', 50000, [['negro', 'M', 0]], ['isTemplate' => true, 'isActive' => false]);

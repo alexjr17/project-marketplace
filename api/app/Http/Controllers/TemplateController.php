@@ -12,12 +12,16 @@ use App\Support\TemplateImages;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 
 class TemplateController extends Controller
 {
     use ApiResponse;
 
     public function __construct(private VariantService $variants) {}
+
+    /** Maniquíes 3D del personalizador (web/src/components/home/pro/shirtConfig.ts). Null = editor con fotos. */
+    public const MODELS_3D = ['basica', 'oversize'];
 
     private const RELATIONS = [
         'category:id,name,slug',
@@ -46,6 +50,7 @@ class TemplateController extends Controller
             'zoneTypeImages' => $t->zoneTypeImages,
             'designZones' => $t->designZones,
             'exclusionZones' => $t->exclusionZones,
+            'model3d' => $t->model3d,
             'colors' => $t->productColors->map(fn ($pc) => [
                 'id' => $pc->color?->id, 'name' => $pc->color?->name,
                 'slug' => $pc->color?->slug, 'hexCode' => $pc->color?->hexCode,
@@ -130,6 +135,7 @@ class TemplateController extends Controller
             'zoneTypeImages' => 'nullable',
             'designZones' => 'nullable',
             'exclusionZones' => 'nullable',
+            'model3d' => ['nullable', 'string', Rule::in(self::MODELS_3D)],
             'tags' => 'nullable|array',
             'colorIds' => 'nullable|array',
             'sizeIds' => 'nullable|array',
@@ -163,6 +169,7 @@ class TemplateController extends Controller
                 'images' => TemplateImages::normalize($data['images'] ?? []),
                 'zoneTypeImages' => $data['zoneTypeImages'] ?? null,
                 'designZones' => $data['designZones'] ?? null,
+                'model3d' => $data['model3d'] ?? null,
                 'exclusionZones' => $data['exclusionZones'] ?? null,
                 'tags' => $data['tags'] ?? [],
                 'isTemplate' => true,
@@ -204,6 +211,7 @@ class TemplateController extends Controller
             'zoneTypeImages' => 'nullable',
             'designZones' => 'nullable',
             'exclusionZones' => 'nullable',
+            'model3d' => ['nullable', 'string', Rule::in(self::MODELS_3D)],
             'tags' => 'nullable|array',
             'isActive' => 'nullable|boolean',
             'colorIds' => 'nullable|array',
@@ -231,7 +239,7 @@ class TemplateController extends Controller
                 $data['images'] = TemplateImages::normalize($data['images'] ?? []);
             }
             foreach (['name', 'description', 'categoryId', 'typeId', 'basePrice', 'images',
-                'zoneTypeImages', 'designZones', 'exclusionZones', 'tags', 'isActive'] as $field) {
+                'zoneTypeImages', 'designZones', 'exclusionZones', 'model3d', 'tags', 'isActive'] as $field) {
                 if ($request->has($field)) {
                     $template->{$field} = $data[$field] ?? null;
                 }

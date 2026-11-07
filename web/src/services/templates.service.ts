@@ -51,6 +51,8 @@ export interface Template {
     abbreviation: string;
   }>;
   tags: string[];
+  /** Maniquí 3D del personalizador ('basica' | 'oversize'); null = editor con fotos. */
+  model3d?: string | null;
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -73,6 +75,7 @@ export interface CreateTemplateInput {
   zoneTypeImages?: Record<string, string>;
   designZones?: Record<string, DesignZone[]>;
   exclusionZones?: Record<string, ExclusionZone[]>; // @deprecated
+  model3d?: string | null;
   tags?: string[];
   colorIds?: number[];
   sizeIds?: number[];
@@ -93,6 +96,7 @@ export interface UpdateTemplateInput {
   zoneTypeImages?: Record<string, string> | null;
   designZones?: Record<string, DesignZone[]> | null;
   exclusionZones?: Record<string, ExclusionZone[]> | null; // @deprecated
+  model3d?: string | null;
   tags?: string[];
   isActive?: boolean;
   colorIds?: number[];

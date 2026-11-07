@@ -10,6 +10,7 @@ import type { Template } from '../../services/templates.service';
 import type { TemplateZone } from '../../services/template-zones.service';
 import type { CustomizedProduct, Design, OrderCustomization } from '../../types/design';
 import type { ProductTypeSlug } from '../../types/product';
+import { isModel3D, MODELS_3D } from '../mannequin/models';
 
 // ─── Tipos del estudio ───────────────────────────────────────────────────────
 
@@ -111,12 +112,18 @@ export function resolveViewImage(template: Pick<Template, 'images' | 'zoneTypeIm
   return undefined;
 }
 
-/** Foto de portada del modelo para las tarjetas (frente o la primera que haya). */
-export function templateCover(template: Pick<Template, 'images' | 'zoneTypeImages'>): string | undefined {
+/**
+ * Foto de portada del modelo para las tarjetas (frente o la primera que haya). Si no tiene fotos y
+ * usa maniquí 3D, la foto del maniquí (archivo del front, en URL absoluta).
+ */
+export function templateCover(template: Pick<Template, 'images' | 'zoneTypeImages' | 'model3d'>): string | undefined {
   const imgs = normalizeTemplateImages(template.images);
   if (imgs.front) return imgs.front;
   const zti = Object.values(template.zoneTypeImages || {}).find((v) => typeof v === 'string' && v.trim());
-  return zti || imgs.back || imgs.side;
+  const photo = zti || imgs.back || imgs.side;
+  if (photo) return photo;
+  if (isModel3D(template.model3d) && typeof window !== 'undefined') return new URL(MODELS_3D[template.model3d].poster, window.location.origin).href;
+  return undefined;
 }
 
 // ─── Zonas ───────────────────────────────────────────────────────────────────

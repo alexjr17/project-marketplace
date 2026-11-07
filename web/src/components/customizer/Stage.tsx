@@ -4,6 +4,8 @@
  * - En táctil, dos dedos escalan y rotan a la vez.
  * - Soltar un archivo encima lo agrega a la zona activa.
  * Todo en % del escenario, así no depende del tamaño de pantalla.
+ * Con `overlay` va encima del maniquí 3D: no pinta la prenda ni las imágenes (las pinta el 3D),
+ * solo las zonas, las cajas de selección y sus asas.
  */
 import { useRef, useState, type CSSProperties, type PointerEvent as RPointerEvent } from 'react';
 import { ImagePlus, Loader2, RotateCw, Maximize2 } from 'lucide-react';
@@ -30,7 +32,7 @@ function zoneClip(z?: StudioZone): string | undefined {
   return `inset(${z.y}% ${100 - z.x - z.width}% ${100 - z.y - z.height}% ${z.x}%)`;
 }
 
-export function Stage({ api, maxHeight = '68vh', onRequestUpload }: { api: CustomizerApi; maxHeight?: string; onRequestUpload: () => void }) {
+export function Stage({ api, maxHeight = '68vh', onRequestUpload, overlay = false }: { api: CustomizerApi; maxHeight?: string; onRequestUpload: () => void; overlay?: boolean }) {
   const { format } = useCurrency();
   const ref = useRef<HTMLDivElement>(null);
   const gesture = useRef<Gesture | null>(null);
@@ -120,11 +122,11 @@ export function Stage({ api, maxHeight = '68vh', onRequestUpload }: { api: Custo
   const blockedMaskId = `blocked-${view}`;
 
   return (
-    <div className="w-full flex justify-center">
+    <div className={overlay ? 'absolute inset-0' : 'w-full flex justify-center'}>
       <div
         ref={ref}
-        className={`relative w-full select-none rounded-xl transition-shadow ${dragOver ? 'ring-2 ring-app-500 ring-offset-4' : ''}`}
-        style={{ aspectRatio: String(stageAspect), maxWidth: `calc(${maxHeight} * ${stageAspect})` }}
+        className={`relative w-full select-none rounded-xl transition-shadow ${overlay ? 'h-full' : ''} ${dragOver ? 'ring-2 ring-app-500 ring-offset-4' : ''}`}
+        style={overlay ? undefined : { aspectRatio: String(stageAspect), maxWidth: `calc(${maxHeight} * ${stageAspect})` }}
         onPointerDown={() => api.dispatch({ type: 'select', id: null })}
         onDragOver={(e) => { if (e.dataTransfer.types.includes('Files')) { e.preventDefault(); setDragOver(true); } }}
         onDragLeave={() => setDragOver(false)}
@@ -132,7 +134,7 @@ export function Stage({ api, maxHeight = '68vh', onRequestUpload }: { api: Custo
         aria-label="Lienzo de diseño"
       >
         {/* Prenda */}
-        {garment ? (
+        {overlay ? null : garment ? (
           <img src={garment.src} alt="" draggable={false} className="absolute inset-0 w-full h-full object-fill pointer-events-none" />
         ) : (
           <div className="absolute inset-0 flex items-center justify-center"><Loader2 className="w-8 h-8 text-app-500 animate-spin" /></div>
@@ -181,7 +183,7 @@ export function Stage({ api, maxHeight = '68vh', onRequestUpload }: { api: Custo
             </defs>
           </svg>
         )}
-        <div className="absolute inset-0 pointer-events-none" style={masked}>
+        {!overlay && <div className="absolute inset-0 pointer-events-none" style={masked}>
           <div className="absolute inset-0" style={viewBlockedZones.length ? { mask: `url(#${blockedMaskId})`, WebkitMask: `url(#${blockedMaskId})` } : undefined}>
             {viewDesigns.map((d) => (
               <div key={d.id} className="absolute inset-0" style={{ clipPath: zoneClip(zoneById(d.templateZoneId)) }}>
@@ -199,7 +201,7 @@ export function Stage({ api, maxHeight = '68vh', onRequestUpload }: { api: Custo
               </div>
             ))}
           </div>
-        </div>
+        </div>}
 
         {/* Cajas de selección (encima, sin recorte) */}
         {viewDesigns.map((d) => {
@@ -244,7 +246,7 @@ export function Stage({ api, maxHeight = '68vh', onRequestUpload }: { api: Custo
         })}
 
         {/* Vista sin diseño: invitación a subir en la zona activa */}
-        {garment && activeZone && !viewDesigns.some((d) => d.templateZoneId === activeZone.id) && (
+        {(garment || overlay) && activeZone && !viewDesigns.some((d) => d.templateZoneId === activeZone.id) && (
           <button
             type="button"
             onPointerDown={(e) => e.stopPropagation()}

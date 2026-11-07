@@ -6,6 +6,8 @@ import {
 import { templatesService, type Template } from '../../services/templates.service';
 import { TemplateForm, type TemplateFormData } from '../../components/admin/TemplateForm';
 import { VisualZoneEditor } from '../../components/admin/VisualZoneEditor';
+import { MannequinSnapshots } from '../../components/mannequin/MannequinSnapshots';
+import { isModel3D, view3DOf, type View3D } from '../../components/mannequin/models';
 import { TemplateRecipesSection } from '../../components/admin/TemplateRecipesSection';
 import { templateRecipesService } from '../../services/template-recipes.service';
 import { useCatalogs } from '../../context/CatalogsContext';
@@ -43,6 +45,10 @@ export const TemplatesPage = () => {
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [editTab, setEditTab] = useState<EditTab>('data');
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
+  // Fotos del maniquí 3D de la plantilla (fondo del editor de zonas).
+  const [snapshots, setSnapshots] = useState<Record<View3D, string> | null>(null);
+  const model3d = isModel3D(selectedTemplate?.model3d) ? selectedTemplate.model3d : null;
+  useEffect(() => { setSnapshots(null); }, [model3d]);
   const [generatingVariantsFor, setGeneratingVariantsFor] = useState<Template | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [templatesWithVariants, setTemplatesWithVariants] = useState<Set<number>>(new Set());
@@ -85,6 +91,7 @@ export const TemplatesPage = () => {
         typeId: data.typeId || undefined,
         basePrice: data.basePrice,
         images: data.images,
+        model3d: data.model3d,
         tags: data.tags,
         colorIds: data.colorIds,
         sizeIds: data.sizeIds,
@@ -110,6 +117,7 @@ export const TemplatesPage = () => {
         typeId: data.typeId,
         basePrice: data.basePrice,
         images: data.images,
+        model3d: data.model3d,
         tags: data.tags,
         isActive: data.isActive,
         colorIds: data.colorIds,
@@ -311,7 +319,11 @@ export const TemplatesPage = () => {
         </div>
 
         <div className={editTab === 'zones' ? 'space-y-4' : 'hidden'}>
-          {!firstImage(selectedTemplate.images) && (
+          {/* Maniquí 3D: fotos de cada vista para dibujar las zonas encima. */}
+          {editTab === 'zones' && model3d && (
+            <MannequinSnapshots key={model3d} model={model3d} onDone={setSnapshots} />
+          )}
+          {!model3d && !firstImage(selectedTemplate.images) && (
             <Alert tone="warning">Agrega una imagen frontal al modelo para visualizar las zonas sobre la imagen.</Alert>
           )}
           <Card>
@@ -320,6 +332,7 @@ export const TemplatesPage = () => {
               templateImage={firstImage(selectedTemplate.images)}
               templateImageBack={backImage(selectedTemplate.images)}
               zoneTypeImages={selectedTemplate.zoneTypeImages || undefined}
+              viewImageFor={model3d ? (snapshots ? (slug) => snapshots[view3DOf(slug)] : null) : undefined}
               onZoneTypeImagesChange={async (images) => {
                 try {
                   await templatesService.updateTemplate(selectedTemplate.id, {

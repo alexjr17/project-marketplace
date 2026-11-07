@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Check, Eye, Image as ImageIcon, Info, Layers, Save, Tag, Trash2 } from 'lucide-react';
+import { Box, Check, Eye, Image as ImageIcon, Info, Layers, Save, Tag, Trash2 } from 'lucide-react';
+import { isModel3D, MODELS_3D, type Model3D } from '../mannequin/models';
 import type { Template } from '../../services/templates.service';
 import { catalogsService } from '../../services/catalogs.service';
 import type { Color, Size, Category, ProductType as CatalogProductType } from '../../types/catalog';
@@ -30,6 +31,8 @@ export interface TemplateFormData {
   colorIds: number[];
   sizeIds: number[];
   isActive: boolean;
+  /** Maniquí 3D del personalizador; null = editor con las fotos. */
+  model3d: Model3D | null;
 }
 
 export interface TemplateImages {
@@ -64,6 +67,7 @@ export const TemplateForm = ({ template, onSubmit, onDelete, onCancel }: Templat
     basePrice: template?.basePrice || 0,
     isActive: template?.isActive ?? true,
     tags: template?.tags?.join(', ') || '',
+    model3d: (isModel3D(template?.model3d) ? template.model3d : null) as Model3D | null,
   });
   const [saving, setSaving] = useState(false);
 
@@ -180,6 +184,7 @@ export const TemplateForm = ({ template, onSubmit, onDelete, onCancel }: Templat
       isActive: formData.isActive,
       tags: formData.tags.split(',').map(t => t.trim()).filter(Boolean),
       images,
+      model3d: formData.model3d,
       colorIds: hasVariants ? selectedColorIds : [],
       sizeIds: hasVariants ? selectedSizeIds : [],
     };
@@ -248,9 +253,26 @@ export const TemplateForm = ({ template, onSubmit, onDelete, onCancel }: Templat
             </div>
           </Card>
 
+          {/* Vista del personalizador: maniquí 3D o fotos */}
+          <Card>
+            <CardTitle icon={Box}>Personalizador</CardTitle>
+            <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-4 items-start">
+              <Field label="Modelo 3D" htmlFor="tf-model3d" hint="Con maniquí 3D, el cliente ve la prenda girar y las zonas se dibujan sobre el maniquí (frente, espalda y mangas). Sin 3D se usan las fotos de abajo.">
+                <SelectInput id="tf-model3d" value={formData.model3d ?? ''} onChange={(e) => setFormData({ ...formData, model3d: isModel3D(e.target.value) ? e.target.value : null })}>
+                  <option value="">Sin 3D (editor con fotos)</option>
+                  {(Object.keys(MODELS_3D) as Model3D[]).map((m) => <option key={m} value={m}>Maniquí · {MODELS_3D[m].label}</option>)}
+                </SelectInput>
+              </Field>
+              {formData.model3d && (
+                <img src={MODELS_3D[formData.model3d].poster} alt={`Maniquí ${MODELS_3D[formData.model3d].label}`} className="w-28 h-28 object-contain rounded-xl bg-gray-50 ring-1 ring-gray-200" />
+              )}
+            </div>
+          </Card>
+
           {/* Imágenes */}
           <Card>
             <CardTitle icon={ImageIcon}>Imágenes</CardTitle>
+            {formData.model3d && <p className="text-xs text-gray-500 mb-3">Opcionales con maniquí 3D: si no hay foto de frente, la tienda muestra la del maniquí.</p>}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               {IMAGE_SLOTS.map(({ key, label, hint }) => (
                 <Field key={key} label={label} hint={hint}>
@@ -258,7 +280,7 @@ export const TemplateForm = ({ template, onSubmit, onDelete, onCancel }: Templat
                 </Field>
               ))}
             </div>
-            {!images.front && <p className="text-xs text-gray-400 mt-2">Sin imagen de frente: el personalizador muestra una silueta de respaldo. Las imágenes de cada zona (Frente, Espalda, Mangas…) se cargan en el editor de zonas.</p>}
+            {!images.front && !formData.model3d && <p className="text-xs text-gray-400 mt-2">Sin imagen de frente: el personalizador muestra una silueta de respaldo. Las imágenes de cada zona (Frente, Espalda, Mangas…) se cargan en el editor de zonas.</p>}
           </Card>
 
           {/* Variantes */}

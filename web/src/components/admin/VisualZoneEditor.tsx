@@ -40,6 +40,11 @@ interface VisualZoneEditorProps {
   // Imágenes personalizadas por tipo de zona
   zoneTypeImages?: ZoneTypeImages;
   onZoneTypeImagesChange?: (images: ZoneTypeImages) => void;
+  /**
+   * Fondo fijo de cada vista (por slug del tipo de zona), p. ej. las fotos del maniquí 3D. Si se
+   * pasa, reemplaza las imágenes subidas y no se ofrece subir otra. Mientras es null, se espera.
+   */
+  viewImageFor?: ((zoneTypeSlug: string) => string | undefined) | null;
 }
 
 interface DragState {
@@ -95,6 +100,7 @@ export const VisualZoneEditor = ({
   templateImage,
   onZonesChange,
   zoneTypeImages: externalZoneTypeImages,
+  viewImageFor,
   onZoneTypeImagesChange,
 }: VisualZoneEditorProps) => {
   const confirm = useConfirm();
@@ -783,7 +789,10 @@ export const VisualZoneEditor = ({
     : availableZoneTypes[0];
 
   // Obtener imagen: prioridad a imagen personalizada del tipo de zona, luego template
+  const fixedViews = viewImageFor !== undefined;
   const getDisplayImage = () => {
+    // Maniquí 3D: la foto de esa vista (vacía mientras se toma).
+    if (fixedViews) return viewImageFor?.(currentZoneType?.slug ?? 'frente') ?? '';
     // Si hay un tipo de zona actual, buscar su imagen personalizada
     if (currentZoneType?.slug) {
       const customImage = zoneTypeImages[currentZoneType.slug];
@@ -1029,7 +1038,12 @@ export const VisualZoneEditor = ({
           )}
 
           {/* Imagen de fondo de la vista actual (independiente de la zona seleccionada) */}
-          {currentZoneType && (
+          {fixedViews && (
+            <p className="rounded-xl border border-gray-200 p-4 text-xs text-gray-500">
+              <span className="font-medium text-gray-800">Maniquí 3D:</span> el fondo es el maniquí visto desde cada vista. Las zonas se dibujan en % de ese recuadro y el cliente las ve igual sobre el 3D.
+            </p>
+          )}
+          {currentZoneType && !fixedViews && (
             <div className="rounded-xl border border-gray-200 p-4">
               <p className="text-sm font-semibold text-gray-900 flex items-center gap-1.5 mb-1">
                 <ImageIcon className="w-4 h-4 text-app-600" />

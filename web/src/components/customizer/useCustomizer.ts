@@ -22,6 +22,8 @@ import { processDesignFile, type ProcessedDesignImage } from './designImage';
 import { assetUrl } from '../../utils/assetUrl';
 import type { DesignImage } from '../../services/design-images.service';
 import { exportDesignsZip } from './designExport';
+import { isModel3D, view3DOf, type Model3D } from '../mannequin/models';
+import type { Mannequin3DHandle } from '../mannequin/Mannequin3D';
 
 export type AddedImage = Pick<ProcessedDesignImage, 'preview' | 'original' | 'fileName' | 'fileSize' | 'width' | 'height'>;
 
@@ -61,6 +63,9 @@ export function useCustomizer() {
   const [saving, setSaving] = useState(false);
   const [exporting, setExporting] = useState(false);
   const editLoadedRef = useRef<string | null>(null);
+  // Maniquí 3D (si la plantilla tiene uno): el lienzo es su escenario cuadrado y las vistas previas
+  // del carrito son fotos del 3D.
+  const mannequinRef = useRef<Mannequin3DHandle | null>(null);
 
   const editItem = useMemo(() => {
     if (!editId) return null;
@@ -139,10 +144,11 @@ export function useCustomizer() {
   const color = template?.colors?.find((c) => c.id === colorId) ?? null;
   const size = template?.sizes?.find((s) => s.id === sizeId) ?? null;
   const colorHex = color?.hexCode || '#FFFFFF';
+  const model3d: Model3D | null = isModel3D(template?.model3d) ? template.model3d : null;
 
   // Prenda de cada vista (pintada del color). La vista actual primero.
   useEffect(() => {
-    if (!template || !views.length) return;
+    if (!template || !views.length || model3d) return;
     let alive = true;
     const ordered = [...views].sort((a, b) => (a.slug === view ? -1 : b.slug === view ? 1 : 0));
     (async () => {
@@ -155,7 +161,7 @@ export function useCustomizer() {
     return () => { alive = false; };
     // La vista no se incluye: cambiarla no debe volver a pintar todo.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [template, views, colorHex]);
+  }, [template, views, colorHex, model3d]);
 
   // Stock de la combinación color/talla.
   useEffect(() => {
@@ -207,8 +213,8 @@ export function useCustomizer() {
     setActiveZoneByView((p) => ({ ...p, [view]: id }));
   }, [view]);
 
-  const garment = view ? garments[view] : undefined;
-  const stageAspect = garment?.aspect || 1;
+  const garment = model3d ? undefined : view ? garments[view] : undefined;
+  const stageAspect = model3d ? 1 : garment?.aspect || 1;
 
   // ── Acciones ──
   const selectTemplate = useCallback((t: Template | null) => {
@@ -340,6 +346,13 @@ export function useCustomizer() {
     for (const v of views) {
       const ds = studio.designs.filter((d) => d.viewSlug === v.slug);
       if (!ds.length) continue;
+      // Maniquí 3D: foto de esa vista con los diseños puestos.
+      if (model3d && mannequinRef.current) {
+        try {
+          const shot = mannequinRef.current.capture(view3DOf(v.slug), { type: 'image/webp', quality: 0.9, size: 900 });
+          if (shot) { out[v.slug] = shot; continue; }
+        } catch { /* imagen sin CORS: queda el mockup plano */ }
+      }
       const g = garments[v.slug] || silhouetteGarment(v.kind, colorHex);
       try {
         out[v.slug] = await renderMockup({ garment: g, kind: v.kind, color: colorHex, designs: ds, zones, blocked: blockedZonesOf(zones, v.slug) });
@@ -348,7 +361,7 @@ export function useCustomizer() {
       }
     }
     return out;
-  }, [views, studio.designs, garments, colorHex, zones]);
+  }, [views, studio.designs, garments, colorHex, zones, model3d]);
 
   const submit = useCallback(async () => {
     if (!template || !color || !size) return;
@@ -396,7 +409,7 @@ export function useCustomizer() {
     // datos
     templates, loadingTemplates, template, pendingTemplate: !!wantedTemplateId && !template, zones, views, zonesReady: rawZonesReady,
     color, size, colorId, sizeId, view, quantity, stock, loadingStock, quote,
-    garment, garments, stageAspect, viewPrintZones, viewBlockedZones, activeZone,
+    garment, garments, stageAspect, model3d, mannequinRef, viewPrintZones, viewBlockedZones, activeZone,
     studio, selected, isEditMode, editItem, saving, exporting, canSubmit, blockers, missing,
     // acciones
     selectTemplate, setColorId, setSizeId, changeView, setQuantity, setActiveZone,

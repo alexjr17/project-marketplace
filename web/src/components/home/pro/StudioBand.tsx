@@ -1,38 +1,65 @@
 import { Component, lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { Check, Hand, ImageUp, Minus, Move, Plus, RotateCcw } from 'lucide-react';
+import { Check, Hand, ImageUp, Minus, Move, Plus, RotateCcw, Trash2 } from 'lucide-react';
 import { useSettings } from '../../../context/SettingsContext';
 import { useCurrency } from '../../../hooks/useCurrency';
 import { useStoreData } from '../../../hooks/useStoreData';
 import { templatesService, type Template } from '../../../services/templates.service';
+import { templateZonesService } from '../../../services/template-zones.service';
 import { isDark } from '../../customizer/garment';
-import { DEFAULT_LAYOUT, FITS, LAYOUT_LIMITS, nudgeLayout, zoneScreenFraction, ZONES, type Fit, type PrintLayout, type Zone } from './shirtConfig';
-import type { Prints } from './Shirt3D';
-import { accentInk, brandInk, cropToContent, loadImage, sampleDesign } from './printTexture';
+import { isModel3D, MODELS_3D, type Model3D, type View3D } from '../../mannequin/models';
+import { frameOf, type ArtArea, type ArtLayer, type MannequinArt } from '../../mannequin/art';
+import { zones3DOf, type Zone3D } from '../../mannequin/zones';
+import { DEFAULT_LAYOUT, LAYOUT_LIMITS, nudgeLayout, type PrintLayout } from './shirtConfig';
+import { accentInk, brandInk, cropToContent, loadImage, sampleDesign, type PrintSource } from './printTexture';
 import { gsap } from './motion';
 
-const Shirt3D = lazy(() => import('./Shirt3D'));
-
-/** Colores de prenda si los modelos aún no cargan. */
-const FALLBACK_COLORS = [
-  { name: 'Blanco', hexCode: '#FFFFFF' },
-  { name: 'Negro', hexCode: '#1F2937' },
-  { name: 'Gris', hexCode: '#9CA3AF' },
-];
+const Mannequin3D = lazy(() => import('../../mannequin/Mannequin3D'));
 
 const fetchTemplates = () => templatesService.getPublicTemplates();
 
-/** Si el navegador no puede con WebGL, queda la silueta plana. */
+/** Si el navegador no puede con WebGL, queda la foto fija. */
 class WebGLBoundary extends Component<{ fallback: ReactNode; children: ReactNode }, { failed: boolean }> {
   state = { failed: false };
   static getDerivedStateFromError() { return { failed: true }; }
   render() { return this.state.failed ? this.props.fallback : this.props.children; }
 }
 
+const sizeOf = (s: PrintSource) =>
+  s instanceof HTMLImageElement ? { w: s.naturalWidth, h: s.naturalHeight } : { w: s.width, h: s.height };
+
+/** Caja del diseño dentro de su zona según su posición (-1..1) y tamaño (fracción del máximo). */
+function placeInZone(src: PrintSource, area: ArtArea, l: PrintLayout) {
+  const { w, h } = sizeOf(src);
+  const k = Math.min(area.w / (w || 1), area.h / (h || 1)) * l.scale;
+  const dw = (w || 1) * k, dh = (h || 1) * k;
+  return {
+    cx: area.x + area.w / 2 + (l.x * (area.w - dw)) / 2,
+    cy: area.y + area.h / 2 + (l.y * (area.h - dh)) / 2,
+    w: dw,
+    h: dh,
+  };
+}
+
+/** Arte del maniquí: cada zona con su diseño, agrupado por vista; las bloqueadas no se imprimen. */
+function buildArt(zones: Zone3D[], prints: Record<number, PrintSource | null | undefined>, layouts: Record<number, PrintLayout | undefined>): MannequinArt {
+  const art: MannequinArt = {};
+  for (const z of zones) {
+    const v = (art[z.view] ??= { layers: [], holes: [] });
+    if (z.isBlocked) { v.holes!.push(z.area); continue; }
+    const src = prints[z.id];
+    if (!src) continue;
+    const layer: ArtLayer = { src, ...placeInZone(src, z.area, layouts[z.id] ?? DEFAULT_LAYOUT), clip: z.area };
+    v.layers.push(layer);
+  }
+  return art;
+}
+
 /**
- * "Personaliza la tuya" (valor añadido de la tienda): titular a la izquierda y, a la derecha, una prenda 3D donde la
- * rasqueta "imprime" un diseño al cargar. La persona puede cambiar el color de la prenda y
- * probar con su propia imagen (no sale del navegador).
+ * "¿No está tu diseño? Créalo." (valor añadido de la tienda): titular a la izquierda y, a la
+ * derecha, el maniquí 3D de las plantillas personalizables (configuradas en el admin: modelo 3D,
+ * zonas, colores y precio). La rasqueta "imprime" un diseño de muestra; la persona puede cambiar el
+ * corte, el color, la zona y probar con su propia imagen (no sale del navegador).
  */
 export function StudioBand({ reduced }: { reduced: boolean }) {
   const { settings } = useSettings();
@@ -40,39 +67,65 @@ export function StudioBand({ reduced }: { reduced: boolean }) {
   const storeName = settings.general.siteName || 'StylePrint';
   const templates = useStoreData<Template[]>('studio:templates', fetchTemplates);
 
-  const { colors, fromPrice } = useMemo(() => {
-    const list = (templates.data ?? []).filter((t) => t.isActive !== false);
-    const seen = new Set<string>();
-    const fromTemplates = list
-      .flatMap((t) => t.colors ?? [])
-      .filter((c) => c.hexCode && !seen.has(c.hexCode.toUpperCase()) && seen.add(c.hexCode.toUpperCase()));
-    const prices = list.map((t) => Number(t.basePrice)).filter((p) => p > 0);
-    return {
-      colors: (fromTemplates.length >= 2 ? fromTemplates : FALLBACK_COLORS).slice(0, 5),
-      fromPrice: prices.length ? Math.min(...prices) : null,
-    };
-  }, [templates.data]);
+  // Plantillas con maniquí 3D (las que se pueden probar aquí).
+  const models = useMemo(
+    () => (templates.data ?? []).filter((t) => t.isActive !== false && isModel3D(t.model3d)) as Array<Template & { model3d: Model3D }>,
+    [templates.data],
+  );
+  const [tplIdx, setTplIdx] = useState(0);
+  const template = models[Math.min(tplIdx, Math.max(0, models.length - 1))];
+  const model: Model3D = template?.model3d ?? 'basica';
+  const colors = template?.colors?.length ? template.colors : [{ id: 0, name: 'Blanco', slug: 'blanco', hexCode: '#FFFFFF' }];
+  const fromPrice = models.length ? Math.min(...models.map((t) => Number(t.basePrice) || 0).filter((p) => p > 0)) : null;
+
+  // Zonas de la plantilla elegida (de la BD).
+  const [zonesByTpl, setZonesByTpl] = useState<Record<number, Zone3D[]>>({});
+  useEffect(() => {
+    if (!template || zonesByTpl[template.id]) return;
+    let alive = true;
+    templateZonesService.getByTemplateId(template.id)
+      .then((raw) => { if (alive) setZonesByTpl((m) => ({ ...m, [template.id]: zones3DOf(raw) })); })
+      .catch(() => { if (alive) setZonesByTpl((m) => ({ ...m, [template.id]: [] })); });
+    return () => { alive = false; };
+  }, [template, zonesByTpl]);
+  const allZones = useMemo(() => (template ? zonesByTpl[template.id] ?? [] : []), [template, zonesByTpl]);
+  const zones = useMemo(() => allZones.filter((z) => !z.isBlocked), [allZones]);
 
   const [colorIdx, setColorIdx] = useState(0);
-  const [fit, setFit] = useState<Fit>('basica');
   const [modelReady, setModelReady] = useState(false);
   const markReady = useCallback(() => setModelReady(true), []);
   const color = colors[Math.min(colorIdx, colors.length - 1)].hexCode;
-  // Un diseño por zona. El frente arranca con el de muestra; las demás, vacías.
-  const [prints, setPrints] = useState<Prints>({});
-  const [zone, setZone] = useState<Zone>('front');
-  const [animZone, setAnimZone] = useState<Zone>('front');
+
+  // Un diseño por zona (por id de zona). El frente arranca con el de muestra.
+  const [prints, setPrints] = useState<Record<number, PrintSource | null>>({});
+  const [own, setOwn] = useState<Record<number, boolean>>({});
+  const [layouts, setLayouts] = useState<Record<number, PrintLayout>>({});
+  const [zoneId, setZoneId] = useState<number | null>(null);
+  const zone = zones.find((z) => z.id === zoneId) ?? zones[0] ?? null;
+  const frontZone = zones.find((z) => z.view === 'front') ?? null;
+  const [animView, setAnimView] = useState<View3D>('front');
   const [printKey, setPrintKey] = useState(0);
-  const [own, setOwn] = useState<Partial<Record<Zone, boolean>>>({});
-  const [layouts, setLayouts] = useState<Partial<Record<Zone, PrintLayout>>>({});
-  // Posición "en vivo": mientras se arrastra se escribe aquí (sin re-render) y el 3D la lee en
-  // cada cuadro; al soltar se guarda en el estado.
-  const liveLayouts = useRef<Partial<Record<Zone, PrintLayout>>>({});
-  const layout = layouts[zone] ?? DEFAULT_LAYOUT;
-  const currentLayout = () => liveLayouts.current[zone] ?? layouts[zone] ?? DEFAULT_LAYOUT;
+
+  // Posición "en vivo": mientras se arrastra se escribe aquí y el 3D la lee en cada cuadro.
+  const liveLayouts = useRef<Record<number, PrintLayout>>({});
+  const art = useMemo(() => buildArt(allZones, prints, layouts), [allZones, prints, layouts]);
+  const artRef = useRef({ version: 0, art });
+  useEffect(() => { artRef.current = { version: artRef.current.version + 1, art }; }, [art]);
+  const frames = useMemo(() => {
+    const out: Partial<Record<View3D, ArtArea>> = {};
+    for (const v of ['front', 'back', 'rightSleeve', 'leftSleeve'] as View3D[]) {
+      const f = frameOf(allZones.filter((z) => z.view === v).map((z) => z.area));
+      if (f) out[v] = f;
+    }
+    return out;
+  }, [allZones]);
+
+  const layout = (zone && layouts[zone.id]) ?? DEFAULT_LAYOUT;
+  const currentLayout = () => (zone ? liveLayouts.current[zone.id] ?? layouts[zone.id] ?? DEFAULT_LAYOUT : DEFAULT_LAYOUT);
   const commit = (next: PrintLayout) => {
-    liveLayouts.current[zone] = next;
-    setLayouts((l) => ({ ...l, [zone]: next }));
+    if (!zone) return;
+    liveLayouts.current[zone.id] = next;
+    setLayouts((l) => ({ ...l, [zone.id]: next }));
   };
   const move = (m: { dx?: number; dy?: number; ds?: number }) => commit(nudgeLayout(currentLayout(), m));
   const resetLayout = () => commit(DEFAULT_LAYOUT);
@@ -95,12 +148,16 @@ export function StudioBand({ reduced }: { reduced: boolean }) {
   };
   const onEditMove = (e: React.PointerEvent<HTMLDivElement>) => {
     const d = dragRef.current;
-    if (!d) return;
-    // 1:1 con el cursor: el espacio libre de la zona en pantalla equivale al recorrido -1..1.
+    const src = zone && prints[zone.id];
+    if (!d || !zone || !src) return;
+    // 1:1 con el cursor: el espacio libre de la zona (en % del recuadro) equivale al recorrido -1..1.
     const cur = currentLayout();
-    const zonePx = e.currentTarget.clientWidth * zoneScreenFraction(fit, zone);
-    const free = Math.max(zonePx * (1 - cur.scale), 1) / 2;
-    liveLayouts.current[zone] = nudgeLayout(cur, { dx: (e.clientX - d.x) / free, dy: (e.clientY - d.y) / free });
+    const box = placeInZone(src, zone.area, cur);
+    const px = e.currentTarget.clientWidth / 100;
+    const freeX = Math.max(((zone.area.w - box.w) / 2) * px, 1);
+    const freeY = Math.max(((zone.area.h - box.h) / 2) * px, 1);
+    liveLayouts.current[zone.id] = nudgeLayout(cur, { dx: (e.clientX - d.x) / freeX, dy: (e.clientY - d.y) / freeY });
+    artRef.current = { version: artRef.current.version + 1, art: buildArt(allZones, prints, { ...layouts, ...liveLayouts.current }) };
     dragRef.current = { x: e.clientX, y: e.clientY };
   };
   const onEditUp = () => {
@@ -117,23 +174,23 @@ export function StudioBand({ reduced }: { reduced: boolean }) {
   const root = useRef<HTMLElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
 
-  // Diseño de muestra con el nombre de la tienda: tinta oscura sobre prenda clara y clara sobre
-  // prenda oscura; los rayos en el acento de la marca.
+  // Diseño de muestra: sello con el nombre de la tienda y su ícono (favicon); tinta oscura sobre
+  // prenda clara y clara sobre prenda oscura.
   const darkGarment = isDark(color);
-  const ownFront = !!own.front;
-  // Diseño de muestra: sello con el nombre de la tienda y su ícono (favicon) arriba; sin ícono, un sol.
+  const sampleZone = frontZone?.id ?? null;
+  const ownSample = sampleZone !== null && !!own[sampleZone];
   const storeIcon = settings.general.favicon;
   useEffect(() => {
-    if (ownFront) return;
+    if (sampleZone === null || ownSample) return;
     let alive = true;
     const icon = storeIcon ? loadImage(storeIcon).catch(() => null) : Promise.resolve(null);
     icon
       .then((img) => sampleDesign(storeName, darkGarment ? '#F3F3EE' : brandInk(), accentInk(), img, darkGarment))
       .then((c) => {
-        if (alive) { setPrints((p) => ({ ...p, front: cropToContent(c) })); setAnimZone('front'); setPrintKey((k) => k + 1); }
+        if (alive) { setPrints((p) => ({ ...p, [sampleZone]: cropToContent(c) })); setAnimView('front'); setPrintKey((k) => k + 1); }
       });
     return () => { alive = false; };
-  }, [storeName, storeIcon, darkGarment, ownFront]);
+  }, [storeName, storeIcon, darkGarment, ownSample, sampleZone]);
 
   // Pausa el 3D fuera de pantalla.
   useEffect(() => {
@@ -148,7 +205,6 @@ export function StudioBand({ reduced }: { reduced: boolean }) {
   useLayoutEffect(() => {
     if (reduced || !root.current) return;
     const ctx = gsap.context(() => {
-      // Entra cuando la sección aparece en pantalla.
       const scrollTrigger = { trigger: root.current, start: 'top 72%', once: true };
       gsap.from('[data-line]', { yPercent: 105, duration: 0.9, ease: 'power4.out', stagger: 0.09, scrollTrigger });
       gsap.from('[data-rise]', { y: 16, opacity: 0, duration: 0.7, ease: 'power3.out', stagger: 0.06, delay: 0.35, scrollTrigger });
@@ -156,47 +212,39 @@ export function StudioBand({ reduced }: { reduced: boolean }) {
     return () => ctx.revert();
   }, [reduced]);
 
-  // La imagen va a la zona elegida (frente, espalda o manga).
+  // La imagen va a la zona elegida.
   const loadPrintFile = (file?: File | null) => {
-    if (!file || !file.type.startsWith('image/')) return;
+    if (!file || !file.type.startsWith('image/') || !zone) return;
     const target = zone;
     const url = URL.createObjectURL(file);
     const img = new Image();
     img.onload = () => {
       const design = cropToContent(img);
-      setPrints((p) => ({ ...p, [target]: design }));
-      setOwn((o) => ({ ...o, [target]: true }));
-      setAnimZone(target);
+      setPrints((p) => ({ ...p, [target.id]: design }));
+      setOwn((o) => ({ ...o, [target.id]: true }));
+      setAnimView(target.view);
       setPrintKey((k) => k + 1);
     };
     img.src = url;
   };
 
   const clearZone = () => {
-    setPrints((p) => ({ ...p, [zone]: null }));
-    setOwn((o) => ({ ...o, [zone]: false }));
-    setPrintKey((k) => k + 1);
+    if (!zone) return;
+    setPrints((p) => ({ ...p, [zone.id]: null }));
+    setOwn((o) => ({ ...o, [zone.id]: false }));
+    setEditing(false);
   };
-  const zoneLabel = ZONES.find((z) => z.id === zone)!.label.toLowerCase();
+  const zoneLabel = (zone?.name ?? '').toLowerCase();
 
-  const pickColor = (i: number) => {
-    setColorIdx(i);
-  };
+  // Foto fija del maniquí mientras carga el 3D (o si el navegador no tiene WebGL).
+  const flat = <img src={MODELS_3D[model].poster} alt="" className="w-full h-full object-contain rounded-[2rem]" />;
 
-  // Sin WebGL: la camiseta plana del molde.
-  // Foto fija de la camiseta mientras carga el 3D (o si el navegador no tiene WebGL).
-  const flat = (
-    <img src={FITS[fit].poster} alt="" className="w-full h-full object-contain rounded-[2rem]" />
-  );
+  // Sin plantillas 3D configuradas no hay nada que probar aquí.
+  if (templates.data && !models.length) return null;
 
   return (
-    <section
-      ref={root}
-      className="relative bg-white overflow-hidden"
-    >
-      <div
-        className="max-w-7xl mx-auto px-4 md:px-6 grid lg:grid-cols-[1.08fr_1fr] lg:grid-rows-[auto_auto] lg:content-center gap-x-8 gap-y-6 items-center py-14 md:py-20"
-      >
+    <section ref={root} className="relative bg-white overflow-hidden">
+      <div className="max-w-7xl mx-auto px-4 md:px-6 grid lg:grid-cols-[1.08fr_1fr] lg:grid-rows-[auto_auto] lg:content-center gap-x-8 gap-y-6 items-center py-14 md:py-20">
         {/* Titular: arriba en celular, a la izquierda en escritorio */}
         <h2 className="min-w-0 lg:col-start-1 lg:row-start-1 lg:self-end font-poster font-bold tracking-[-0.035em] uppercase text-gray-900 leading-[0.9] text-[clamp(2.4rem,8.5vw,4.4rem)] lg:text-[clamp(3.2rem,4.6vw,4.8rem)]">
           <span className="block overflow-hidden pt-[0.06em]"><span data-line className="block">¿No está</span></span>
@@ -211,13 +259,13 @@ export function StudioBand({ reduced }: { reduced: boolean }) {
           </p>
           <div data-rise className="mt-8 flex flex-col sm:flex-row gap-3">
             <Link
-              to="/customize"
+              to={template ? `/customize?template=${template.id}` : '/customize'}
               className="inline-flex items-center justify-center h-14 px-8 rounded-full bg-app-600 text-white text-base font-semibold hover:bg-app-700 active:scale-[0.98] transition focus:outline-none focus-visible:ring-4 focus-visible:ring-app-200"
             >
               Diseñar mi prenda
             </Link>
           </div>
-          {fromPrice !== null && (
+          {fromPrice !== null && Number.isFinite(fromPrice) && (
             <p data-rise className="mt-5 text-sm text-gray-600">
               Desde <span className="font-semibold text-gray-900 tabular-nums">{format(fromPrice)}</span>. Pagas solo las zonas que diseñas.
             </p>
@@ -235,16 +283,31 @@ export function StudioBand({ reduced }: { reduced: boolean }) {
           >
             <div className="absolute inset-0">
               {!modelReady && <div className="absolute inset-0">{flat}</div>}
-              <WebGLBoundary fallback={flat}>
-                <Suspense fallback={flat}>
-                  <Shirt3D fit={fit} color={color} prints={prints} layouts={layouts} layoutRef={liveLayouts} locked={editing} focus={zone} animZone={animZone} printKey={printKey} still={reduced} active={inView} onReady={markReady} />
-                </Suspense>
-              </WebGLBoundary>
+              {template && (
+                <WebGLBoundary fallback={flat}>
+                  <Suspense fallback={flat}>
+                    <Mannequin3D
+                      model={model}
+                      color={color}
+                      art={art}
+                      artRef={artRef}
+                      frames={frames}
+                      focus={zone?.view ?? 'front'}
+                      locked={editing}
+                      animView={animView}
+                      printKey={printKey}
+                      still={reduced}
+                      active={inView}
+                      onReady={markReady}
+                    />
+                  </Suspense>
+                </WebGLBoundary>
+              )}
             </div>
             <p className="sr-only">Prenda de muestra con un diseño estampado en el pecho. Puedes cambiar el color y probar con tu imagen.</p>
 
             {/* Mover el diseño de la zona elegida: siempre dentro de la zona. */}
-            {prints[zone] && !editing && (
+            {zone && prints[zone.id] && !editing && (
               <button
                 type="button"
                 onClick={() => setEditing(true)}
@@ -254,7 +317,7 @@ export function StudioBand({ reduced }: { reduced: boolean }) {
                 Mover diseño
               </button>
             )}
-            {prints[zone] && editing && (
+            {zone && prints[zone.id] && editing && (
               <>
                 {/* Capa de arrastre: la mano mueve el diseño; la rueda cambia el tamaño. */}
                 <div
@@ -267,7 +330,13 @@ export function StudioBand({ reduced }: { reduced: boolean }) {
                   onPointerCancel={onEditUp}
                   onWheel={onEditWheel}
                   aria-label={`Arrastra para mover el diseño (${zoneLabel})`}
-                />
+                >
+                  {/* Límite de la zona */}
+                  <span
+                    className={`pointer-events-none absolute border-2 border-dashed border-accent/80 ${zone.area.circle ? 'rounded-full' : 'rounded-md'}`}
+                    style={{ left: `${zone.area.x}%`, top: `${zone.area.y}%`, width: `${zone.area.w}%`, height: `${zone.area.h}%` }}
+                  />
+                </div>
                 <p className="pointer-events-none absolute top-3 left-1/2 -translate-x-1/2 inline-flex items-center gap-1.5 whitespace-nowrap rounded-full bg-white/30 backdrop-blur-md ring-1 ring-white/50 px-3 py-1.5 text-xs font-semibold text-gray-900">
                   <Hand className="w-3.5 h-3.5" aria-hidden="true" />
                   Arrastra el diseño · rueda o +/− para el tamaño
@@ -290,78 +359,94 @@ export function StudioBand({ reduced }: { reduced: boolean }) {
             )}
           </div>
 
-          {/* Zonas de estampado: al elegir una, la prenda gira para mostrarla. */}
-          <div className="mt-4 max-w-[620px] mx-auto flex flex-wrap items-center gap-1.5" role="group" aria-label="Zona de estampado">
-            {ZONES.map((z) => (
-              <button
-                key={z.id}
-                type="button"
-                onClick={() => { setZone(z.id); setEditing(false); }}
-                aria-pressed={z.id === zone}
-                className={`relative h-9 px-4 rounded-full text-sm font-semibold border transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-app-500 ${
-                  z.id === zone ? 'bg-accent text-accent-ink border-accent' : 'bg-white text-gray-700 border-black/10 hover:border-black/30'
-                }`}
-              >
-                {z.label}
-                {prints[z.id] && <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-app-600 ring-2 ring-white" aria-label="con diseño" />}
-              </button>
-            ))}
-          </div>
-
-          <div className="mt-3 max-w-[620px] mx-auto flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-1 p-1 rounded-full bg-black/5" role="group" aria-label="Corte de la camiseta">
-              {(Object.keys(FITS) as Fit[]).map((f) => (
-                <button
-                  key={f}
-                  type="button"
-                  onClick={() => { setFit(f); setAnimZone(zone); setPrintKey((k) => k + 1); }}
-                  aria-pressed={f === fit}
-                  className={`h-9 px-4 rounded-full text-sm font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-app-500 ${
-                    f === fit ? 'bg-app-600 text-white' : 'text-gray-600 hover:text-gray-900'
-                  }`}
-                >
-                  {FITS[f].label}
-                </button>
-              ))}
-            </div>
-            <div className="flex items-center gap-2" role="group" aria-label="Color de la prenda">
-              {colors.map((c, i) => (
-                <button
-                  key={c.hexCode}
-                  type="button"
-                  onClick={() => pickColor(i)}
-                  aria-pressed={i === colorIdx}
-                  aria-label={c.name}
-                  title={c.name}
-                  className={`w-9 h-9 rounded-full ring-1 ring-black/15 transition-transform hover:scale-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-app-500 ${i === colorIdx ? 'ring-2 ring-app-600 ring-offset-2' : ''}`}
-                  style={{ backgroundColor: c.hexCode }}
-                />
-              ))}
-            </div>
-            <button
-              type="button"
-              onClick={() => fileInput.current?.click()}
-              className="inline-flex items-center gap-2 h-11 px-5 rounded-full bg-app-600 text-white text-sm font-semibold hover:bg-app-800 active:scale-[0.98] transition focus:outline-none focus-visible:ring-4 focus-visible:ring-gray-300"
-            >
-              <ImageUp className="w-4 h-4" aria-hidden="true" />
-              {own[zone] ? `Cambiar imagen (${zoneLabel})` : `Mi imagen en ${zoneLabel}`}
-            </button>
-            {own[zone] && (
-              <button type="button" onClick={clearZone} className="text-sm font-semibold text-gray-600 underline underline-offset-4 hover:text-gray-900">
-                Quitar
-              </button>
+          {/* Controles compactos: arriba la zona (la prenda gira a mostrarla); abajo corte, color e imagen. */}
+          <div className="mt-3 max-w-[620px] mx-auto rounded-3xl bg-paper p-1.5 space-y-1.5">
+            {zones.length > 0 && (
+              <div className="grid gap-1 p-1 rounded-[1.25rem] bg-white ring-1 ring-black/5" style={{ gridTemplateColumns: `repeat(${Math.min(zones.length, 4)}, minmax(0, 1fr))` }} role="group" aria-label="Zona de estampado">
+                {zones.map((z) => (
+                  <button
+                    key={z.id}
+                    type="button"
+                    onClick={() => { setZoneId(z.id); setEditing(false); }}
+                    aria-pressed={z.id === zone?.id}
+                    className={`relative h-9 px-1 rounded-2xl text-[13px] sm:text-sm font-semibold whitespace-nowrap overflow-hidden text-ellipsis transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-app-500 ${
+                      z.id === zone?.id ? 'bg-accent text-accent-ink' : 'text-gray-600 hover:text-gray-900 hover:bg-black/5'
+                    }`}
+                  >
+                    {/* Nombre corto para que quepan 4 en el celular. */}
+                    {z.name.replace(/\s+derecha$/i, ' der.').replace(/\s+izquierda$/i, ' izq.')}
+                    {prints[z.id] && <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-app-600" aria-label="con diseño" />}
+                  </button>
+                ))}
+              </div>
             )}
-            <input
-              ref={fileInput}
-              type="file"
-              accept="image/png,image/jpeg,image/webp"
-              className="sr-only"
-              tabIndex={-1}
-              onChange={(e) => { loadPrintFile(e.target.files?.[0]); e.target.value = ''; }}
-            />
+
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-1">
+              {models.length > 1 && (
+                <div className="flex items-center gap-0.5 p-0.5 rounded-full bg-white ring-1 ring-black/5" role="group" aria-label="Corte de la camiseta">
+                  {models.map((t, i) => (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => { setTplIdx(i); setZoneId(null); setEditing(false); setColorIdx(0); setAnimView('front'); setPrintKey((k) => k + 1); }}
+                      aria-pressed={t.id === template?.id}
+                      className={`h-8 px-3.5 rounded-full text-sm font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-app-500 ${
+                        t.id === template?.id ? 'bg-app-600 text-white' : 'text-gray-600 hover:text-gray-900'
+                      }`}
+                    >
+                      {MODELS_3D[t.model3d].label}
+                    </button>
+                  ))}
+                </div>
+              )}
+              <div className="flex items-center gap-1.5" role="group" aria-label="Color de la prenda">
+                {colors.slice(0, 6).map((c, i) => (
+                  <button
+                    key={c.hexCode + i}
+                    type="button"
+                    onClick={() => setColorIdx(i)}
+                    aria-pressed={i === colorIdx}
+                    aria-label={c.name}
+                    title={c.name}
+                    className={`w-7 h-7 rounded-full ring-1 ring-black/15 transition-transform hover:scale-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-app-500 ${i === colorIdx ? 'ring-2 ring-app-600 ring-offset-2 ring-offset-paper' : ''}`}
+                    style={{ backgroundColor: c.hexCode }}
+                  />
+                ))}
+              </div>
+              <div className="w-full sm:w-auto sm:ml-auto flex items-center gap-1">
+                {zone && prints[zone.id] && (
+                  <button
+                    type="button"
+                    onClick={clearZone}
+                    aria-label={`Quitar el diseño (${zoneLabel})`}
+                    title="Quitar diseño"
+                    className="w-9 h-9 rounded-full flex items-center justify-center text-gray-600 hover:text-gray-900 hover:bg-black/5 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-app-500"
+                  >
+                    <Trash2 className="w-4 h-4" aria-hidden="true" />
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => fileInput.current?.click()}
+                  disabled={!zone}
+                  className="flex-1 sm:flex-none inline-flex items-center justify-center gap-2 h-9 px-4 rounded-full bg-app-600 text-white text-sm font-semibold hover:bg-app-800 active:scale-[0.98] transition disabled:opacity-50 focus:outline-none focus-visible:ring-4 focus-visible:ring-gray-300"
+                >
+                  <ImageUp className="w-4 h-4" aria-hidden="true" />
+                  {zone && own[zone.id] ? 'Cambiar imagen' : 'Subir imagen'}
+                </button>
+              </div>
+              <input
+                ref={fileInput}
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                className="sr-only"
+                tabIndex={-1}
+                onChange={(e) => { loadPrintFile(e.target.files?.[0]); e.target.value = ''; }}
+              />
+            </div>
           </div>
-          <p className="mt-2 max-w-[620px] mx-auto text-xs text-gray-500">
-            Arrastra la prenda para girarla. Tu imagen se queda en tu navegador: no se sube a ningún lado.
+          <p className="mt-2 max-w-[620px] mx-auto px-2 text-xs text-gray-500">
+            Arrastra la prenda para girarla o suelta una imagen encima. Tu imagen se queda en tu navegador: no se sube a ningún lado.
           </p>
         </div>
       </div>
@@ -369,7 +454,7 @@ export function StudioBand({ reduced }: { reduced: boolean }) {
   );
 }
 
-/** Botón del control de posición (flechas y tamaño). */
+/** Botón del control de tamaño. */
 function PadButton({ label, disabled, onClick, children }: { label: string; disabled?: boolean; onClick: () => void; children: ReactNode }) {
   return (
     <button
