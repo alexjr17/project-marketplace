@@ -59,33 +59,6 @@ interface FormErrors {
   shippingCity?: string;
 }
 
-// Borrador de los datos del paso 1: una recarga o una interrupción no borra lo escrito.
-// Se guarda solo en esta pestaña (sessionStorage) y se olvida al crear el pedido.
-const DRAFT_KEY = 'checkout:draft';
-const readDraft = (): Partial<FormData> => {
-  try { return JSON.parse(sessionStorage.getItem(DRAFT_KEY) || '{}') as Partial<FormData>; } catch { return {}; }
-};
-const forgetCheckoutDraft = () => {
-  try { sessionStorage.removeItem(DRAFT_KEY); } catch { /* sin almacenamiento: nada que borrar */ }
-};
-
-/** Campos obligatorios del paso 1, en el orden del formulario (para enfocar el primero que falte). */
-const REQUIRED_FIELDS: { key: keyof FormErrors; label: string }[] = [
-  { key: 'customerName', label: 'nombre' },
-  { key: 'customerEmail', label: 'correo' },
-  { key: 'customerPhone', label: 'teléfono' },
-  { key: 'shippingAddress', label: 'dirección' },
-  { key: 'shippingCity', label: 'ciudad' },
-];
-
-/** "Falta: teléfono y ciudad". */
-const missingMessage = (errs: FormErrors) => {
-  const labels = REQUIRED_FIELDS.filter((f) => errs[f.key]).map((f) => f.label);
-  if (labels.length === 0) return '';
-  const list = labels.length === 1 ? labels[0] : `${labels.slice(0, -1).join(', ')} y ${labels[labels.length - 1]}`;
-  return `Revisa: ${list}`;
-};
-
 export const CheckoutPage = () => {
   const navigate = useNavigate();
   const { cart, clearCart, isReady: cartReady } = useCart();
@@ -95,28 +68,15 @@ export const CheckoutPage = () => {
   const { showToast } = useToast();
   const { user } = useAuth();
 
-  const [formData, setFormData] = useState<FormData>(() => {
-    const base: FormData = {
-      customerName: user?.name || '',
-      customerEmail: user?.email || '',
-      customerPhone: user?.profile?.phone || '',
-      shippingAddress: user?.profile?.address || '',
-      shippingCity: user?.profile?.city || '',
-      shippingPostalCode: user?.profile?.postalCode || '',
-      shippingNotes: '',
-    };
-    // Lo escrito antes de recargar manda sobre los datos del perfil (solo campos con valor).
-    const draft = readDraft();
-    (Object.keys(base) as (keyof FormData)[]).forEach((k) => {
-      const v = draft[k];
-      if (typeof v === 'string' && v.trim()) base[k] = v;
-    });
-    return base;
+  const [formData, setFormData] = useState<FormData>({
+    customerName: user?.name || '',
+    customerEmail: user?.email || '',
+    customerPhone: user?.profile?.phone || '',
+    shippingAddress: user?.profile?.address || '',
+    shippingCity: user?.profile?.city || '',
+    shippingPostalCode: user?.profile?.postalCode || '',
+    shippingNotes: '',
   });
-
-  useEffect(() => {
-    try { sessionStorage.setItem(DRAFT_KEY, JSON.stringify(formData)); } catch { /* sin almacenamiento: no se guarda */ }
-  }, [formData]);
 
   const [errors, setErrors] = useState<FormErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -149,7 +109,7 @@ export const CheckoutPage = () => {
   // carrito llega de la DB un instante después y antes se redirigía siempre).
   useEffect(() => {
     if (cartReady && cart.items.length === 0) {
-      navigate('/cart', { replace: true });
+      navigate('/cart');
     }
   }, [cartReady, cart.items.length, navigate]);
 
@@ -342,8 +302,7 @@ export const CheckoutPage = () => {
     </div>
   );
 
-  /** Valida el paso 1, marca los campos y devuelve los errores (vacío = todo bien). */
-  const collectErrors = (): FormErrors => {
+  const validateForm = (): boolean => {
     const newErrors: FormErrors = {};
 
     if (!formData.customerName.trim()) {
@@ -369,28 +328,7 @@ export const CheckoutPage = () => {
     }
 
     setErrors(newErrors);
-    return newErrors;
-  };
-  const validateForm = (): boolean => Object.keys(collectErrors()).length === 0;
-
-  /** "Continuar al pago": si falta algo, dice qué y lleva el foco al primer campo con error. */
-  const goToPayment = () => {
-    const errs = collectErrors();
-    const first = REQUIRED_FIELDS.find((f) => errs[f.key]);
-    if (!first) {
-      setStep('payment');
-      window.scrollTo({ top: 0 });
-      return;
-    }
-    showToast(missingMessage(errs), 'error');
-    // Tras pintar los errores: el campo por nombre o, si no lo tiene (ciudad), el primero marcado.
-    requestAnimationFrame(() => {
-      const el =
-        document.querySelector<HTMLElement>(`[name="${first.key}"]`) ??
-        document.querySelector<HTMLElement>('[aria-invalid="true"]');
-      el?.scrollIntoView({ block: 'center' });
-      el?.focus({ preventScroll: true });
-    });
+    return Object.keys(newErrors).length === 0;
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -503,13 +441,11 @@ export const CheckoutPage = () => {
     try {
       const { order } = await ordersService.confirmWompiPayment(reference, transactionId);
       clearCart();
-      forgetCheckoutDraft();
       showToast(String(order?.status ?? '').toUpperCase() === 'PAID' ? '¡Pago exitoso! Tu pedido está confirmado.' : 'Recibimos tu pago; lo estamos verificando.', 'success');
       navigate('/my-orders');
     } catch (error: unknown) {
       // El pago puede seguir pendiente en Wompi: el pedido queda creado y el webhook lo confirmará.
       clearCart();
-      forgetCheckoutDraft();
       showToast(error instanceof Error ? error.message : 'Tu pago está en verificación.', 'info');
       navigate('/my-orders');
     } finally {
@@ -527,13 +463,9 @@ export const CheckoutPage = () => {
 
   // Handler para métodos de pago manuales (transferencia, contra entrega)
   const handleManualPayment = async () => {
-    {
-      const errs = collectErrors();
-      if (Object.keys(errs).length > 0) {
-        showToast(missingMessage(errs), 'error');
-        setStep('info');
-        return;
-      }
+    if (!validateForm()) {
+      showToast('Por favor completa todos los campos requeridos', 'error');
+      return;
     }
 
     setIsSubmitting(true);
@@ -565,8 +497,6 @@ export const CheckoutPage = () => {
 
       clearCart();
 
-      forgetCheckoutDraft();
-
       showToast(
         proofImage
           ? '¡Pedido creado! Verificaremos tu comprobante pronto.'
@@ -587,13 +517,9 @@ export const CheckoutPage = () => {
   // Handler para Mercado Pago (Checkout Pro): crea el pedido, registra el pago
   // pendiente y redirige a la pasarela para pagar.
   const handleMercadoPago = async () => {
-    {
-      const errs = collectErrors();
-      if (Object.keys(errs).length > 0) {
-        showToast(missingMessage(errs), 'error');
-        setStep('info');
-        return;
-      }
+    if (!validateForm()) {
+      showToast('Por favor completa todos los campos requeridos', 'error');
+      return;
     }
 
     setIsSubmitting(true);
@@ -630,8 +556,6 @@ export const CheckoutPage = () => {
       }
 
       clearCart();
-
-      forgetCheckoutDraft();
       // Redirige a la pasarela de Mercado Pago.
       window.location.href = pref.initPoint;
     } catch (error: any) {
@@ -654,6 +578,7 @@ export const CheckoutPage = () => {
     { id: 'payment', label: 'Pago', icon: CreditCard },
   ];
 
+  const canProceedToPayment = formData.customerName && formData.customerEmail && formData.customerPhone && formData.shippingAddress && formData.shippingCity;
 
   if (cart.items.length === 0) {
     return null;
@@ -684,9 +609,8 @@ export const CheckoutPage = () => {
                   type="button"
                   onClick={() => {
                     if (s.id === 'info') setStep('info');
-                    else if (s.id === 'payment' && step !== 'payment') goToPayment();
+                    else if (s.id === 'payment' && canProceedToPayment) setStep('payment');
                   }}
-                  aria-current={isActive ? 'step' : undefined}
                   className={`inline-flex items-center gap-2 h-9 pl-1.5 pr-3 rounded-full border text-sm font-medium transition-colors ${
                     isActive
                       ? 'border-app-300 bg-app-50 text-app-700'
@@ -842,7 +766,12 @@ export const CheckoutPage = () => {
                     <Button
                       size="lg"
                       className="w-full sm:w-auto"
-                      onClick={goToPayment}
+                      onClick={() => {
+                        if (validateForm()) {
+                          setStep('payment');
+                        }
+                      }}
+                      disabled={!canProceedToPayment}
                     >
                       Continuar al pago
                       <ChevronRight className="w-4 h-4" />

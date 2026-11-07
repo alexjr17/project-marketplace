@@ -714,10 +714,8 @@ export default function ProductDetailPage() {
         </div>
       </StoreContainer>
 
-      {/* Celular: precio y "Agregar" siempre a mano, encima de la navegación inferior.
-          El espaciador evita que la barra tape el final de la página. */}
-      <div className="md:hidden h-[72px]" aria-hidden="true" />
-      <div className="md:hidden fixed inset-x-0 bottom-[var(--store-bottom-nav)] z-40 bg-white border-t border-gray-200 px-3 py-2.5 shadow-[0_-4px_12px_rgba(0,0,0,0.04)]">
+      {/* Celular: precio y "Agregar" siempre a mano, encima de la navegación inferior */}
+      <div className="md:hidden fixed inset-x-0 bottom-[60px] z-40 bg-white border-t border-gray-200 px-3 py-2.5 shadow-[0_-4px_12px_rgba(0,0,0,0.04)]">
         <div className="flex items-center gap-3">
           <div className="min-w-0">
             <p className="text-base font-bold text-gray-900 leading-tight">{format(unitPrice * quantity)}</p>

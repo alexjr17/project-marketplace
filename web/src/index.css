@@ -5,16 +5,9 @@
 /* Paleta del color de la app (la sobrescribe <AppTheme> según la app y los Ajustes).
    Por defecto: violeta de marca (#7c3aed como tono 600). */
 :root {
-  /* Alto de la barra inferior de la tienda en celular (0 donde no se muestra). Las barras fijas
-     de compra se apoyan encima con bottom-[var(--store-bottom-nav)]. */
-  --store-bottom-nav: 0px;
   --app-50: 248 245 254; --app-100: 241 233 253; --app-200: 222 206 251; --app-300: 196 163 248;
   --app-400: 169 120 244; --app-500: 144 80 241; --app-600: 124 58 237; --app-700: 105 49 201;
   --app-800: 87 41 166; --app-900: 68 32 130;
-}
-
-@media (max-width: 767.98px) {
-  :root { --store-bottom-nav: calc(4rem + env(safe-area-inset-bottom)); }
 }
 
 @layer utilities {

@@ -115,7 +115,7 @@ export function CustomizerStudio({ api }: { api: CustomizerApi }) {
       </div>
 
       {/* Barra fija (celular), encima de la navegación inferior */}
-      <div className="lg:hidden fixed inset-x-0 bottom-[var(--store-bottom-nav)] z-40 bg-white border-t border-gray-200 px-3 py-2.5 shadow-[0_-4px_12px_rgba(0,0,0,0.04)]">
+      <div className="lg:hidden fixed inset-x-0 bottom-[60px] z-40 bg-white border-t border-gray-200 px-3 py-2.5 shadow-[0_-4px_12px_rgba(0,0,0,0.04)]">
         <div className="flex items-center gap-3">
           <div className="min-w-0">
             <p className="text-[11px] text-gray-500 leading-tight">{api.quantity > 1 ? `${api.quantity} × ${format(api.quote.total)}` : 'Total'}</p>

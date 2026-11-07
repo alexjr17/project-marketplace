@@ -13,8 +13,8 @@ import { homeBlock } from '../types/settings';
 import { Seo } from '../components/seo/Seo';
 
 /**
- * Portada de la tienda ("Tienda guiada"): hero, estudio de diseño (personaliza en 3 pasos),
- * beneficios, categorías, vitrina con pestañas, secciones y banners configurados, reseñas reales y CTA final.
+ * Portada de la tienda ("Tienda guiada"): hero, beneficios, categorías, vitrina con pestañas,
+ * personaliza en 3 pasos, secciones y banners configurados, reseñas reales y CTA final.
  * Todo se configura en Ajustes > Página de inicio.
  */
 export const HomePage = () => {
@@ -50,18 +50,16 @@ export const HomePage = () => {
   return (
     <div className="bg-gray-50 min-h-screen">
       <Seo />
-      {/* Título de la página para lectores de pantalla y buscadores (el hero usa h2 por diapositiva). */}
-      <h1 className="sr-only">{[settings.general.siteName || 'StylePrint', settings.general.slogan].filter(Boolean).join(' — ')}</h1>
 
       <HeroSection />
-
-      {enableCustomizer && howItWorks.isActive && <HowItWorks title={howItWorks.title} subtitle={howItWorks.subtitle} />}
 
       {showFeatures && <TrustStrip features={features} />}
 
       {categories.isActive && <CategoryTiles title={categories.title} subtitle={categories.subtitle} />}
 
       {showcase.isActive && <ProductShowcase title={showcase.title} subtitle={showcase.subtitle} />}
+
+      {enableCustomizer && howItWorks.isActive && <HowItWorks title={howItWorks.title} subtitle={howItWorks.subtitle} />}
 
       {content.map((item) =>
         item.type === 'section' ? (

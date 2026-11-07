@@ -79,13 +79,14 @@ export const ProductCard = ({ product, priority = false }: ProductCardProps) => 
         </h3>
 
         <div className="flex items-center gap-1 text-xs text-gray-500 min-h-[1rem]">
-          {/* Sin reseñas no se pinta nada: el "Sin reseñas" repetido en cada tarjeta solo hacía ruido. */}
-          {reviews > 0 && (
+          {reviews > 0 ? (
             <>
-              <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" aria-hidden="true" />
+              <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
               <span className="font-medium text-gray-700">{rating.toFixed(1)}</span>
-              <span>({reviews} <span className="sr-only">reseñas</span>)</span>
+              <span>({reviews})</span>
             </>
+          ) : (
+            <span className="text-gray-400">Sin reseñas</span>
           )}
           {lowStock && <span className="ml-auto text-amber-700 whitespace-nowrap">Últimas {product.stock}</span>}
         </div>
@@ -104,9 +105,9 @@ export const ProductCard = ({ product, priority = false }: ProductCardProps) => 
                 ))}
               </div>
             )}
-            {product.colors.length > 4 && <span className="text-xs text-gray-500">+{product.colors.length - 4}</span>}
+            {product.colors.length > 4 && <span className="text-xs text-gray-400">+{product.colors.length - 4}</span>}
             {sizes.length > 0 && (
-              <span className="text-xs text-gray-500 truncate">
+              <span className="text-xs text-gray-400 truncate">
                 {sizes.slice(0, 5).join(' · ')}{sizes.length > 5 ? ` +${sizes.length - 5}` : ''}
               </span>
             )}
@@ -116,7 +117,7 @@ export const ProductCard = ({ product, priority = false }: ProductCardProps) => 
         <div className="mt-auto pt-1 flex items-baseline gap-x-2 flex-wrap">
           <span className="text-base font-semibold text-gray-900">{format(sale ?? product.basePrice)}</span>
           {sale != null && (
-            <span className="text-xs text-gray-500 line-through"><span className="sr-only">Antes: </span>{format(product.basePrice)}</span>
+            <span className="text-xs text-gray-400 line-through">{format(product.basePrice)}</span>
           )}
         </div>
       </div>

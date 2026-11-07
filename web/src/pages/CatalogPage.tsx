@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { PackageSearch, SlidersHorizontal, X } from 'lucide-react';
 import { Button, Drawer, Skeleton } from '../components/ui';
@@ -8,8 +8,6 @@ import { useProducts } from '../context/ProductsContext';
 import { useCatalogs } from '../context/CatalogsContext';
 import { useCurrency } from '../hooks/useCurrency';
 import { ProductCard } from '../components/products/ProductCard';
-import { DesignYourOwnCard } from '../components/products/DesignYourOwnCard';
-import { useSettings } from '../context/SettingsContext';
 import { Seo } from '../components/seo/Seo';
 import { ProductFilters, type FilterValues } from '../components/products/ProductFilters';
 import { ProductSort } from '../components/products/ProductSort';
@@ -32,8 +30,6 @@ export const CatalogPage = () => {
   const { categories, productTypes } = useCatalogs();
   const { format } = useCurrency();
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const { settings } = useSettings();
-  const enableCustomizer = settings.home?.enableCustomizer ?? true;
 
   // La URL es la fuente de verdad (se puede compartir y "atrás" deshace el último filtro).
   const urlKey = searchParams.toString();
@@ -66,12 +62,10 @@ export const CatalogPage = () => {
   const total = pagination.total || filteredProducts.length;
   const countLabel = isLoading ? 'Buscando productos…' : `${total} ${total === 1 ? 'producto' : 'productos'}`;
   const filterCount = chips.filter((c) => c.key !== 'search').length;
-  const showDesignCard = enableCustomizer && state.page <= 1 && !search;
 
   const handlePageChange = (page: number) => {
     go({ page });
-    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    window.scrollTo({ top: 0, behavior: reduce ? 'auto' : 'smooth' });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   return (
@@ -169,11 +163,7 @@ export const CatalogPage = () => {
               <>
                 <div className={GRID}>
                   {filteredProducts.map((product, i) => (
-                    <Fragment key={product.id}>
-                      <ProductCard product={product} priority={i < 4} />
-                      {/* "Diseña la tuya" en la primera página, tras el 3.er producto (o al final si hay menos) */}
-                      {showDesignCard && i === Math.min(2, filteredProducts.length - 1) && <DesignYourOwnCard />}
-                    </Fragment>
+                    <ProductCard key={product.id} product={product} priority={i < 4} />
                   ))}
                 </div>
                 {pagination.totalPages > 1 && (
