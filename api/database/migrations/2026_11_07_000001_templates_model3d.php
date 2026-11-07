@@ -24,14 +24,14 @@ return new class extends Migration
         'basica' => [
             ['frente', 'Frente', 36, 28, 28, 30, 8000, true, 1],
             ['espalda', 'Espalda', 36, 28, 28, 34, 8000, false, 2],
-            ['manga-derecha', 'Manga derecha', 39, 30, 12, 11, 4000, false, 3],
-            ['manga-izquierda', 'Manga izquierda', 39, 30, 12, 11, 4000, false, 4],
+            ['manga-derecha', 'Manga derecha', 41, 29, 9, 9, 4000, false, 3],
+            ['manga-izquierda', 'Manga izquierda', 41, 29, 9, 9, 4000, false, 4],
         ],
         'oversize' => [
             ['frente', 'Frente', 35, 28, 30, 34, 8000, true, 1],
             ['espalda', 'Espalda', 35, 28, 30, 36, 8000, false, 2],
-            ['manga-derecha', 'Manga derecha', 41, 37, 14, 12, 4000, false, 3],
-            ['manga-izquierda', 'Manga izquierda', 41, 37, 14, 12, 4000, false, 4],
+            ['manga-derecha', 'Manga derecha', 44, 38, 9, 10, 4000, false, 3],
+            ['manga-izquierda', 'Manga izquierda', 44, 38, 9, 10, 4000, false, 4],
         ],
     ];
 

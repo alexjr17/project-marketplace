@@ -119,16 +119,106 @@ function useMannequin(cfg: ModelConfig) {
     const cz = ring.reduce((a, p) => a + p.z, 0) / (ring.length || 1);
     const radii = ring.map((p) => Math.hypot(p.x - cx, p.z - cz)).sort((a, b) => a - b);
     const neckR = radii[Math.floor(radii.length * 0.5)] || size.y * 0.04;
+    const collar = cfg.collarFromMesh ? measureCollar(out, box, size, cfg, cx, cz) : null;
 
-    return { geometry: g, box, size, neck: { cx, cz, r: neckR } };
-  }, [scene, cfg.hem, cfg.headFrom]);
+    return { geometry: g, box, size, neck: { cx, cz, r: neckR }, collar };
+  }, [scene, cfg]);
+}
+
+/** Direcciones alrededor del cuello en las que se mide el escote (cada 15°). */
+const COLLAR_BINS = 24;
+
+/**
+ * Escote medido en la malla: donde el resorte del suéter se junta con el cuello del maniquí la
+ * superficie hace una canaleta (unión cóncava). Para cada dirección alrededor del cuello toma la
+ * altura de la canaleta más marcada. Donde no hay canaleta clara (atrás el cuello baja liso) usa
+ * las alturas del modelo: costados `collarSide` y espalda `collarBack`, y rellena entre medidas.
+ * Devuelve la altura (fracción del alto) por dirección; dirección 0 = atrás (-180°), sube hacia +x.
+ */
+function measureCollar(pos: Float32Array, box: THREE.Box3, size: THREE.Vector3, cfg: ModelConfig, cx: number, cz: number): Float32Array {
+  const n = pos.length / 3;
+  // Soldar (triángulos sueltos → vértices compartidos).
+  const ids = new Int32Array(n);
+  const map = new Map<string, number>();
+  const pts: number[] = [];
+  for (let i = 0; i < n; i++) {
+    const k = `${Math.round(pos[i * 3] * 1e4)},${Math.round(pos[i * 3 + 1] * 1e4)},${Math.round(pos[i * 3 + 2] * 1e4)}`;
+    let id = map.get(k);
+    if (id === undefined) { id = pts.length / 3; map.set(k, id); pts.push(pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2]); }
+    ids[i] = id;
+  }
+  const m = pts.length / 3;
+  const nrm = new Float32Array(m * 3), sum = new Float32Array(m * 3), cnt = new Float32Array(m);
+  for (let t = 0; t < n; t += 3) {
+    const a = ids[t], b = ids[t + 1], c = ids[t + 2];
+    const ux = pts[b * 3] - pts[a * 3], uy = pts[b * 3 + 1] - pts[a * 3 + 1], uz = pts[b * 3 + 2] - pts[a * 3 + 2];
+    const vx = pts[c * 3] - pts[a * 3], vy = pts[c * 3 + 1] - pts[a * 3 + 1], vz = pts[c * 3 + 2] - pts[a * 3 + 2];
+    const fx = uy * vz - uz * vy, fyN = uz * vx - ux * vz, fz = ux * vy - uy * vx;
+    for (const v of [a, b, c]) { nrm[v * 3] += fx; nrm[v * 3 + 1] += fyN; nrm[v * 3 + 2] += fz; }
+    // Vecinos (cada arista dos veces: suma uniforme).
+    for (const [p, q] of [[a, b], [b, c], [c, a], [b, a], [c, b], [a, c]]) {
+      sum[p * 3] += pts[q * 3]; sum[p * 3 + 1] += pts[q * 3 + 1]; sum[p * 3 + 2] += pts[q * 3 + 2]; cnt[p]++;
+    }
+  }
+  // Concavidad: el promedio de los vecinos queda "afuera" (sobre la normal) en un valle.
+  const conc = new Float32Array(m);
+  for (let i = 0; i < m; i++) {
+    const l = Math.hypot(nrm[i * 3], nrm[i * 3 + 1], nrm[i * 3 + 2]) || 1;
+    const k = cnt[i] || 1;
+    conc[i] = ((sum[i * 3] / k - pts[i * 3]) * nrm[i * 3] + (sum[i * 3 + 1] / k - pts[i * 3 + 1]) * nrm[i * 3 + 1] + (sum[i * 3 + 2] / k - pts[i * 3 + 2]) * nrm[i * 3 + 2]) / l;
+  }
+  // Las 3 más marcadas de cada dirección, entre el pecho y la cabeza, cerca del cuello.
+  const top: Array<Array<{ c: number; fy: number }>> = Array.from({ length: COLLAR_BINS }, () => []);
+  for (let i = 0; i < m; i++) {
+    const fy = (pts[i * 3 + 1] - box.min.y) / size.y;
+    if (fy < cfg.bodyTop + 0.03 || fy > cfg.headFrom + 0.02) continue;
+    const dx = pts[i * 3] - cx, dz = pts[i * 3 + 2] - cz;
+    if (Math.hypot(dx, dz) > size.y * 0.19) continue;
+    const b = Math.min(COLLAR_BINS - 1, Math.floor(((Math.atan2(dx, dz) + Math.PI) / (Math.PI * 2)) * COLLAR_BINS));
+    const list = top[b];
+    list.push({ c: conc[i], fy });
+    list.sort((p, q) => q.c - p.c);
+    if (list.length > 3) list.pop();
+  }
+  const strength = top.map((l) => (l.length ? l.reduce((s, p) => s + p.c, 0) / l.length : 0));
+  const maxS = Math.max(...strength);
+  // Anclas: las direcciones con canaleta clara y, fijas, los costados y la espalda del modelo.
+  const anchors: Array<{ b: number; h: number }> = [];
+  top.forEach((l, b) => { if (l.length && strength[b] > maxS * 0.45) anchors.push({ b, h: l.reduce((s, p) => s + p.fy, 0) / l.length }); });
+  const side = cfg.collarSide ?? cfg.collarBack;
+  const binOf = (deg: number) => ((deg + 180) / 360) * COLLAR_BINS - 0.5;
+  for (const [deg, h] of [[-180, cfg.collarBack], [-90, side], [90, side]] as const) {
+    const b = binOf(deg);
+    if (!anchors.some((a) => Math.abs(a.b - b) < 1.5)) anchors.push({ b, h });
+  }
+  anchors.sort((p, q) => p.b - q.b);
+  // Relleno circular lineal entre anclas.
+  const out = new Float32Array(COLLAR_BINS);
+  for (let b = 0; b < COLLAR_BINS; b++) {
+    let prev = anchors[anchors.length - 1], next = anchors[0];
+    for (let k = 0; k < anchors.length; k++) {
+      if (anchors[k].b <= b) prev = anchors[k];
+      if (anchors[k].b >= b) { next = anchors[k]; break; }
+    }
+    const pb = prev.b > b ? prev.b - COLLAR_BINS : prev.b;
+    const nb = next.b < b ? next.b + COLLAR_BINS : next.b;
+    out[b] = nb === pb ? prev.h : prev.h + ((b - pb) / (nb - pb)) * (next.h - prev.h);
+  }
+  // Curva suave (sin esquinas entre direcciones): dos pasadas de promedio circular 1-2-1.
+  for (let pass = 0; pass < 2; pass++) {
+    const prev = Float32Array.from(out);
+    for (let b = 0; b < COLLAR_BINS; b++) {
+      out[b] = (prev[(b + COLLAR_BINS - 1) % COLLAR_BINS] + 2 * prev[b] + prev[(b + 1) % COLLAR_BINS]) / 4;
+    }
+  }
+  return out;
 }
 
 /**
  * Material: tela mate del color elegido o maniquí satinado (por píxel). Cabeza: maniquí. Cuello:
  * maniquí cerca del eje del cuello, tela (el resorte) más afuera. Debajo del cuello: tela.
  */
-function useGarmentMaterial(box: THREE.Box3, size: THREE.Vector3, cfg: ModelConfig, neck: { cx: number; cz: number; r: number }) {
+function useGarmentMaterial(box: THREE.Box3, size: THREE.Vector3, cfg: ModelConfig, neck: { cx: number; cz: number; r: number }, collar: Float32Array | null) {
   const material = useMemo(() => {
     const uniforms = {
       uNeckC: { value: new THREE.Vector2(neck.cx, neck.cz) },
@@ -136,6 +226,10 @@ function useGarmentMaterial(box: THREE.Box3, size: THREE.Vector3, cfg: ModelConf
       uCollarFront: { value: cfg.collarFront },
       uCut: { value: cfg.cut },
       uCollarBack: { value: cfg.collarBack },
+      uCollarCurve: { value: cfg.collarCurve },
+      uCollarSide: { value: cfg.collarSide ?? 0 },
+      uCollarMesh: { value: collar ? 1 : 0 },
+      uCollarH: { value: Array.from(collar ?? new Float32Array(COLLAR_BINS)) },
       uMin: { value: new THREE.Vector2(box.min.x, box.min.y) },
       uSize: { value: new THREE.Vector2(size.x, size.y) },
       uHeadFrom: { value: cfg.headFrom },
@@ -152,7 +246,7 @@ function useGarmentMaterial(box: THREE.Box3, size: THREE.Vector3, cfg: ModelConf
       shader.fragmentShader = shader.fragmentShader
         .replace(
           '#include <common>',
-          '#include <common>\nvarying vec3 vObj;\nuniform vec2 uNeckC;\nuniform float uNeckR;\nuniform float uCut;\nuniform float uCollarFront;\nuniform float uCollarBack;\nuniform vec2 uMin;\nuniform vec2 uSize;\nuniform float uHeadFrom;\nuniform float uBodyTop;\nuniform vec3 uShirt;\nuniform vec3 uDummy;',
+          '#include <common>\nvarying vec3 vObj;\nuniform vec2 uNeckC;\nuniform float uNeckR;\nuniform float uCut;\nuniform float uCollarFront;\nuniform float uCollarBack;\nuniform float uCollarCurve;\nuniform float uCollarSide;\nuniform float uCollarMesh;\nuniform float uCollarH[24];\nuniform vec2 uMin;\nuniform vec2 uSize;\nuniform float uHeadFrom;\nuniform float uBodyTop;\nuniform vec3 uShirt;\nuniform vec3 uDummy;',
         )
         .replace(
           '#include <color_fragment>',
@@ -161,27 +255,43 @@ function useGarmentMaterial(box: THREE.Box3, size: THREE.Vector3, cfg: ModelConf
           if (muv.y < uCut) discard;
           vec2 d = vObj.xz - uNeckC;
           float rn = length(d);
+          // Escote de cuello redondo: de la espalda al frente con la curva de cada talla.
           float front = clamp(d.y / max(rn, 1e-4) * 0.5 + 0.5, 0.0, 1.0);
-          float line = mix(uCollarBack, uCollarFront, front);
-          float below = 1.0 - smoothstep(line - 0.002, line + 0.002, muv.y);
-          float far = smoothstep(uNeckR * 1.45, uNeckR * 1.7, rn);
+          // Con altura propia de los costados (uCollarSide > 0): espalda → costado → frente.
+          float line = uCollarSide > 0.0
+            ? (front < 0.5 ? mix(uCollarBack, uCollarSide, front * 2.0) : mix(uCollarSide, uCollarFront, front * 2.0 - 1.0))
+            : mix(uCollarBack, uCollarFront, pow(front, uCollarCurve));
+          // Escote medido en la malla (ver measureCollar): altura por dirección, interpolada.
+          if (uCollarMesh > 0.5) {
+            float t = (atan(d.x, d.y) + PI) / (2.0 * PI) * 24.0 - 0.5;
+            float fi = floor(t);
+            int i0 = int(mod(fi, 24.0));
+            int i1 = int(mod(fi + 1.0, 24.0));
+            line = mix(uCollarH[i0], uCollarH[i1], t - fi);
+          }
+          // Borde nítido: la transición dura un píxel (sin franja gris entre tela y maniquí).
+          float aa = max(fwidth(muv.y), 1e-5);
+          float below = 1.0 - smoothstep(line - aa, line + aa, muv.y);
+          // Lejos del cuello (los hombros) siempre es tela.
+          float far = smoothstep(uNeckR * 2.3, uNeckR * 2.5, rn);
           float cloth = max(below, far);
           if (muv.y < uBodyTop) cloth = 1.0;
           if (muv.y > uHeadFrom) cloth = 0.0;
           diffuseColor.rgb = mix(uDummy, uShirt, cloth);`,
         )
-        .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(0.35, 0.92, cloth);');
+        .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(0.5, 0.92, cloth);');
     };
     m.userData.uniforms = uniforms;
     return m;
-  }, [box, size, cfg, neck]);
+  }, [box, size, cfg, neck, collar]);
   useEffect(() => () => material.dispose(), [material]);
   return material;
 }
 
-/** Hacia dónde mira la cámara, en coordenadas del maniquí, cuando muestra una vista. */
-function towardCamera(view: View3D) {
-  const t = VIEW_ANGLE[view];
+type Angles = Record<View3D, number>;
+
+/** Hacia dónde mira la cámara, en coordenadas del maniquí, con el maniquí girado `t`. */
+function towardCamera(t: number) {
   return { dir: new THREE.Vector3(-Math.sin(t), 0, Math.cos(t)), right: new THREE.Vector3(Math.cos(t), 0, Math.sin(t)) };
 }
 
@@ -189,31 +299,60 @@ function towardCamera(view: View3D) {
  * Profundidad de la tela que mira la cámara en cada vista (distancia desde el eje): el pecho, la
  * espalda o la cara de afuera de cada manga. Ahí se apoya el escenario.
  */
-function viewDepths(geometry: THREE.BufferGeometry, box: THREE.Box3, size: THREE.Vector3, cfg: ModelConfig): Record<View3D, number> {
+/**
+ * Giro del maniquí para cada vista. Frente y espalda, fijos; cada manga se mira de frente a su cara
+ * de afuera (en la oversize la manga cae un poco hacia adelante o atrás): promedio de la normal
+ * suavizada de la manga a la altura del estampado, sin pasar de ±35° del costado.
+ */
+function viewAngles(geometry: THREE.BufferGeometry, box: THREE.Box3, size: THREE.Vector3, cfg: ModelConfig): Angles {
+  const pos = geometry.attributes.position;
+  const nrm = geometry.attributes.aSmoothN;
+  const sleeveY = box.min.y + size.y * cfg.sleeveY;
+  const band = size.y * 0.05;
+  const sleeve = (side: 1 | -1) => {
+    const base = VIEW_ANGLE[side === -1 ? 'rightSleeve' : 'leftSleeve'];
+    let maxX = 0;
+    for (let i = 0; i < pos.count; i++) if (Math.abs(pos.getY(i) - sleeveY) < band) maxX = Math.max(maxX, pos.getX(i) * side);
+    let nx = 0, nz = 0;
+    for (let i = 0; i < pos.count; i++) {
+      if (Math.abs(pos.getY(i) - sleeveY) > band || pos.getX(i) * side < maxX * 0.8) continue;
+      nx += nrm.getX(i); nz += nrm.getZ(i);
+    }
+    if (!nx && !nz) return base;
+    let diff = Math.atan2(-nx, nz) - base;
+    diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+    return base + Math.max(-0.6, Math.min(0.6, diff));
+  };
+  return { front: VIEW_ANGLE.front, back: VIEW_ANGLE.back, rightSleeve: sleeve(-1), leftSleeve: sleeve(1) };
+}
+
+function viewDepths(geometry: THREE.BufferGeometry, box: THREE.Box3, size: THREE.Vector3, cfg: ModelConfig, angles: Angles): Record<View3D, number> {
   const mesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }));
   const ray = new THREE.Raycaster();
   const far = Math.max(size.x, size.z) * 2 + 1;
   const chestY = box.min.y + size.y * 0.58;
   const sleeveY = box.min.y + size.y * cfg.sleeveY;
   const depth = (view: View3D, y: number, fallback: number) => {
-    const { dir } = towardCamera(view);
+    const { dir } = towardCamera(angles[view]);
     ray.set(new THREE.Vector3(dir.x * far, y, dir.z * far), dir.clone().negate());
     const hit = ray.intersectObject(mesh, false)[0];
     return hit ? hit.point.dot(dir) : fallback;
   };
-  // Manga: lo más afuera a esa altura (el rayo por el centro puede pasar por delante o detrás).
-  const sleeve = (side: 1 | -1) => {
+  // Manga: lo más afuera a esa altura, en la dirección de su vista (el rayo por el centro puede
+  // pasar por delante o detrás).
+  const sleeve = (view: View3D) => {
     const pos = geometry.attributes.position;
+    const { dir } = towardCamera(angles[view]);
     const band = size.y * 0.04;
     let m = 0;
-    for (let i = 0; i < pos.count; i++) if (Math.abs(pos.getY(i) - sleeveY) < band) m = Math.max(m, pos.getX(i) * side);
+    for (let i = 0; i < pos.count; i++) if (Math.abs(pos.getY(i) - sleeveY) < band) m = Math.max(m, pos.getX(i) * dir.x + pos.getZ(i) * dir.z);
     return m;
   };
   return {
     front: depth('front', chestY, box.max.z),
     back: depth('back', chestY, -box.min.z),
-    rightSleeve: sleeve(-1),
-    leftSleeve: sleeve(1),
+    rightSleeve: sleeve('rightSleeve'),
+    leftSleeve: sleeve('leftSleeve'),
   };
 }
 
@@ -270,13 +409,21 @@ function addSmoothSurface(g: THREE.BufferGeometry, passes = 40) {
     e1.subVectors(vb, va); e2.subVectors(vc, va); e1.cross(e2);
     for (const v of [a, b, c]) { nrm[v * 3] += e1.x; nrm[v * 3 + 1] += e1.y; nrm[v * 3 + 2] += e1.z; }
   }
-  const sn = new Float32Array(n * 3);
+  // Punto de cada vértice "aplanado" hacia la tela lisa SOLO a lo largo de la normal suavizada (sin
+  // el deslizamiento de lado del suavizado): en un pliegue, las laderas caen sobre la tela lisa y el
+  // estampado se ve plegado (comprimido) como en tela real, en vez de estirado.
+  const sn = new Float32Array(n * 3), sp = new Float32Array(n * 3);
   for (let i = 0; i < n; i++) {
     const id = ids[i] * 3;
     const l = Math.hypot(nrm[id], nrm[id + 1], nrm[id + 2]) || 1;
-    sn[i * 3] = nrm[id] / l; sn[i * 3 + 1] = nrm[id + 1] / l; sn[i * 3 + 2] = nrm[id + 2] / l;
+    const nx = nrm[id] / l, ny = nrm[id + 1] / l, nz = nrm[id + 2] / l;
+    sn[i * 3] = nx; sn[i * 3 + 1] = ny; sn[i * 3 + 2] = nz;
+    const px = pos[i * 3], py = pos[i * 3 + 1], pz = pos[i * 3 + 2];
+    const h = (cur[id] - px) * nx + (cur[id + 1] - py) * ny + (cur[id + 2] - pz) * nz;
+    sp[i * 3] = px + nx * h; sp[i * 3 + 1] = py + ny * h; sp[i * 3 + 2] = pz + nz * h;
   }
   g.setAttribute('aSmoothN', new THREE.BufferAttribute(sn, 3));
+  g.setAttribute('aFlat', new THREE.BufferAttribute(sp, 3));
 }
 
 /** Proyección del escenario de una vista sobre la tela (en coordenadas del maniquí). */
@@ -291,9 +438,9 @@ interface Projection {
 }
 
 /** Cómo cae el área `frame` (en % del escenario) de una vista sobre la tela. */
-function projectView(view: View3D, depth: number, frame: ArtArea, geometry: THREE.BufferGeometry): Projection {
+function projectView(view: View3D, angle: number, depth: number, frame: ArtArea, geometry: THREE.BufferGeometry): Projection {
   const half = stageHalf(depth);
-  const { dir, right } = towardCamera(view);
+  const { dir, right } = towardCamera(angle);
   const sleeve = view === 'rightSleeve' || view === 'leftSleeve';
   const fx = ((frame.x + frame.w / 2) / 100 - 0.5) * 2 * half;
   const fy = (0.5 - (frame.y + frame.h / 2) / 100) * 2 * half;
@@ -324,6 +471,7 @@ const VIEW_IDS: View3D[] = ['front', 'back', 'rightSleeve', 'leftSleeve'];
 
 const PRINT_GLSL = `
 varying vec3 vObjP;
+varying vec3 vFlat;
 varying vec3 vSmN;
 uniform sampler2D uMap0;
 uniform sampler2D uMap1;
@@ -333,16 +481,18 @@ uniform vec2 uDir[4];
 uniform vec2 uRight[4];
 uniform vec4 uRect[4];
 uniform vec2 uRange[4];
-vec4 viewPrint(sampler2D map, vec2 dir, vec2 right, vec4 rect, vec2 range) {
+// face: de qué inclinación a cuál se desvanece (más estricto en las mangas: solo su cara de afuera).
+vec4 viewPrint(sampler2D map, vec2 dir, vec2 right, vec4 rect, vec2 range, vec2 face) {
   // La textura se lee SIEMPRE y luego se recorta con máscaras: leerla dentro de un "if" rompe el
   // cálculo del nivel de detalle en los bordes y deja puntos grises (promedio de todo el diseño).
   float d = dot(vObjP.xz, dir);
-  vec2 uv = vec2((dot(vObjP.xz, right) - rect.x) / rect.z + 0.5, (vObjP.y - rect.y) / rect.w + 0.5);
+  // Posición en la tela aplanada (ver addSmoothSurface): los pliegues comprimen, no estiran.
+  vec2 uv = vec2((dot(vFlat.xz, right) - rect.x) / rect.z + 0.5, (vFlat.y - rect.y) / rect.w + 0.5);
   vec4 c = texture2D(map, uv);
   float inside = step(range.x, d) * step(d, range.y) * step(0.0, uv.x) * step(uv.x, 1.0) * step(0.0, uv.y) * step(uv.y, 1.0);
   float facing = dot(normalize(vSmN), vec3(dir.x, 0.0, dir.y));
   // Textura premultiplicada (color × alfa): sin bordes oscuros al filtrar junto a lo transparente.
-  return c * (inside * smoothstep(0.05, 0.22, facing));
+  return c * (inside * smoothstep(face.x, face.y, facing));
 }
 // Mezcla "encima" en premultiplicado.
 vec4 overPrint(vec4 acc, vec4 c) {
@@ -352,10 +502,10 @@ vec4 overPrint(vec4 acc, vec4 c) {
 
 const PRINT_APPLY = `
 vec4 pr = vec4(0.0);
-pr = overPrint(pr, viewPrint(uMap0, uDir[0], uRight[0], uRect[0], uRange[0]));
-pr = overPrint(pr, viewPrint(uMap1, uDir[1], uRight[1], uRect[1], uRange[1]));
-pr = overPrint(pr, viewPrint(uMap2, uDir[2], uRight[2], uRect[2], uRange[2]));
-pr = overPrint(pr, viewPrint(uMap3, uDir[3], uRight[3], uRect[3], uRange[3]));
+pr = overPrint(pr, viewPrint(uMap0, uDir[0], uRight[0], uRect[0], uRange[0], vec2(0.05, 0.22)));
+pr = overPrint(pr, viewPrint(uMap1, uDir[1], uRight[1], uRect[1], uRange[1], vec2(0.05, 0.22)));
+pr = overPrint(pr, viewPrint(uMap2, uDir[2], uRight[2], uRect[2], uRange[2], vec2(0.3, 0.55)));
+pr = overPrint(pr, viewPrint(uMap3, uDir[3], uRight[3], uRect[3], uRange[3], vec2(0.3, 0.55)));
 if (pr.a < 0.004) discard;
 diffuseColor = vec4(pr.rgb / pr.a, pr.a);
 `;
@@ -377,8 +527,8 @@ function makePrintMaterial(textures: Record<View3D, THREE.Texture>) {
   m.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, uniforms);
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nattribute vec3 aSmoothN;\nvarying vec3 vObjP;\nvarying vec3 vSmN;')
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvObjP = position;\nvSmN = aSmoothN;');
+      .replace('#include <common>', '#include <common>\nattribute vec3 aSmoothN;\nattribute vec3 aFlat;\nvarying vec3 vObjP;\nvarying vec3 vFlat;\nvarying vec3 vSmN;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvObjP = position;\nvFlat = aFlat;\nvSmN = aSmoothN;');
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <common>', `#include <common>\n${PRINT_GLSL}`)
       .replace('#include <color_fragment>', `#include <color_fragment>\n${PRINT_APPLY}`);
@@ -412,15 +562,16 @@ function Garment({ model, color, art, artRef, frames, focus, locked = false, ani
   const group = useRef<THREE.Group>(null);
   const drag = useRef({ down: false, x: 0, offset: 0 });
   const { gl, scene, camera } = useThree();
-  const { geometry, box, size, neck } = useMannequin(cfg);
-  const material = useGarmentMaterial(box, size, cfg, neck);
+  const { geometry, box, size, neck, collar } = useMannequin(cfg);
+  const material = useGarmentMaterial(box, size, cfg, neck, collar);
   useEffect(() => { onReady?.(); }, [onReady]);
 
   useEffect(() => {
     (material.userData.uniforms.uShirt.value as THREE.Color).set(color);
   }, [material, color]);
 
-  const depths = useMemo(() => viewDepths(geometry, box, size, cfg), [geometry, box, size, cfg]);
+  const angles = useMemo(() => viewAngles(geometry, box, size, cfg), [geometry, box, size, cfg]);
+  const depths = useMemo(() => viewDepths(geometry, box, size, cfg, angles), [geometry, box, size, cfg, angles]);
 
   // El área de cada vista solo cambia cuando cambian las zonas: se compara por valor.
   const frameKey = VIEWS_3D.map(({ id }) => { const f = frames?.[id] ?? FULL_FRAME; return `${f.x},${f.y},${f.w},${f.h}`; }).join('|');
@@ -433,9 +584,9 @@ function Garment({ model, color, art, artRef, frames, focus, locked = false, ani
 
   const places = useMemo(() => {
     const out = {} as Record<View3D, Projection>;
-    for (const { id } of VIEWS_3D) out[id] = projectView(id, depths[id], stableFrames[id], geometry);
+    for (const { id } of VIEWS_3D) out[id] = projectView(id, angles[id], depths[id], stableFrames[id], geometry);
     return out;
-  }, [depths, stableFrames, geometry]);
+  }, [angles, depths, stableFrames, geometry]);
 
   // Una textura (canvas) por vista.
   const decals = useMemo(() => {
@@ -509,7 +660,7 @@ function Garment({ model, color, art, artRef, frames, focus, locked = false, ani
         const g = group.current;
         if (!g) return null;
         const prev = g.rotation.y;
-        g.rotation.y = VIEW_ANGLE[view];
+        g.rotation.y = angles[view];
         for (const { id } of VIEWS_3D) paint(id, 1);
         gl.render(scene, camera);
         const src = gl.domElement;
@@ -542,7 +693,7 @@ function Garment({ model, color, art, artRef, frames, focus, locked = false, ani
     if (g) {
       const t = frame.clock.elapsedTime;
       const idle = still || locked || drag.current.down ? 0 : Math.sin(t * 0.45) * 0.3;
-      const target = VIEW_ANGLE[focus] + drag.current.offset + idle;
+      const target = angles[focus] + drag.current.offset + idle;
       let diff = target - g.rotation.y;
       diff = Math.atan2(Math.sin(diff), Math.cos(diff));
       g.rotation.y += diff * Math.min(1, delta * (locked ? 6 : 3.5));
@@ -553,7 +704,7 @@ function Garment({ model, color, art, artRef, frames, focus, locked = false, ani
     <>
       <group
         ref={group}
-        rotation-y={VIEW_ANGLE[focus]}
+        rotation-y={angles[focus]}
         onPointerDown={(e) => {
           if (locked) return;
           e.stopPropagation();

@@ -37,6 +37,18 @@ export interface ModelConfig {
   /** Escote: altura del borde del cuello adelante y atrás (fracciones del alto). */
   collarFront: number;
   collarBack: number;
+  /**
+   * Forma del escote entre la espalda y el frente: 1 = baja parejo; 2 = se mantiene alto a los
+   * costados y solo baja adelante.
+   */
+  collarCurve: number;
+  /** Altura del escote a los costados (opcional; si está, reemplaza la curva). */
+  collarSide?: number;
+  /**
+   * Medir el escote en la malla (la canaleta entre el resorte y el cuello) en vez de usar solo las
+   * alturas. Donde no hay canaleta clara se usan `collarSide` y `collarBack`.
+   */
+  collarFromMesh?: boolean;
   /** Altura del ruedo: por debajo, lo que es maniquí (piernas o palo) se quita y va la base común. */
   hem: number;
   /** Corte recto: todo lo que quede por debajo se quita (piernas que asoman bajo el ruedo). 0 = sin corte. */
@@ -52,8 +64,11 @@ export const MODELS_3D: Record<Model3D, ModelConfig> = {
     poster: '/models/camiseta-basica.png',
     headFrom: 0.767,
     bodyTop: 0.681,
-    collarFront: 0.75,
-    collarBack: 0.775,
+    collarFront: 0.748,
+    collarBack: 0.76,
+    collarSide: 0.764,
+    collarFromMesh: true,
+    collarCurve: 1,
     hem: 0.143,
     cut: 0,
     sleeveY: 0.655,
@@ -64,8 +79,9 @@ export const MODELS_3D: Record<Model3D, ModelConfig> = {
     poster: '/models/camiseta-oversize.png',
     headFrom: 0.771,
     bodyTop: 0.685,
-    collarFront: 0.739,
-    collarBack: 0.769,
+    collarFront: 0.74,
+    collarBack: 0.765,
+    collarCurve: 2,
     hem: 0.107,
     cut: 0.112,
     sleeveY: 0.585,

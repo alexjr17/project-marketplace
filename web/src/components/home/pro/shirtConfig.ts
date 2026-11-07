@@ -6,8 +6,9 @@
  * respecto al máximo de la zona. Así el diseño nunca sale de la zona.
  */
 export interface PrintLayout { x: number; y: number; scale: number }
-// Arranca al 70 % de la zona, arriba (el pecho): hay espacio para moverlo y se puede agrandar.
-export const DEFAULT_LAYOUT: PrintLayout = { x: 0, y: -1, scale: 0.7 };
+// Arranca al 70 % de la zona, en la parte alta del pecho (sin pegarse al cuello): hay espacio para
+// moverlo y se puede agrandar.
+export const DEFAULT_LAYOUT: PrintLayout = { x: 0, y: -0.35, scale: 0.7 };
 export const LAYOUT_LIMITS = { minScale: 0.3, maxScale: 1, step: 0.25, scaleStep: 0.1 };
 
 /** Mueve o escala dentro de los límites de la zona. */
