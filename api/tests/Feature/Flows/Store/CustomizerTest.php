@@ -308,6 +308,8 @@ class CustomizerTest extends TestCase
 
         $this->actingAsAdmin();
         $this->putJson("/api/templates/{$tpl->id}", ['model3d' => 'maniqui-raro'])->assertUnprocessable();
+        // Las claves v2 ya no existen: los v2 son ahora 'basica' y 'oversize'.
+        $this->putJson("/api/templates/{$tpl->id}", ['model3d' => 'basica_v2'])->assertUnprocessable();
         $this->putJson("/api/templates/{$tpl->id}", ['model3d' => 'oversize'])->assertOk()->assertJsonPath('data.model3d', 'oversize');
 
         // La tienda (sin sesión) lo recibe en la plantilla y en la lista pública.
@@ -371,5 +373,44 @@ class CustomizerTest extends TestCase
         $b = $back->fresh(); // ya estaba en porcentaje: no cambia
         $this->assertSame([20.0, 10.0, 50.0, 60.0], [$b->positionX, $b->positionY, $b->maxWidth, $b->maxHeight]);
         $this->assertTrue(Schema::hasColumn('template_zones', 'positionX'));
+    }
+
+    public function test_las_zonas_por_defecto_quedan_dentro_de_la_prenda_y_las_mangas_espejadas(): void
+    {
+        if (! ZoneType::where('slug', 'manga-izquierda')->exists()) {
+            $this->markTestSkipped('Sin tipos de zona de manga en la semilla.');
+        }
+        $tpl = $this->makeProduct('Plantilla 3D zonas', 50000, [['negro', 'M', 0]], ['isTemplate' => true]);
+        DB::table('products')->where('id', $tpl->id)->update(['model3d' => 'basica']);
+        $front = $this->zone($tpl, 'frente', 8000, ['positionX' => 36, 'positionY' => 28, 'maxWidth' => 28, 'maxHeight' => 30]);
+        $left = $this->zone($tpl, 'manga-izquierda', 4000, ['positionX' => 41, 'positionY' => 29, 'maxWidth' => 9, 'maxHeight' => 9]);
+        // Ajustada a mano en el admin: no se toca.
+        $back = $this->zone($tpl, 'espalda', 8000, ['positionX' => 30, 'positionY' => 30, 'maxWidth' => 25, 'maxHeight' => 30]);
+
+        $migration = require database_path('migrations/2026_11_09_000001_template_zones_print_defaults.php');
+        $migration->up();
+        $migration->up(); // idempotente
+
+        $f = $front->fresh();
+        $this->assertSame([41.0, 32.0, 18.0, 24.0], [$f->positionX, $f->positionY, $f->maxWidth, $f->maxHeight]);
+        $l = $left->fresh(); // espejada respecto a la manga derecha (41 + 10 → 100 - 51 = 49)
+        $this->assertSame([49.0, 29.0, 10.0, 10.0], [$l->positionX, $l->positionY, $l->maxWidth, $l->maxHeight]);
+        $b = $back->fresh();
+        $this->assertSame([30.0, 30.0, 25.0, 30.0], [$b->positionX, $b->positionY, $b->maxWidth, $b->maxHeight]);
+    }
+
+    public function test_las_plantillas_con_maniqui_v2_pasan_a_la_clave_original(): void
+    {
+        $a = $this->makeProduct('Plantilla v2 a', 50000, [['negro', 'M', 0]], ['isTemplate' => true]);
+        $b = $this->makeProduct('Plantilla v2 b', 50000, [['negro', 'M', 0]], ['isTemplate' => true]);
+        DB::table('products')->where('id', $a->id)->update(['model3d' => 'basica_v2']);
+        DB::table('products')->where('id', $b->id)->update(['model3d' => 'oversize_v2']);
+
+        $migration = require database_path('migrations/2026_11_09_000002_templates_model3d_v2_to_original.php');
+        $migration->up();
+        $migration->up(); // idempotente
+
+        $this->assertSame('basica', DB::table('products')->where('id', $a->id)->value('model3d'));
+        $this->assertSame('oversize', DB::table('products')->where('id', $b->id)->value('model3d'));
     }
 }

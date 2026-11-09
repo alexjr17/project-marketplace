@@ -20,7 +20,7 @@ class TemplateController extends Controller
 
     public function __construct(private VariantService $variants) {}
 
-    /** Maniquíes 3D del personalizador (web/src/components/home/pro/shirtConfig.ts). Null = editor con fotos. */
+    /** Maniquíes 3D del personalizador (web/src/components/mannequin/models.ts). Null = editor con fotos. */
     public const MODELS_3D = ['basica', 'oversize'];
 
     private const RELATIONS = [

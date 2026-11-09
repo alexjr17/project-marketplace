@@ -1,10 +1,10 @@
 /**
  * Maniquíes 3D del personalizador (portada, editor avanzado y editor de zonas del admin).
  *
- * Cómo se hicieron (todo con IA, por API):
- *  1. Foto de estudio de cada camiseta en el maniquí con FLUX.1-schnell (licencia Apache 2.0).
- *  2. Modelo 3D a partir de esa foto con Hunyuan3D 2.1 (Tencent, licencia Tencent Hunyuan Community).
- *  3. Simplificado a ~40 mil caras con gltf-transform.
+ * Cada .glb trae dos piezas con su material: "camiseta" (se recolorea) y "maniqui" (grafito, con su
+ * base). Ya vienen con la línea de cuello, la caída del ruedo y las mangas y paneles lisos para
+ * estampar, así que se ven igual en cualquier visor .glb. Versión web comprimida en public/models;
+ * completa (para otros programas) en recursos/maniquies. La versión 1 queda en recursos/maniquies/v1.
  *
  * Cada plantilla del admin elige su maniquí en "Modelo 3D" (columna products.model3d). Las claves de
  * MODELS_3D deben coincidir con TemplateController::MODELS_3D en la API.
@@ -55,6 +55,12 @@ export interface ModelConfig {
   cut: number;
   /** Altura del centro de la manga (fracción del alto), para medir qué tan afuera está. */
   sleeveY: number;
+  /**
+   * Modelo por piezas: el .glb trae la camiseta y el maniquí (con su base) como materiales
+   * "camiseta" y "maniqui". La tela sale del material, sin reglas de altura ni recortes, y la base es
+   * la del modelo. Las alturas de escote, ruedo y corte no se usan.
+   */
+  parts?: boolean;
 }
 
 export const MODELS_3D: Record<Model3D, ModelConfig> = {
@@ -62,29 +68,17 @@ export const MODELS_3D: Record<Model3D, ModelConfig> = {
     label: 'Básica',
     model: '/models/camiseta-basica.glb',
     poster: '/models/camiseta-basica.png',
-    headFrom: 0.767,
-    bodyTop: 0.681,
-    collarFront: 0.748,
-    collarBack: 0.76,
-    collarSide: 0.764,
-    collarFromMesh: true,
-    collarCurve: 1,
-    hem: 0.143,
-    cut: 0,
+    headFrom: 0.767, bodyTop: 0.681, collarFront: 0.748, collarBack: 0.76, collarCurve: 1, hem: 0.143, cut: 0,
     sleeveY: 0.655,
+    parts: true,
   },
   oversize: {
     label: 'Oversize',
     model: '/models/camiseta-oversize.glb',
     poster: '/models/camiseta-oversize.png',
-    headFrom: 0.771,
-    bodyTop: 0.685,
-    collarFront: 0.74,
-    collarBack: 0.765,
-    collarCurve: 2,
-    hem: 0.107,
-    cut: 0.112,
+    headFrom: 0.771, bodyTop: 0.685, collarFront: 0.74, collarBack: 0.765, collarCurve: 2, hem: 0.107, cut: 0,
     sleeveY: 0.585,
+    parts: true,
   },
 };
 

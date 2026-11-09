@@ -18,7 +18,13 @@ export interface Mannequin3DHandle {
    * Foto del maniquí mirando una vista (PNG con fondo transparente, recortada al escenario). Gira
    * al instante, pinta, toma la foto y vuelve a como estaba.
    */
-  capture: (view: View3D, opts?: { type?: string; quality?: number; size?: number }) => string | null;
+  capture: (view: View3D, opts?: {
+    type?: string; quality?: number; size?: number;
+    /** Giro exacto en radianes (p. ej. costados a 90° para generar el modelo 3D); por defecto, el de la vista. */
+    angle?: number;
+    /** Inclinación hacia la cámara en radianes (positiva: se ve desde arriba). */
+    tilt?: number;
+  }) => string | null;
 }
 
 export interface Mannequin3DProps {
@@ -63,6 +69,7 @@ function useMannequin(cfg: ModelConfig) {
   const { scene } = useGLTF(cfg.model);
 
   return useMemo(() => {
+    if (cfg.parts) return partsMannequin(scene);
     let src: THREE.BufferGeometry | null = null;
     scene.updateMatrixWorld(true);
     scene.traverse((o) => {
@@ -107,6 +114,7 @@ function useMannequin(cfg: ModelConfig) {
     g.setAttribute('position', new THREE.BufferAttribute(out, 3));
     g.computeVertexNormals();
     g.boundingBox = box;
+    g.setAttribute('aCloth', new THREE.BufferAttribute(new Float32Array(out.length / 3).fill(1), 1));
     addSmoothSurface(g);
 
     // Cuello del maniquí: centro y radio medidos justo encima del cuello de la camiseta.
@@ -123,6 +131,51 @@ function useMannequin(cfg: ModelConfig) {
 
     return { geometry: g, box, size, neck: { cx, cz, r: neckR }, collar };
   }, [scene, cfg]);
+}
+
+/**
+ * Modelo por piezas (v2): une las piezas del .glb en una geometría centrada y al alto de la escena,
+ * con el atributo `aCloth` (1 = material "camiseta", 0 = "maniqui"). Conserva las normales suaves del
+ * archivo y su base; no recorta nada.
+ */
+function partsMannequin(scene: THREE.Object3D) {
+  scene.updateMatrixWorld(true);
+  const pos: number[] = [], nor: number[] = [], cloth: number[] = [];
+  let flat = false;
+  scene.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (!m.isMesh) return;
+    const name = ((Array.isArray(m.material) ? m.material[0] : m.material)?.name || '').toLowerCase();
+    const isCloth = name.includes('camiseta') ? 1 : 0;
+    // El .glb web viene comprimido (posiciones en enteros normalizados + escala del nodo): se lee cada
+    // vértice ya en decimal y recién ahí se aplica la transformación (sobre el formato comprimido se desborda).
+    const g = m.geometry.index ? m.geometry.toNonIndexed() : m.geometry;
+    const p = g.attributes.position, n = g.attributes.normal;
+    const nm = new THREE.Matrix3().getNormalMatrix(m.matrixWorld);
+    const v = new THREE.Vector3();
+    for (let i = 0; i < p.count; i++) {
+      v.set(p.getX(i), p.getY(i), p.getZ(i)).applyMatrix4(m.matrixWorld);
+      pos.push(v.x, v.y, v.z);
+      if (n) { v.set(n.getX(i), n.getY(i), n.getZ(i)).applyMatrix3(nm).normalize(); nor.push(v.x, v.y, v.z); } else { nor.push(0, 1, 0); flat = true; }
+      cloth.push(isCloth);
+    }
+  });
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(pos), 3));
+  g.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(nor), 3));
+  g.setAttribute('aCloth', new THREE.BufferAttribute(new Float32Array(cloth), 1));
+  // Sin normales en el archivo: sombreado plano por triángulo (como la versión 1).
+  if (flat) g.computeVertexNormals();
+  g.computeBoundingBox();
+  const size0 = g.boundingBox!.getSize(new THREE.Vector3());
+  const center0 = g.boundingBox!.getCenter(new THREE.Vector3());
+  g.translate(-center0.x, -center0.y, -center0.z);
+  g.scale(HEIGHT / size0.y, HEIGHT / size0.y, HEIGHT / size0.y);
+  g.computeBoundingBox();
+  const box = g.boundingBox!.clone();
+  const size = box.getSize(new THREE.Vector3());
+  addSmoothSurface(g);
+  return { geometry: g, box, size, neck: { cx: 0, cz: 0, r: size.y * 0.04 }, collar: null as Float32Array | null };
 }
 
 /** Direcciones alrededor del cuello en las que se mide el escote (cada 15°). */
@@ -229,6 +282,7 @@ function useGarmentMaterial(box: THREE.Box3, size: THREE.Vector3, cfg: ModelConf
       uCollarCurve: { value: cfg.collarCurve },
       uCollarSide: { value: cfg.collarSide ?? 0 },
       uCollarMesh: { value: collar ? 1 : 0 },
+      uParts: { value: cfg.parts ? 1 : 0 },
       uCollarH: { value: Array.from(collar ?? new Float32Array(COLLAR_BINS)) },
       uMin: { value: new THREE.Vector2(box.min.x, box.min.y) },
       uSize: { value: new THREE.Vector2(size.x, size.y) },
@@ -241,18 +295,18 @@ function useGarmentMaterial(box: THREE.Box3, size: THREE.Vector3, cfg: ModelConf
     m.onBeforeCompile = (shader) => {
       Object.assign(shader.uniforms, uniforms);
       shader.vertexShader = shader.vertexShader
-        .replace('#include <common>', '#include <common>\nvarying vec3 vObj;')
-        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvObj = position;');
+        .replace('#include <common>', '#include <common>\nattribute float aCloth;\nvarying vec3 vObj;\nvarying float vCloth;')
+        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvObj = position;\nvCloth = aCloth;');
       shader.fragmentShader = shader.fragmentShader
         .replace(
           '#include <common>',
-          '#include <common>\nvarying vec3 vObj;\nuniform vec2 uNeckC;\nuniform float uNeckR;\nuniform float uCut;\nuniform float uCollarFront;\nuniform float uCollarBack;\nuniform float uCollarCurve;\nuniform float uCollarSide;\nuniform float uCollarMesh;\nuniform float uCollarH[24];\nuniform vec2 uMin;\nuniform vec2 uSize;\nuniform float uHeadFrom;\nuniform float uBodyTop;\nuniform vec3 uShirt;\nuniform vec3 uDummy;',
+          '#include <common>\nvarying vec3 vObj;\nuniform vec2 uNeckC;\nuniform float uNeckR;\nuniform float uCut;\nuniform float uCollarFront;\nuniform float uCollarBack;\nuniform float uCollarCurve;\nuniform float uCollarSide;\nuniform float uCollarMesh;\nuniform float uCollarH[24];\nuniform float uParts;\nvarying float vCloth;\nuniform vec2 uMin;\nuniform vec2 uSize;\nuniform float uHeadFrom;\nuniform float uBodyTop;\nuniform vec3 uShirt;\nuniform vec3 uDummy;',
         )
         .replace(
           '#include <color_fragment>',
           `#include <color_fragment>
           vec2 muv = (vObj.xy - uMin) / uSize;
-          if (muv.y < uCut) discard;
+          if (uParts < 0.5 && muv.y < uCut) discard;
           vec2 d = vObj.xz - uNeckC;
           float rn = length(d);
           // Escote de cuello redondo: de la espalda al frente con la curva de cada talla.
@@ -277,6 +331,8 @@ function useGarmentMaterial(box: THREE.Box3, size: THREE.Vector3, cfg: ModelConf
           float cloth = max(below, far);
           if (muv.y < uBodyTop) cloth = 1.0;
           if (muv.y > uHeadFrom) cloth = 0.0;
+          // Modelo por piezas (v2): la tela es la pieza "camiseta" del archivo.
+          if (uParts > 0.5) cloth = step(0.5, vCloth);
           diffuseColor.rgb = mix(uDummy, uShirt, cloth);`,
         )
         .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(0.5, 0.92, cloth);');
@@ -473,6 +529,8 @@ const PRINT_GLSL = `
 varying vec3 vObjP;
 varying vec3 vFlat;
 varying vec3 vSmN;
+varying vec3 vObjN;
+varying float vClothP;
 uniform sampler2D uMap0;
 uniform sampler2D uMap1;
 uniform sampler2D uMap2;
@@ -491,8 +549,12 @@ vec4 viewPrint(sampler2D map, vec2 dir, vec2 right, vec4 rect, vec2 range, vec2 
   vec4 c = texture2D(map, uv);
   float inside = step(range.x, d) * step(d, range.y) * step(0.0, uv.x) * step(uv.x, 1.0) * step(0.0, uv.y) * step(uv.y, 1.0);
   float facing = dot(normalize(vSmN), vec3(dir.x, 0.0, dir.y));
+  // Además, la tela real tiene que mirar hacia la vista: en las esquinas de un torso cuadrado la
+  // normal suavizada sigue "de frente" y el estampado se iría al costado. Umbral bajo: los pliegues
+  // del pecho no lo cortan.
+  float facingReal = dot(normalize(vObjN), vec3(dir.x, 0.0, dir.y));
   // Textura premultiplicada (color × alfa): sin bordes oscuros al filtrar junto a lo transparente.
-  return c * (inside * smoothstep(face.x, face.y, facing));
+  return c * (inside * smoothstep(face.x, face.y, facing) * smoothstep(0.08, 0.26, facingReal));
 }
 // Mezcla "encima" en premultiplicado.
 vec4 overPrint(vec4 acc, vec4 c) {
@@ -502,10 +564,11 @@ vec4 overPrint(vec4 acc, vec4 c) {
 
 const PRINT_APPLY = `
 vec4 pr = vec4(0.0);
-pr = overPrint(pr, viewPrint(uMap0, uDir[0], uRight[0], uRect[0], uRange[0], vec2(0.05, 0.22)));
-pr = overPrint(pr, viewPrint(uMap1, uDir[1], uRight[1], uRect[1], uRange[1], vec2(0.05, 0.22)));
+pr = overPrint(pr, viewPrint(uMap0, uDir[0], uRight[0], uRect[0], uRange[0], vec2(0.22, 0.45)));
+pr = overPrint(pr, viewPrint(uMap1, uDir[1], uRight[1], uRect[1], uRange[1], vec2(0.22, 0.45)));
 pr = overPrint(pr, viewPrint(uMap2, uDir[2], uRight[2], uRect[2], uRange[2], vec2(0.3, 0.55)));
 pr = overPrint(pr, viewPrint(uMap3, uDir[3], uRight[3], uRect[3], uRange[3], vec2(0.3, 0.55)));
+pr *= step(0.5, vClothP);
 if (pr.a < 0.004) discard;
 diffuseColor = vec4(pr.rgb / pr.a, pr.a);
 `;
@@ -527,8 +590,8 @@ function makePrintMaterial(textures: Record<View3D, THREE.Texture>) {
   m.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, uniforms);
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nattribute vec3 aSmoothN;\nattribute vec3 aFlat;\nvarying vec3 vObjP;\nvarying vec3 vFlat;\nvarying vec3 vSmN;')
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvObjP = position;\nvFlat = aFlat;\nvSmN = aSmoothN;');
+      .replace('#include <common>', '#include <common>\nattribute vec3 aSmoothN;\nattribute vec3 aFlat;\nattribute float aCloth;\nvarying vec3 vObjP;\nvarying vec3 vFlat;\nvarying vec3 vSmN;\nvarying vec3 vObjN;\nvarying float vClothP;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvObjP = position;\nvFlat = aFlat;\nvSmN = aSmoothN;\nvObjN = normal;\nvClothP = aCloth;');
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <common>', `#include <common>\n${PRINT_GLSL}`)
       .replace('#include <color_fragment>', `#include <color_fragment>\n${PRINT_APPLY}`);
@@ -660,7 +723,9 @@ function Garment({ model, color, art, artRef, frames, focus, locked = false, ani
         const g = group.current;
         if (!g) return null;
         const prev = g.rotation.y;
-        g.rotation.y = angles[view];
+        const prevX = g.rotation.x;
+        g.rotation.y = opts?.angle ?? angles[view];
+        g.rotation.x = opts?.tilt ?? 0;
         for (const { id } of VIEWS_3D) paint(id, 1);
         gl.render(scene, camera);
         const src = gl.domElement;
@@ -669,6 +734,7 @@ function Garment({ model, color, art, artRef, frames, focus, locked = false, ani
         out.width = out.height = opts?.size ?? side;
         out.getContext('2d')!.drawImage(src, (src.width - side) / 2, (src.height - side) / 2, side, side, 0, 0, out.width, out.height);
         g.rotation.y = prev;
+        g.rotation.x = prevX;
         return out.toDataURL(opts?.type ?? 'image/png', opts?.quality);
       },
     };
@@ -722,7 +788,7 @@ function Garment({ model, color, art, artRef, frames, focus, locked = false, ani
       >
         <mesh geometry={geometry} material={material} />
         <mesh geometry={geometry} material={printMaterial} renderOrder={1} />
-        <Stand box={box} size={size} hem={cfg.hem} />
+        {!cfg.parts && <Stand box={box} size={size} hem={cfg.hem} />}
       </group>
       <ContactShadows position={[0, box.min.y + 0.001, 0]} opacity={0.35} scale={3} blur={2.6} far={1.2} resolution={512} />
     </>
