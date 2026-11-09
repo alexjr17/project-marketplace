@@ -7,7 +7,12 @@ import { templatesService, type Template } from '../../services/templates.servic
 import { TemplateForm, type TemplateFormData } from '../../components/admin/TemplateForm';
 import { VisualZoneEditor } from '../../components/admin/VisualZoneEditor';
 import { MannequinSnapshots } from '../../components/mannequin/MannequinSnapshots';
-import { isModel3D, view3DOf, type View3D } from '../../components/mannequin/models';
+import { isModel3D, MODELS_3D, view3DOf, type View3D } from '../../components/mannequin/models';
+
+/** Piezas del maniquí por slug del tipo de zona (el editor de zonas trabaja con slugs). */
+const PIECE_SLUG: Record<View3D, string> = { front: 'frente', back: 'espalda', rightSleeve: 'manga-derecha', leftSleeve: 'manga-izquierda' };
+const piecesBySlug = (p: Record<View3D, [number, number, number, number]>) =>
+  Object.fromEntries((Object.keys(p) as View3D[]).map((v) => [PIECE_SLUG[v], p[v]]));
 import { TemplateRecipesSection } from '../../components/admin/TemplateRecipesSection';
 import { templateRecipesService } from '../../services/template-recipes.service';
 import { useCatalogs } from '../../context/CatalogsContext';
@@ -333,6 +338,7 @@ export const TemplatesPage = () => {
               templateImageBack={backImage(selectedTemplate.images)}
               zoneTypeImages={selectedTemplate.zoneTypeImages || undefined}
               viewImageFor={model3d ? (snapshots ? (slug) => snapshots[view3DOf(slug)] : null) : undefined}
+              modelPieces={model3d && MODELS_3D[model3d].pieces ? piecesBySlug(MODELS_3D[model3d].pieces!) : undefined}
               onZoneTypeImagesChange={async (images) => {
                 try {
                   await templatesService.updateTemplate(selectedTemplate.id, {

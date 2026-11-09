@@ -49,6 +49,8 @@ export interface Mannequin3DProps {
   active?: boolean;
   onReady?: () => void;
   handleRef?: MutableRefObject<Mannequin3DHandle | null>;
+  /** Modelos con patrón: tiñe suave cada pieza (frente, espalda, mangas) para ver dónde van las costuras. */
+  pieceGuide?: boolean;
 }
 
 /** Alto del maniquí en la escena (unidades). */
@@ -140,7 +142,7 @@ function useMannequin(cfg: ModelConfig) {
  */
 function partsMannequin(scene: THREE.Object3D) {
   scene.updateMatrixWorld(true);
-  const pos: number[] = [], nor: number[] = [], cloth: number[] = [];
+  const pos: number[] = [], nor: number[] = [], cloth: number[] = [], uvs: number[] = [];
   let flat = false;
   scene.traverse((o) => {
     const m = o as THREE.Mesh;
@@ -150,7 +152,7 @@ function partsMannequin(scene: THREE.Object3D) {
     // El .glb web viene comprimido (posiciones en enteros normalizados + escala del nodo): se lee cada
     // vértice ya en decimal y recién ahí se aplica la transformación (sobre el formato comprimido se desborda).
     const g = m.geometry.index ? m.geometry.toNonIndexed() : m.geometry;
-    const p = g.attributes.position, n = g.attributes.normal;
+    const p = g.attributes.position, n = g.attributes.normal, uvA = g.attributes.uv;
     const nm = new THREE.Matrix3().getNormalMatrix(m.matrixWorld);
     const v = new THREE.Vector3();
     for (let i = 0; i < p.count; i++) {
@@ -158,12 +160,15 @@ function partsMannequin(scene: THREE.Object3D) {
       pos.push(v.x, v.y, v.z);
       if (n) { v.set(n.getX(i), n.getY(i), n.getZ(i)).applyMatrix3(nm).normalize(); nor.push(v.x, v.y, v.z); } else { nor.push(0, 1, 0); flat = true; }
       cloth.push(isCloth);
+      uvs.push(uvA ? uvA.getX(i) : 0, uvA ? uvA.getY(i) : 0);
     }
   });
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(pos), 3));
   g.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(nor), 3));
   g.setAttribute('aCloth', new THREE.BufferAttribute(new Float32Array(cloth), 1));
+  // Patrón de la tela (modelos v2): el estampado se pinta en una textura con estas coordenadas.
+  g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(uvs), 2));
   // Sin normales en el archivo: sombreado plano por triángulo (como la versión 1).
   if (flat) g.computeVertexNormals();
   g.computeBoundingBox();
@@ -283,6 +288,8 @@ function useGarmentMaterial(box: THREE.Box3, size: THREE.Vector3, cfg: ModelConf
       uCollarSide: { value: cfg.collarSide ?? 0 },
       uCollarMesh: { value: collar ? 1 : 0 },
       uParts: { value: cfg.parts ? 1 : 0 },
+      uPrint: { value: null as THREE.Texture | null },
+      uUsePrint: { value: 0 },
       uCollarH: { value: Array.from(collar ?? new Float32Array(COLLAR_BINS)) },
       uMin: { value: new THREE.Vector2(box.min.x, box.min.y) },
       uSize: { value: new THREE.Vector2(size.x, size.y) },
@@ -295,12 +302,12 @@ function useGarmentMaterial(box: THREE.Box3, size: THREE.Vector3, cfg: ModelConf
     m.onBeforeCompile = (shader) => {
       Object.assign(shader.uniforms, uniforms);
       shader.vertexShader = shader.vertexShader
-        .replace('#include <common>', '#include <common>\nattribute float aCloth;\nvarying vec3 vObj;\nvarying float vCloth;')
-        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvObj = position;\nvCloth = aCloth;');
+        .replace('#include <common>', '#include <common>\nattribute float aCloth;\nvarying vec3 vObj;\nvarying float vCloth;\nvarying vec2 vPrintUv;')
+        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvObj = position;\nvCloth = aCloth;\nvPrintUv = uv;');
       shader.fragmentShader = shader.fragmentShader
         .replace(
           '#include <common>',
-          '#include <common>\nvarying vec3 vObj;\nuniform vec2 uNeckC;\nuniform float uNeckR;\nuniform float uCut;\nuniform float uCollarFront;\nuniform float uCollarBack;\nuniform float uCollarCurve;\nuniform float uCollarSide;\nuniform float uCollarMesh;\nuniform float uCollarH[24];\nuniform float uParts;\nvarying float vCloth;\nuniform vec2 uMin;\nuniform vec2 uSize;\nuniform float uHeadFrom;\nuniform float uBodyTop;\nuniform vec3 uShirt;\nuniform vec3 uDummy;',
+          '#include <common>\nvarying vec3 vObj;\nuniform vec2 uNeckC;\nuniform float uNeckR;\nuniform float uCut;\nuniform float uCollarFront;\nuniform float uCollarBack;\nuniform float uCollarCurve;\nuniform float uCollarSide;\nuniform float uCollarMesh;\nuniform float uCollarH[24];\nuniform float uParts;\nvarying float vCloth;\nvarying vec2 vPrintUv;\nuniform sampler2D uPrint;\nuniform float uUsePrint;\nuniform vec2 uMin;\nuniform vec2 uSize;\nuniform float uHeadFrom;\nuniform float uBodyTop;\nuniform vec3 uShirt;\nuniform vec3 uDummy;',
         )
         .replace(
           '#include <color_fragment>',
@@ -333,7 +340,10 @@ function useGarmentMaterial(box: THREE.Box3, size: THREE.Vector3, cfg: ModelConf
           if (muv.y > uHeadFrom) cloth = 0.0;
           // Modelo por piezas (v2): la tela es la pieza "camiseta" del archivo.
           if (uParts > 0.5) cloth = step(0.5, vCloth);
-          diffuseColor.rgb = mix(uDummy, uShirt, cloth);`,
+          diffuseColor.rgb = mix(uDummy, uShirt, cloth);
+          // Modelos con patrón (v2): el estampado está pintado en la tela misma.
+          vec4 printC = texture2D(uPrint, vPrintUv);
+          diffuseColor.rgb = mix(diffuseColor.rgb, printC.rgb, printC.a * cloth * uUsePrint);`,
         )
         .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(0.5, 0.92, cloth);');
     };
@@ -554,7 +564,10 @@ vec4 viewPrint(sampler2D map, vec2 dir, vec2 right, vec4 rect, vec2 range, vec2 
   // del pecho no lo cortan.
   float facingReal = dot(normalize(vObjN), vec3(dir.x, 0.0, dir.y));
   // Textura premultiplicada (color × alfa): sin bordes oscuros al filtrar junto a lo transparente.
-  return c * (inside * smoothstep(face.x, face.y, facing) * smoothstep(0.08, 0.26, facingReal));
+  // Mangas (face negativo): solo se apaga en su cara de atrás, con la normal suavizada; con la real,
+  // el estampado se cortaba donde la manga se curva y en cada arruguita.
+  float realOk = face.x < 0.0 ? 1.0 : smoothstep(0.08, 0.26, facingReal);
+  return c * (inside * smoothstep(face.x, face.y, facing) * realOk);
 }
 // Mezcla "encima" en premultiplicado.
 vec4 overPrint(vec4 acc, vec4 c) {
@@ -566,8 +579,8 @@ const PRINT_APPLY = `
 vec4 pr = vec4(0.0);
 pr = overPrint(pr, viewPrint(uMap0, uDir[0], uRight[0], uRect[0], uRange[0], vec2(0.22, 0.45)));
 pr = overPrint(pr, viewPrint(uMap1, uDir[1], uRight[1], uRect[1], uRange[1], vec2(0.22, 0.45)));
-pr = overPrint(pr, viewPrint(uMap2, uDir[2], uRight[2], uRect[2], uRange[2], vec2(0.3, 0.55)));
-pr = overPrint(pr, viewPrint(uMap3, uDir[3], uRight[3], uRect[3], uRange[3], vec2(0.3, 0.55)));
+pr = overPrint(pr, viewPrint(uMap2, uDir[2], uRight[2], uRect[2], uRange[2], vec2(-0.3, -0.1)));
+pr = overPrint(pr, viewPrint(uMap3, uDir[3], uRight[3], uRect[3], uRange[3], vec2(-0.3, -0.1)));
 pr *= step(0.5, vClothP);
 if (pr.a < 0.004) discard;
 diffuseColor = vec4(pr.rgb / pr.a, pr.a);
@@ -620,7 +633,179 @@ function Stand({ box, size, hem }: { box: THREE.Box3; size: THREE.Vector3; hem: 
   );
 }
 
-function Garment({ model, color, art, artRef, frames, focus, locked = false, animView, printKey = 0, still = false, onReady, handleRef }: Omit<Mannequin3DProps, 'active'>) {
+/** Lado de la textura del patrón (px): 4096 en equipos que la soportan, si no 2048. */
+const atlasSize = (gl: THREE.WebGLRenderer) => (gl.capabilities.maxTextureSize >= 4096 ? 4096 : 2048);
+
+/**
+ * Del escenario de una vista (en %) al patrón de la tela: lanza un rayo desde la cámara (con el maniquí
+ * girado como en esa vista) y devuelve el punto del patrón (u, v en 0..1) donde toca la tela, o null.
+ */
+/** Dónde cae un punto del escenario en el patrón: centro (u, v en 0..1), escala y giro locales. */
+interface PatternHit {
+  /** Punto del patrón (0..1). */
+  c: THREE.Vector2;
+  /** Unidades de patrón (0..1) por 1 % del escenario, medido sobre la tela (sin estirarse). */
+  perPct: number;
+  /** Giro (radianes) de "a la derecha en pantalla" dentro del patrón. */
+  rot: number;
+}
+
+/**
+ * Del escenario de una vista (en %) al patrón de la tela: lanza un rayo desde la cámara (con el maniquí
+ * girado como en esa vista) hasta la tela. La escala sale de una constante del patrón (todas las
+ * piezas tienen la misma escala de tela) y de la distancia real a la cámara; el giro, del triángulo
+ * de tela que se toca (sin rayos vecinos, que en una costura caían en otra pieza).
+ */
+function makeStageToPattern(geometry: THREE.BufferGeometry) {
+  const mesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }));
+  const ray = new THREE.Raycaster();
+  const cloth = geometry.attributes.aCloth;
+  const pos = geometry.attributes.position, uv = geometry.attributes.uv;
+  const half = Math.tan(((CAMERA.fov / 2) * Math.PI) / 180);
+  // Unidades de patrón por unidad de largo de tela (igual en todas las piezas): sqrt(área UV / área 3D).
+  let a3 = 0, a2 = 0;
+  const p0 = new THREE.Vector3(), p1 = new THREE.Vector3(), p2 = new THREE.Vector3();
+  for (let t = 0; t < pos.count; t += 3) {
+    if (cloth && cloth.getX(t) < 0.5) continue;
+    p0.fromBufferAttribute(pos, t); p1.fromBufferAttribute(pos, t + 1); p2.fromBufferAttribute(pos, t + 2);
+    a3 += p1.clone().sub(p0).cross(p2.clone().sub(p0)).length() / 2;
+    const u0 = uv.getX(t), v0 = uv.getY(t), u1 = uv.getX(t + 1), v1 = uv.getY(t + 1), u2 = uv.getX(t + 2), v2 = uv.getY(t + 2);
+    a2 += Math.abs((u1 - u0) * (v2 - v0) - (u2 - u0) * (v1 - v0)) / 2;
+  }
+  const uvPerUnit = a3 > 0 ? Math.sqrt(a2 / a3) : 0;
+  const cam = new THREE.Vector3(), dir = new THREE.Vector3(), right = new THREE.Vector3(), up = new THREE.Vector3();
+  const e1 = new THREE.Vector3(), e2 = new THREE.Vector3(), n = new THREE.Vector3();
+  const viewDir = new THREE.Vector3();
+
+  /** En el triángulo tocado: cómo cambia el patrón al moverse `vec` (unidad 3D) sobre la tela. */
+  const gradient = (a: number, b: number, c: number, vec: THREE.Vector3) => {
+    p0.fromBufferAttribute(pos, a); p1.fromBufferAttribute(pos, b); p2.fromBufferAttribute(pos, c);
+    e1.subVectors(p1, p0); e2.subVectors(p2, p0); n.crossVectors(e1, e2).normalize();
+    const t = vec.clone().addScaledVector(n, -vec.dot(n));
+    const len = t.length();
+    if (len < 1e-6) return null;
+    t.divideScalar(len);
+    const d11 = e1.dot(e1), d12 = e1.dot(e2), d22 = e2.dot(e2), r1 = t.dot(e1), r2 = t.dot(e2);
+    const det = d11 * d22 - d12 * d12;
+    if (Math.abs(det) < 1e-14) return null;
+    const s1 = (r1 * d22 - r2 * d12) / det, s2 = (r2 * d11 - r1 * d12) / det;
+    const du = s1 * (uv.getX(b) - uv.getX(a)) + s2 * (uv.getX(c) - uv.getX(a));
+    const dv = s1 * (uv.getY(b) - uv.getY(a)) + s2 * (uv.getY(c) - uv.getY(a));
+    return { du, dv, scale: Math.hypot(du, dv) };
+  };
+
+  const cast = (angle: number, xPct: number, yPct: number) => {
+    const nx = (xPct / 100) * 2 - 1, ny = 1 - (yPct / 100) * 2;
+    cam.set(0, 0, CAMERA.distance).applyAxisAngle(Y_AXIS, -angle);
+    dir.set(nx * half, ny * half, -1).normalize().applyAxisAngle(Y_AXIS, -angle);
+    ray.set(cam, dir);
+    const h = ray.intersectObject(mesh, false).find((x) => x.face && x.uv);
+    if (!h || !h.face || !h.uv) return null;
+    // la primera superficie que se ve: si es maniquí, ese punto no es de la prenda
+    if (cloth && cloth.getX(h.face.a) < 0.5) return null;
+    return h;
+  };
+
+  return (angle: number, xPct: number, yPct: number): PatternHit | null => {
+    const h = cast(angle, xPct, yPct);
+    if (!h || !h.face || !h.uv) return null;
+    viewDir.set(0, 0, -1).applyAxisAngle(Y_AXIS, -angle);
+    right.set(1, 0, 0).applyAxisAngle(Y_AXIS, -angle);
+    up.set(0, 1, 0);
+    const g = gradient(h.face.a, h.face.b, h.face.c, right);
+    const rot = g ? Math.atan2(g.dv, g.du) : 0;
+    // Escala local de la tela (patrón por unidad de largo): mediana de los triángulos alrededor del
+    // punto. Donde el aplanado comprime un poco (puño), el diseño igual mide lo mismo sobre la tela.
+    const scales: number[] = [];
+    for (const [ox, oy] of [[0, 0], [0.8, 0], [-0.8, 0], [0, 0.8], [0, -0.8]]) {
+      const hh = ox || oy ? cast(angle, xPct + ox, yPct + oy) : h;
+      if (!hh || !hh.face) continue;
+      const gr = gradient(hh.face.a, hh.face.b, hh.face.c, right), gu = gradient(hh.face.a, hh.face.b, hh.face.c, up);
+      if (gr) scales.push(gr.scale);
+      if (gu) scales.push(gu.scale);
+    }
+    scales.sort((x, y) => x - y);
+    const local = scales.length ? scales[Math.floor(scales.length / 2)] : uvPerUnit;
+    // 1 % del escenario = este largo de tela a la distancia del punto (de frente a la cámara)
+    const depth = h.distance * dir.dot(viewDir);
+    const perPct = ((2 * half * depth) / 100) * local;
+    return { c: h.uv.clone(), perPct, rot };
+  };
+}
+const Y_AXIS = new THREE.Vector3(0, 1, 0);
+
+/**
+ * Pinta el arte de todas las vistas en el patrón. Cada diseño se ubica por su centro (rayo desde la
+ * cámara) y se dibuja con la escala real de la tela en ese punto: así mide lo mismo en cualquier
+ * zona y sigue la forma de la prenda sin estirarse. La zona recorta igual, medida en el patrón.
+ */
+function paintPattern(
+  ctx: CanvasRenderingContext2D, art: MannequinArt, angles: Record<View3D, number>,
+  toPattern: (angle: number, x: number, y: number) => PatternHit | null, progress: Partial<Record<View3D, number>>,
+  pieceGuide = false,
+) {
+  const S = ctx.canvas.width;
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, S, S);
+  if (pieceGuide) {
+    // piezas del patrón en una cuadrícula de 2×2: frente, espalda / manga der., manga izq.
+    const tints = ['rgba(59,130,246,0.28)', 'rgba(239,68,68,0.24)', 'rgba(34,197,94,0.28)', 'rgba(234,179,8,0.32)'];
+    tints.forEach((t, k) => { ctx.fillStyle = t; ctx.fillRect((k % 2) * S / 2, Math.floor(k / 2) * S / 2, S / 2, S / 2); });
+  }
+  for (const { id } of VIEWS_3D) {
+    const v = art[id];
+    if (!v) continue;
+    const ang = angles[id];
+    const prog = progress[id] ?? 1;
+    // escala del escenario al patrón alrededor de un punto: px de patrón por 1 % del escenario
+    const frameAt = (x: number, y: number) => {
+      const f = toPattern(ang, x, y);
+      return f ? { c: f.c, scale: f.perPct * S, rot: f.rot } : null;
+    };
+    const area = (a: ArtArea) => {
+      const f = frameAt(a.x + a.w / 2, a.y + a.h / 2);
+      if (!f) return null;
+      return { x: f.c.x * S, y: f.c.y * S, w: a.w * f.scale, h: a.h * f.scale, rot: f.rot, circle: a.circle };
+    };
+    const pathOf = (r: { x: number; y: number; w: number; h: number; rot: number; circle?: boolean }) => {
+      ctx.save(); ctx.translate(r.x, r.y); ctx.rotate(r.rot);
+      ctx.beginPath();
+      if (r.circle) ctx.ellipse(0, 0, r.w / 2, r.h / 2, 0, 0, Math.PI * 2); else ctx.rect(-r.w / 2, -r.h / 2, r.w, r.h);
+      ctx.restore();
+    };
+    for (const l of v.layers) {
+      const f = frameAt(l.cx, l.cy);
+      if (!f) continue;
+      const src = l.src as CanvasImageSource & { naturalWidth?: number; width: number; height: number; naturalHeight?: number };
+      const iw = src.naturalWidth || src.width, ih = src.naturalHeight || src.height;
+      if (!iw || !ih) continue;
+      const bw = l.w * f.scale, bh = l.h * f.scale;
+      const k = Math.min(bw / iw, bh / ih);
+      const dw = iw * k, dh = ih * k;
+      ctx.save();
+      // Nunca sale de su pieza del patrón (cuadrícula 2×2): en una prenda real ahí hay una costura, y
+      // en el patrón seguiría hacia otra pieza.
+      const qx = f.c.x < 0.5 ? 0 : S / 2, qy = f.c.y < 0.5 ? 0 : S / 2;
+      ctx.beginPath(); ctx.rect(qx, qy, S / 2, S / 2); ctx.clip();
+      if (l.clip) { const z = area(l.clip); if (z) { pathOf(z); ctx.clip(); } }
+      ctx.translate(f.c.x * S, f.c.y * S);
+      ctx.rotate(f.rot + ((l.rotation ?? 0) * Math.PI) / 180);
+      // rasqueta: el diseño aparece de izquierda a derecha
+      if (prog < 1) { ctx.beginPath(); ctx.rect(-dw / 2, -dh / 2, dw * Math.max(0, prog), dh); ctx.clip(); }
+      ctx.globalAlpha = l.opacity ?? 1;
+      ctx.drawImage(src, -dw / 2, -dh / 2, dw, dh);
+      ctx.restore();
+    }
+    if (v.holes?.length) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'destination-out';
+      for (const h of v.holes) { const r = area(h); if (r) { pathOf(r); ctx.fill(); } }
+      ctx.restore();
+    }
+  }
+}
+
+function Garment({ model, color, art, artRef, frames, focus, locked = false, animView, printKey = 0, still = false, onReady, handleRef, pieceGuide = false }: Omit<Mannequin3DProps, 'active'>) {
   const cfg = MODELS_3D[model];
   const group = useRef<THREE.Group>(null);
   const drag = useRef({ down: false, x: 0, offset: 0 });
@@ -687,6 +872,24 @@ function Garment({ model, color, art, artRef, frames, focus, locked = false, ani
     });
   }, [printMaterial, places]);
 
+  // Modelos con patrón (v2): una textura para toda la tela, parte del material de la prenda.
+  const pattern = useMemo(() => {
+    if (!cfg.uv) return null;
+    const c = document.createElement('canvas');
+    c.width = c.height = atlasSize(gl);
+    const t = new THREE.CanvasTexture(c);
+    t.flipY = false; // el patrón del .glb tiene el origen arriba a la izquierda (como la imagen)
+    t.colorSpace = THREE.SRGBColorSpace;
+    t.anisotropy = 8;
+    return { canvas: c, tex: t, toPattern: makeStageToPattern(geometry) };
+  }, [cfg.uv, gl, geometry]);
+  useEffect(() => {
+    const u = material.userData.uniforms;
+    u.uPrint.value = pattern?.tex ?? null;
+    u.uUsePrint.value = pattern ? 1 : 0;
+    return () => { pattern?.tex.dispose(); };
+  }, [material, pattern]);
+
   const pass = useRef(Object.fromEntries(VIEWS_3D.map(({ id }) => [id, { progress: 1, dirty: true }])) as Record<View3D, { progress: number; dirty: boolean }>);
   const lastArt = useRef<MannequinArt>({});
   const lastVersion = useRef(-1);
@@ -709,8 +912,16 @@ function Garment({ model, color, art, artRef, frames, focus, locked = false, ani
 
   const currentArt = () => (artRef ? artRef.current.art : art);
   const paint = (id: View3D, progress: number) => {
+    if (pattern) return; // los modelos con patrón se pintan todos juntos (paintAll)
     paintArt(decals[id].canvas.getContext('2d')!, currentArt()[id], progress, stableFrames[id]);
     decals[id].tex.needsUpdate = true;
+  };
+  const paintAll = () => {
+    if (!pattern) return;
+    const prog: Partial<Record<View3D, number>> = {};
+    for (const { id } of VIEWS_3D) prog[id] = pass.current[id].progress;
+    paintPattern(pattern.canvas.getContext('2d')!, currentArt(), angles, pattern.toPattern, prog, pieceGuide);
+    pattern.tex.needsUpdate = true;
   };
 
   useEffect(() => { drag.current.offset = 0; }, [focus, locked]);
@@ -726,7 +937,8 @@ function Garment({ model, color, art, artRef, frames, focus, locked = false, ani
         const prevX = g.rotation.x;
         g.rotation.y = opts?.angle ?? angles[view];
         g.rotation.x = opts?.tilt ?? 0;
-        for (const { id } of VIEWS_3D) paint(id, 1);
+        for (const { id } of VIEWS_3D) { pass.current[id].progress = 1; paint(id, 1); }
+        paintAll();
         gl.render(scene, camera);
         const src = gl.domElement;
         const side = Math.min(src.width, src.height);
@@ -745,6 +957,7 @@ function Garment({ model, color, art, artRef, frames, focus, locked = false, ani
     const version = artRef?.current.version ?? 0;
     const live = artRef && version !== lastVersion.current;
     lastVersion.current = version;
+    let repaint = false;
     for (const { id } of VIEWS_3D) {
       const st = pass.current[id];
       const hasArt = !!currentArt()[id]?.layers.length;
@@ -753,8 +966,10 @@ function Garment({ model, color, art, artRef, frames, focus, locked = false, ani
         if (hasArt && st.progress < 1) st.progress = Math.min(1, st.progress + delta / PASS_SECONDS);
         paint(id, hasArt ? st.progress : 1);
         st.dirty = false;
+        repaint = true;
       }
     }
+    if (repaint) paintAll();
     const g = group.current;
     if (g) {
       const t = frame.clock.elapsedTime;
@@ -787,7 +1002,7 @@ function Garment({ model, color, art, artRef, frames, focus, locked = false, ani
         onPointerLeave={() => { drag.current.down = false; }}
       >
         <mesh geometry={geometry} material={material} />
-        <mesh geometry={geometry} material={printMaterial} renderOrder={1} />
+        {!pattern && <mesh geometry={geometry} material={printMaterial} renderOrder={1} />}
         {!cfg.parts && <Stand box={box} size={size} hem={cfg.hem} />}
       </group>
       <ContactShadows position={[0, box.min.y + 0.001, 0]} opacity={0.35} scale={3} blur={2.6} far={1.2} resolution={512} />

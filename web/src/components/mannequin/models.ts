@@ -61,6 +61,17 @@ export interface ModelConfig {
    * la del modelo. Las alturas de escote, ruedo y corte no se usan.
    */
   parts?: boolean;
+  /**
+   * Con patrón de costura (v2): el .glb trae las piezas de la camiseta aplanadas (TEXCOORD_0) y el
+   * estampado se pinta sobre la tela misma, no se proyecta: no se estira, no se corta ni queda por
+   * debajo en ningún pliegue, y mide lo mismo en cualquier zona.
+   */
+  uv?: boolean;
+  /**
+   * Área que ocupa cada pieza del patrón en la vista del editor ([x, y, ancho, alto] en % del
+   * escenario). Con "Piezas del modelo" cada zona es su pieza entera; el estampado se recorta a la pieza.
+   */
+  pieces?: Record<View3D, [number, number, number, number]>;
 }
 
 export const MODELS_3D: Record<Model3D, ModelConfig> = {
@@ -71,6 +82,8 @@ export const MODELS_3D: Record<Model3D, ModelConfig> = {
     headFrom: 0.767, bodyTop: 0.681, collarFront: 0.748, collarBack: 0.76, collarCurve: 1, hem: 0.143, cut: 0,
     sleeveY: 0.655,
     parts: true,
+    uv: true,
+    pieces: { front: [35.2, 27, 29.2, 56.2], back: [35.8, 25.5, 29, 57.8], rightSleeve: [38.5, 26.8, 17.5, 21.8], leftSleeve: [43.8, 27, 17.5, 22] },
   },
   oversize: {
     label: 'Oversize',
@@ -79,6 +92,8 @@ export const MODELS_3D: Record<Model3D, ModelConfig> = {
     headFrom: 0.771, bodyTop: 0.685, collarFront: 0.74, collarBack: 0.765, collarCurve: 2, hem: 0.107, cut: 0,
     sleeveY: 0.585,
     parts: true,
+    uv: true,
+    pieces: { front: [33.5, 27.5, 33, 60], back: [32, 25, 35.2, 62.5], rightSleeve: [40.5, 27.8, 15.8, 31.8], leftSleeve: [46.8, 28, 15.5, 31.5] },
   },
 };
 

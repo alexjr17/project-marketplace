@@ -33,7 +33,7 @@ export function MannequinSnapshots({ model, color = '#FFFFFF', onDone }: { model
   return (
     <div aria-hidden="true" style={{ position: 'fixed', left: -10000, top: 0, width: 800, height: 800, pointerEvents: 'none' }}>
       <Suspense fallback={null}>
-        <Mannequin3D key={model} model={model} color={color} art={EMPTY} focus="front" locked still onReady={markReady} handleRef={handle} />
+        <Mannequin3D key={model} model={model} color={color} art={EMPTY} focus="front" locked still onReady={markReady} handleRef={handle} pieceGuide />
       </Suspense>
     </div>
   );

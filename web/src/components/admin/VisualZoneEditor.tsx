@@ -45,6 +45,11 @@ interface VisualZoneEditorProps {
    * pasa, reemplaza las imágenes subidas y no se ofrece subir otra. Mientras es null, se espera.
    */
   viewImageFor?: ((zoneTypeSlug: string) => string | undefined) | null;
+  /**
+   * Maniquí 3D con patrón: área de cada pieza (por slug del tipo de zona, [x, y, ancho, alto] en %).
+   * Permite elegir "Piezas del modelo" (una zona por pieza, entera) o "Zonas libres".
+   */
+  modelPieces?: Record<string, [number, number, number, number]>;
 }
 
 interface DragState {
@@ -102,6 +107,7 @@ export const VisualZoneEditor = ({
   zoneTypeImages: externalZoneTypeImages,
   viewImageFor,
   onZoneTypeImagesChange,
+  modelPieces,
 }: VisualZoneEditorProps) => {
   const confirm = useConfirm();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -119,6 +125,9 @@ export const VisualZoneEditor = ({
   const [imageLoaded, setImageLoaded] = useState(false);
 
   const [isCreatingZone, setIsCreatingZone] = useState(false);
+  // Maniquí 3D: "pieces" = una zona por pieza del modelo (no se dibujan); "free" = zonas libres.
+  const [zoneMode, setZoneMode] = useState<'pieces' | 'free' | null>(null);
+  const [applyingPieces, setApplyingPieces] = useState(false);
   const [newZoneType, setNewZoneType] = useState<number>(0);
   const [newZoneName, setNewZoneName] = useState('');
   const [newZoneWidthCm, setNewZoneWidthCm] = useState<number>(18);
@@ -269,6 +278,8 @@ export const VisualZoneEditor = ({
   const handleZoneMouseDown = (e: React.MouseEvent, zone: TemplateZone, handle?: string) => {
     e.preventDefault();
     e.stopPropagation();
+    // Con "Piezas del modelo" cada zona es su pieza entera: no se mueve ni se cambia de tamaño.
+    if (piecesMode) return;
 
     setSelectedZoneId(zone.id);
     const pos = getRelativePosition(e);
@@ -815,6 +826,57 @@ export const VisualZoneEditor = ({
     return <Spinner label="Cargando editor de zonas…" />;
   }
 
+  /** ¿Las zonas actuales son exactamente las piezas del modelo? */
+  const matchesPieces = (list: TemplateZone[]) => !!modelPieces && Object.entries(modelPieces).every(([slug, [x, y, w, h]]) => {
+    const of = list.filter((z) => z.zoneType?.slug === slug && !z.isBlocked);
+    return of.length === 1 && Math.abs(of[0].positionX - x) < 0.6 && Math.abs(of[0].positionY - y) < 0.6
+      && Math.abs(of[0].maxWidth - w) < 0.6 && Math.abs(of[0].maxHeight - h) < 0.6;
+  });
+  const piecesMode = !!modelPieces && (zoneMode ?? (matchesPieces(zones) ? 'pieces' : 'free')) === 'pieces';
+
+  /** Una zona por pieza, del tamaño de la pieza: actualiza la que haya, crea la que falte y quita las sobrantes. */
+  const applyModelPieces = async () => {
+    if (!modelPieces) return;
+    const extra = Object.keys(modelPieces).flatMap((slug) => zones.filter((z) => z.zoneType?.slug === slug && !z.isBlocked).slice(1));
+    if (!(await confirm({
+      title: 'Usar las piezas del modelo',
+      message: `Cada vista queda con una sola zona del tamaño de su pieza.${extra.length ? ` Se quitan ${extra.length} zona(s) de más.` : ''} Los precios de las zonas que ya existen se conservan.`,
+    }))) return;
+    setApplyingPieces(true);
+    try {
+      const DEFAULT_PRICE: Record<string, number> = { frente: 8000, espalda: 8000, 'manga-derecha': 4000, 'manga-izquierda': 4000 };
+      let next = [...zones];
+      let order = 1;
+      for (const [slug, [x, y, w, h]] of Object.entries(modelPieces)) {
+        const type = zoneTypes.find((t) => t.slug === slug);
+        if (!type) continue;
+        const area = { positionX: pct(x), positionY: pct(y), maxWidth: pct(w), maxHeight: pct(h), shape: 'rect' as const };
+        const of = next.filter((z) => z.zoneType?.slug === slug && !z.isBlocked);
+        if (of.length) {
+          await templateZonesService.update(of[0].id, { ...area, name: type.name, sortOrder: order });
+          next = next.map((z) => (z.id === of[0].id ? { ...z, ...area, name: type.name, sortOrder: order } : z));
+          for (const z of of.slice(1)) { await templateZonesService.delete(z.id); next = next.filter((n) => n.id !== z.id); }
+        } else {
+          const created = await templateZonesService.create({
+            templateId, zoneTypeId: type.id, zoneId: `${slug}-${Date.now()}`, name: type.name, ...area,
+            price: DEFAULT_PRICE[slug] ?? 0, isRequired: slug === 'frente', isBlocked: false, sortOrder: order,
+          });
+          next.push({ ...created, ...area, zoneType: { id: type.id, name: type.name, slug: type.slug } });
+        }
+        order++;
+      }
+      setZones(next);
+      setZoneMode('pieces');
+      onZonesChange?.(next);
+      toast.success('Zonas ajustadas a las piezas del modelo');
+    } catch (err) {
+      toast.error('No se pudieron aplicar las piezas del modelo');
+      console.error(err);
+    } finally {
+      setApplyingPieces(false);
+    }
+  };
+
   const resetNewZone = () => { setIsCreatingZone(false); setNewZoneIsBlocked(false); setNewZoneShape('rect'); setNewZonePrice(0); };
   const shapeBtn = (active: boolean) =>
     `flex flex-col items-center justify-center gap-1 px-2 py-2 rounded-lg border text-xs transition-colors ${
@@ -825,6 +887,26 @@ export const VisualZoneEditor = ({
 
   return (
     <div className="space-y-4">
+      {/* Maniquí 3D con patrón: zonas por piezas del modelo o libres */}
+      {modelPieces && (
+        <div className="rounded-xl border border-gray-200 p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-gray-900">Zonas de estampado</p>
+            <p className="text-xs text-gray-500">
+              {piecesMode
+                ? 'Cada zona es una pieza entera del modelo (frente, espalda, mangas). Ajusta el precio y si es obligatoria.'
+                : 'Dibuja las zonas que quieras. El estampado nunca cruza de una pieza a otra.'}
+            </p>
+          </div>
+          <RadioGroup
+            variant="segmented"
+            value={piecesMode ? 'pieces' : 'free'}
+            onChange={(v) => { if (v === 'pieces') void applyModelPieces(); else setZoneMode('free'); }}
+            options={[{ value: 'pieces', label: applyingPieces ? 'Aplicando…' : 'Piezas del modelo' }, { value: 'free', label: 'Zonas libres' }]}
+          />
+        </div>
+      )}
+
       {/* Barra de herramientas */}
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
         <div className="min-w-0">
@@ -864,7 +946,7 @@ export const VisualZoneEditor = ({
 
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,22rem)_1fr] gap-4">
         <div className="space-y-3 min-w-0">
-          {!isCreatingZone ? (
+          {piecesMode ? null : !isCreatingZone ? (
             <Button onClick={() => setIsCreatingZone(true)} variant="outline" fullWidth icon={<Plus className="w-4 h-4" />}>
               Agregar zona
             </Button>
@@ -1325,7 +1407,7 @@ export const VisualZoneEditor = ({
             )}
           </div>
 
-          <div className="mt-3 flex items-center gap-4 text-xs text-gray-500">
+          <div className={`mt-3 flex items-center gap-4 text-xs text-gray-500 ${piecesMode ? 'hidden' : ''}`}>
             <span className="flex items-center gap-1">
               <Move className="w-3 h-3" /> Arrastra para mover
             </span>

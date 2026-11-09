@@ -308,7 +308,7 @@ class CustomizerTest extends TestCase
 
         $this->actingAsAdmin();
         $this->putJson("/api/templates/{$tpl->id}", ['model3d' => 'maniqui-raro'])->assertUnprocessable();
-        // Las claves v2 ya no existen: los v2 son ahora 'basica' y 'oversize'.
+        // Las claves v2 ya no existen: los maniquíes con patrón son ahora 'basica' y 'oversize'.
         $this->putJson("/api/templates/{$tpl->id}", ['model3d' => 'basica_v2'])->assertUnprocessable();
         $this->putJson("/api/templates/{$tpl->id}", ['model3d' => 'oversize'])->assertOk()->assertJsonPath('data.model3d', 'oversize');
 
@@ -406,11 +406,30 @@ class CustomizerTest extends TestCase
         DB::table('products')->where('id', $a->id)->update(['model3d' => 'basica_v2']);
         DB::table('products')->where('id', $b->id)->update(['model3d' => 'oversize_v2']);
 
-        $migration = require database_path('migrations/2026_11_09_000002_templates_model3d_v2_to_original.php');
+        $migration = require database_path('migrations/2026_11_09_000004_templates_model3d_patron_oficial.php');
         $migration->up();
         $migration->up(); // idempotente
 
         $this->assertSame('basica', DB::table('products')->where('id', $a->id)->value('model3d'));
         $this->assertSame('oversize', DB::table('products')->where('id', $b->id)->value('model3d'));
+    }
+
+    public function test_las_zonas_por_defecto_de_los_maniquies_v2_caben_en_su_pieza(): void
+    {
+        $tpl = $this->makeProduct('Plantilla v2 zonas', 50000, [['negro', 'M', 0]], ['isTemplate' => true]);
+        DB::table('products')->where('id', $tpl->id)->update(['model3d' => 'oversize']);
+        // Con el valor por defecto anterior (cruzaba la costura de la manga): se actualiza.
+        $sleeve = $this->zone($tpl, 'manga-derecha', 4000, ['positionX' => 39.5, 'positionY' => 32, 'maxWidth' => 11, 'maxHeight' => 12]);
+        // Ajustada a mano: no se toca.
+        $front = $this->zone($tpl, 'frente', 8000, ['positionX' => 30, 'positionY' => 30, 'maxWidth' => 25, 'maxHeight' => 30]);
+
+        $migration = require database_path('migrations/2026_11_09_000003_template_zones_v2_defaults.php');
+        $migration->up();
+        $migration->up(); // idempotente
+
+        $s = $sleeve->fresh();
+        $this->assertSame([43.5, 38.0, 8.5, 8.5], [$s->positionX, $s->positionY, $s->maxWidth, $s->maxHeight]);
+        $f = $front->fresh();
+        $this->assertSame([30.0, 30.0, 25.0, 30.0], [$f->positionX, $f->positionY, $f->maxWidth, $f->maxHeight]);
     }
 }
