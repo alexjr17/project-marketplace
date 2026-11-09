@@ -96,9 +96,16 @@ class ProductCatalogService
     {
         $t = trim($tag);
         $variants = array_values(array_unique([$t, mb_strtolower($t), mb_convert_case(mb_strtolower($t), MB_CASE_TITLE)]));
-        $query->where(function ($q) use ($variants) {
+        // MySQL/MariaDB comparan el texto del JSON tal cual: las etiquetas se guardan con las
+        // tildes escapadas ("básicos") y whereJsonContains busca "básicos" sin escapar, así
+        // que también se busca la forma escapada (si no, una temática con tilde sale vacía).
+        $escaped = in_array($query->getConnection()->getDriverName(), ['mysql', 'mariadb'], true);
+        $query->where(function ($q) use ($variants, $escaped) {
             foreach ($variants as $v) {
                 $q->orWhereJsonContains('tags', $v);
+                if ($escaped) {
+                    $q->orWhereRaw('JSON_CONTAINS(tags, ?)', [json_encode($v)]);
+                }
             }
         });
     }

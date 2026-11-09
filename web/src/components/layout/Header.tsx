@@ -1,5 +1,5 @@
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { ShoppingCart, Search, Home, Package, Palette, Shirt, User, Heart, X, Percent } from 'lucide-react';
+import { ShoppingCart, Search, Home, Package, Palette, Shirt, User, Heart, X, Percent, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { useCart } from '../../context/CartContext';
 import { useFavorites } from '../../context/FavoritesContext';
@@ -85,12 +85,37 @@ export const Header = () => {
   const headerBg = settings.appearance?.headerBgColor && settings.appearance.headerBgColor.toLowerCase() !== '#ffffff'
     ? settings.appearance.headerBgColor
     : 'rgb(var(--paper) / 0.92)';
+  // Banda de categorías en el celular: se desliza de lado. Un degradado con flecha avisa que hay más
+  // a la derecha (o a la izquierda si ya se deslizó) y desaparece al llegar al borde.
+  const catScroll = useRef<HTMLDivElement>(null);
+  const [catMore, setCatMore] = useState({ left: false, right: false });
+  const measureCats = () => {
+    const el = catScroll.current;
+    if (!el) return;
+    const left = el.scrollLeft > 4;
+    const right = el.scrollLeft + el.clientWidth < el.scrollWidth - 4;
+    setCatMore((m) => (m.left === left && m.right === right ? m : { left, right }));
+  };
+  useEffect(() => {
+    const el = catScroll.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => measureCats());
+    ro.observe(el);
+    if (el.firstElementChild) ro.observe(el.firstElementChild);
+    return () => ro.disconnect();
+  }, []);
+  const scrollCats = (dir: 1 | -1) => catScroll.current?.scrollBy({ left: dir * catScroll.current.clientWidth * 0.7, behavior: 'smooth' });
   const iconBtn = (active: boolean) =>
     `relative p-2 rounded-lg transition-colors ${active ? 'bg-app-50 text-app-700' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'}`;
   const countBadge = 'absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-semibold flex items-center justify-center ring-2 ring-white';
 
   // Fila de categorías: las activas del catálogo + Ofertas + Personaliza.
   const activeCategories = useMemo(() => categories.filter((c) => c.isActive), [categories]);
+  // Las categorías llegan después: al cambiar la lista se vuelve a medir (en el siguiente cuadro).
+  useEffect(() => {
+    const id = requestAnimationFrame(measureCats);
+    return () => cancelAnimationFrame(id);
+  }, [activeCategories.length, enableCustomizer]);
   const onCatalog = location.pathname === '/catalog';
   const currentCategory = onCatalog ? params.get('category') : null;
   const onSale = onCatalog && (params.get('onSale') === '1' || params.get('onSale') === 'true');
@@ -217,16 +242,12 @@ export const Header = () => {
 
         {/* Banda de categorías: ancho completo con su propia línea; el contenido se alinea con el logo */}
         <nav aria-label="Categorías" className="border-t border-gray-100">
-          <div className="max-w-7xl mx-auto px-3 md:px-6">
+          <div className="relative max-w-7xl mx-auto px-3 md:px-6">
             {/* En escritorio sin overflow: el menú desplegable de Categorías no se recorta */}
-            <div className="flex items-center gap-1 md:gap-0.5 overflow-x-auto md:overflow-visible scrollbar-hide h-11">
+            <div ref={catScroll} onScroll={measureCats} className="flex items-center gap-1 md:gap-0.5 overflow-x-auto md:overflow-visible scrollbar-hide h-11">
               <span className="hidden md:block flex-shrink-0 pr-2 mr-1 border-r border-gray-200">
                 <CategoriesMenu />
               </span>
-              <Link to="/" className={`md:hidden ${tab(isActive('/'))}`}>
-                <Home className="w-4 h-4" />
-                Inicio
-              </Link>
               {activeCategories.map((c) => (
                 <Link key={c.id} to={`/catalog?category=${encodeURIComponent(c.slug)}`} className={tab(currentCategory === c.slug)}>
                   {c.name}
@@ -248,6 +269,29 @@ export const Header = () => {
                 </Link>
               )}
             </div>
+            {/* Hay más categorías: degradado + flecha (solo celular) */}
+            {catMore.left && (
+              <button
+                type="button"
+                onClick={() => scrollCats(-1)}
+                aria-label="Ver categorías anteriores"
+                className="md:hidden absolute left-0 inset-y-0 w-12 flex items-center justify-start pl-1 text-gray-700"
+                style={{ background: `linear-gradient(to right, ${headerBg} 40%, transparent)` }}
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+            )}
+            {catMore.right && (
+              <button
+                type="button"
+                onClick={() => scrollCats(1)}
+                aria-label="Ver más categorías"
+                className="md:hidden absolute right-0 inset-y-0 w-14 flex items-center justify-end pr-1 text-gray-700"
+                style={{ background: `linear-gradient(to left, ${headerBg} 45%, transparent)` }}
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            )}
           </div>
         </nav>
       </header>

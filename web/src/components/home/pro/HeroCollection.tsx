@@ -23,7 +23,9 @@ const ROTATE_MS = 7000;
 export function HeroCollection({ reduced }: { reduced: boolean }) {
   const { format } = useCurrency();
   const { tags, loading: tagsLoading } = useTags();
-  const tabs = tags.slice(0, MAX_TABS);
+  // Colecciones con productos: si alguna no trae ninguno al pedirlos, deja de ofrecerse.
+  const [emptyTags, setEmptyTags] = useState<string[]>([]);
+  const tabs = tags.filter((t) => t.productCount > 0 && !emptyTags.includes(t.tag)).slice(0, MAX_TABS);
   const [idx, setIdx] = useState(0);
   const current = tabs[Math.min(idx, Math.max(0, tabs.length - 1))];
 
@@ -39,7 +41,11 @@ export function HeroCollection({ reduced }: { reduced: boolean }) {
   const tag = current?.tag ?? null;
   const tagged = useStoreData<Product[]>(
     tag ? `tag:${tag}` : null,
-    () => productsService.getAll({ tag: tag!, limit: 3, isActive: true, sortBy: 'createdAt', sortOrder: 'desc' }).then((r) => r.data || []),
+    () => productsService.getAll({ tag: tag!, limit: 3, isActive: true, sortBy: 'createdAt', sortOrder: 'desc' }).then((r) => {
+      const list = r.data || [];
+      if (!list.length) setEmptyTags((prev) => (prev.includes(tag!) ? prev : [...prev, tag!]));
+      return list;
+    }),
   );
   const newest = useStoreData<Product[]>(!tagsLoading && !tag ? 'showcase:new' : null, fetchShowcase('new'));
   const products = ((tag ? tagged.data : newest.data) ?? []).slice(0, 3);
@@ -71,7 +77,8 @@ export function HeroCollection({ reduced }: { reduced: boolean }) {
 
   return (
     <section className="bg-paper pt-3 md:pt-5 pb-10 md:pb-14">
-      <div className="max-w-7xl mx-auto px-3 md:px-6 grid lg:grid-cols-[1.65fr_1fr] gap-3 md:gap-4">
+      {/* grid-cols-1 (minmax(0,1fr)): en el celular la columna no crece con el carrusel de productos. */}
+      <div className="max-w-7xl mx-auto px-3 md:px-6 grid grid-cols-1 lg:grid-cols-[1.65fr_1fr] gap-3 md:gap-4">
         {/* Panel de la colección */}
         <div
           ref={panel}
@@ -160,7 +167,8 @@ export function HeroCollection({ reduced }: { reduced: boolean }) {
             <h2 className="text-base font-semibold text-gray-900">{tag ? `En ${name}` : 'Recién llegados'}</h2>
             <Link to={href} className="text-sm font-semibold text-gray-900 underline decoration-accent decoration-2 underline-offset-4">Ver todo</Link>
           </div>
-          <ul className={`flex lg:flex-col gap-3 overflow-x-auto lg:overflow-visible snap-x snap-mandatory -mx-3 px-3 lg:mx-0 lg:px-0 scrollbar-hide ${fill ? 'lg:flex-1 lg:min-h-0' : ''}`}>
+          {/* relative: el texto oculto del precio (sr-only, absoluto) no se escapa del carrusel y no ensancha la página. */}
+          <ul className={`relative flex lg:flex-col gap-3 overflow-x-auto lg:overflow-visible snap-x snap-mandatory -mx-3 px-3 lg:mx-0 lg:px-0 scrollbar-hide ${fill ? 'lg:flex-1 lg:min-h-0' : ''}`}>
             {loadingProducts
               ? Array.from({ length: 3 }).map((_, i) => (
                   <li key={i} className="flex-shrink-0 w-[72%] sm:w-[45%] lg:w-auto lg:flex-1 lg:basis-0 lg:min-h-0 overflow-hidden rounded-2xl bg-white ring-1 ring-black/5 p-3 flex items-center gap-3">
