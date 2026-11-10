@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -35,6 +35,7 @@ import { WompiCheckout } from '../components/payment/WompiCheckout';
 import { addressesService, type Address } from '../services/addresses.service';
 import { quoteShipping } from '../utils/shippingQuote';
 import { validateCoupon, type CouponResult } from '../services/discounts.service';
+import { listUnitPrice, offerSavings } from '../utils/offerSavings';
 import { CitySelect } from '../components/shared/CitySelect';
 import { PageHeader } from '../components/shared/PageHeader';
 import { ProductImage } from '../components/products/ProductImage';
@@ -61,7 +62,12 @@ interface FormErrors {
 
 export const CheckoutPage = () => {
   const navigate = useNavigate();
-  const { cart, clearCart, isReady: cartReady } = useCart();
+  // Los precios vigentes los recarga el carrito en cada cambio de página.
+  const { cart, clearCart, isReady: cartReady, orderConfig } = useCart();
+  // IVA: solo si el negocio cobra impuestos; incluido en el precio se muestra lo que ya trae.
+  const includedTax = orderConfig.taxEnabled && orderConfig.taxIncluded
+    ? Math.round(cart.subtotal - cart.subtotal / (1 + orderConfig.taxRate))
+    : 0;
   const { createOrder } = useOrders();
   const { createPayment, updateMyPayment } = usePayments();
   const { settings } = useSettings();
@@ -207,7 +213,14 @@ export const CheckoutPage = () => {
             ? item.customizedProduct.productId
             : (item as import('../types/cart').CartItem).product.id;
         const productId = typeof raw === 'string' ? (Number.isNaN(Number(raw)) ? 0 : Number(raw)) : Number(raw);
-        return { productId, price: item.price, quantity: item.quantity };
+        // Personalizado: las zonas del diseño, para que el servidor cotice prenda + estampado (como el pedido).
+        const customization = item.type === 'customized' && item.customizedProduct.version === 2
+          ? {
+            version: 2, templateId: item.customizedProduct.templateId ?? productId,
+            designs: (item.customizedProduct.designs ?? []).map((d) => ({ templateZoneId: d.templateZoneId ?? null })),
+          }
+          : undefined;
+        return { productId, price: item.price, quantity: item.quantity, customization };
       }),
     [cart.items]
   );
@@ -228,6 +241,20 @@ export const CheckoutPage = () => {
       setCouponBusy(false);
     }
   };
+
+  // El cupón se recalcula solo si cambia el carrito (cantidades, ofertas que se activan o desactivan).
+  const couponKey = JSON.stringify(couponItems);
+  const appliedKey = useRef('');
+  useEffect(() => {
+    if (!coupon) { appliedKey.current = couponKey; return; }
+    if (appliedKey.current === couponKey) return;
+    appliedKey.current = couponKey;
+    validateCoupon(coupon.code, couponItems, 'online')
+      .then((r) => setCoupon(r))
+      .catch((e) => { setCoupon(null); setCouponError(e instanceof Error ? `El cupón ya no aplica: ${e.message}` : 'El cupón ya no aplica'); });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [couponKey]);
+  const savings = offerSavings(cart.items);
 
   const removeCoupon = () => {
     setCoupon(null);
@@ -1064,7 +1091,11 @@ export const CheckoutPage = () => {
                           </p>
                         )}
                       </div>
-                      <p className="text-sm font-medium text-gray-900 whitespace-nowrap">{formatCurrency(item.subtotal)}</p>
+                      <div className="text-right whitespace-nowrap">
+                        {listUnitPrice(item) && <p className="text-xs text-gray-400 line-through">{formatCurrency(listUnitPrice(item)! * item.quantity)}</p>}
+                        <p className="text-sm font-medium text-gray-900">{formatCurrency(item.subtotal)}</p>
+                        {listUnitPrice(item) && <p className="text-[11px] text-green-700">Oferta</p>}
+                      </div>
                     </li>
                   );
                 })}
@@ -1102,10 +1133,14 @@ export const CheckoutPage = () => {
                   <span className="text-gray-500">Subtotal</span>
                   <span className="font-medium text-gray-900">{formatCurrency(cart.subtotal)}</span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-500">Impuestos</span>
-                  <span className="font-medium text-gray-900">{formatCurrency(cart.tax)}</span>
-                </div>
+                {orderConfig.taxEnabled && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">
+                      IVA ({Math.round(orderConfig.taxRate * 100)}%){orderConfig.taxIncluded && <span className="text-xs text-gray-400"> · incluido</span>}
+                    </span>
+                    <span className="font-medium text-gray-900">{formatCurrency(orderConfig.taxIncluded ? includedTax : cart.tax)}</span>
+                  </div>
+                )}
                 <div className="flex justify-between">
                   <span className="text-gray-500">Envío</span>
                   <span className={`font-medium ${shippingCost === 0 ? 'text-green-700' : 'text-gray-900'}`}>
@@ -1129,6 +1164,12 @@ export const CheckoutPage = () => {
                     {handlingDays > 0 && <>Preparación {handlingDays} {handlingDays === 1 ? 'día' : 'días'}. </>}
                     Tarifa estimada — "{formData.shippingCity}" aún no está en una zona de cobertura
                   </p>
+                )}
+                {savings > 0 && (
+                  <div className="flex justify-between text-green-700">
+                    <span>Ahorro en ofertas <span className="text-xs text-green-600">· ya incluido</span></span>
+                    <span className="font-medium">-{formatCurrency(savings)}</span>
+                  </div>
                 )}
                 {discountAmount > 0 && (
                   <div className="flex justify-between text-green-700">

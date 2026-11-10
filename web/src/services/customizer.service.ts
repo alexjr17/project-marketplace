@@ -2,6 +2,8 @@ import { http } from '../lib/http';
 
 export interface CustomizationQuote {
   basePrice: number;
+  /** Precio base sin la oferta automática (igual a basePrice si no hay oferta). */
+  listPrice?: number;
   zones: Array<{ id: number; name: string; zoneTypeSlug: string; price: number }>;
   customizationPrice: number;
   total: number;

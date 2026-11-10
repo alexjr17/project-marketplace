@@ -180,7 +180,14 @@ export const CustomizedCartItem = ({ item, onUpdateQuantity, onRemove, onStockCh
           </div>
 
           <p className="mt-1 text-xs text-gray-500">
-            {format(customizedProduct.basePrice || 0)} + {format(customizedProduct.customizationPrice || 0)} personalización =
+            {(customizedProduct.listPrice ?? 0) > (customizedProduct.basePrice || 0) && (
+              <><s className="text-gray-400">{format(customizedProduct.listPrice!)}</s>{' '}</>
+            )}
+            {format(customizedProduct.basePrice || 0)}
+            {(customizedProduct.listPrice ?? 0) > (customizedProduct.basePrice || 0) && (
+              <span className="text-green-700"> (oferta -{Math.round((1 - (customizedProduct.basePrice || 0) / customizedProduct.listPrice!) * 100)}%)</span>
+            )}
+            {' '}+ {format(customizedProduct.customizationPrice || 0)} personalización =
             <span className="font-medium text-gray-900"> {format(item.price || 0)}</span> c/u
           </p>
 

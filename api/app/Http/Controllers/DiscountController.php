@@ -88,6 +88,7 @@ class DiscountController extends Controller
             'items.*.productId' => 'nullable|integer',
             'items.*.price' => 'nullable|numeric',
             'items.*.quantity' => 'nullable|integer',
+            'items.*.customization' => 'nullable|array',
         ]);
 
         try {

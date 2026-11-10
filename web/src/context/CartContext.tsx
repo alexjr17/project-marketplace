@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
+import { useLocation } from 'react-router-dom';
 import type { Cart, CartItemType, CartSummary } from '../types/cart';
 import type { Product } from '../types/product';
 import type { CustomizedProduct } from '../types/design';
@@ -10,6 +11,8 @@ import { settingsService } from '../services/settings.service';
 import { cartService, type CartItemDB } from '../services/cart.service';
 import { ApiError } from '../lib/http';
 import { getVariantByProductColorSize } from '../services/variants.service';
+import { productsService } from '../services/products.service';
+import { customizerService } from '../services/customizer.service';
 import { useAuth } from './AuthContext';
 
 /**
@@ -51,6 +54,8 @@ interface CartContextType {
   isSyncing: boolean;
   /** El carrito ya se cargó (de la DB si hay sesión): antes de esto, vacío no significa vacío. */
   isReady: boolean;
+  /** Vuelve a pedir el carrito al servidor (precios y ofertas vigentes). */
+  refresh: () => Promise<void>;
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
@@ -186,6 +191,57 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [rawCartItems]);
 
+  /**
+   * Invitado (carrito en el navegador): precios vigentes. Cada producto se vuelve a pedir (oferta
+   * activa o no) y cada personalizado se vuelve a cotizar, así una oferta que se activó o desactivó
+   * se refleja sin volver a agregar el producto.
+   */
+  // Por referencia: el setter del almacenamiento local cambia en cada render y la recarga debe ser estable.
+  const rawItemsRef = useRef(rawCartItems);
+  rawItemsRef.current = rawCartItems;
+  const setRawRef = useRef(setRawCartItems);
+  setRawRef.current = setRawCartItems;
+  const refreshGuestPrices = useCallback(async () => {
+    const items = rawItemsRef.current;
+    if (!items.length) return;
+    const updated = await Promise.all(items.map(async (item): Promise<CartItemType> => {
+      try {
+        if (item.type === 'customized') {
+          const cp = (item as import('../types/cart').CustomizedCartItem).customizedProduct;
+          const zoneIds = [...new Set((cp.designs ?? []).map((d) => d.templateZoneId).filter((id): id is number => typeof id === 'number' && id > 0))];
+          if (!cp.templateId || cp.version !== 2) return item;
+          const q = await customizerService.quote(cp.templateId, zoneIds);
+          return {
+            ...item,
+            customizedProduct: { ...cp, basePrice: q.basePrice, listPrice: q.listPrice, customizationPrice: q.customizationPrice, totalPrice: q.total },
+            price: q.total,
+            subtotal: q.total * item.quantity,
+          } as CartItemType;
+        }
+        const st = item as import('../types/cart').CartItem;
+        const fresh = await productsService.getById(Number(st.product.id));
+        if (!fresh) return item;
+        const price = fresh.salePrice ?? fresh.basePrice;
+        return {
+          ...st,
+          product: { ...st.product, basePrice: fresh.basePrice, salePrice: fresh.salePrice, hasDiscount: fresh.hasDiscount },
+          price,
+          subtotal: price * st.quantity,
+        };
+      } catch {
+        return item;
+      }
+    }));
+    const byId = new Map(updated.filter((u, i) => u.price !== items[i].price || u !== items[i]).map((u) => [u.id, u]));
+    if (byId.size && updated.some((u, i) => u.price !== items[i].price)) {
+      // Se aplica sobre lo que haya ahora (si mientras tanto cambió la cantidad, se respeta).
+      setRawRef.current((prev) => prev.map((p) => {
+        const u = byId.get(p.id);
+        return u ? { ...u, quantity: p.quantity, subtotal: u.price * p.quantity } as CartItemType : p;
+      }));
+    }
+  }, []);
+
   // Cargar carrito desde DB cuando usuario esta autenticado
   const loadCartFromDB = useCallback(async () => {
     if (!isAuthenticated) return;
@@ -202,6 +258,28 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
       setDbLoaded(true);
     }
   }, [isAuthenticated]);
+
+  // Precios vivos: al volver a la pestaña se vuelve a pedir el carrito (una oferta pudo activarse o
+  // desactivarse en el admin mientras tanto).
+  const refresh = useCallback(async () => {
+    if (isAuthenticated) await loadCartFromDB();
+    else await refreshGuestPrices();
+  }, [isAuthenticated, loadCartFromDB, refreshGuestPrices]);
+
+  // Precios vivos en toda la tienda (también el total del encabezado): en cada cambio de página.
+  const { pathname } = useLocation();
+  const firstRoute = useRef(true);
+  useEffect(() => {
+    if (firstRoute.current) { firstRoute.current = false; return; } // la primera carga ya la hace la sesión
+    refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname]);
+
+  useEffect(() => {
+    const onFocus = () => { if (document.visibilityState === 'visible') refresh(); };
+    document.addEventListener('visibilitychange', onFocus);
+    return () => document.removeEventListener('visibilitychange', onFocus);
+  }, [refresh]);
 
   // Sincronizar con DB cuando el usuario se loguea
   useEffect(() => {
@@ -314,7 +392,16 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
         return {
           id: `db-${dbItem.id}`,
           type: 'customized' as const,
-          customizedProduct: dbItem.customization,
+          // El desglose guardado puede estar viejo: se usa el que calcula el servidor ahora.
+          customizedProduct: dbItem.pricing
+            ? {
+              ...dbItem.customization,
+              basePrice: dbItem.pricing.basePrice,
+              listPrice: dbItem.pricing.listPrice,
+              customizationPrice: dbItem.pricing.customizationPrice,
+              totalPrice: dbItem.pricing.total,
+            }
+            : dbItem.customization,
           quantity: dbItem.quantity,
           price: dbItem.unitPrice,
           subtotal: dbItem.unitPrice * dbItem.quantity,
@@ -649,6 +736,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
         getCartSummary,
         isSyncing: isSyncingWithDB,
         isReady,
+        refresh,
       }}
     >
       {children}

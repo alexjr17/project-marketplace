@@ -40,6 +40,8 @@ export interface CartItemDB {
   customization: CustomizedProduct | null;
   quantity: number;
   unitPrice: number;
+  /** Personalizados: desglose vigente (prenda con oferta, precio de lista, personalización). */
+  pricing?: { basePrice: number; listPrice: number; customizationPrice: number; total: number } | null;
   availableStock: number;
   hasStock: boolean;
   product?: ProductInfo;

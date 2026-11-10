@@ -70,6 +70,8 @@ export interface CustomizedProduct {
   };
   productionImages?: ProductionImages;
   zonePrices?: ZonePriceLine[];
+  /** Precio base sin la oferta automática (para mostrar el descuento en el carrito). */
+  listPrice?: number;
   customizationPrice: number;
   totalPrice: number;
   createdAt: Date;

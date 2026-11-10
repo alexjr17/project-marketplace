@@ -300,7 +300,16 @@ export function SummaryStep({ api }: { api: CustomizerApi }) {
   return (
     <StepCard n={3} title="Resumen" done={api.canSubmit}>
       <dl className="space-y-2 text-sm">
-        <div className="flex justify-between gap-3"><dt className="text-gray-600">Prenda</dt><dd className="tabular-nums text-gray-900">{format(q.basePrice)}</dd></div>
+        <div className="flex justify-between gap-3">
+          <dt className="text-gray-600">Prenda</dt>
+          <dd className="tabular-nums text-gray-900">
+            {(q.listPrice ?? 0) > q.basePrice && <s className="text-gray-400 mr-1.5">{format(q.listPrice!)}</s>}
+            {format(q.basePrice)}
+          </dd>
+        </div>
+        {(q.listPrice ?? 0) > q.basePrice && (
+          <p className="text-xs text-green-700 -mt-1 text-right">Oferta: ahorras {format(q.listPrice! - q.basePrice)} en la prenda</p>
+        )}
         {q.zones.map((z) => (
           <div key={z.id} className="flex justify-between gap-3"><dt className="text-gray-600">Estampado {z.name.toLowerCase()}</dt><dd className="tabular-nums text-gray-900">{z.price > 0 ? `+${format(z.price)}` : 'Incluido'}</dd></div>
         ))}

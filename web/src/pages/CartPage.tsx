@@ -19,6 +19,7 @@ interface StockStatus {
 
 export const CartPage = () => {
   const navigate = useNavigate();
+  // Los precios vigentes los recarga el carrito en cada cambio de página.
   const { cart, removeItem, updateQuantity } = useCart();
 
   // Estado para rastrear el stock de cada item

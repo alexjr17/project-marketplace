@@ -46,6 +46,8 @@ export type GarmentKind = 'front' | 'back' | 'sleeve';
 export interface QuoteLine { id: number; name: string; zoneTypeSlug: string; price: number }
 export interface Quote {
   basePrice: number;
+  /** Precio base sin la oferta automática (igual a basePrice si no hay oferta). */
+  listPrice?: number;
   zones: QuoteLine[];
   customizationPrice: number;
   total: number;
@@ -354,6 +356,7 @@ export function buildCustomizedProduct(input: BuildProductInput): CustomizedProd
     productType: (template.typeSlug || 'tshirt') as ProductTypeSlug,
     productName: template.name,
     basePrice: quote.basePrice,
+    listPrice: quote.listPrice,
     selectedColor: color.hexCode,
     selectedColorName: color.name,
     colorId: color.id,

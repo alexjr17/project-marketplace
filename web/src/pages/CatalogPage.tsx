@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { PackageSearch, SlidersHorizontal, X } from 'lucide-react';
 import { Button, Drawer, Skeleton } from '../components/ui';
@@ -27,7 +27,17 @@ const GRID = 'grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4';
 
 export const CatalogPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
-  const { filteredProducts, filters, setFilters, sortOption, setSortOption, setPage, pagination, isLoading } = useProducts();
+  const { filteredProducts, filters, setFilters, sortOption, setSortOption, setPage, pagination, isLoading, refreshProducts } = useProducts();
+  // Al volver al catálogo, precios y ofertas vigentes (la lista queda en memoria entre páginas).
+  const refreshRef = useRef(refreshProducts);
+  refreshRef.current = refreshProducts;
+  const visited = useRef(false);
+  useEffect(() => {
+    if (visited.current) return;
+    visited.current = true;
+    if (filteredProducts.length) refreshRef.current();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const { categories, productTypes } = useCatalogs();
   const { format } = useCurrency();
   const [filtersOpen, setFiltersOpen] = useState(false);

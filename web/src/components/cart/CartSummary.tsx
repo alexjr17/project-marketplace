@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { offerSavings } from '../../utils/offerSavings';
 import { Truck, Lock, RotateCcw, ShieldCheck } from 'lucide-react';
 import { Button } from '../ui';
 import { useCurrency } from '../../hooks/useCurrency';
@@ -20,10 +21,12 @@ export const CartSummary = ({ cart, onCheckout }: CartSummaryProps) => {
   const { orderConfig } = useCart();
   const { settings } = useSettings();
   const hasItems = cart.items.length > 0;
+  // Ofertas automáticas que ya trae el precio de los productos (se muestran para que el cliente las vea).
+  const savings = offerSavings(cart.items);
 
 
   // Obtener configuración del CartContext
-  const { freeShippingThreshold, taxRate, taxIncluded } = orderConfig;
+  const { freeShippingThreshold, taxEnabled, taxRate, taxIncluded } = orderConfig;
   const taxPercentage = Math.round(taxRate * 100);
 
   // Calcular el valor del impuesto para mostrar
@@ -81,6 +84,12 @@ export const CartSummary = ({ cart, onCheckout }: CartSummaryProps) => {
           <span className="text-gray-500">Productos ({cart.totalItems})</span>
           <span className="font-medium text-gray-900">{format(cart.subtotal)}</span>
         </div>
+        {savings > 0 && (
+          <div className={row}>
+            <span className="text-green-700">Ahorro en ofertas <span className="text-xs text-green-600">· ya incluido</span></span>
+            <span className="font-medium text-green-700">-{format(savings)}</span>
+          </div>
+        )}
 
         <div className={row}>
           <span className="text-gray-500">Envío</span>
@@ -108,10 +117,13 @@ export const CartSummary = ({ cart, onCheckout }: CartSummaryProps) => {
           />
         )}
 
-        <div className={row}>
-          <span className="text-gray-500">IVA ({taxPercentage}%){taxIncluded && <span className="text-xs text-gray-400"> · incluido</span>}</span>
-          <span className="font-medium text-gray-900">{format(taxIncluded ? calculatedTax : cart.tax)}</span>
-        </div>
+        {/* Solo si el negocio cobra impuestos (Configuración → Pagos). */}
+        {taxEnabled && (
+          <div className={row}>
+            <span className="text-gray-500">IVA ({taxPercentage}%){taxIncluded && <span className="text-xs text-gray-400"> · incluido</span>}</span>
+            <span className="font-medium text-gray-900">{format(taxIncluded ? calculatedTax : cart.tax)}</span>
+          </div>
+        )}
 
         {cart.discount > 0 && (
           <div className={row}>

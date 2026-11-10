@@ -24,7 +24,10 @@ class CustomizationPricingService
      * bloqueada; si no, 422.
      *
      * @param  int[]  $templateZoneIds
-     * @return array{basePrice: float, zones: array<int, array{id: int, name: string, zoneTypeSlug: ?string, price: float}>, customizationPrice: float, total: float}
+     * listPrice es el precio base sin la oferta automática (para mostrar el descuento; si no hay oferta,
+     * es igual a basePrice). No lleva impuestos: el IVA solo se aplica si está activo en Pagos.
+     *
+     * @return array{basePrice: float, listPrice: float, zones: array<int, array{id: int, name: string, zoneTypeSlug: ?string, price: float}>, customizationPrice: float, total: float}
      */
     public function quote(Product $template, array $templateZoneIds, ?Collection $autoDiscounts = null): array
     {
@@ -60,6 +63,7 @@ class CustomizationPricingService
 
         return [
             'basePrice' => $basePrice,
+            'listPrice' => (float) $template->basePrice,
             'zones' => $zones->map(fn ($z) => [
                 'id' => $z->id,
                 'name' => $z->name,
@@ -89,6 +93,15 @@ class CustomizationPricingService
      */
     public function cartUnitPrice(mixed $customization, ?Collection $autoDiscounts = null): ?float
     {
+        return $this->cartQuote($customization, $autoDiscounts)['total'] ?? null;
+    }
+
+    /**
+     * Cotización vigente de un ítem del carrito (desglose para mostrar: prenda con oferta, precio de
+     * lista, personalización y total). null si es del formato viejo o la plantilla ya no está.
+     */
+    public function cartQuote(mixed $customization, ?Collection $autoDiscounts = null): ?array
+    {
         $templateId = is_array($customization) ? (int) ($customization['templateId'] ?? 0) : 0;
         if ($templateId <= 0 || $this->zoneIdsFrom($customization) === null) {
             return null;
@@ -98,7 +111,7 @@ class CustomizationPricingService
             return null;
         }
 
-        return $this->quoteForCustomization($template, $customization, $autoDiscounts)['total'];
+        return $this->quoteForCustomization($template, $customization, $autoDiscounts);
     }
 
     /**

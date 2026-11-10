@@ -110,16 +110,29 @@ class CustomizerTest extends TestCase
         $this->postJson('/api/customizer/quote', ['templateId' => $tpl->id, 'templateZoneIds' => []])->assertNotFound();
     }
 
-    public function test_la_cotizacion_aplica_la_oferta_automatica_al_precio_base(): void
+    public function test_la_cotizacion_solo_aplica_ofertas_hechas_para_la_plantilla(): void
     {
         [$tpl, $front] = $this->template();
+        $body = ['templateId' => $tpl->id, 'templateZoneIds' => [$front->id]];
+        // Ofertas de toda la tienda o de la categoría: el producto personalizado no es de catálogo, no aplican.
         \App\Models\Discount::create([
             'name' => 'Oferta 10%', 'type' => 'percent', 'value' => 10, 'isAuto' => true, 'isActive' => true,
             'appliesTo' => 'all', 'channel' => 'online',
         ]);
+        \App\Models\Discount::create([
+            'name' => 'Oferta categoría 15%', 'type' => 'percent', 'value' => 15, 'isAuto' => true, 'isActive' => true,
+            'appliesTo' => 'category', 'targetIds' => [$tpl->categoryId], 'channel' => 'online',
+        ]);
+        $res = $this->postJson('/api/customizer/quote', $body)->json('data');
+        $this->assertEquals([70000, 70000, 8000, 78000], [$res['basePrice'], $res['listPrice'], $res['customizationPrice'], $res['total']]);
 
-        $res = $this->postJson('/api/customizer/quote', ['templateId' => $tpl->id, 'templateZoneIds' => [$front->id]])->json('data');
-        $this->assertEquals([63000, 8000, 71000], [$res['basePrice'], $res['customizationPrice'], $res['total']]);
+        // Una oferta hecha para esa plantilla sí aplica, y la cotización trae el precio de lista para mostrarla.
+        \App\Models\Discount::create([
+            'name' => 'Oferta plantilla 10%', 'type' => 'percent', 'value' => 10, 'isAuto' => true, 'isActive' => true,
+            'appliesTo' => 'product', 'targetIds' => [$tpl->id], 'channel' => 'online',
+        ]);
+        $res = $this->postJson('/api/customizer/quote', $body)->json('data');
+        $this->assertEquals([63000, 70000, 8000, 71000], [$res['basePrice'], $res['listPrice'], $res['customizationPrice'], $res['total']]);
     }
 
     public function test_la_cotizacion_es_publica_para_todos_los_roles(): void
@@ -278,6 +291,49 @@ class CustomizerTest extends TestCase
         $this->patchJson("/api/cart/items/{$item['id']}/customization", [
             'customization' => $this->customization($tpl, [$front->id]), 'unitPrice' => 1,
         ])->assertOk()->assertJsonPath('item.unitPrice', 78000);
+    }
+
+    public function test_el_carrito_aplica_o_quita_la_oferta_al_activarla_o_desactivarla(): void
+    {
+        $this->actingAsCliente();
+        [$tpl, $front] = $this->template();
+        $this->postJson('/api/cart/items', [
+            'productId' => $tpl->id, 'isCustomized' => true, 'customization' => $this->customization($tpl, [$front->id]), 'quantity' => 1, 'unitPrice' => 1,
+        ])->assertCreated();
+        $item = $this->getJson('/api/cart')->json('items.0');
+        $this->assertEquals(78000, $item['unitPrice']);
+        $this->assertEquals(['basePrice' => 70000, 'listPrice' => 70000, 'customizationPrice' => 8000, 'total' => 78000], $item['pricing']);
+
+        // Se activa una oferta para la plantilla: el ítem que ya estaba en el carrito la toma.
+        $offer = \App\Models\Discount::create([
+            'name' => 'Oferta plantilla 10%', 'type' => 'percent', 'value' => 10, 'isAuto' => true, 'isActive' => true,
+            'appliesTo' => 'product', 'targetIds' => [$tpl->id], 'channel' => 'online',
+        ]);
+        $item = $this->getJson('/api/cart')->json('items.0');
+        $this->assertEquals(71000, $item['unitPrice']);
+        $this->assertEquals(['basePrice' => 63000, 'listPrice' => 70000, 'customizationPrice' => 8000, 'total' => 71000], $item['pricing']);
+
+        // Se desactiva: vuelve al precio normal.
+        $offer->update(['isActive' => false]);
+        $item = $this->getJson('/api/cart')->json('items.0');
+        $this->assertEquals(78000, $item['unitPrice']);
+        $this->assertEquals(70000, $item['pricing']['basePrice']);
+    }
+
+    public function test_el_cupon_del_checkout_cuenta_prenda_y_estampado_como_el_pedido(): void
+    {
+        $this->actingAsCliente();
+        [$tpl, $front] = $this->template();
+        \App\Models\Discount::create([
+            'code' => 'DIEZ', 'name' => 'Diez', 'type' => 'percent', 'value' => 10, 'isAuto' => false, 'isActive' => true,
+            'appliesTo' => 'all', 'channel' => 'all',
+        ]);
+        $custom = $this->customization($tpl, [$front->id]);
+        // Vista previa: 10% de 78.000 (prenda 70.000 + frente 8.000), no solo de la prenda.
+        $this->postJson('/api/discounts/validate', [
+            'code' => 'DIEZ', 'channel' => 'online',
+            'items' => [['productId' => $tpl->id, 'price' => 1, 'quantity' => 1, 'customization' => $custom]],
+        ])->assertOk()->assertJsonPath('data.amount', 7800);
     }
 
     // ==================== Plantillas ====================

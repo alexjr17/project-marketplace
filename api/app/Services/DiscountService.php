@@ -155,6 +155,15 @@ class DiscountService
             $pid = (int) ($it['productId'] ?? 0);
             $product = $products[$pid] ?? null;
             $price = $product ? $this->autoPrice($product, $autos) : (float) ($it['price'] ?? 0);
+            // Personalizado: prenda (con su oferta) + estampado de las zonas, igual que al crear el
+            // pedido; si no se puede cotizar, el precio de la prenda.
+            if ($product?->isTemplate && ! empty($it['customization'])) {
+                try {
+                    $quote = app(CustomizationPricingService::class)->quoteForCustomization($product, $it['customization'], $autos);
+                    $price = $quote['total'] ?? $price;
+                } catch (\Throwable) {
+                }
+            }
             $qty = (int) ($it['quantity'] ?? 0);
             $subtotal += $price * $qty;
             $lines[] = [
@@ -267,6 +276,11 @@ class DiscountService
     /** ¿El descuento automático aplica a este producto (por alcance)? */
     private function autoMatches(Discount $d, Product $product): bool
     {
+        // Plantilla personalizable: no es un producto de catálogo; las ofertas por categoría o de
+        // toda la tienda no la tocan. Solo una oferta hecha para esa plantilla (por producto).
+        if ($product->isTemplate && $d->appliesTo !== 'product') {
+            return false;
+        }
         if ($d->appliesTo === 'all') {
             return true;
         }

@@ -247,6 +247,7 @@ class CartService
         $product = null;
         $variant = null;
         $effectivePrice = (float) $item->unitPrice;
+        $pricing = null;
 
         if ($item->isCustomized && $item->customization) {
             $custom = $item->customization;
@@ -254,7 +255,15 @@ class CartService
                 // Precio vigente del diseño (v2: base con oferta + zonas). Si una zona dejó de
                 // existir, se conserva el precio guardado; el pedido lo vuelve a validar.
                 try {
-                    $effectivePrice = $this->customPricing->cartUnitPrice($custom, $autos) ?? $effectivePrice;
+                    $quote = $this->customPricing->cartQuote($custom, $autos);
+                    if ($quote) {
+                        $effectivePrice = $quote['total'];
+                        // Desglose vigente para el carrito (el guardado en el ítem puede estar viejo).
+                        $pricing = [
+                            'basePrice' => $quote['basePrice'], 'listPrice' => $quote['listPrice'],
+                            'customizationPrice' => $quote['customizationPrice'], 'total' => $quote['total'],
+                        ];
+                    }
                 } catch (ValidationException) {
                 }
                 $tplVariant = $this->templateVariantFor($custom);
@@ -307,6 +316,7 @@ class CartService
             'customization' => $item->customization,
             'quantity' => $item->quantity,
             'unitPrice' => $effectivePrice,
+            'pricing' => $pricing,
             'availableStock' => $availableStock,
             'hasStock' => $availableStock >= $item->quantity,
             'product' => $product,

@@ -54,7 +54,7 @@ class CartTest extends TestCase
 
         $item = $this->getJson('/api/cart')->assertOk()->json('items.0');
         $this->assertSame([
-            'id', 'productId', 'variantId', 'isCustomized', 'customization', 'quantity', 'unitPrice',
+            'id', 'productId', 'variantId', 'isCustomized', 'customization', 'quantity', 'unitPrice', 'pricing',
             'availableStock', 'hasStock', 'product', 'variant',
         ], array_keys($item));
         // El precio mostrado es el del producto (no el que mandó el cliente).

@@ -23,6 +23,7 @@ import { assetUrl } from '../../utils/assetUrl';
 import type { DesignImage } from '../../services/design-images.service';
 import { exportDesignsZip } from './designExport';
 import { isModel3D, view3DOf, type Model3D } from '../mannequin/models';
+import { useModels3D } from '../mannequin/useModels3D';
 import type { Mannequin3DHandle } from '../mannequin/Mannequin3D';
 
 export type AddedImage = Pick<ProcessedDesignImage, 'preview' | 'original' | 'fileName' | 'fileSize' | 'width' | 'height'>;
@@ -34,6 +35,8 @@ export function useCustomizer() {
   const navigate = useNavigate();
   const { addCustomizedProduct, updateCustomizedProduct, getCartItemById } = useCart();
 
+  // Maniquíes generados en el admin: hasta que llegan, la plantilla no sabe si es 3D.
+  const models3dReady = useModels3D();
   const templateParam = Number(params.get('template')) || null;
   const editId = params.get('edit');
 
@@ -191,7 +194,7 @@ export function useCustomizer() {
       customizerService.quote(template.id, ids)
         .then((q) => {
           if (!alive || !q || typeof q.total !== 'number') return;
-          setServerQuote({ basePrice: q.basePrice, zones: q.zones || [], customizationPrice: q.customizationPrice, total: q.total });
+          setServerQuote({ basePrice: q.basePrice, listPrice: q.listPrice, zones: q.zones || [], customizationPrice: q.customizationPrice, total: q.total });
         })
         .catch(() => { /* se queda el cálculo local */ });
     }, 300);
@@ -371,7 +374,7 @@ export function useCustomizer() {
       const previews = await buildPreviews();
       // Precio confirmado por el servidor para estas zonas (si no responde, el último conocido).
       const finalQuote: Quote = await customizerService.quote(template.id, usedZoneIds(studio.designs))
-        .then((q) => ({ basePrice: q.basePrice, zones: q.zones || [], customizationPrice: q.customizationPrice, total: q.total }))
+        .then((q) => ({ basePrice: q.basePrice, listPrice: q.listPrice, zones: q.zones || [], customizationPrice: q.customizationPrice, total: q.total }))
         .catch(() => quote);
       const product: CustomizedProduct = buildCustomizedProduct({
         template, color: { id: color.id, hexCode: color.hexCode, name: color.name }, size: { id: size.id, abbreviation: size.abbreviation },
@@ -407,7 +410,7 @@ export function useCustomizer() {
 
   return {
     // datos
-    templates, loadingTemplates, template, pendingTemplate: !!wantedTemplateId && !template, zones, views, zonesReady: rawZonesReady,
+    templates, loadingTemplates: loadingTemplates || !models3dReady, template, pendingTemplate: !!wantedTemplateId && !template, zones, views, zonesReady: rawZonesReady,
     color, size, colorId, sizeId, view, quantity, stock, loadingStock, quote,
     garment, garments, stageAspect, model3d, mannequinRef, viewPrintZones, viewBlockedZones, activeZone,
     studio, selected, isEditMode, editItem, saving, exporting, canSubmit, blockers, missing,
