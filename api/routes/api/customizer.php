@@ -7,6 +7,7 @@
 
 use App\Http\Controllers\CustomizerController;
 use App\Http\Controllers\DesignImageController;
+use App\Http\Controllers\MannequinModelController;
 use App\Http\Controllers\TemplateController;
 use App\Http\Controllers\TemplateRecipeController;
 use App\Http\Controllers\TemplateZoneController;
@@ -81,5 +82,26 @@ Route::prefix('design-images')->group(function () {
         Route::put('sort-order', [DesignImageController::class, 'updateSortOrder']);
         Route::put('{id}', [DesignImageController::class, 'update'])->whereNumber('id');
         Route::delete('{id}', [DesignImageController::class, 'destroy'])->whereNumber('id');
+    });
+});
+
+// ==================== MODELOS 3D (maniquíes generados con IA) ====================
+Route::prefix('mannequin-models')->group(function () {
+    Route::get('public', [MannequinModelController::class, 'publicList']);
+    Route::middleware(['auth:sanctum', 'permission:models3d.view'])->group(function () {
+        Route::get('/', [MannequinModelController::class, 'index']);
+        Route::get('accounts', [MannequinModelController::class, 'accounts']);
+        Route::get('{id}', [MannequinModelController::class, 'show'])->whereNumber('id');
+        Route::post('/', [MannequinModelController::class, 'store'])->middleware('throttle:10,1');
+        Route::put('{id}', [MannequinModelController::class, 'update'])->whereNumber('id');
+        Route::post('{id}/retry', [MannequinModelController::class, 'retry'])->whereNumber('id')->middleware('throttle:10,1');
+        Route::delete('{id}', [MannequinModelController::class, 'destroy'])->whereNumber('id');
+        // Chat para pulir el modelo
+        Route::get('{id}/edits', [MannequinModelController::class, 'edits'])->whereNumber('id');
+        Route::post('{id}/edits', [MannequinModelController::class, 'storeEdit'])->whereNumber('id')->middleware('throttle:20,1');
+        Route::post('{id}/edits/{editId}/apply', [MannequinModelController::class, 'applyEdit'])->whereNumber('id')->whereNumber('editId')->middleware('throttle:10,1');
+        Route::post('{id}/edits/{editId}/approve', [MannequinModelController::class, 'approveEdit'])->whereNumber('id')->whereNumber('editId')->middleware('throttle:10,1');
+        Route::post('{id}/views/generate', [MannequinModelController::class, 'generateFromViews'])->whereNumber('id')->middleware('throttle:10,1');
+        Route::post('{id}/views/{view}', [MannequinModelController::class, 'redoView'])->whereNumber('id')->whereIn('view', ['back', 'left', 'right'])->middleware('throttle:20,1');
     });
 });

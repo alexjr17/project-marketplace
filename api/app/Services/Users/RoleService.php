@@ -29,7 +29,7 @@ class RoleService
         'shipping.carriers', 'shipping.zones', 'shipping.connections', 'shipping.config', 'shipping.dispatch',
         'variants.view',
         'products.view', 'products.manage', 'templates.view', 'categories.view', 'product_types.view', 'sizes.view', 'colors.view',
-        'zone_types.view', 'design_images.view',
+        'zone_types.view', 'design_images.view', 'models3d.view',
         'inputs.view', 'input_types.view',
         'suppliers.view', 'purchase_orders.view', 'purchase_returns.view',
         'conversions.view', 'inventory_counts.view', 'inventory_movements.view',
@@ -48,7 +48,7 @@ class RoleService
         'sales' => ['orders.view', 'reviews.view', 'payments.view'],
         'shipping' => ['shipping.carriers', 'shipping.zones', 'shipping.connections', 'shipping.config', 'shipping.dispatch'],
         'catalog' => ['products.view', 'products.manage', 'variants.view', 'templates.view', 'categories.view', 'product_types.view', 'sizes.view', 'colors.view'],
-        'production' => ['zone_types.view', 'design_images.view'],
+        'production' => ['zone_types.view', 'design_images.view', 'models3d.view'],
         'supplies' => ['inputs.view', 'input_types.view'],
         'purchases' => ['suppliers.view', 'purchase_orders.view', 'purchase_returns.view', 'conversions.view', 'inventory_counts.view', 'inventory_movements.view'],
         // Administradores y Roles: solo SuperAdmin (no se asignan a otros roles).

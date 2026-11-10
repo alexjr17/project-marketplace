@@ -8,6 +8,7 @@ import { templatesService, type Template } from '../../../services/templates.ser
 import { templateZonesService } from '../../../services/template-zones.service';
 import { isDark } from '../../customizer/garment';
 import { isModel3D, MODELS_3D, type Model3D, type View3D } from '../../mannequin/models';
+import { useModels3D } from '../../mannequin/useModels3D';
 import { frameOf, type ArtArea, type ArtLayer, type MannequinArt } from '../../mannequin/art';
 import { zones3DOf, type Zone3D } from '../../mannequin/zones';
 import { DEFAULT_LAYOUT, LAYOUT_LIMITS, nudgeLayout, type PrintLayout } from './shirtConfig';
@@ -66,11 +67,13 @@ export function StudioBand({ reduced }: { reduced: boolean }) {
   const { format } = useCurrency();
   const storeName = settings.general.siteName || 'StylePrint';
   const templates = useStoreData<Template[]>('studio:templates', fetchTemplates);
+  const models3dReady = useModels3D();
 
   // Plantillas con maniquí 3D (las que se pueden probar aquí).
   const models = useMemo(
     () => (templates.data ?? []).filter((t) => t.isActive !== false && isModel3D(t.model3d)) as Array<Template & { model3d: Model3D }>,
-    [templates.data],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [templates.data, models3dReady],
   );
   const [tplIdx, setTplIdx] = useState(0);
   const template = models[Math.min(tplIdx, Math.max(0, models.length - 1))];

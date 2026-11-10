@@ -59,6 +59,8 @@ const InputTypeDetailPage = lazy(() => import('./pages/admin/InputTypeDetailPage
 const InputsPage = lazy(() => import('./pages/admin/InputsPage'));
 const InputDetailPage = lazy(() => import('./pages/admin/InputDetailPage'));
 const DesignImagesPage = lazy(() => import('./pages/admin/DesignImagesPage'));
+const MannequinModelsPage = lazy(() => import('./pages/admin/MannequinModelsPage'));
+const MannequinModelDetailPage = lazy(() => import('./pages/admin/MannequinModelDetailPage'));
 const OrdersPage = lazy(() => import('./pages/admin/OrdersPage').then(m => ({ default: m.OrdersPage })));
 const OrderDetailPage = lazy(() => import('./pages/admin/OrderDetailPage').then(m => ({ default: m.OrderDetailPage })));
 const ShippingPage = lazy(() => import('./pages/admin/ShippingPage').then(m => ({ default: m.ShippingPage })));
@@ -569,6 +571,24 @@ function App() {
                                       element={
                                         <PermissionRoute permission="design_images.view">
                                           <DesignImagesPage />
+                                        </PermissionRoute>
+                                      }
+                                    />
+
+                                    {/* Modelos 3D (maniquíes generados con IA) */}
+                                    <Route
+                                      path="/models-3d"
+                                      element={
+                                        <PermissionRoute permission="models3d.view">
+                                          <MannequinModelsPage />
+                                        </PermissionRoute>
+                                      }
+                                    />
+                                    <Route
+                                      path="/models-3d/:id"
+                                      element={
+                                        <PermissionRoute permission="models3d.view">
+                                          <MannequinModelDetailPage />
                                         </PermissionRoute>
                                       }
                                     />

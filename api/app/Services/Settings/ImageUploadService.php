@@ -13,7 +13,7 @@ use Illuminate\Support\Str;
 class ImageUploadService
 {
     /** Subcarpetas válidas; cualquier otro valor cae en "general". */
-    public const FOLDERS = ['products', 'designs', 'avatars', 'orders', 'templates', 'references', 'general'];
+    public const FOLDERS = ['products', 'designs', 'avatars', 'orders', 'templates', 'references', 'models3d', 'general'];
 
     public const MAX_BYTES = 10 * 1024 * 1024; // 10 MB
 

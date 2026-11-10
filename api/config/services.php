@@ -49,6 +49,19 @@ return [
         'public_key' => env('MERCADOPAGO_PUBLIC_KEY', ''),
     ],
 
+    // Hugging Face: cuentas para generar maniquíes 3D (Admin → Modelos 3D). Cada cuenta gratis
+    // tiene su cuota diaria de GPU; se usa la que tenga cuota. Los tokens van solo en el .env.
+    'huggingface' => [
+        'tokens' => array_filter([
+            1 => env('HF_TOKEN'),
+            2 => env('HF_TOKEN_2'),
+            3 => env('HF_TOKEN_3'),
+            4 => env('HF_TOKEN_4'),
+            5 => env('HF_TOKEN_5'),
+            6 => env('HF_TOKEN_6'),
+        ]),
+    ],
+
     // Webhooks: si falta el secreto de firma, en producción se RECHAZAN las peticiones.
     // Solo en local/testing se puede permitir explícitamente (para probar sin la pasarela).
     'webhooks' => [

@@ -52,6 +52,8 @@ export interface Mannequin3DProps {
   handleRef?: MutableRefObject<Mannequin3DHandle | null>;
   /** Modelos con patrón: tiñe suave cada pieza (frente, espalda, mangas) para ver dónde van las costuras. */
   pieceGuide?: boolean;
+  /** Config propia en vez de la del registro (revisión de un maniquí generado, con ajustes sin guardar). */
+  config?: ModelConfig;
 }
 
 /** Alto del maniquí en la escena (unidades). */
@@ -77,12 +79,18 @@ function useMannequin(cfg: ModelConfig) {
   return useMemo(() => {
     if (cfg.parts) return partsMannequin(scene);
     let src: THREE.BufferGeometry | null = null;
+    let srcMap: THREE.Texture | null = null;
     scene.updateMatrixWorld(true);
     scene.traverse((o) => {
       const m = o as THREE.Mesh;
-      if (m.isMesh && !src) src = m.geometry.clone().applyMatrix4(m.matrixWorld);
+      if (m.isMesh && !src) {
+        src = m.geometry.clone().applyMatrix4(m.matrixWorld);
+        srcMap = ((Array.isArray(m.material) ? m.material[0] : m.material) as THREE.MeshStandardMaterial)?.map ?? null;
+      }
     });
     let g = (src as unknown as THREE.BufferGeometry).toNonIndexed();
+    // Tela por color (modelos generados en cabeza o piernas): lo claro de la textura es la prenda.
+    const byColor = cfg.lightFrom !== undefined ? clothByColor(g, srcMap, cfg.lightFrom) : null;
     g.computeBoundingBox();
     const size0 = g.boundingBox!.getSize(new THREE.Vector3());
     const center0 = g.boundingBox!.getCenter(new THREE.Vector3());
@@ -113,14 +121,19 @@ function useMannequin(cfg: ModelConfig) {
       if (!drop) keep.push(t);
     }
     const out = new Float32Array(keep.length * 9);
+    const clothOut = new Float32Array(keep.length * 3).fill(1);
     keep.forEach((t, j) => {
-      for (let k = 0; k < 3; k++) out.set([pos.getX(t + k), pos.getY(t + k), pos.getZ(t + k)], j * 9 + k * 3);
+      for (let k = 0; k < 3; k++) {
+        out.set([pos.getX(t + k), pos.getY(t + k), pos.getZ(t + k)], j * 9 + k * 3);
+        if (byColor) clothOut[j * 3 + k] = byColor[t + k];
+      }
     });
     g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.BufferAttribute(out, 3));
     g.computeVertexNormals();
     g.boundingBox = box;
-    g.setAttribute('aCloth', new THREE.BufferAttribute(new Float32Array(out.length / 3).fill(1), 1));
+    g.setAttribute('aCloth', new THREE.BufferAttribute(clothOut, 1));
+    g.userData.clothByColor = !!byColor;
     addSmoothSurface(g);
 
     // Cuello del maniquí: centro y radio medidos justo encima del cuello de la camiseta.
@@ -137,6 +150,41 @@ function useMannequin(cfg: ModelConfig) {
 
     return { geometry: g, box, size, neck: { cx, cz, r: neckR }, collar };
   }, [scene, cfg]);
+}
+
+/**
+ * Tela por color: lee la textura del modelo generado en cada vértice. La prenda sale blanca en la foto
+ * estándar y el maniquí es grafito, así que lo claro (luminancia > `threshold`) es tela. Para que una
+ * costura o sombra no deje puntos sueltos, cada triángulo queda entero del lado de la mayoría.
+ * Devuelve 1 (tela) / 0 (maniquí) por vértice, o null si el modelo no trae textura.
+ */
+function clothByColor(g: THREE.BufferGeometry, map: THREE.Texture | null, threshold: number): Float32Array | null {
+  const uv = g.attributes.uv;
+  const img = map?.image as CanvasImageSource & { width?: number; height?: number } | undefined;
+  if (!uv || !img || !img.width || !img.height) return null;
+  const W = Math.min(1024, img.width), H = Math.min(1024, img.height);
+  const canvas = document.createElement('canvas');
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  if (!ctx) return null;
+  ctx.drawImage(img, 0, 0, W, H);
+  const px = ctx.getImageData(0, 0, W, H).data;
+  // glTF: el origen de la textura es arriba a la izquierda (flipY = false).
+  const flip = map?.flipY ?? false;
+  const out = new Float32Array(uv.count);
+  for (let i = 0; i < uv.count; i++) {
+    const u = ((uv.getX(i) % 1) + 1) % 1, v = ((uv.getY(i) % 1) + 1) % 1;
+    const x = Math.min(W - 1, Math.floor(u * W)), y = Math.min(H - 1, Math.floor((flip ? 1 - v : v) * H));
+    const o = (y * W + x) * 4;
+    const lum = (0.2126 * px[o] + 0.7152 * px[o + 1] + 0.0722 * px[o + 2]) / 255;
+    out[i] = lum > threshold ? 1 : 0;
+  }
+  // Cada triángulo entero de un lado (el borde sigue las aristas de la malla, sin puntos sueltos).
+  for (let t = 0; t < out.length; t += 3) {
+    const m = out[t] + out[t + 1] + out[t + 2] >= 2 ? 1 : 0;
+    out[t] = out[t + 1] = out[t + 2] = m;
+  }
+  return out;
 }
 
 /**
@@ -282,7 +330,7 @@ function measureCollar(pos: Float32Array, box: THREE.Box3, size: THREE.Vector3, 
  * Material: tela mate del color elegido o maniquí satinado (por píxel). Cabeza: maniquí. Cuello:
  * maniquí cerca del eje del cuello, tela (el resorte) más afuera. Debajo del cuello: tela.
  */
-function useGarmentMaterial(box: THREE.Box3, size: THREE.Vector3, cfg: ModelConfig, neck: { cx: number; cz: number; r: number }, collar: Float32Array | null) {
+function useGarmentMaterial(box: THREE.Box3, size: THREE.Vector3, cfg: ModelConfig, neck: { cx: number; cz: number; r: number }, collar: Float32Array | null, byColor = false) {
   const material = useMemo(() => {
     const uniforms = {
       uNeckC: { value: new THREE.Vector2(neck.cx, neck.cz) },
@@ -293,7 +341,7 @@ function useGarmentMaterial(box: THREE.Box3, size: THREE.Vector3, cfg: ModelConf
       uCollarCurve: { value: cfg.collarCurve },
       uCollarSide: { value: cfg.collarSide ?? 0 },
       uCollarMesh: { value: collar ? 1 : 0 },
-      uParts: { value: cfg.parts ? 1 : 0 },
+      uParts: { value: cfg.parts || byColor ? 1 : 0 },
       uPrint: { value: null as THREE.Texture | null },
       uUsePrint: { value: 0 },
       uCollarH: { value: Array.from(collar ?? new Float32Array(COLLAR_BINS)) },
@@ -301,6 +349,7 @@ function useGarmentMaterial(box: THREE.Box3, size: THREE.Vector3, cfg: ModelConf
       uSize: { value: new THREE.Vector2(size.x, size.y) },
       uHeadFrom: { value: cfg.headFrom },
       uBodyTop: { value: cfg.bodyTop },
+      uClothFrom: { value: cfg.clothFrom ?? -1 },
       uShirt: { value: new THREE.Color('#ffffff') },
       uDummy: { value: new THREE.Color(MANNEQUIN_COLOR) },
     };
@@ -313,7 +362,7 @@ function useGarmentMaterial(box: THREE.Box3, size: THREE.Vector3, cfg: ModelConf
       shader.fragmentShader = shader.fragmentShader
         .replace(
           '#include <common>',
-          '#include <common>\nvarying vec3 vObj;\nuniform vec2 uNeckC;\nuniform float uNeckR;\nuniform float uCut;\nuniform float uCollarFront;\nuniform float uCollarBack;\nuniform float uCollarCurve;\nuniform float uCollarSide;\nuniform float uCollarMesh;\nuniform float uCollarH[24];\nuniform float uParts;\nvarying float vCloth;\nvarying vec2 vPrintUv;\nuniform sampler2D uPrint;\nuniform float uUsePrint;\nuniform vec2 uMin;\nuniform vec2 uSize;\nuniform float uHeadFrom;\nuniform float uBodyTop;\nuniform vec3 uShirt;\nuniform vec3 uDummy;',
+          '#include <common>\nvarying vec3 vObj;\nuniform vec2 uNeckC;\nuniform float uNeckR;\nuniform float uCut;\nuniform float uCollarFront;\nuniform float uCollarBack;\nuniform float uCollarCurve;\nuniform float uCollarSide;\nuniform float uCollarMesh;\nuniform float uCollarH[24];\nuniform float uParts;\nvarying float vCloth;\nvarying vec2 vPrintUv;\nuniform sampler2D uPrint;\nuniform float uUsePrint;\nuniform vec2 uMin;\nuniform vec2 uSize;\nuniform float uHeadFrom;\nuniform float uBodyTop;\nuniform float uClothFrom;\nuniform vec3 uShirt;\nuniform vec3 uDummy;',
         )
         .replace(
           '#include <color_fragment>',
@@ -344,6 +393,8 @@ function useGarmentMaterial(box: THREE.Box3, size: THREE.Vector3, cfg: ModelConf
           float cloth = max(below, far);
           if (muv.y < uBodyTop) cloth = 1.0;
           if (muv.y > uHeadFrom) cloth = 0.0;
+          // Maniquí de cabeza o de piernas: tela arriba de la línea, maniquí abajo.
+          if (uClothFrom >= 0.0) cloth = smoothstep(uClothFrom - aa, uClothFrom + aa, muv.y);
           // Modelo por piezas (v2): la tela es la pieza "camiseta" del archivo.
           if (uParts > 0.5) cloth = step(0.5, vCloth);
           diffuseColor.rgb = mix(uDummy, uShirt, cloth);
@@ -355,7 +406,7 @@ function useGarmentMaterial(box: THREE.Box3, size: THREE.Vector3, cfg: ModelConf
     };
     m.userData.uniforms = uniforms;
     return m;
-  }, [box, size, cfg, neck, collar]);
+  }, [box, size, cfg, neck, collar, byColor]);
   useEffect(() => () => material.dispose(), [material]);
   return material;
 }
@@ -395,6 +446,8 @@ function viewAngles(geometry: THREE.BufferGeometry, box: THREE.Box3, size: THREE
     diff = Math.atan2(Math.sin(diff), Math.cos(diff));
     return base + Math.max(-0.6, Math.min(0.6, diff));
   };
+  // Objeto completo: los cuatro lados de frente (no hay mangas que buscar).
+  if (cfg.object) return { ...VIEW_ANGLE };
   return { front: VIEW_ANGLE.front, back: VIEW_ANGLE.back, rightSleeve: sleeve(-1), leftSleeve: sleeve(1) };
 }
 
@@ -420,6 +473,14 @@ function viewDepths(geometry: THREE.BufferGeometry, box: THREE.Box3, size: THREE
     for (let i = 0; i < pos.count; i++) if (Math.abs(pos.getY(i) - sleeveY) < band) m = Math.max(m, pos.getX(i) * dir.x + pos.getZ(i) * dir.z);
     return m;
   };
+  if (cfg.object) {
+    // Objeto completo: cada lado donde lo toca un rayo a media altura.
+    const midY = box.min.y + size.y * 0.5;
+    return {
+      front: depth('front', midY, box.max.z), back: depth('back', midY, -box.min.z),
+      rightSleeve: depth('rightSleeve', midY, -box.min.x), leftSleeve: depth('leftSleeve', midY, box.max.x),
+    };
+  }
   return {
     front: depth('front', chestY, box.max.z),
     back: depth('back', chestY, -box.min.z),
@@ -907,13 +968,13 @@ function paintPattern(
   }
 }
 
-function Garment({ model, color, art, artRef, frames, focus, locked = false, animView, printKey = 0, still = false, onReady, handleRef, pieceGuide = false }: Omit<Mannequin3DProps, 'active'>) {
-  const cfg = MODELS_3D[model];
+function Garment({ model, color, art, artRef, frames, focus, locked = false, animView, printKey = 0, still = false, onReady, handleRef, pieceGuide = false, config }: Omit<Mannequin3DProps, 'active'>) {
+  const cfg = config ?? MODELS_3D[model];
   const group = useRef<THREE.Group>(null);
   const drag = useRef({ down: false, x: 0, offset: 0 });
   const { gl, scene, camera } = useThree();
   const { geometry, box, size, neck, collar } = useMannequin(cfg);
-  const material = useGarmentMaterial(box, size, cfg, neck, collar);
+  const material = useGarmentMaterial(box, size, cfg, neck, collar, !!geometry.userData.clothByColor);
   useEffect(() => { onReady?.(); }, [onReady]);
 
   useEffect(() => {
@@ -1122,7 +1183,7 @@ function Garment({ model, color, art, artRef, frames, focus, locked = false, ani
       >
         <mesh geometry={geometry} material={material} />
         {!pattern && <mesh geometry={geometry} material={printMaterial} renderOrder={1} />}
-        {!cfg.parts && <Stand box={box} size={size} hem={cfg.hem} />}
+        {!cfg.parts && !cfg.object && <Stand box={box} size={size} hem={cfg.hem} />}
       </group>
       <ContactShadows position={[0, box.min.y + 0.001, 0]} opacity={0.35} scale={3} blur={2.6} far={1.2} resolution={512} />
     </>

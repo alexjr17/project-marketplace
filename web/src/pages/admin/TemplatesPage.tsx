@@ -8,6 +8,7 @@ import { TemplateForm, type TemplateFormData } from '../../components/admin/Temp
 import { VisualZoneEditor } from '../../components/admin/VisualZoneEditor';
 import { MannequinSnapshots } from '../../components/mannequin/MannequinSnapshots';
 import { isModel3D, MODELS_3D, view3DOf, type View3D } from '../../components/mannequin/models';
+import { useModels3D } from '../../components/mannequin/useModels3D';
 
 /** Piezas del maniquí por slug del tipo de zona (el editor de zonas trabaja con slugs). */
 const PIECE_SLUG: Record<View3D, string> = { front: 'frente', back: 'espalda', rightSleeve: 'manga-derecha', leftSleeve: 'manga-izquierda' };
@@ -52,6 +53,7 @@ export const TemplatesPage = () => {
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
   // Fotos del maniquí 3D de la plantilla (fondo del editor de zonas).
   const [snapshots, setSnapshots] = useState<Record<View3D, string> | null>(null);
+  useModels3D();
   const model3d = isModel3D(selectedTemplate?.model3d) ? selectedTemplate.model3d : null;
   useEffect(() => { setSnapshots(null); }, [model3d]);
   const [generatingVariantsFor, setGeneratingVariantsFor] = useState<Template | null>(null);

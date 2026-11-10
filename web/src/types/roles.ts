@@ -57,6 +57,7 @@ export type Permission =
   // Producción
   | 'zone_types.view'          // Tipos de Zona
   | 'design_images.view'       // Imágenes de Diseño
+  | 'models3d.view'            // Modelos 3D (maniquíes generados con IA)
   // Inventario
   | 'inputs.view'              // Insumos
   | 'input_types.view'         // Tipos de Insumo
@@ -127,7 +128,7 @@ export const SYSTEM_ROLES: Role[] = [
       'shipping.carriers', 'shipping.zones', 'shipping.connections', 'shipping.config', 'shipping.dispatch',
       'variants.view',
       'products.view', 'templates.view', 'categories.view', 'product_types.view', 'sizes.view', 'colors.view',
-      'zone_types.view', 'design_images.view',
+      'zone_types.view', 'design_images.view', 'models3d.view',
       'inputs.view', 'input_types.view',
       'suppliers.view', 'purchase_orders.view', 'purchase_returns.view',
       'conversions.view', 'inventory_counts.view', 'inventory_movements.view',
@@ -205,6 +206,7 @@ export const PERMISSION_GROUPS: {
     permissions: [
       { id: 'zone_types.view', label: 'Tipos de Zona', description: 'Tipos de zona de diseño' },
       { id: 'design_images.view', label: 'Imágenes de Diseño', description: 'Catálogo de imágenes' },
+      { id: 'models3d.view', label: 'Modelos 3D', description: 'Generar maniquíes 3D con IA (gasta la cuota de GPU de Hugging Face)' },
     ],
   },
   {

@@ -7,6 +7,7 @@ use App\Models\Product;
 use App\Models\ProductColor;
 use App\Models\ProductSize;
 use App\Models\ProductType;
+use App\Services\Customizer\MannequinModelService;
 use App\Services\VariantService;
 use App\Support\TemplateImages;
 use Illuminate\Http\Request;
@@ -22,6 +23,12 @@ class TemplateController extends Controller
 
     /** Maniquíes 3D del personalizador (web/src/components/mannequin/models.ts). Null = editor con fotos. */
     public const MODELS_3D = ['basica', 'oversize'];
+
+    /** Maniquíes que puede usar una plantilla: los del sistema y los publicados en Admin → Modelos 3D. */
+    private function models3d(): array
+    {
+        return array_merge(self::MODELS_3D, app(MannequinModelService::class)->publishedKeys());
+    }
 
     private const RELATIONS = [
         'category:id,name,slug',
@@ -135,7 +142,7 @@ class TemplateController extends Controller
             'zoneTypeImages' => 'nullable',
             'designZones' => 'nullable',
             'exclusionZones' => 'nullable',
-            'model3d' => ['nullable', 'string', Rule::in(self::MODELS_3D)],
+            'model3d' => ['nullable', 'string', Rule::in($this->models3d())],
             'tags' => 'nullable|array',
             'colorIds' => 'nullable|array',
             'sizeIds' => 'nullable|array',
@@ -211,7 +218,7 @@ class TemplateController extends Controller
             'zoneTypeImages' => 'nullable',
             'designZones' => 'nullable',
             'exclusionZones' => 'nullable',
-            'model3d' => ['nullable', 'string', Rule::in(self::MODELS_3D)],
+            'model3d' => ['nullable', 'string', Rule::in($this->models3d())],
             'tags' => 'nullable|array',
             'isActive' => 'nullable|boolean',
             'colorIds' => 'nullable|array',

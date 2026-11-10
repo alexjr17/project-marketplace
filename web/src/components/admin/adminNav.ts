@@ -58,6 +58,7 @@ export const ADMIN_NAV: NavSection[] = [
         tabs: [
           { path: `${BASE}/zone-types`, label: 'Tipos de zona', permission: 'zone_types.view' },
           { path: `${BASE}/design-images`, label: 'Imágenes de diseño', permission: 'design_images.view' },
+          { path: `${BASE}/models-3d`, label: 'Modelos 3D', permission: 'models3d.view' },
         ],
       },
       {

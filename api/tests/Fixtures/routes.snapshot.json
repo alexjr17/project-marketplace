@@ -77,6 +77,10 @@
         "auth:sanctum",
         "permission:settings.label_templates,settings.general"
     ],
+    "DELETE api/mannequin-models/{id}": [
+        "auth:sanctum",
+        "permission:models3d.view"
+    ],
     "DELETE api/manufacturing/brands/{id}": [
         "auth:sanctum",
         "permission:manufacturing.catalogs.view"
@@ -425,6 +429,23 @@
     "GET api/label-templates/{id}": [
         "auth:sanctum",
         "permission:settings.label_templates,settings.general,products.view"
+    ],
+    "GET api/mannequin-models": [
+        "auth:sanctum",
+        "permission:models3d.view"
+    ],
+    "GET api/mannequin-models/accounts": [
+        "auth:sanctum",
+        "permission:models3d.view"
+    ],
+    "GET api/mannequin-models/public": [],
+    "GET api/mannequin-models/{id}": [
+        "auth:sanctum",
+        "permission:models3d.view"
+    ],
+    "GET api/mannequin-models/{id}/edits": [
+        "auth:sanctum",
+        "permission:models3d.view"
     ],
     "GET api/manufacturing/brands": [
         "auth:sanctum",
@@ -1199,6 +1220,41 @@
         "auth:sanctum",
         "permission:settings.label_templates,settings.general"
     ],
+    "POST api/mannequin-models": [
+        "auth:sanctum",
+        "permission:models3d.view",
+        "throttle:10,1"
+    ],
+    "POST api/mannequin-models/{id}/edits": [
+        "auth:sanctum",
+        "permission:models3d.view",
+        "throttle:20,1"
+    ],
+    "POST api/mannequin-models/{id}/edits/{editId}/apply": [
+        "auth:sanctum",
+        "permission:models3d.view",
+        "throttle:10,1"
+    ],
+    "POST api/mannequin-models/{id}/edits/{editId}/approve": [
+        "auth:sanctum",
+        "permission:models3d.view",
+        "throttle:10,1"
+    ],
+    "POST api/mannequin-models/{id}/retry": [
+        "auth:sanctum",
+        "permission:models3d.view",
+        "throttle:10,1"
+    ],
+    "POST api/mannequin-models/{id}/views/generate": [
+        "auth:sanctum",
+        "permission:models3d.view",
+        "throttle:10,1"
+    ],
+    "POST api/mannequin-models/{id}/views/{view}": [
+        "auth:sanctum",
+        "permission:models3d.view",
+        "throttle:20,1"
+    ],
     "POST api/manufacturing/brands": [
         "auth:sanctum",
         "permission:manufacturing.catalogs.view"
@@ -1577,6 +1633,10 @@
     "PUT api/inputs/{id}": [
         "auth:sanctum",
         "permission:inputs.view"
+    ],
+    "PUT api/mannequin-models/{id}": [
+        "auth:sanctum",
+        "permission:models3d.view"
     ],
     "PUT api/manufacturing/brands/{id}": [
         "auth:sanctum",
