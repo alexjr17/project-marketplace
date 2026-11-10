@@ -10,6 +10,7 @@ import { Suspense, useEffect, useMemo, useRef, useState, type MutableRefObject }
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { ContactShadows, Environment, Lightformer, useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
+import { acceleratedRaycast, MeshBVH } from 'three-mesh-bvh';
 import { CAMERA, MANNEQUIN_COLOR, MODELS_3D, VIEW_ANGLE, VIEWS_3D, type Model3D, type ModelConfig, type View3D } from './models';
 import { FULL_FRAME, paintArt, type ArtArea, type MannequinArt } from './art';
 
@@ -57,6 +58,9 @@ export interface Mannequin3DProps {
 const HEIGHT = 2.4;
 /** Ancho de la textura de cada vista (px). */
 const TEX_W = 1024;
+/** Lienzo del patrón mientras se arrastra (liviano) y pausa que marca el fin del arrastre. */
+const LIVE_ATLAS = 2048;
+const LIVE_MS = 250;
 const PASS_SECONDS = 1.1;
 const HALF_TAN = Math.tan(((CAMERA.fov / 2) * Math.PI) / 180);
 
@@ -180,6 +184,8 @@ function partsMannequin(scene: THREE.Object3D) {
   const box = g.boundingBox!.clone();
   const size = box.getSize(new THREE.Vector3());
   addSmoothSurface(g);
+  // Con patrón (piezas en la UV): pliegues más suaves, el estampado se ve parejo al moverlo.
+  if (uvs.some((v) => v !== 0)) relaxFolds(g, size);
   return { geometry: g, box, size, neck: { cx: 0, cz: 0, r: size.y * 0.04 }, collar: null as Float32Array | null };
 }
 
@@ -478,9 +484,10 @@ function addSmoothSurface(g: THREE.BufferGeometry, passes = 40) {
   // Punto de cada vértice "aplanado" hacia la tela lisa SOLO a lo largo de la normal suavizada (sin
   // el deslizamiento de lado del suavizado): en un pliegue, las laderas caen sobre la tela lisa y el
   // estampado se ve plegado (comprimido) como en tela real, en vez de estirado.
-  const sn = new Float32Array(n * 3), sp = new Float32Array(n * 3);
+  const sn = new Float32Array(n * 3), sp = new Float32Array(n * 3), smooth = new Float32Array(n * 3);
   for (let i = 0; i < n; i++) {
     const id = ids[i] * 3;
+    smooth[i * 3] = cur[id]; smooth[i * 3 + 1] = cur[id + 1]; smooth[i * 3 + 2] = cur[id + 2];
     const l = Math.hypot(nrm[id], nrm[id + 1], nrm[id + 2]) || 1;
     const nx = nrm[id] / l, ny = nrm[id + 1] / l, nz = nrm[id + 2] / l;
     sn[i * 3] = nx; sn[i * 3 + 1] = ny; sn[i * 3 + 2] = nz;
@@ -490,6 +497,85 @@ function addSmoothSurface(g: THREE.BufferGeometry, passes = 40) {
   }
   g.setAttribute('aSmoothN', new THREE.BufferAttribute(sn, 3));
   g.setAttribute('aFlat', new THREE.BufferAttribute(sp, 3));
+  // Superficie lisa (sin arrugas) y vértices soldados: los usa relaxFolds.
+  g.setAttribute('aSmoothP', new THREE.BufferAttribute(smooth, 3));
+  g.userData.weld = { ids, nb };
+}
+
+/**
+ * Pliegues más suaves en la forma de la tela (sobre todo en las mangas, donde son hondos): el estampado
+ * se ve parejo en vez de ondulado. La sombra de los pliegues se conserva (normales), así se siguen viendo.
+ * Cerca del cuello y de los bordes de la tela no se toca nada.
+ */
+const RELAX_SLEEVE = 0.85;
+const RELAX_TORSO = 0.85;
+function relaxFolds(g: THREE.BufferGeometry, size: THREE.Vector3) {
+  const weld = g.userData.weld as { ids: Int32Array; nb: Int32Array[] } | undefined;
+  const sp = g.attributes.aSmoothP, sn = g.attributes.aSmoothN, uv = g.attributes.uv, cloth = g.attributes.aCloth;
+  if (!weld || !sp || !uv || !cloth) return;
+  const { ids, nb } = weld;
+  const pos = g.attributes.position, nor = g.attributes.normal;
+  const m = nb.length;
+  // cuánto se alisa cada vértice soldado; 0 en el maniquí y en lo que lo toca
+  let f = new Float32Array(m).fill(-1);
+  const isMan = new Uint8Array(m);
+  for (let i = 0; i < pos.count; i++) {
+    const w = ids[i];
+    if (cloth.getX(i) < 0.5) { isMan[w] = 1; continue; }
+    const k = uv.getY(i) >= 0.5 ? RELAX_SLEEVE : RELAX_TORSO;
+    f[w] = Math.max(f[w], k);
+  }
+  for (let w = 0; w < m; w++) if (isMan[w] || f[w] < 0) f[w] = 0;
+  // bordes de la tela (cuello, puños, ruedo): sin vecinos por algún lado → 0
+  const deg = new Uint16Array(m);
+  for (let i = 0; i < pos.count; i += 3) for (let k = 0; k < 3; k++) deg[ids[i + k]]++;
+  // axila: debajo, la tela cuelga separada del cuerpo (se puede alisar también el ruedo y bajar crestas)
+  let armpitY = Infinity;
+  for (let i = 0; i < pos.count; i++) if (cloth.getX(i) > 0.5 && uv.getY(i) >= 0.5) armpitY = Math.min(armpitY, pos.getY(i));
+  const freeY = armpitY - size.y * 0.04;
+  const wy = new Float32Array(m);
+  for (let i = 0; i < pos.count; i++) wy[ids[i]] = pos.getY(i);
+  // borde: menos triángulos que vecinos (abanico abierto); el ruedo del torso sí se alisa
+  for (let w = 0; w < m; w++) {
+    const hem = f[w] === RELAX_TORSO && wy[w] < freeY;
+    if ((deg[w] < nb[w].length && !hem) || nb[w].some((r) => isMan[r])) f[w] = 0;
+  }
+  // cuello: la parte de arriba de la tela no se toca
+  let clothTop = -Infinity;
+  for (let i = 0; i < pos.count; i++) if (cloth.getX(i) > 0.5) clothTop = Math.max(clothTop, pos.getY(i));
+  const neckY = clothTop - size.y * 0.05;
+  for (let i = 0; i < pos.count; i++) if (pos.getY(i) > neckY && uv.getY(i) < 0.5) f[ids[i]] = 0;
+  // transición suave hacia lo que no se toca
+  const fixed = Uint8Array.from(f, (x) => (x === 0 ? 1 : 0));
+  for (let it = 0; it < 12; it++) {
+    const nf = new Float32Array(m);
+    for (let w = 0; w < m; w++) {
+      if (fixed[w]) continue;
+      let acc = f[w];
+      for (const r of nb[w]) acc += f[r];
+      nf[w] = acc / (nb[w].length + 1);
+    }
+    f = nf;
+  }
+  const a = new THREE.Vector3(), b = new THREE.Vector3();
+  for (let i = 0; i < pos.count; i++) {
+    const k = f[ids[i]];
+    if (k <= 0) continue;
+    // solo se rellenan los valles (hacia afuera): hundir las crestas dejaría ver el maniquí
+    b.fromBufferAttribute(sp, i).sub(a.fromBufferAttribute(pos, i));
+    const out = b.x * sn.getX(i) + b.y * sn.getY(i) + b.z * sn.getZ(i);
+    // Solo se rellenan los valles, hacia afuera y en línea recta (a lo largo de la normal lisa):
+    // hundir la tela deja asomar el maniquí (el básico va ceñido) y deslizarla de lado volteaba
+    // triángulos que quedaban como huequitos.
+    const lift = Math.max(0, out) * k;
+    a.x += sn.getX(i) * lift; a.y += sn.getY(i) * lift; a.z += sn.getZ(i) * lift;
+    pos.setXYZ(i, a.x, a.y, a.z);
+    // la normal conserva casi toda la sombra del pliegue
+    a.fromBufferAttribute(nor, i).lerp(b.fromBufferAttribute(sn, i), k * 0.35).normalize();
+    nor.setXYZ(i, a.x, a.y, a.z);
+  }
+  pos.needsUpdate = true; nor.needsUpdate = true;
+  g.computeBoundingBox();
 }
 
 /** Proyección del escenario de una vista sobre la tela (en coordenadas del maniquí). */
@@ -657,8 +743,13 @@ interface PatternHit {
  * de tela que se toca (sin rayos vecinos, que en una costura caían en otra pieza).
  */
 function makeStageToPattern(geometry: THREE.BufferGeometry) {
+  // Índice espacial (BVH): cada rayo revisa unos pocos triángulos en vez de toda la malla (el arrastre
+  // repinta varias veces por segundo).
   const mesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }));
+  (geometry as THREE.BufferGeometry & { boundsTree?: MeshBVH }).boundsTree ??= new MeshBVH(geometry);
+  mesh.raycast = acceleratedRaycast;
   const ray = new THREE.Raycaster();
+  (ray as THREE.Raycaster & { firstHitOnly?: boolean }).firstHitOnly = true;
   const cloth = geometry.attributes.aCloth;
   const pos = geometry.attributes.position, uv = geometry.attributes.uv;
   const half = Math.tan(((CAMERA.fov / 2) * Math.PI) / 180);
@@ -706,7 +797,18 @@ function makeStageToPattern(geometry: THREE.BufferGeometry) {
     return h;
   };
 
+  // Lo ya calculado (las zonas no cambian mientras se arrastra un diseño) no se vuelve a medir.
+  const memo = new Map<string, PatternHit | null>();
   return (angle: number, xPct: number, yPct: number): PatternHit | null => {
+    const key = `${angle}|${xPct}|${yPct}`;
+    if (memo.has(key)) return memo.get(key)!;
+    if (memo.size > 400) memo.clear();
+    const out = measure(angle, xPct, yPct);
+    memo.set(key, out);
+    return out;
+  };
+
+  function measure(angle: number, xPct: number, yPct: number): PatternHit | null {
     const h = cast(angle, xPct, yPct);
     if (!h || !h.face || !h.uv) return null;
     viewDir.set(0, 0, -1).applyAxisAngle(Y_AXIS, -angle);
@@ -730,7 +832,7 @@ function makeStageToPattern(geometry: THREE.BufferGeometry) {
     const depth = h.distance * dir.dot(viewDir);
     const perPct = ((2 * half * depth) / 100) * local;
     return { c: h.uv.clone(), perPct, rot };
-  };
+  }
 }
 const Y_AXIS = new THREE.Vector3(0, 1, 0);
 
@@ -873,22 +975,32 @@ function Garment({ model, color, art, artRef, frames, focus, locked = false, ani
   }, [printMaterial, places]);
 
   // Modelos con patrón (v2): una textura para toda la tela, parte del material de la prenda.
+  // Dos lienzos del patrón: el nítido y uno liviano (2048) que se usa mientras se arrastra un diseño
+  // —subir 4096² en cada cuadro trababa el arrastre—; al soltar se repinta el nítido.
   const pattern = useMemo(() => {
     if (!cfg.uv) return null;
-    const c = document.createElement('canvas');
-    c.width = c.height = atlasSize(gl);
-    const t = new THREE.CanvasTexture(c);
-    t.flipY = false; // el patrón del .glb tiene el origen arriba a la izquierda (como la imagen)
-    t.colorSpace = THREE.SRGBColorSpace;
-    t.anisotropy = 8;
-    return { canvas: c, tex: t, toPattern: makeStageToPattern(geometry) };
+    const atlas = (size: number) => {
+      const c = document.createElement('canvas');
+      c.width = c.height = size;
+      const t = new THREE.CanvasTexture(c);
+      t.flipY = false; // el patrón del .glb tiene el origen arriba a la izquierda (como la imagen)
+      t.colorSpace = THREE.SRGBColorSpace;
+      t.anisotropy = 8;
+      return { canvas: c, tex: t };
+    };
+    const full = atlasSize(gl);
+    const hi = atlas(full);
+    return { hi, lo: full > LIVE_ATLAS ? atlas(LIVE_ATLAS) : hi, toPattern: makeStageToPattern(geometry) };
   }, [cfg.uv, gl, geometry]);
   useEffect(() => {
     const u = material.userData.uniforms;
-    u.uPrint.value = pattern?.tex ?? null;
+    u.uPrint.value = pattern?.hi.tex ?? null;
     u.uUsePrint.value = pattern ? 1 : 0;
-    return () => { pattern?.tex.dispose(); };
+    return () => { pattern?.hi.tex.dispose(); pattern?.lo.tex.dispose(); };
   }, [material, pattern]);
+  /** El arte está cambiando (arrastre): se pinta en el lienzo liviano hasta LIVE_MS sin cambios. */
+  const motion = useRef({ last: 0, live: false });
+  const noteChange = () => { motion.current.last = performance.now(); motion.current.live = true; };
 
   const pass = useRef(Object.fromEntries(VIEWS_3D.map(({ id }) => [id, { progress: 1, dirty: true }])) as Record<View3D, { progress: number; dirty: boolean }>);
   const lastArt = useRef<MannequinArt>({});
@@ -896,9 +1008,11 @@ function Garment({ model, color, art, artRef, frames, focus, locked = false, ani
 
   // Cambió el arte de una vista: se repinta (y si es la animada, pasa la rasqueta).
   useEffect(() => {
+    let changed = false;
     for (const { id } of VIEWS_3D) {
-      if (art[id] !== lastArt.current[id]) pass.current[id].dirty = true;
+      if (art[id] !== lastArt.current[id]) { pass.current[id].dirty = true; changed = true; }
     }
+    if (changed) noteChange();
     lastArt.current = art;
   }, [art]);
   useEffect(() => {
@@ -916,12 +1030,14 @@ function Garment({ model, color, art, artRef, frames, focus, locked = false, ani
     paintArt(decals[id].canvas.getContext('2d')!, currentArt()[id], progress, stableFrames[id]);
     decals[id].tex.needsUpdate = true;
   };
-  const paintAll = () => {
+  const paintAll = (sharp = false) => {
     if (!pattern) return;
     const prog: Partial<Record<View3D, number>> = {};
     for (const { id } of VIEWS_3D) prog[id] = pass.current[id].progress;
-    paintPattern(pattern.canvas.getContext('2d')!, currentArt(), angles, pattern.toPattern, prog, pieceGuide);
-    pattern.tex.needsUpdate = true;
+    const target = motion.current.live && !sharp ? pattern.lo : pattern.hi;
+    paintPattern(target.canvas.getContext('2d')!, currentArt(), angles, pattern.toPattern, prog, pieceGuide);
+    target.tex.needsUpdate = true;
+    material.userData.uniforms.uPrint.value = target.tex;
   };
 
   useEffect(() => { drag.current.offset = 0; }, [focus, locked]);
@@ -938,7 +1054,7 @@ function Garment({ model, color, art, artRef, frames, focus, locked = false, ani
         g.rotation.y = opts?.angle ?? angles[view];
         g.rotation.x = opts?.tilt ?? 0;
         for (const { id } of VIEWS_3D) { pass.current[id].progress = 1; paint(id, 1); }
-        paintAll();
+        paintAll(true);
         gl.render(scene, camera);
         const src = gl.domElement;
         const side = Math.min(src.width, src.height);
@@ -957,7 +1073,10 @@ function Garment({ model, color, art, artRef, frames, focus, locked = false, ani
     const version = artRef?.current.version ?? 0;
     const live = artRef && version !== lastVersion.current;
     lastVersion.current = version;
+    if (live) noteChange();
     let repaint = false;
+    // terminó el arrastre: se repinta en el lienzo nítido
+    if (motion.current.live && performance.now() - motion.current.last > LIVE_MS) { motion.current.live = false; repaint = true; }
     for (const { id } of VIEWS_3D) {
       const st = pass.current[id];
       const hasArt = !!currentArt()[id]?.layers.length;
