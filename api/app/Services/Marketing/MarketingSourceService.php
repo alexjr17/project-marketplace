@@ -137,7 +137,9 @@ class MarketingSourceService
     {
         $published = collect(app(MannequinModelService::class)->publicList())->keyBy('key');
 
-        return Product::where('isTemplate', true)->where('isActive', true)->orderBy('name')->get()
+        return Product::where('isTemplate', true)->where('isActive', true)->orderBy('name')
+            ->with(['templateZones' => fn ($q) => $q->where('isActive', true)->where('isBlocked', false)->orderBy('sortOrder')->with('zoneType:id,name,slug')])
+            ->get()
             ->map(function ($t) use ($published) {
                 $images = TemplateImages::normalize($t->images);
                 $gen = $t->model3d ? $published->get($t->model3d) : null;
@@ -151,6 +153,17 @@ class MarketingSourceService
                     'model3d' => $t->model3d,
                     'image' => $images['front'] ?? ($gen['poster'] ?? null),
                     'colors' => $t->productColors()->with('color:id,name,hexCode')->get()->map(fn ($pc) => $pc->color?->hexCode)->filter()->values()->all(),
+                    // Zonas de diseño (en % de la vista) para poner diseños sobre el modelo 3D en los videos.
+                    'zones' => $t->templateZones->map(fn ($z) => [
+                        'id' => $z->id,
+                        'name' => $z->name,
+                        'view' => $z->zoneType?->slug,
+                        'x' => $z->positionX,
+                        'y' => $z->positionY,
+                        'w' => $z->maxWidth,
+                        'h' => $z->maxHeight,
+                        'circle' => $z->shape === 'circle',
+                    ])->values()->all(),
                 ];
             })->all();
     }

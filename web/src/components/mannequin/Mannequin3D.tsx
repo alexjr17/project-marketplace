@@ -6,7 +6,7 @@
  * cubre el área de sus zonas. Así, un punto en % del escenario cae exactamente donde se ve en el
  * recuadro cuando el maniquí mira esa vista: el editor 2D puede ir encima.
  */
-import { Suspense, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { ContactShadows, Environment, Lightformer, useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
@@ -58,6 +58,17 @@ export interface Mannequin3DProps {
   spin?: number;
   /** Conserva cada cuadro para copiarlo a otro lienzo (grabar video). */
   recordable?: boolean;
+  /** Escenario 3D de estudio (fondo curvo, piso y pedestal) para los videos: lienzo vertical, sin transparencia. */
+  stage?: Stage3D;
+  /** Movimiento manejado desde afuera (videos por escenas): giro desde el frente y acercamiento de la cámara. */
+  motionRef?: MutableRefObject<{ turn: number; zoom: number }>;
+}
+
+/** Colores del escenario: `base` es el fondo y el piso, `accent` la luz de la marca. */
+export interface Stage3D {
+  base: string;
+  accent: string;
+  dark: boolean;
 }
 
 /** Alto del maniquí en la escena (unidades). */
@@ -973,6 +984,124 @@ function makePrintMaterial(textures: Record<View3D, THREE.Texture>) {
 }
 
 /** Base igual para todos los cortes: palo y disco, satinados como el maniquí. */
+/** Radio del pedestal según el ancho de la prenda u objeto. */
+const pedestalRadius = (size: THREE.Vector3) => Math.min(0.95, Math.max(0.45, Math.max(size.x, size.z) * 0.5));
+const PEDESTAL_H = 0.2;
+
+/**
+ * Fondo de estudio "infinito": piso que sube en curva hasta la pared (sin esquina ni horizonte).
+ * Perfil en el plano y-z, barrido a lo ancho en x. El piso queda en y = 0.
+ */
+function cycloramaGeometry(width = 34, front = 9, back = -3.2, radius = 3, height = 14, arcSteps = 24) {
+  const prof: [number, number][] = [[0, front], [0, back]];
+  for (let i = 1; i <= arcSteps; i++) {
+    const a = (i / arcSteps) * (Math.PI / 2);
+    prof.push([radius - Math.cos(a) * radius, back - Math.sin(a) * radius]);
+  }
+  prof.push([height, back - radius]);
+  const pos: number[] = [];
+  const idx: number[] = [];
+  prof.forEach(([y, z]) => { pos.push(-width / 2, y, z, width / 2, y, z); });
+  for (let i = 0; i < prof.length - 1; i++) {
+    const a = i * 2;
+    idx.push(a, a + 2, a + 1, a + 1, a + 2, a + 3);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  return g;
+}
+
+/** Textura de un halo radial (para la luz de la marca en la pared). */
+function glowTexture() {
+  const c = document.createElement('canvas');
+  c.width = c.height = 256;
+  const ctx = c.getContext('2d')!;
+  const g = ctx.createRadialGradient(128, 128, 0, 128, 128, 128);
+  g.addColorStop(0, 'rgba(255,255,255,1)');
+  g.addColorStop(0.45, 'rgba(255,255,255,0.35)');
+  g.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 256, 256);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
+/**
+ * Escenario de los videos: fondo curvo, piso, pedestal con aro de luz del acento, halo en la pared y
+ * cámara vertical con aire arriba (logo) y abajo (textos). El modelo queda parado sobre el pedestal.
+ */
+function StudioStage({ stage, box, size, motionRef }: { stage: Stage3D; box: THREE.Box3; size: THREE.Vector3; motionRef?: MutableRefObject<{ turn: number; zoom: number }> }) {
+  const { camera } = useThree();
+  // La tapa del pedestal queda apenas debajo del modelo: la sombra de contacto no la toma como objeto.
+  const top = box.min.y - 0.012;
+  const floorY = top - PEDESTAL_H;
+  const r = pedestalRadius(size);
+  const cyc = useMemo(() => cycloramaGeometry(), []);
+  const glow = useMemo(() => glowTexture(), []);
+  useEffect(() => () => { cyc.dispose(); glow.dispose(); }, [cyc, glow]);
+
+  const colors = useMemo(() => {
+    const base = new THREE.Color(stage.base);
+    const white = new THREE.Color('#ffffff');
+    return {
+      pedestal: stage.dark ? base.clone().lerp(white, 0.1) : white,
+      rim: stage.dark ? base.clone().lerp(white, 0.18) : base.clone().lerp(new THREE.Color('#000000'), 0.06),
+    };
+  }, [stage.base, stage.dark]);
+
+  // Cámara un poco más lejos y alta: el modelo ocupa la franja media del video vertical. Con
+  // acercamiento (zoom > 1) se arrima y baja la mirada hacia el pecho, donde va el diseño.
+  const place = useCallback((zoom: number) => {
+    const cam = camera as THREE.PerspectiveCamera;
+    const centerY = (box.max.y + floorY) / 2;
+    const chestY = box.max.y - size.y * 0.36;
+    const k = Math.min(1, Math.max(0, (zoom - 1) / 0.65));
+    const lookY = THREE.MathUtils.lerp(centerY - 0.3, chestY, k);
+    cam.position.set(0, THREE.MathUtils.lerp(centerY + 0.45, chestY + 0.15, k), (CAMERA.distance * 1.5) / Math.max(0.5, zoom));
+    cam.lookAt(0, lookY, 0);
+  }, [camera, box, floorY, size]);
+  useEffect(() => { place(1); }, [place]);
+  useFrame(() => { if (motionRef) place(motionRef.current.zoom); });
+
+  return (
+    <group>
+      <mesh geometry={cyc} position={[0, floorY, 0]}>
+        <meshStandardMaterial color={stage.base} roughness={0.92} metalness={0} envMapIntensity={stage.dark ? 0.35 : 0.6} />
+      </mesh>
+      {/* Halo de la marca detrás del modelo. */}
+      <mesh position={[0, (box.max.y + floorY) / 2 + 0.3, -6]}>
+        <planeGeometry args={[9, 9]} />
+        <meshBasicMaterial map={glow} color={stage.accent} transparent opacity={stage.dark ? 0.32 : 0.22} depthWrite={false} toneMapped={false} />
+      </mesh>
+      {/* Pedestal: base, cuerpo y aro de luz. */}
+      <mesh position={[0, floorY + 0.03, 0]}>
+        <cylinderGeometry args={[r * 1.12, r * 1.14, 0.06, 96]} />
+        <meshStandardMaterial color={colors.rim} roughness={0.5} metalness={0.2} />
+      </mesh>
+      <mesh position={[0, floorY + 0.06 + (PEDESTAL_H - 0.06) / 2, 0]}>
+        <cylinderGeometry args={[r, r, PEDESTAL_H - 0.06, 96]} />
+        <meshStandardMaterial color={colors.pedestal} roughness={0.35} metalness={0.15} />
+      </mesh>
+      {/* Sombra suave del modelo sobre el pedestal. */}
+      <mesh position={[0, top + 0.002, 0]} rotation-x={-Math.PI / 2}>
+        <circleGeometry args={[Math.min(r * 0.95, Math.max(size.x, size.z) * 0.55), 64]} />
+        <meshBasicMaterial map={glow} color="#000000" transparent opacity={stage.dark ? 0.55 : 0.28} depthWrite={false} />
+      </mesh>
+      {/* Franja de luz del acento alrededor del pedestal. */}
+      <mesh position={[0, top - 0.035, 0]}>
+        <cylinderGeometry args={[r + 0.004, r + 0.004, 0.022, 96, 1, true]} />
+        <meshBasicMaterial color={stage.accent} toneMapped={false} />
+      </mesh>
+      {/* Pozo de luz sobre el pedestal y contraluz del acento. */}
+      <spotLight position={[0, floorY + 6, 2.5]} angle={0.42} penumbra={0.9} intensity={stage.dark ? 40 : 22} distance={14} decay={1.6} />
+      <pointLight position={[0, (box.max.y + floorY) / 2 + 0.6, -2]} color={stage.accent} intensity={stage.dark ? 6 : 3} distance={6} />
+    </group>
+  );
+}
+
 function Stand({ box, size, hem }: { box: THREE.Box3; size: THREE.Vector3; hem: number }) {
   const top = box.min.y + size.y * (hem + 0.08);
   const bottom = box.min.y;
@@ -1179,7 +1308,7 @@ function paintPattern(
   }
 }
 
-function Garment({ model, color, art, artRef, frames, focus, locked = false, animView, printKey = 0, still = false, onReady, handleRef, pieceGuide = false, config, spin }: Omit<Mannequin3DProps, 'active'>) {
+function Garment({ model, color, art, artRef, frames, focus, locked = false, animView, printKey = 0, still = false, onReady, handleRef, pieceGuide = false, config, spin, stage, motionRef }: Omit<Mannequin3DProps, 'active'>) {
   const cfg = config ?? MODELS_3D[model];
   const group = useRef<THREE.Group>(null);
   const drag = useRef({ down: false, x: 0, offset: 0 });
@@ -1362,7 +1491,9 @@ function Garment({ model, color, art, artRef, frames, focus, locked = false, ani
     }
     if (repaint) paintAll();
     const g = group.current;
-    if (g && spin) {
+    if (g && motionRef) {
+      g.rotation.y = angles.front + motionRef.current.turn;
+    } else if (g && spin) {
       g.rotation.y += delta * spin;
     } else if (g) {
       const t = frame.clock.elapsedTime;
@@ -1398,7 +1529,8 @@ function Garment({ model, color, art, artRef, frames, focus, locked = false, ani
         {!pattern && <mesh geometry={geometry} material={printMaterial} renderOrder={1} />}
         {!cfg.parts && !cfg.object && <Stand box={box} size={size} hem={cfg.hem} />}
       </group>
-      <ContactShadows position={[0, box.min.y + 0.001, 0]} opacity={0.35} scale={3} blur={2.6} far={1.2} resolution={512} />
+      {stage && <StudioStage stage={stage} box={box} size={size} motionRef={motionRef} />}
+      {!stage && <ContactShadows position={[0, box.min.y + 0.001, 0]} opacity={0.35} scale={3} blur={2.6} far={1.2} resolution={512} />}
     </>
   );
 }
@@ -1412,13 +1544,15 @@ export default function Mannequin3D({ active = true, ...props }: Mannequin3DProp
   return (
     <Canvas
       frameloop={active ? 'always' : 'never'}
-      dpr={[1, 2]}
+      dpr={props.stage ? 2 : [1, 2]}
       camera={{ position: [0, 0, CAMERA.distance], fov: CAMERA.fov }}
-      gl={{ antialias: true, alpha: true, preserveDrawingBuffer: !!props.recordable, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.05 }}
+      gl={{ antialias: true, alpha: !props.stage, preserveDrawingBuffer: !!props.recordable, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.05 }}
       onCreated={() => setReady(true)}
       style={{ touchAction: props.locked ? 'auto' : 'pan-y', cursor: props.locked ? 'default' : 'grab', opacity: ready ? 1 : 0, transition: 'opacity .4s' }}
       aria-hidden="true"
     >
+      {props.stage && <color attach="background" args={[props.stage.base]} />}
+      {props.stage && <fog attach="fog" args={[props.stage.base, 9, 22]} />}
       <ambientLight intensity={0.35} />
       <directionalLight position={[2.5, 4, 3.5]} intensity={1.6} />
       {/* Luz de estudio armada en la escena (sin descargar mapas de entorno). */}

@@ -5,6 +5,7 @@
  *
  * Unidad: el lienzo mide 1080 de ancho; las medidas se escriben en esa escala.
  */
+import { frameAt, layout, type Scene } from './timeline';
 
 export type Format = 'post' | 'historia' | 'reel' | 'video360';
 export type TemplateId = 'destacado' | 'oferta' | 'coleccion' | 'nuevo' | 'cupon' | 'personaliza';
@@ -46,6 +47,8 @@ export interface PieceSpec {
   items: PieceItem[];
   promo?: { label: string; code?: string | null; name: string } | null;
   brand: Brand;
+  /** Escenario del video 360°: claro (fondo de la marca) u oscuro (color principal). */
+  stage?: 'claro' | 'oscuro';
 }
 
 export const TEMPLATES: { id: TemplateId; label: string; hint: string }[] = [
@@ -144,6 +147,13 @@ function roundImage(ctx: CanvasRenderingContext2D, img: HTMLImageElement | null,
   ctx.clip();
   cover(ctx, img, x, y, w, h, zoom);
   ctx.restore();
+}
+
+/** Color hex con transparencia. */
+function rgba(hex: string, a: number) {
+  const h = hex.replace('#', '');
+  const n = parseInt(h.length === 3 ? h.split('').map((c) => c + c).join('') : h.slice(0, 6), 16);
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
 }
 
 function logo(ctx: CanvasRenderingContext2D, b: Brand, dark: boolean, x: number, y: number, h: number, align: 'left' | 'center' = 'left') {
@@ -498,31 +508,164 @@ function endCard(ctx: CanvasRenderingContext2D, s: PieceSpec, W: number, H: numb
   ctx.globalAlpha = 1;
 }
 
-/** Cuadro del video 360°: el maniquí girando (lienzo 3D) con la marca, el título y el precio. */
-export function draw360(ctx: CanvasRenderingContext2D, s: PieceSpec, frame: HTMLCanvasElement | null, time: number, total: number) {
+// ─── Video 3D por escenas (ver timeline.ts) ─────────────────────────────────────────────────────
+
+/** Cuadro 3D a pantalla completa, con zoom opcional desde el centro. */
+function frameCover(ctx: CanvasRenderingContext2D, frame: HTMLCanvasElement | null, W: number, H: number, zoom = 1) {
+  if (!frame || !frame.width || !frame.height) return;
+  const k = Math.max(W / frame.width, H / frame.height) * zoom;
+  ctx.drawImage(frame, (W - frame.width * k) / 2, (H - frame.height * k) / 2, frame.width * k, frame.height * k);
+}
+
+/** Textos de una escena (título y subtítulo), entrando desde abajo al empezar la escena. */
+function sceneText(ctx: CanvasRenderingContext2D, s: PieceSpec, sc: Scene, local: number, alpha: number, W: number, H: number, ctaRoom: boolean) {
+  if (!sc.title && !sc.subtitle) return;
+  const dark = s.stage === 'oscuro';
+  const a = ease(local * 2.2) * alpha;
+  if (a <= 0) return;
+  ctx.save();
+  ctx.globalAlpha = a;
+  ctx.translate(0, (1 - ease(local * 2.2)) * 40);
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  const bottom = ctaRoom ? H - 176 : H - 110;
+  let y = bottom;
+  if (sc.subtitle) {
+    font(ctx, 500, 38);
+    y -= 50;
+    ctx.fillStyle = dark ? 'rgba(255,255,255,0.78)' : '#5b5b5b';
+    wrap(ctx, sc.subtitle, W / 2, y, W - 200, 46, 1);
+    y -= 14;
+  }
+  if (sc.title) {
+    font(ctx, 800, 84, 'heading');
+    const t = up(sc.title);
+    const lines = lineCount(ctx, t, W - 140, 2);
+    ctx.fillStyle = dark ? '#ffffff' : s.brand.primary;
+    wrap(ctx, t, W / 2, y - lines * 90, W - 140, 90, 2);
+  }
+  ctx.restore();
+}
+
+/**
+ * Cuadro del video 3D por escenas en el segundo `time`. `frames` son los lienzos de los dos maniquíes
+ * (la escena i se ve en frames[i % 2]). Encima van el logo, el precio, los textos de cada escena y,
+ * al final, el cierre con el logo y el botón.
+ */
+export function drawScenes(
+  ctx: CanvasRenderingContext2D, s: PieceSpec, scenes: Scene[], withEnd: boolean,
+  frames: [HTMLCanvasElement | null, HTMLCanvasElement | null], time: number,
+) {
   setBrandFonts(s.brand);
   const [W, H] = sizeOf(s.format);
   const b = s.brand;
-  ctx.fillStyle = b.paper;
+  const dark = s.stage === 'oscuro';
+  const base = dark ? b.primary : b.paper;
+  const f = frameAt(scenes, withEnd, time);
+  ctx.fillStyle = base;
   ctx.fillRect(0, 0, W, H);
-  const g = ctx.createRadialGradient(W / 2, H * 0.5, 60, W / 2, H * 0.5, W * 0.8);
-  g.addColorStop(0, '#ffffff');
-  g.addColorStop(1, b.paper);
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, W, H);
-  logo(ctx, b, false, W / 2, 80, 60, 'center');
-  contain(ctx, frame, 40, 230, W - 80, H - 640);
-  const a = ease((time / total) * 4);
-  ctx.globalAlpha = a;
-  ctx.textAlign = 'center';
-  font(ctx, 800, 84, 'heading');
-  ctx.fillStyle = b.primary;
-  ctx.textBaseline = 'top';
-  wrap(ctx, up(s.title || 'Diseña la tuya'), W / 2, H - 380, W - 140, 90, 2);
-  if (s.subtitle) { font(ctx, 500, 38); ctx.fillStyle = '#5b5b5b'; wrap(ctx, s.subtitle, W / 2, H - 200, W - 200, 46, 1); }
-  ctx.textAlign = 'left';
-  if (s.cta) pill(ctx, s.cta, W / 2, H - 140, 36, b.primary, '#ffffff', 'center');
+  if (!scenes.length) return;
+
+  if (f.index === -1) {
+    // Cierre: entra con un velo del color de la marca sobre la última escena.
+    if (f.end < 0.2) {
+      frameCover(ctx, frames[(scenes.length - 1) % 2], W, H);
+      ctx.fillStyle = rgba(b.primary, f.end / 0.2);
+      ctx.fillRect(0, 0, W, H);
+    } else {
+      endCard(ctx, s, W, H, (f.end - 0.2) / 0.8);
+    }
+    return;
+  }
+
+  // 1. Escenas 3D (con la transición si hay).
+  const tr = f.transition;
+  if (!tr) {
+    frameCover(ctx, frames[f.index % 2], W, H);
+  } else {
+    const A = frames[tr.from % 2], B = frames[tr.to % 2];
+    const p = Math.min(1, Math.max(0, tr.p));
+    switch (tr.kind) {
+      case 'barrido': {
+        frameCover(ctx, A, W, H);
+        const x = ease(p) * W;
+        ctx.save(); ctx.beginPath(); ctx.rect(0, 0, x, H); ctx.clip(); frameCover(ctx, B, W, H); ctx.restore();
+        ctx.fillStyle = b.accent;
+        ctx.fillRect(x - 10, 0, 20, H);
+        break;
+      }
+      case 'zoom':
+        frameCover(ctx, B, W, H, 1.15 - 0.15 * ease(p));
+        ctx.globalAlpha = 1 - ease(p);
+        frameCover(ctx, A, W, H, 1 + 0.35 * ease(p));
+        ctx.globalAlpha = 1;
+        break;
+      case 'destello':
+      case 'cortina':
+        frameCover(ctx, p < 0.5 ? A : B, W, H);
+        break;
+      default: // fundido
+        frameCover(ctx, A, W, H);
+        ctx.globalAlpha = ease(p);
+        frameCover(ctx, B, W, H);
+        ctx.globalAlpha = 1;
+    }
+  }
+
+  // 2. Velos arriba y abajo para leer el logo y los textos.
+  const topG = ctx.createLinearGradient(0, 0, 0, 280);
+  topG.addColorStop(0, rgba(base, 0.85));
+  topG.addColorStop(1, rgba(base, 0));
+  ctx.fillStyle = topG;
+  ctx.fillRect(0, 0, W, 280);
+  const botG = ctx.createLinearGradient(0, H - 620, 0, H);
+  botG.addColorStop(0, rgba(base, 0));
+  botG.addColorStop(0.45, rgba(base, 0.82));
+  botG.addColorStop(1, rgba(base, 0.96));
+  ctx.fillStyle = botG;
+  ctx.fillRect(0, H - 620, W, 620);
+
+  // 3. Marca, precio, textos de la escena y botón (en la última escena si no hay cierre).
+  logo(ctx, b, dark, W / 2, 80, 60, 'center');
   const item = s.items[0];
-  if (s.showPrice && item?.price != null) { font(ctx, 700, 40); ctx.fillStyle = b.primary; ctx.textAlign = 'right'; ctx.fillText('desde ' + money(item.price), W - 64, 96); ctx.textAlign = 'left'; }
-  ctx.globalAlpha = 1;
+  if (s.showPrice && item?.price != null) {
+    font(ctx, 700, 40); ctx.fillStyle = dark ? '#ffffff' : b.primary; ctx.textAlign = 'right'; ctx.textBaseline = 'top';
+    ctx.fillText('desde ' + money(item.price), W - 64, 96); ctx.textAlign = 'left';
+  }
+  const last = scenes.length - 1;
+  const ctaRoom = !withEnd && !!s.cta;
+  if (tr) {
+    const p = Math.min(1, Math.max(0, tr.p));
+    const lenFrom = layout(scenes, withEnd).starts;
+    sceneText(ctx, s, scenes[tr.from], time - lenFrom[tr.from], Math.max(0, 1 - p * 2), W, H, ctaRoom && tr.from === last);
+    sceneText(ctx, s, scenes[tr.to], Math.max(0, time - lenFrom[tr.to]), Math.max(0, p * 2 - 1), W, H, ctaRoom && tr.to === last);
+  } else {
+    sceneText(ctx, s, scenes[f.index], f.local, 1, W, H, ctaRoom && f.index === last);
+  }
+  if (ctaRoom && f.index === last) {
+    ctx.globalAlpha = tr ? Math.min(1, Math.max(0, tr.p * 2 - 1)) : ease(f.local * 2);
+    pill(ctx, s.cta, W / 2, H - 140, 36, dark ? b.accent : b.primary, dark ? b.primary : '#ffffff', 'center');
+    ctx.globalAlpha = 1;
+  }
+
+  // 4. Velos de transición que tapan todo (escena, logo y textos).
+  if (tr && (tr.kind === 'destello' || tr.kind === 'cortina')) {
+    const p = Math.min(1, Math.max(0, tr.p));
+    if (tr.kind === 'destello') {
+      const a = 1 - Math.abs(p - 0.5) * 2;
+      ctx.fillStyle = dark ? rgba(b.accent, a) : `rgba(255,255,255,${a})`;
+      ctx.fillRect(0, 0, W, H);
+    } else {
+      // Un panel de la marca sube tapando la escena y sigue subiendo destapando la nueva.
+      const top = p < 0.5 ? H * (1 - ease(p * 2)) : 0;
+      const bottom = p < 0.5 ? H : H * (1 - ease((p - 0.5) * 2));
+      ctx.fillStyle = dark ? b.accent : b.primary;
+      ctx.fillRect(0, top, W, bottom - top);
+      const icon = dark ? b.icon : b.iconOnDark ?? b.icon;
+      if (icon && icon.naturalWidth && bottom - top > 300) {
+        const ih = 180, iw = (icon.naturalWidth / icon.naturalHeight) * ih;
+        ctx.drawImage(icon, W / 2 - iw / 2, (top + bottom) / 2 - ih / 2, iw, ih);
+      }
+    }
+  }
 }

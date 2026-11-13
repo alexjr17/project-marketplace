@@ -21,7 +21,10 @@ export interface SourceProduct {
   images?: string[];
   model3d?: string | null;
   colors?: string[];
+  /** Zonas de diseño de la plantilla (en % de la vista), para los videos 3D. */
+  zones?: SourceZone[];
 }
+export interface SourceZone { id: number; name: string; view: string | null; x: number; y: number; w: number; h: number; circle: boolean }
 export interface SourceCollection { id: string; name: string; count: number; products: SourceProduct[] }
 export interface SourcePromotion {
   id: number; name: string; code: string | null; isAuto: boolean; type: string; value: number; label: string;

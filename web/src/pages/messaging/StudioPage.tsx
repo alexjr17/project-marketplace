@@ -4,7 +4,7 @@
  * o video 360° del maniquí) y la plantilla; la IA escribe los textos. Se descarga, se guarda en la
  * biblioteca y se publica o programa en Facebook e Instagram (ver CalendarPage).
  */
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { CalendarClock, Download, Film, Palette, Pause, Play, Save, Send, Sparkles, Wand2, X } from 'lucide-react';
 import {
@@ -14,8 +14,11 @@ import {
 import { errorMessage } from '../../lib/http';
 import { useBrandKit } from '../../components/marketing/brand';
 import {
-  draw360, drawReel, drawStill, reelLength, sizeOf, TEMPLATES, type Format, type PieceItem, type PieceSpec, type TemplateId,
+  drawReel, drawScenes, drawStill, reelLength, sizeOf, TEMPLATES, type Format, type PieceItem, type PieceSpec, type TemplateId,
 } from '../../components/marketing/render';
+import { layout, motionAt, newScene, slotsAt, type Scene } from '../../components/marketing/timeline';
+import { sceneArt } from '../../components/marketing/sceneArt';
+import { SceneEditor } from '../../components/marketing/SceneEditor';
 import { extOf, loadImage, recordCanvas, videoMime } from '../../components/marketing/media';
 import { AiAccountsCard } from '../../components/marketing/AiAccountsCard';
 import { isModel3D } from '../../components/mannequin/models';
@@ -53,7 +56,10 @@ const MAX_ITEMS: Record<SourceType, number> = { producto: 5, coleccion: 1, promo
 
 type AnySource = SourceProduct | SourceCollection | SourcePromotion | SourceDesign;
 
-const SPIN_SECONDS = 8;
+/** Primera escena del video 3D: un giro completo de la prenda en su color. */
+const firstScene = (color: string) => newScene({ color, motion: 'giro', seconds: 6, transition: 'fundido' });
+
+const canvasOf = (h: RefObject<HTMLDivElement | null>) => (h.current?.querySelector('canvas') as HTMLCanvasElement | null) ?? null;
 
 export const StudioPage = () => {
   const navigate = useNavigate();
@@ -71,6 +77,15 @@ export const StudioPage = () => {
   // 2. Formato y plantilla
   const [format, setFormat] = useState<Format>('post');
   const [template, setTemplate] = useState<TemplateId>('destacado');
+  const [stage, setStage] = useState<'claro' | 'oscuro'>('oscuro');
+  // Video 3D por escenas: cada una con su diseño, color, movimiento, textos y transición.
+  const [scenes, setScenes] = useState<Scene[]>(() => [firstScene('#FFFFFF')]);
+  const [sceneSel, setSceneSel] = useState<string | null>(null);
+  const [endCard, setEndCard] = useState(true);
+  /** Qué escena muestra cada uno de los dos maniquíes (se turnan para las transiciones). */
+  const [slots, setSlots] = useState<[number, number]>([0, -1]);
+  /** Segundo que se ve en pausa (la escena elegida). */
+  const [pausedAt, setPausedAt] = useState(3);
 
   // 3. Textos
   const [title, setTitle] = useState('');
@@ -87,6 +102,11 @@ export const StudioPage = () => {
   // Lienzo y salida
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const holder3d = useRef<HTMLDivElement>(null);
+  const holder3dB = useRef<HTMLDivElement>(null);
+  const motionA = useRef({ turn: 0, zoom: 1 });
+  const motionB = useRef({ turn: 0, zoom: 1 });
+  const playheadRef = useRef<HTMLDivElement | null>(null);
+  const recording = useRef(false);
   const [images, setImages] = useState<Record<string, HTMLImageElement | null>>({});
   const [playing, setPlaying] = useState(false);
   const [busy, setBusy] = useState<null | 'download' | 'save' | 'publish'>(null);
@@ -137,6 +157,33 @@ export const StudioPage = () => {
   const promo = sourceType === 'promocion' ? (selected[0] as SourcePromotion | undefined) ?? null : null;
   const template3d = sourceType === 'plantilla' ? (selected[0] as SourceProduct | undefined) : undefined;
   const can360 = !!template3d?.model3d && isModel3D(template3d.model3d);
+  const zones = useMemo(() => template3d?.zones ?? [], [template3d]);
+
+  // Plantilla nueva: el video arranca con una escena en el primer color de la prenda.
+  const templateId = template3d?.id;
+  const firstColor = template3d?.colors?.[0];
+  useEffect(() => {
+    const s = firstScene(firstColor || '#FFFFFF');
+    setScenes([s]);
+    setSceneSel(s.id);
+  }, [templateId, firstColor]);
+
+  // Diseños de las escenas, listos para pintar sobre el maniquí.
+  useEffect(() => {
+    let alive = true;
+    scenes.forEach((sc) => {
+      const url = sc.design?.image;
+      if (!url || url in images) return;
+      loadImage(url).then((img) => { if (alive) setImages((m) => ({ ...m, [url]: img })); });
+    });
+    return () => { alive = false; };
+  }, [scenes, images]);
+
+  // Lo que pinta cada maniquí: su escena con el diseño en la zona elegida.
+  const slotViews = useMemo(() => slots.map((j) => {
+    const sc = scenes[j];
+    return sc ? { sc, ...sceneArt(sc, zones, sc.design ? images[sc.design.image] : null) } : null;
+  }), [scenes, slots, zones, images]);
 
   // Fotos de los productos.
   useEffect(() => {
@@ -159,34 +206,57 @@ export const StudioPage = () => {
       image: it.image ? images[it.image] ?? null : null,
     }));
     return {
-      format, template, title, subtitle, cta, showPrice, items: pieceItems, brand,
+      format, template, title, subtitle, cta, showPrice, items: pieceItems, brand, stage,
       promo: promo ? { label: promo.label, code: promo.code, name: promo.name } : null,
     };
-  }, [brand, items, images, format, template, title, subtitle, cta, showPrice, promo, sourceType]);
+  }, [brand, items, images, format, template, title, subtitle, cta, showPrice, promo, sourceType, stage]);
 
   const [W, H] = sizeOf(format);
   const isVideo = format === 'reel' || format === 'video360';
-  const length = format === 'video360' ? SPIN_SECONDS : spec ? reelLength(spec) : 6;
-
-  const frame3d = () => (holder3d.current?.querySelector('canvas') as HTMLCanvasElement | null) ?? null;
+  const timing = useMemo(() => layout(scenes, endCard), [scenes, endCard]);
+  const length = format === 'video360' ? timing.total : spec ? reelLength(spec) : 6;
 
   const drawAt = useCallback((time: number) => {
     const ctx = canvasRef.current?.getContext('2d');
     if (!ctx || !spec) return;
     if (format === 'reel') drawReel(ctx, spec, time);
-    else if (format === 'video360') draw360(ctx, spec, frame3d(), time, SPIN_SECONDS);
-    else drawStill(ctx, spec);
-  }, [spec, format]);
+    else if (format === 'video360') {
+      // Cada maniquí muestra su escena; el movimiento sale de la línea de tiempo.
+      const next = slotsAt(scenes, endCard, time);
+      setSlots((cur) => (cur[0] === next[0] && cur[1] === next[1] ? cur : next));
+      [motionA, motionB].forEach((m, k) => {
+        const j = next[k];
+        if (j >= 0) m.current = motionAt(scenes[j].motion, time - timing.starts[j], scenes[j].seconds);
+      });
+      drawScenes(ctx, spec, scenes, endCard, [canvasOf(holder3d), canvasOf(holder3dB)], time);
+      const ph = playheadRef.current;
+      if (ph) { ph.style.left = `${timing.total ? (time / timing.total) * 100 : 0}%`; ph.style.opacity = '1'; }
+    } else drawStill(ctx, spec);
+  }, [spec, format, scenes, endCard, timing]);
 
-  // Vista previa: fija o animada (reel y 360° se reproducen en bucle).
+  // Vista previa: fija o animada (reel y video 3D en bucle). El video 3D se redibuja siempre, aun en
+  // pausa, porque los maniquíes siguen pintándose.
   useEffect(() => {
-    if (!isVideo || !playing) { drawAt(isVideo ? length * 0.35 : 0); return; }
+    if (!isVideo || (!playing && format !== 'video360')) { drawAt(isVideo ? length * 0.35 : 0); return; }
     let raf = 0;
     const start = performance.now();
-    const loop = () => { drawAt(((performance.now() - start) / 1000) % length); raf = requestAnimationFrame(loop); };
+    const loop = () => {
+      // Mientras se graba, el lienzo es solo de la grabación.
+      if (!recording.current) drawAt(playing ? ((performance.now() - start) / 1000) % length : Math.min(pausedAt, length - 0.01));
+      raf = requestAnimationFrame(loop);
+    };
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
-  }, [drawAt, isVideo, playing, length]);
+  }, [drawAt, isVideo, playing, length, format, pausedAt]);
+
+  /** Ver una escena: pausa a la mitad de ella. */
+  const previewScene = (id: string) => {
+    const i = scenes.findIndex((s) => s.id === id);
+    if (i < 0) return;
+    setPlaying(false);
+    const len = layout([scenes[i]], false).total;
+    setPausedAt(timing.starts[i] + (scenes[i].motion === 'giro' ? Math.min(0.6, len * 0.15) : len * 0.5));
+  };
 
   const ready = !!spec && items.length > 0 && (format !== 'video360' || can360);
 
@@ -201,8 +271,13 @@ export const StudioPage = () => {
     }
     setPlaying(false);
     setProgress(0);
-    const blob = await recordCanvas(canvas, length, (t) => drawAt(t), setProgress);
-    return { blob, name: `${base}.${extOf(blob.type)}` };
+    recording.current = true;
+    try {
+      const blob = await recordCanvas(canvas, length, (t) => drawAt(t), setProgress);
+      return { blob, name: `${base}.${extOf(blob.type)}` };
+    } finally {
+      recording.current = false;
+    }
   };
 
   const download = async () => {
@@ -230,7 +305,7 @@ export const StudioPage = () => {
       source: sourceType,
       sourceIds: selected.map((s) => s.id),
       template,
-      data: { title, subtitle, cta, showPrice },
+      data: { title, subtitle, cta, showPrice, ...(format === 'video360' ? { stage, endCard, scenes: scenes.map((sc) => (sc.design?.image.startsWith('data:') ? { ...sc, design: { ...sc.design, image: '' } } : sc)) } : {}) },
       caption,
       hashtags,
     }, blob, name);
@@ -350,6 +425,12 @@ export const StudioPage = () => {
             {format === 'video360' && !can360 && (
               <Alert tone="info">El video 360° es de las prendas personalizables con maniquí 3D: en "Qué promocionas" elige <b>Personalizable</b> y una plantilla con modelo 3D.</Alert>
             )}
+            {format === 'video360' && can360 && (
+              <RadioGroup
+                variant="segmented" value={stage} onChange={setStage}
+                options={[{ value: 'oscuro', label: 'Escenario oscuro' }, { value: 'claro', label: 'Escenario claro' }]}
+              />
+            )}
             {format !== 'video360' && (
               <div className="flex flex-wrap gap-1.5">
                 {TEMPLATES.map((t) => (
@@ -393,17 +474,23 @@ export const StudioPage = () => {
             </div>
           )}
 
-          {/* Maniquí 3D girando para el video 360° (se copia cuadro a cuadro al lienzo). */}
-          {format === 'video360' && can360 && template3d?.model3d && (
-            <div ref={holder3d} aria-hidden="true" style={{ position: 'fixed', left: -10000, top: 0, width: 900, height: 900, pointerEvents: 'none' }}>
-              <Suspense fallback={null}>
-                <Mannequin3D
-                  key={template3d.model3d} model={template3d.model3d} color={template3d.colors?.[0] || '#FFFFFF'} art={{}} focus="front"
-                  still spin={(Math.PI * 2) / SPIN_SECONDS} recordable
-                />
-              </Suspense>
-            </div>
-          )}
+          {/* Dos maniquíes 3D fuera de pantalla (se turnan las escenas); se copian cuadro a cuadro al lienzo. */}
+          {format === 'video360' && can360 && template3d?.model3d && [holder3d, holder3dB].map((holder, k) => {
+            const view = slotViews[k];
+            return (
+              <div key={k} ref={holder} aria-hidden="true" style={{ position: 'fixed', left: -10000 - k * 600, top: 0, width: 540, height: 960, pointerEvents: 'none' }}>
+                {view && (
+                  <Suspense fallback={null}>
+                    <Mannequin3D
+                      key={template3d.model3d} model={template3d.model3d!} color={view.sc.color} art={view.art} frames={view.frames} focus="front"
+                      still recordable motionRef={k === 0 ? motionA : motionB}
+                      stage={brand ? { base: stage === 'oscuro' ? brand.primary : brand.paper, accent: brand.accent, dark: stage === 'oscuro' } : undefined}
+                    />
+                  </Suspense>
+                )}
+              </div>
+            );
+          })}
 
           <div className="mt-5 flex flex-wrap justify-end gap-2 border-t border-gray-100 pt-4">
             <Button variant="secondary" icon={<Download className="w-4 h-4" />} disabled={!ready || !!busy} isLoading={busy === 'download'} onClick={download}>Descargar</Button>
@@ -451,6 +538,15 @@ export const StudioPage = () => {
           </div>
         </Card>
       </div>
+
+      {format === 'video360' && can360 && (
+        <div className="mt-5">
+          <SceneEditor
+            scenes={scenes} onChange={setScenes} selectedId={sceneSel} onSelect={setSceneSel} endCard={endCard} onEndCard={setEndCard}
+            zones={zones} colors={template3d?.colors ?? []} playheadRef={playheadRef} onPreview={previewScene}
+          />
+        </div>
+      )}
 
       <AiAccountsCard />
 

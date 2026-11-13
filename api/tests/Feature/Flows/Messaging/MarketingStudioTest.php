@@ -6,6 +6,8 @@ use App\Models\Channel;
 use App\Models\Discount;
 use App\Models\MarketingCreative;
 use App\Models\SocialPost;
+use App\Models\TemplateZone;
+use App\Models\ZoneType;
 use App\Services\Social\SocialPostService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -80,6 +82,21 @@ class MarketingStudioTest extends TestCase
         $promos = collect($this->getJson('/api/messaging/marketing/sources?type=promocion')->json('data'));
         $this->assertSame('-10%', $promos->firstWhere('code', 'HOLA10')['label']);
         $this->getJson('/api/messaging/marketing/sources?type=otro')->assertUnprocessable();
+
+        // Plantillas personalizables: con sus zonas de diseño (sin las bloqueadas) para los videos 3D.
+        $tpl = $this->makeProduct('Suéter Personalizable', 70000, [['negro', 'M', 2]], ['isTemplate' => true, 'model3d' => 'basica']);
+        $zone = fn (string $slug, array $a = []) => TemplateZone::create(array_merge([
+            'templateId' => $tpl->id, 'zoneTypeId' => ZoneType::where('slug', $slug)->value('id'), 'zoneId' => 'z-'.uniqid(),
+            'name' => ucfirst($slug), 'shape' => 'rect', 'positionX' => 30, 'positionY' => 24, 'maxWidth' => 40, 'maxHeight' => 42,
+            'isEditable' => true, 'isRequired' => false, 'isBlocked' => false, 'price' => 0, 'sortOrder' => 1, 'isActive' => true,
+        ], $a));
+        $zone('frente');
+        $zone('espalda', ['shape' => 'circle', 'sortOrder' => 2]);
+        $zone('frente', ['isBlocked' => true, 'name' => 'Bloqueada']);
+        $row = collect($this->getJson('/api/messaging/marketing/sources?type=plantilla')->assertOk()->json('data'))->firstWhere('id', $tpl->id);
+        $this->assertSame(['Frente', 'Espalda'], array_column($row['zones'], 'name'));
+        $this->assertSame(['frente', 30, 24, 40, 42, false], [$row['zones'][0]['view'], $row['zones'][0]['x'], $row['zones'][0]['y'], $row['zones'][0]['w'], $row['zones'][0]['h'], $row['zones'][0]['circle']]);
+        $this->assertTrue($row['zones'][1]['circle']);
     }
 
     public function test_textos_con_ia_y_respaldo_sin_ia(): void
