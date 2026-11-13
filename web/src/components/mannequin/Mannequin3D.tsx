@@ -54,6 +54,10 @@ export interface Mannequin3DProps {
   pieceGuide?: boolean;
   /** Config propia en vez de la del registro (revisión de un maniquí generado, con ajustes sin guardar). */
   config?: ModelConfig;
+  /** Giro continuo (radianes por segundo) en vez de mirar `focus`: video 360° del estudio de contenido. */
+  spin?: number;
+  /** Conserva cada cuadro para copiarlo a otro lienzo (grabar video). */
+  recordable?: boolean;
 }
 
 /** Alto del maniquí en la escena (unidades). */
@@ -75,6 +79,8 @@ const stageHalf = (depth: number) => HALF_TAN * (CAMERA.distance - depth);
  */
 function useMannequin(cfg: ModelConfig) {
   const { scene } = useGLTF(cfg.model);
+  // Maniquí aprobado (el de los suéteres): de ahí sale la cabeza estándar para las gorras.
+  const { scene: standardScene } = useGLTF(MODELS_3D.basica.model);
 
   return useMemo(() => {
     if (cfg.parts) return partsMannequin(scene);
@@ -90,12 +96,26 @@ function useMannequin(cfg: ModelConfig) {
     });
     let g = (src as unknown as THREE.BufferGeometry).toNonIndexed();
     // Tela por color (modelos generados en cabeza o piernas): lo claro de la textura es la prenda.
-    const byColor = cfg.lightFrom !== undefined ? clothByColor(g, srcMap, cfg.lightFrom) : null;
+    let byColor = cfg.lightFrom !== undefined ? clothByColor(g, srcMap, cfg.lightFrom) : null;
+    // Gorras: la gorra generada sobre la cabeza del maniquí aprobado (la IA inventa cabezas con cara).
+    if (cfg.standardHead && byColor) {
+      const composed = capOnStandardHead(g, byColor, standardScene);
+      if (composed) { g = composed.geometry; byColor = composed.cloth; }
+    }
+    // Objetos: solo la pieza principal (la IA a veces deja partes sueltas flotando, como una correa).
+    if (cfg.object && !cfg.standardHead) {
+      const main = largestPiece(g, byColor);
+      if (main) { g = main.geometry; byColor = main.cloth; }
+    }
+    if (cfg.yaw) g.rotateY(cfg.yaw);
     g.computeBoundingBox();
     const size0 = g.boundingBox!.getSize(new THREE.Vector3());
     const center0 = g.boundingBox!.getCenter(new THREE.Vector3());
     g.translate(-center0.x, -center0.y, -center0.z);
-    g.scale(HEIGHT / size0.y, HEIGHT / size0.y, HEIGHT / size0.y);
+    // Maniquíes: por la altura. Objetos (gorra, bolso…): por la medida más grande, para que uno ancho
+    // y bajo no se salga del recuadro.
+    const fit = cfg.object && !cfg.standardHead ? (HEIGHT * 0.8) / Math.max(size0.x, size0.y, size0.z) : HEIGHT / size0.y;
+    g.scale(fit, fit, fit);
     g.computeBoundingBox();
     const box = g.boundingBox!.clone();
     const size = box.getSize(new THREE.Vector3());
@@ -149,7 +169,198 @@ function useMannequin(cfg: ModelConfig) {
     const collar = cfg.collarFromMesh ? measureCollar(out, box, size, cfg, cx, cz) : null;
 
     return { geometry: g, box, size, neck: { cx, cz, r: neckR }, collar };
-  }, [scene, cfg]);
+  }, [scene, cfg, standardScene]);
+}
+
+/**
+ * La pieza más grande de la malla (triángulos unidos por vértices compartidos), con su tela por
+ * vértice si la hay. null si ya es una sola pieza o no se puede calcular.
+ */
+function largestPiece(g: THREE.BufferGeometry, cloth: Float32Array | null): { geometry: THREE.BufferGeometry; cloth: Float32Array | null } | null {
+  const p = g.attributes.position.array as Float32Array;
+  const n = p.length / 3;
+  const ids = new Int32Array(n);
+  const map = new Map<string, number>();
+  for (let i = 0; i < n; i++) {
+    const k = `${Math.round(p[i * 3] * 1e4)},${Math.round(p[i * 3 + 1] * 1e4)},${Math.round(p[i * 3 + 2] * 1e4)}`;
+    let id = map.get(k);
+    if (id === undefined) { id = map.size; map.set(k, id); }
+    ids[i] = id;
+  }
+  const parent = new Int32Array(map.size).map((_, i) => i);
+  const find = (x: number): number => { while (parent[x] !== x) { parent[x] = parent[parent[x]]; x = parent[x]; } return x; };
+  for (let t = 0; t < n; t += 3) {
+    const a = find(ids[t]);
+    for (const v of [ids[t + 1], ids[t + 2]]) { const b = find(v); if (a !== b) parent[b] = a; }
+  }
+  const count = new Map<number, number>();
+  for (let t = 0; t < n; t += 3) { const r = find(ids[t]); count.set(r, (count.get(r) ?? 0) + 1); }
+  if (count.size < 2) return null;
+  let best = -1, bestN = 0;
+  for (const [r, c] of count) if (c > bestN) { best = r; bestN = c; }
+  const out = new Float32Array(bestN * 9);
+  const outCloth = cloth ? new Float32Array(bestN * 3) : null;
+  let j = 0;
+  for (let t = 0; t < n; t += 3) {
+    if (find(ids[t]) !== best) continue;
+    out.set(p.subarray(t * 3, t * 3 + 9), j * 9);
+    if (outCloth && cloth) outCloth.set(cloth.subarray(t, t + 3), j * 3);
+    j++;
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.BufferAttribute(out, 3));
+  return { geometry, cloth: outCloth };
+}
+
+/** Mediana de una lista (0 si está vacía). */
+const median = (a: number[]) => {
+  if (!a.length) return 0;
+  const s = [...a].sort((x, y) => x - y);
+  return s[Math.floor(s.length / 2)];
+};
+
+/**
+ * Gorra sobre la cabeza estándar: de la malla generada se queda solo la tela (la gorra) y se pone
+ * sobre la cabeza del maniquí aprobado (del cuello para arriba), con palo y base del mismo grafito.
+ * El calce se mide en la cabeza que trae la malla generada: su ancho justo debajo del borde de la
+ * gorra se iguala al de la cabeza estándar a la altura de la frente, y la visera queda al frente.
+ * Devuelve la geometría (triángulos sueltos) y la tela por vértice, o null si no se puede medir.
+ */
+function capOnStandardHead(gen: THREE.BufferGeometry, cloth: Float32Array, standard: THREE.Object3D): { geometry: THREE.BufferGeometry; cloth: Float32Array } | null {
+  // 1. Cabeza estándar.
+  standard.updateMatrixWorld(true);
+  const sp: number[] = [];
+  const v = new THREE.Vector3();
+  standard.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (!m.isMesh) return;
+    const name = ((Array.isArray(m.material) ? m.material[0] : m.material)?.name || '').toLowerCase();
+    if (!name.includes('maniqui')) return;
+    const gg = m.geometry.index ? m.geometry.toNonIndexed() : m.geometry;
+    const p = gg.attributes.position;
+    for (let i = 0; i < p.count; i++) { v.set(p.getX(i), p.getY(i), p.getZ(i)).applyMatrix4(m.matrixWorld); sp.push(v.x, v.y, v.z); }
+  });
+  if (!sp.length) return null;
+  let maxY = -Infinity, minY = Infinity;
+  for (let i = 1; i < sp.length; i += 3) { maxY = Math.max(maxY, sp[i]); minY = Math.min(minY, sp[i]); }
+  const H = maxY - minY;
+  let scx = 0, scz = 0, sn = 0; // eje de la cabeza (se corrige al borde de la gorra)
+  for (let i = 0; i < sp.length; i += 3) if (sp[i + 1] > maxY - 0.12 * H) { scx += sp[i]; scz += sp[i + 2]; sn++; }
+  scx /= sn || 1; scz /= sn || 1;
+  const radiusAt = (pts: number[], y: number, band: number, cx: number, cz: number) => {
+    const r: number[] = [];
+    for (let i = 0; i < pts.length; i += 3) if (Math.abs(pts[i + 1] - y) < band) r.push(Math.hypot(pts[i] - cx, pts[i + 2] - cz));
+    return median(r);
+  };
+  // Cuello: bajando desde lo más ancho de la cabeza, donde el radio ya es menos del 70 % (bajo la
+  // barbilla); se deja un tramo corto de cuello. Más abajo el maniquí de los suéteres es irregular
+  // (queda tapado por el cuello de la camiseta).
+  let rMax = 0, yMax = maxY - 0.1 * H;
+  for (let y = maxY - 0.03 * H; y > maxY - 0.2 * H; y -= 0.004 * H) {
+    const r = radiusAt(sp, y, 0.004 * H, scx, scz);
+    if (r > rMax) { rMax = r; yMax = y; }
+  }
+  let yNeck = yMax - 0.1 * H;
+  for (let y = yMax; y > maxY - 0.4 * H; y -= 0.003 * H) {
+    const r = radiusAt(sp, y, 0.003 * H, scx, scz);
+    if (r > 0 && r < rMax * 0.7) { yNeck = y; break; }
+  }
+  const yCut = yNeck - 0.015 * H;
+  // Ancho del cuello limpio (justo bajo la barbilla), para el aro que remata el corte.
+  const rNeck = radiusAt(sp, yNeck, 0.003 * H, scx, scz) || rMax * 0.6;
+
+  // 2. Gorra generada: centro y ancho de la corona (sus paredes, por encima de la visera). No se usa
+  // la cabeza generada: la cara y la nariz corren su centro hacia adelante.
+  const gp = gen.attributes.position.array as Float32Array;
+  const clothY: number[] = [];
+  let capTop = -Infinity;
+  for (let i = 0; i < cloth.length; i++) if (cloth[i] > 0.5) { clothY.push(gp[i * 3 + 1]); capTop = Math.max(capTop, gp[i * 3 + 1]); }
+  if (clothY.length < 30) return null;
+  clothY.sort((a, b) => a - b);
+  const capBottom = clothY[Math.floor(clothY.length * 0.15)];
+  const capH = capTop - capBottom;
+  let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+  for (let i = 0; i < cloth.length; i++) {
+    const y = gp[i * 3 + 1];
+    if (cloth[i] < 0.5 || y < capBottom + 0.3 * capH || y > capBottom + 0.5 * capH) continue;
+    x0 = Math.min(x0, gp[i * 3]); x1 = Math.max(x1, gp[i * 3]); z0 = Math.min(z0, gp[i * 3 + 2]); z1 = Math.max(z1, gp[i * 3 + 2]);
+  }
+  if (!Number.isFinite(x0)) return null;
+  const gcx = (x0 + x1) / 2, gcz = (z0 + z1) / 2;
+  const rG = ((x1 - x0) + (z1 - z0)) / 4; // radio de la corona
+  // Visera: la tela baja que más se aleja del eje de la cabeza.
+  let bx = 0, bz = 0;
+  for (let i = 0; i < cloth.length; i++) {
+    if (cloth[i] < 0.5 || gp[i * 3 + 1] > capBottom + 0.4 * capH) continue;
+    const dx = gp[i * 3] - gcx, dz = gp[i * 3 + 2] - gcz;
+    if (Math.hypot(dx, dz) > rG * 1.25) { bx += dx; bz += dz; }
+  }
+  const rot = bx || bz ? -Math.atan2(bx, bz) : 0; // la visera apunta a +z (frente)
+  // Borde a la altura de la frente. La corona se ajusta al contorno de la cabeza de la frente para
+  // arriba, por separado de lado a lado y de adelante hacia atrás (la cara sobresale más que la nuca),
+  // con holgura; y como la cabeza estándar es un huevo más alto que una real, la gorra se alarga en
+  // vertical solo lo necesario para cubrir la coronilla.
+  const headH0 = maxY - yNeck;
+  const rimS = yNeck + 0.56 * headH0;
+  let hx0 = Infinity, hx1 = -Infinity, hz0 = Infinity, hz1 = -Infinity;
+  for (let i = 0; i < sp.length; i += 3) {
+    const y = sp[i + 1];
+    if (y < rimS - 0.01 * H || y > rimS + 0.3 * headH0) continue;
+    hx0 = Math.min(hx0, sp[i]); hx1 = Math.max(hx1, sp[i]); hz0 = Math.min(hz0, sp[i + 2]); hz1 = Math.max(hz1, sp[i + 2]);
+  }
+  const rS = (hx1 - hx0) / 2;
+  if (rS <= 0) return null;
+  const cr = Math.cos(rot), sr = Math.sin(rot);
+  const rx = (x: number, z: number) => (x - gcx) * cr + (z - gcz) * sr;
+  const rz = (x: number, z: number) => -(x - gcx) * sr + (z - gcz) * cr;
+  let cx0 = Infinity, cx1 = -Infinity, cz0 = Infinity, cz1 = -Infinity;
+  for (let i = 0; i < cloth.length; i++) {
+    const y = gp[i * 3 + 1];
+    if (cloth[i] < 0.5 || y < capBottom + 0.3 * capH || y > capBottom + 0.5 * capH) continue;
+    const X = rx(gp[i * 3], gp[i * 3 + 2]), Z = rz(gp[i * 3], gp[i * 3 + 2]);
+    cx0 = Math.min(cx0, X); cx1 = Math.max(cx1, X); cz0 = Math.min(cz0, Z); cz1 = Math.max(cz1, Z);
+  }
+  const sx = ((hx1 - hx0) * 1.16) / (cx1 - cx0), sz = ((hz1 - hz0) * 1.14) / (cz1 - cz0);
+  const sy = Math.max((sx + sz) / 2, ((maxY - rimS) * 1.06) / (capH * 0.92));
+  const hcx = (hx0 + hx1) / 2, hcz = (hz0 + hz1) / 2, ccx = (cx0 + cx1) / 2, ccz = (cz0 + cz1) / 2;
+
+  // 3. Todo junto: cabeza (maniquí), gorra (tela), palo y base.
+  const out: number[] = [];
+  const outCloth: number[] = [];
+  // Cuello cortado parejo: entran los triángulos con el centro sobre el corte y lo que baja de la
+  // línea se aplana en ella.
+  for (let t = 0; t < sp.length; t += 9) {
+    if ((sp[t + 1] + sp[t + 4] + sp[t + 7]) / 3 < yCut) continue;
+    // Triángulos grandes que bajan a los hombros: fuera (aplanados dejarían un ala).
+    if (Math.min(sp[t + 1], sp[t + 4], sp[t + 7]) < yCut - 0.015 * H) continue;
+    for (let k = 0; k < 3; k++) out.push(sp[t + k * 3], Math.max(yCut, sp[t + k * 3 + 1]), sp[t + k * 3 + 2]);
+    outCloth.push(0, 0, 0);
+  }
+  for (let t = 0; t < cloth.length; t += 3) {
+    if (cloth[t] < 0.5) continue;
+    for (let k = 0; k < 3; k++) {
+      const i = t + k;
+      const X = rx(gp[i * 3], gp[i * 3 + 2]), Z = rz(gp[i * 3], gp[i * 3 + 2]);
+      out.push(hcx + sx * (X - ccx), rimS + sy * (gp[i * 3 + 1] - capBottom), hcz + sz * (Z - ccz));
+      outCloth.push(1);
+    }
+  }
+  const headH = maxY - yNeck;
+  const poleLen = headH * 0.9, baseH = rS * 0.14;
+  const addCyl = (c: THREE.BufferGeometry, y: number) => {
+    const n = c.toNonIndexed().attributes.position;
+    for (let i = 0; i < n.count; i++) { out.push(scx + n.getX(i), y + n.getY(i), scz + n.getZ(i)); outCloth.push(0); }
+  };
+  // Remate del cuello: un aro del mismo grafito tapa el borde del corte (como el tapón de cuello de
+  // un maniquí de vitrina).
+  addCyl(new THREE.CylinderGeometry(rNeck * 1.12, rNeck * 1.12, 0.022 * H, 40), yCut + 0.004 * H);
+  // El palo entra en el cuello (sin hueco entre el cuello y el palo).
+  addCyl(new THREE.CylinderGeometry(rS * 0.12, rS * 0.12, poleLen, 24), yCut + 0.03 * H - poleLen / 2);
+  addCyl(new THREE.CylinderGeometry(rS * 1.25, rS * 1.3, baseH, 48), yCut + 0.03 * H - poleLen - baseH / 2);
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(out), 3));
+  return { geometry, cloth: new Float32Array(outCloth) };
 }
 
 /**
@@ -968,7 +1179,7 @@ function paintPattern(
   }
 }
 
-function Garment({ model, color, art, artRef, frames, focus, locked = false, animView, printKey = 0, still = false, onReady, handleRef, pieceGuide = false, config }: Omit<Mannequin3DProps, 'active'>) {
+function Garment({ model, color, art, artRef, frames, focus, locked = false, animView, printKey = 0, still = false, onReady, handleRef, pieceGuide = false, config, spin }: Omit<Mannequin3DProps, 'active'>) {
   const cfg = config ?? MODELS_3D[model];
   const group = useRef<THREE.Group>(null);
   const drag = useRef({ down: false, x: 0, offset: 0 });
@@ -1151,7 +1362,9 @@ function Garment({ model, color, art, artRef, frames, focus, locked = false, ani
     }
     if (repaint) paintAll();
     const g = group.current;
-    if (g) {
+    if (g && spin) {
+      g.rotation.y += delta * spin;
+    } else if (g) {
       const t = frame.clock.elapsedTime;
       const idle = still || locked || drag.current.down ? 0 : Math.sin(t * 0.45) * 0.3;
       const target = angles[focus] + drag.current.offset + idle;
@@ -1201,7 +1414,7 @@ export default function Mannequin3D({ active = true, ...props }: Mannequin3DProp
       frameloop={active ? 'always' : 'never'}
       dpr={[1, 2]}
       camera={{ position: [0, 0, CAMERA.distance], fov: CAMERA.fov }}
-      gl={{ antialias: true, alpha: true, preserveDrawingBuffer: false, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.05 }}
+      gl={{ antialias: true, alpha: true, preserveDrawingBuffer: !!props.recordable, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.05 }}
       onCreated={() => setReady(true)}
       style={{ touchAction: props.locked ? 'auto' : 'pan-y', cursor: props.locked ? 'default' : 'grab', opacity: ready ? 1 : 0, transition: 'opacity .4s' }}
       aria-hidden="true"

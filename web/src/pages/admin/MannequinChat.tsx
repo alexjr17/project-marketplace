@@ -7,8 +7,8 @@
  * 3. "Generar 3D con las 4 vistas": el 3D multivista, fiel también atrás y a los lados.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Box, Check, CornerDownRight, ImageIcon, ImagePlus, RefreshCw, RotateCcw, Send, X } from 'lucide-react';
-import { Badge, Button, Card, CardTitle, ImageInput, TextArea, TextInput, toast, useConfirm } from '../../components/ui';
+import { Box, Camera, Check, CornerDownRight, ImageIcon, ImagePlus, RefreshCw, RotateCcw, Send, X } from 'lucide-react';
+import { Badge, Button, Card, CardTitle, Dialog, FormActions, ImageInput, TextArea, TextInput, toast, useConfirm } from '../../components/ui';
 import { errorMessage } from '../../lib/http';
 import type { ModelKind } from '../../components/mannequin/models';
 import { mannequinModelsService, type MannequinEdit, type MannequinModel } from '../../services/mannequinModels.service';
@@ -37,6 +37,9 @@ export function MannequinChat({ model, onModel }: { model: MannequinModel; onMod
   const [redoText, setRedoText] = useState<Partial<Record<ViewId, string>>>({});
   const [now, setNow] = useState(Date.now());
   const end = useRef<HTMLDivElement>(null);
+  // Fotos reales como las 4 vistas.
+  const [realOpen, setRealOpen] = useState(false);
+  const [real, setReal] = useState<Partial<Record<'front' | 'back' | 'left' | 'right', string>>>({});
 
   const load = useCallback(async () => {
     try {
@@ -149,6 +152,24 @@ export function MannequinChat({ model, onModel }: { model: MannequinModel; onMod
     }
   };
 
+  const uploadReal = async () => {
+    const order = ['front', 'back', 'left', 'right'] as const;
+    if (order.some((v) => !real[v])) { toast.error('Sube las 4 fotos'); return; }
+    setActing('real');
+    try {
+      const images = Object.fromEntries(await Promise.all(order.map(async (v) => [v, await shrinkImage(real[v]!)]))) as Record<(typeof order)[number], string>;
+      setEdits(await mannequinModelsService.uploadViews(model.id, images));
+      setRealOpen(false);
+      setReal({});
+      toast.success('Fotos cargadas como vistas. Revísalas y genera el 3D.');
+      onModel({ ...model, inputImages: { front: images.front } });
+    } catch (err) {
+      toast.error(errorMessage(err, 'No se pudieron cargar las fotos'));
+    } finally {
+      setActing(null);
+    }
+  };
+
   const elapsed = (e: MannequinEdit) => Math.max(0, Math.round((now - new Date(e.createdAt).getTime()) / 1000));
   const latestView = (v: ViewId) => [...views].reverse().find((e) => e.view === v) ?? null;
   const viewsReady = views.length > 0 && VIEW_IDS.every((v) => latestView(v)?.status === 'listo');
@@ -208,7 +229,12 @@ export function MannequinChat({ model, onModel }: { model: MannequinModel; onMod
       )}
 
       <Card>
-        <CardTitle icon={ImageIcon}>Chat para definir el modelo</CardTitle>
+        <CardTitle
+          icon={ImageIcon}
+          actions={<Button size="sm" variant="outline" icon={<Camera className="w-4 h-4" />} disabled={locked || working} onClick={() => setRealOpen(true)}>Subir mis 4 fotos</Button>}
+        >
+          Chat para definir el modelo
+        </CardTitle>
         <p className="text-sm text-gray-500 mb-4">
           Pide cambios con detalle, en español, o adjunta fotos de referencia: la IA arma la foto del producto en su maniquí estándar. Cuando quede como lo quieres, apruébala para armar las 4 vistas.
           Cada foto gasta cerca de 1 min 30 s de GPU.
@@ -310,6 +336,35 @@ export function MannequinChat({ model, onModel }: { model: MannequinModel; onMod
           <p className="text-xs text-gray-400">Enter envía · Shift+Enter hace un salto de línea</p>
         </div>
       </Card>
+
+      <Dialog
+        open={realOpen}
+        onClose={() => acting !== 'real' && setRealOpen(false)}
+        title="Subir mis 4 fotos"
+        description="Fotos reales del producto: dan el 3D más detallado, porque la IA ve cómo es por todos lados y no inventa la parte de atrás. No gastan GPU; el 3D se genera después, cuando lo pidas."
+        size="lg"
+        footer={(
+          <FormActions>
+            <Button variant="secondary" onClick={() => setRealOpen(false)} disabled={acting === 'real'}>Cancelar</Button>
+            <Button icon={<Check className="w-4 h-4" />} isLoading={acting === 'real'} onClick={uploadReal}>Usar estas fotos</Button>
+          </FormActions>
+        )}
+      >
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {([['front', labels.front], ['back', labels.back], ['left', labels.leftSleeve], ['right', labels.rightSleeve]] as const).map(([v, label]) => (
+              <div key={v}>
+                <p className="text-xs font-medium text-gray-700 mb-1">{label}</p>
+                <ImageInput value={real[v]} onChange={(val) => setReal((r) => ({ ...r, [v]: val }))} maxSizeMB={10} allowUrl={false} />
+              </div>
+            ))}
+          </div>
+          <p className="text-xs text-gray-500">
+            Cómo tomarlas: el producto entero y centrado, fondo liso, buena luz pareja, la cámara a la misma distancia y altura en las 4.
+            De frente, de atrás y de perfil exacto por cada lado (izquierdo y derecho del producto). En blanco sale mejor, pero cualquier color sirve: la tienda lo pinta.
+          </p>
+        </div>
+      </Dialog>
     </div>
   );
 }

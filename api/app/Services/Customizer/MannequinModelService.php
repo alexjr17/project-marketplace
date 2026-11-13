@@ -48,6 +48,9 @@ class MannequinModelService
         'split' => 'color',
         'lightFrom' => 0.62,
         'clothFrom' => 0.5,
+        // Giro del modelo en grados (-180..180) para que su frente mire al frente (la IA lo puede
+        // generar de lado).
+        'yaw' => 0,
         'headFrom' => 0.767, 'bodyTop' => 0.681, 'collarFront' => 0.748, 'collarBack' => 0.76,
         'collarCurve' => 1, 'hem' => 0.143, 'cut' => 0, 'sleeveY' => 0.655,
     ];
@@ -333,7 +336,11 @@ class MannequinModelService
             if ($k === 'kind' || $k === 'split' || ! isset($c[$k]) || ! is_numeric($c[$k])) {
                 continue;
             }
-            $out[$k] = $k === 'collarCurve' ? (in_array((int) $c[$k], [1, 2], true) ? (int) $c[$k] : 1) : round(min(1, max(0, (float) $c[$k])), 4);
+            $out[$k] = match ($k) {
+                'collarCurve' => in_array((int) $c[$k], [1, 2], true) ? (int) $c[$k] : 1,
+                'yaw' => (int) round(min(180, max(-180, (float) $c[$k]))),
+                default => round(min(1, max(0, (float) $c[$k])), 4),
+            };
         }
 
         return $out;

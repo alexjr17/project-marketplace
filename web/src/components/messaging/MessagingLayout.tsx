@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { ChevronDown, FileText, Inbox, LogOut, MessageSquare, Plug, Share2, Sparkles, User } from 'lucide-react';
+import { CalendarClock, ChevronDown, FileText, Inbox, LogOut, MessageSquare, Palette, Plug, Share2, Sparkles, User, Wand2 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useSettings } from '../../context/SettingsContext';
 import AppSwitcher from '../common/AppSwitcher';
@@ -10,6 +10,9 @@ import type { Permission } from '../../types/roles';
 const TABS: { path: string; label: string; icon: typeof Inbox; permission: Permission }[] = [
   { path: '/messaging/inbox', label: 'Bandeja', icon: Inbox, permission: 'messaging.inbox' },
   { path: '/messaging/posts', label: 'Publicaciones', icon: Share2, permission: 'messaging.posts' },
+  { path: '/messaging/studio', label: 'Estudio', icon: Wand2, permission: 'messaging.posts' },
+  { path: '/messaging/calendar', label: 'Calendario', icon: CalendarClock, permission: 'messaging.posts' },
+  { path: '/messaging/brand', label: 'Marca', icon: Palette, permission: 'messaging.posts' },
   { path: '/messaging/pages', label: 'Páginas', icon: FileText, permission: 'messaging.pages' },
   { path: '/messaging/knowledge', label: 'Entrenar IA', icon: Sparkles, permission: 'messaging.knowledge' },
   { path: '/messaging/channels', label: 'Canales', icon: Plug, permission: 'messaging.channels' },

@@ -24,7 +24,7 @@ const NO_ART = {};
 const COLORS = [{ hex: '#FFFFFF', name: 'Blanco' }, { hex: '#1F1D1E', name: 'Negro' }, { hex: '#9CA3AF', name: 'Gris' }, { hex: '#B91C1C', name: 'Rojo' }];
 
 /** Ajustes de la tela, de arriba hacia abajo. Todo en % del alto del modelo (0 = abajo). */
-const SLIDERS: { key: Exclude<keyof GeneratedModelConfig, 'kind' | 'split'>; label: string; hint: string }[] = [
+const SLIDERS: { key: Exclude<keyof GeneratedModelConfig, 'kind' | 'split' | 'yaw'>; label: string; hint: string }[] = [
   { key: 'headFrom', label: 'Inicio de la cabeza', hint: 'Por encima todo es maniquí.' },
   { key: 'collarBack', label: 'Escote atrás', hint: 'Borde del cuello en la espalda.' },
   { key: 'collarFront', label: 'Escote adelante', hint: 'Borde del cuello en el pecho.' },
@@ -266,6 +266,18 @@ export default function MannequinModelDetailPage() {
               <p className="text-sm text-gray-500 my-4">
                 {kind === 'objeto' ? 'Todo el modelo es tela: el estampado se puede poner en cualquier lado.' : 'Marca dónde termina el maniquí y empieza la tela; el estampado solo se pinta en la tela. Medidas en % del alto, desde abajo.'}
               </p>
+              <div className="mb-4">
+                <div className="flex items-baseline justify-between gap-2">
+                  <label htmlFor="mm-yaw" className="text-sm font-medium text-gray-700">Girar</label>
+                  <span className="text-sm tabular-nums text-gray-900">{config.yaw ?? 0}°</span>
+                </div>
+                <input
+                  id="mm-yaw" type="range" min={-180} max={180} step={5} value={config.yaw ?? 0}
+                  onChange={(e) => setConfig({ ...config, yaw: Number(e.target.value) })}
+                  className="w-full accent-app-600"
+                />
+                <p className="text-xs text-gray-500">Si la IA lo generó de lado, gíralo hasta que en "Frente" se vea su frente.</p>
+              </div>
               {(kind === 'cabeza' || kind === 'piernas') && (
                 <div className="space-y-3">
                   <Field label="Separar la tela del maniquí">

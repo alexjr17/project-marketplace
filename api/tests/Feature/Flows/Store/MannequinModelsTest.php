@@ -235,6 +235,28 @@ class MannequinModelsTest extends TestCase
         $this->assertSame('revision', MannequinModel::find($m['id'])->status);
     }
 
+    public function test_las_4_fotos_reales_son_las_vistas_sin_gastar_gpu(): void
+    {
+        $this->actingAsAdmin();
+        $m = $this->postJson('/api/mannequin-models', ['name' => 'Gorra', 'kind' => 'objeto', 'prompt' => 'gorra'])->assertCreated()->json('data');
+        $this->runLaunchedEdits();
+        $calls = count($this->hf->calls);
+        $this->postJson("/api/mannequin-models/{$m['id']}/views/upload", ['images' => ['front' => self::PNG]])->assertUnprocessable();
+        $list = $this->postJson("/api/mannequin-models/{$m['id']}/views/upload", [
+            'images' => ['front' => self::PNG, 'back' => self::PNG, 'left' => self::PNG, 'right' => self::PNG],
+        ])->assertOk()->json('data');
+        $views = array_values(array_filter($list, fn ($e) => $e['mode'] === 'view'));
+        $this->assertSame(['back', 'left', 'right'], array_column($views, 'view'));
+        $this->assertSame(['listo', 'listo', 'listo'], array_column($views, 'status'));
+        $this->assertCount($calls, $this->hf->calls); // sin IA
+        $this->assertFileExists(public_path(ltrim($this->getJson("/api/mannequin-models/{$m['id']}")->json('data.inputImages.front'), '/')));
+
+        // El 3D sale de las 4 fotos (multivista).
+        $this->postJson("/api/mannequin-models/{$m['id']}/views/generate")->assertOk()->assertJsonPath('data.source', 'vistas');
+        app(MannequinModelService::class)->generate($m['id']);
+        $this->assertSame('tencent/Hunyuan3D-2mv', end($this->hf->calls)[0]);
+    }
+
     public function test_genera_el_3d_con_la_cuenta_que_tiene_cuota(): void
     {
         $this->actingAsAdmin();

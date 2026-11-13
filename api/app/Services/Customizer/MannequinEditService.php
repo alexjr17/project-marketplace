@@ -141,6 +141,38 @@ class MannequinEditService
         return $this->format($e);
     }
 
+    /**
+     * Fotos reales del producto como las 4 vistas (frente, atrás y los dos lados): no gastan GPU y dan
+     * el 3D más fiel (la IA no inventa la parte de atrás). Reemplazan las vistas que hubiera.
+     *
+     * @param  array<string,string>  $images  front, back, left, right (data URL)
+     */
+    public function uploadViews(int $modelId, array $images, ?int $userId): array
+    {
+        $m = $this->editable($modelId);
+        $this->assertIdle($m);
+        foreach (['front', ...MannequinStandard::VIEWS] as $v) {
+            if (empty($images[$v])) {
+                throw new BusinessRuleException('Sube las 4 fotos: frente, atrás, lado izquierdo y lado derecho', 422, ['images' => ['Faltan fotos']]);
+            }
+        }
+        $paths = [];
+        foreach (['front', ...MannequinStandard::VIEWS] as $v) {
+            $saved = $this->uploads->store($this->uploads->decodeBase64($images[$v]), 'models3d', 'vista-'.$v);
+            $paths[$v] = ltrim($saved['url'], '/');
+        }
+        $m->update(['inputImages' => ['front' => $paths['front']]]);
+        foreach (MannequinStandard::VIEWS as $v) {
+            MannequinModelEdit::create([
+                'modelId' => $m->id, 'mode' => 'view', 'view' => $v, 'prompt' => 'Foto real',
+                'status' => MannequinModelEdit::DONE, 'basePath' => $paths['front'], 'imagePath' => $paths[$v],
+                'seconds' => 0, 'createdBy' => $userId,
+            ]);
+        }
+
+        return $this->list($m->id);
+    }
+
     /** Genera el 3D con las 4 vistas aprobadas (frente + la última buena de cada vista). */
     public function generateFromViews(int $modelId): array
     {

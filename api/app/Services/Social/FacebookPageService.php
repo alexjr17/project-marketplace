@@ -47,6 +47,10 @@ class FacebookPageService
 
         try {
             $external = match (true) {
+                // Estudio de contenido: video (reel o 360°) e historias.
+                $post->type === 'video' && count($urls) === 1 => $this->publishVideo($pageId, $token, $post->content ?? '', $urls[0]),
+                $post->type === 'story' && count($urls) === 1 && ! $this->isVideo($urls[0]) => $this->publishPhotoStory($pageId, $token, $urls[0]),
+                $post->type === 'story' => throw new RuntimeException('Facebook no permite publicar historias de video por API: publícala como video o en Instagram'),
                 count($urls) >= 2 => $this->publishCarousel($pageId, $token, $post->content ?? '', $urls),
                 count($urls) === 1 => $this->publishPhoto($pageId, $token, $post->content ?? '', $urls[0]),
                 default => $this->publishText($pageId, $token, $post->content ?? ''),
@@ -69,7 +73,7 @@ class FacebookPageService
      * Reescribe URLs locales o de localhost a la URL pública (ngrok / Render)
      * para que Meta pueda descargarlas. Si ya es HTTPS pública, no toca.
      */
-    private function publicizeUrl(string $url): string
+    public function publicizeUrl(string $url): string
     {
         $url = trim($url);
         if ($url === '') {
@@ -103,13 +107,13 @@ class FacebookPageService
 
     private function publicBaseUrl(): string
     {
-        $domain = (string) env('NGROK_DOMAIN', '');
+        $domain = (string) config('services.meta.public_domain', '');
         if ($domain) {
             return 'https://'.ltrim($domain, '/');
         }
 
         // Fallback: APP_URL si está configurada con un dominio público.
-        $appUrl = (string) env('APP_URL', '');
+        $appUrl = (string) config('app.url', '');
         if ($appUrl && ! str_contains($appUrl, 'localhost')) {
             return rtrim($appUrl, '/');
         }
@@ -222,6 +226,39 @@ class FacebookPageService
             'id' => $postId,
             'url' => $this->fetchPermalink($postId, $token),
         ];
+    }
+
+    public function isVideo(string $url): bool
+    {
+        return (bool) preg_match('/\.(mp4|mov|webm)(\?|$)/i', $url);
+    }
+
+    /** Video en el feed de la Página (reel o video 360° del estudio). Meta lo descarga de la URL. */
+    private function publishVideo(string $pageId, string $token, string $description, string $videoUrl): array
+    {
+        $response = Http::timeout(120)
+            ->withQueryParameters(['access_token' => $token])
+            ->post('https://graph.facebook.com/'.self::GRAPH_VERSION."/{$pageId}/videos", [
+                'file_url' => $videoUrl,
+                'description' => $description,
+            ]);
+        $this->ensureSuccess($response);
+        $id = $response->json('id');
+
+        return ['id' => $id, 'url' => $id ? "https://www.facebook.com/{$pageId}/videos/{$id}" : null];
+    }
+
+    /** Historia con foto: la foto se sube sin publicar y se publica como historia de la Página. */
+    private function publishPhotoStory(string $pageId, string $token, string $imageUrl): array
+    {
+        $photo = Http::timeout(30)->withQueryParameters(['access_token' => $token])
+            ->post('https://graph.facebook.com/'.self::GRAPH_VERSION."/{$pageId}/photos", ['url' => $imageUrl, 'published' => false]);
+        $this->ensureSuccess($photo);
+        $story = Http::timeout(30)->withQueryParameters(['access_token' => $token])
+            ->post('https://graph.facebook.com/'.self::GRAPH_VERSION."/{$pageId}/photo_stories", ['photo_id' => $photo->json('id')]);
+        $this->ensureSuccess($story);
+
+        return ['id' => $story->json('post_id') ?? $story->json('id'), 'url' => null];
     }
 
     private function fetchPermalink(?string $postId, string $token): ?string

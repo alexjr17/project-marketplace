@@ -10,12 +10,45 @@ use RuntimeException;
 use Throwable;
 
 /**
- * Publicaciones en redes (por ahora la página de Facebook): borradores, publicar ya,
- * publicar un borrador y borrar (también en Meta si ya estaba publicada).
+ * Publicaciones en redes (la página de Facebook y su cuenta de Instagram): borradores, publicar ya,
+ * publicar un borrador, programadas (las publica el comando social:publish-scheduled) y borrar
+ * (también en Meta si ya estaba publicada).
  */
 class SocialPostService
 {
-    public function __construct(private FacebookPageService $facebook) {}
+    public function __construct(private FacebookPageService $facebook, private InstagramService $instagram) {}
+
+    /**
+     * Publica una publicación ya armada (estudio de contenido o programada) en su red. No lanza: si
+     * Meta la rechaza queda en estado failed con el motivo.
+     */
+    public function publishPost(SocialPost $post): SocialPost
+    {
+        try {
+            return $post->platform === 'instagram' ? $this->instagram->publish($post) : $this->facebook->publish($post);
+        } catch (Throwable $e) {
+            $post->status = 'failed';
+            $post->error = $e->getMessage();
+            $post->save();
+
+            return $post;
+        }
+    }
+
+    /** Publica las programadas cuya hora ya llegó. Devuelve cuántas se intentaron. */
+    public function publishDue(): int
+    {
+        $due = SocialPost::where('status', 'scheduled')->where('scheduledAt', '<=', now())->orderBy('scheduledAt')->limit(20)->get();
+        foreach ($due as $post) {
+            // Se marca antes para que otro proceso no la publique dos veces.
+            $claimed = SocialPost::where('id', $post->id)->where('status', 'scheduled')->update(['status' => 'publishing']);
+            if ($claimed) {
+                $this->publishPost($post->fresh());
+            }
+        }
+
+        return $due->count();
+    }
 
     public function paginate(?string $status, ?string $platform, int $perPage): LengthAwarePaginator
     {
@@ -72,7 +105,7 @@ class SocialPostService
     /** Borra en Meta (si estaba publicada) y en local. */
     public function delete(SocialPost $post): void
     {
-        if ($post->status === 'published') {
+        if ($post->status === 'published' && $post->platform !== 'instagram') {
             try {
                 $this->facebook->delete($post);
             } catch (RuntimeException $e) {
@@ -107,7 +140,7 @@ class SocialPostService
     private function publishToProvider(SocialPost $post): SocialPost
     {
         try {
-            return $this->facebook->publish($post);
+            return $post->platform === 'instagram' ? $this->instagram->publish($post) : $this->facebook->publish($post);
         } catch (Throwable $e) {
             throw new BusinessRuleException('Error al publicar: '.$e->getMessage(), 500);
         }

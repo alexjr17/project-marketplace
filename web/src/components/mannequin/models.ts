@@ -85,6 +85,13 @@ export interface ModelConfig {
    * (luminancia 0..1) es la prenda (sale blanca en la foto estándar); lo demás, el maniquí grafito.
    */
   lightFrom?: number;
+  /**
+   * Gorras: la gorra generada va sobre la cabeza del maniquí aprobado (la de los suéteres), con su
+   * palo y base; la cabeza que inventó la IA se descarta. Necesita `lightFrom` (tela por color).
+   */
+  standardHead?: boolean;
+  /** Giro del modelo (radianes) para que su frente mire al frente. */
+  yaw?: number;
 }
 
 /** Maniquíes del sistema: siempre están, con sus ajustes finos en el código. */
@@ -133,6 +140,8 @@ export interface GeneratedModelConfig {
   split: 'color' | 'altura';
   lightFrom: number;
   clothFrom: number;
+  /** Giro en grados (-180..180) para que el frente del modelo mire al frente. */
+  yaw?: number;
   headFrom: number; bodyTop: number; collarFront: number; collarBack: number; collarCurve: number;
   hem: number; cut: number; sleeveY: number;
 }
@@ -149,6 +158,8 @@ export function generatedConfig(name: string, model: string, poster: string | nu
       label: name, model, poster: poster || MODELS_3D.basica.poster, object: true,
       clothFrom: c.kind === 'objeto' || c.split !== 'altura' ? undefined : c.clothFrom,
       lightFrom: c.kind !== 'objeto' && c.split !== 'altura' ? c.lightFrom : undefined,
+      standardHead: c.kind === 'cabeza' && c.split !== 'altura',
+      yaw: ((c.yaw ?? 0) * Math.PI) / 180,
       headFrom: 2, bodyTop: 2, collarFront: 2, collarBack: 2, collarCurve: 1, hem: -1, cut: 0, sleeveY: 0.5,
     };
   }
@@ -179,13 +190,14 @@ export const VIEW_ANGLE: Record<View3D, number> = { front: 0, back: Math.PI, rig
 const plain = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 
 /**
- * Vista 3D de un tipo de zona de la BD (frente, bolsillo, espalda, manga-derecha…). Lo que no se
- * reconoce va al frente.
+ * Vista 3D de un tipo de zona de la BD (frente, bolsillo, espalda/atrás, manga o lado izquierdo y
+ * derecho…). Lo que no se reconoce va al frente.
  */
 export function view3DOf(zoneTypeSlug: string | null | undefined): View3D {
   const s = plain(zoneTypeSlug || '');
-  if (/espalda|back|traser/.test(s)) return 'back';
-  if (/(manga|sleeve).*(izq|left)|(izq|left).*(manga|sleeve)/.test(s)) return 'leftSleeve';
-  if (/manga|sleeve|side|lado|lateral/.test(s)) return 'rightSleeve';
+  if (/espalda|back|traser|atras/.test(s)) return 'back';
+  // Izquierda: manga o lado (gorras, bolsos: "Lado izquierdo").
+  if (/(manga|sleeve|lado|side|lateral).*(izq|left)|(izq|left).*(manga|sleeve|lado|side|lateral)/.test(s)) return 'leftSleeve';
+  if (/manga|sleeve|side|lado|lateral|derech|right/.test(s)) return 'rightSleeve';
   return 'front';
 }

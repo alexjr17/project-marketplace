@@ -52,6 +52,11 @@ RUN composer dump-autoload --optimize --no-dev \
 # Se usa `php -S` con un router propio (server-router.php) en vez de
 # `php artisan serve` para poder añadir cabeceras CORS a /uploads (las
 # imágenes que el personalizador procesa en <canvas>/máscaras desde el front).
+# Límites de subida (videos del estudio de contenido): docker/php/uploads.ini.
+ENV PHP_INI_SCAN_DIR=":/app/docker/php"
+# Las tareas programadas (publicaciones del estudio de contenido) corren en segundo plano en el
+# mismo contenedor.
 CMD php artisan migrate --force \
     && php artisan app:seed-if-empty \
+    && (php artisan schedule:work > /dev/null 2>&1 &) \
     && php -S 0.0.0.0:${PORT:-8000} -t public server-router.php

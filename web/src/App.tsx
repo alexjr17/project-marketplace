@@ -38,6 +38,9 @@ const MessagingChannelsPage = lazy(() => import('./pages/messaging/ChannelsPage'
 const MessagingPostsPage = lazy(() => import('./pages/messaging/PostsPage').then(m => ({ default: m.PostsPage })));
 const MessagingPagesPage = lazy(() => import('./pages/messaging/PagesPage').then(m => ({ default: m.PagesPage })));
 const MessagingKnowledgePage = lazy(() => import('./pages/messaging/KnowledgePage').then(m => ({ default: m.KnowledgePage })));
+const MessagingStudioPage = lazy(() => import('./pages/messaging/StudioPage').then(m => ({ default: m.StudioPage })));
+const MessagingBrandPage = lazy(() => import('./pages/messaging/BrandPage').then(m => ({ default: m.BrandPage })));
+const MessagingCalendarPage = lazy(() => import('./pages/messaging/CalendarPage').then(m => ({ default: m.CalendarPage })));
 import MessagingLayout from './components/messaging/MessagingLayout';
 const ProductsPage = lazy(() => import('./pages/admin/ProductsPage').then(m => ({ default: m.ProductsPage })));
 const VariantsPage = lazy(() => import('./pages/admin/VariantsPage').then(m => ({ default: m.VariantsPage })));
@@ -243,6 +246,7 @@ const HomeOrSelector = () => {
 const MESSAGING_TABS: { path: string; permission: Permission }[] = [
   { path: '/messaging/inbox', permission: 'messaging.inbox' },
   { path: '/messaging/posts', permission: 'messaging.posts' },
+  { path: '/messaging/studio', permission: 'messaging.posts' },
   { path: '/messaging/pages', permission: 'messaging.pages' },
   { path: '/messaging/knowledge', permission: 'messaging.knowledge' },
   { path: '/messaging/channels', permission: 'messaging.channels' },
@@ -298,6 +302,9 @@ function App() {
                                       <Route path="/" element={<MessagingHome />} />
                                       <Route path="/inbox" element={<PermissionRoute permission="messaging.inbox" fallback={<MessagingHome />}><MessagingInboxPage /></PermissionRoute>} />
                                       <Route path="/posts" element={<PermissionRoute permission="messaging.posts" fallback={<MessagingHome />}><MessagingPostsPage /></PermissionRoute>} />
+                                      <Route path="/studio" element={<PermissionRoute permission="messaging.posts" fallback={<MessagingHome />}><MessagingStudioPage /></PermissionRoute>} />
+                                      <Route path="/brand" element={<PermissionRoute permission="messaging.posts" fallback={<MessagingHome />}><MessagingBrandPage /></PermissionRoute>} />
+                                      <Route path="/calendar" element={<PermissionRoute permission="messaging.posts" fallback={<MessagingHome />}><MessagingCalendarPage /></PermissionRoute>} />
                                       <Route path="/pages" element={<PermissionRoute permission="messaging.pages" fallback={<MessagingHome />}><MessagingPagesPage /></PermissionRoute>} />
                                       <Route path="/knowledge" element={<PermissionRoute permission="messaging.knowledge" fallback={<MessagingHome />}><MessagingKnowledgePage /></PermissionRoute>} />
                                       <Route path="/channels" element={<PermissionRoute permission="messaging.channels" fallback={<MessagingHome />}><MessagingChannelsPage /></PermissionRoute>} />

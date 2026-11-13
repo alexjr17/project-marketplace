@@ -49,6 +49,18 @@ return [
         'public_key' => env('MERCADOPAGO_PUBLIC_KEY', ''),
     ],
 
+    // Meta (Facebook/Instagram): dominio público desde el que Meta descarga las imágenes y videos
+    // (ngrok en desarrollo; en producción, el de la tienda vía APP_URL).
+    'meta' => [
+        'public_domain' => env('NGROK_DOMAIN', ''),
+    ],
+
+    // Groq (textos con IA): asistente de mensajes y textos del estudio de contenido de la app Social.
+    'groq' => [
+        'key' => env('GROQ_API_KEY', ''),
+        'copy_model' => env('GROQ_COPY_MODEL', 'openai/gpt-oss-120b'),
+    ],
+
     // Hugging Face: cuentas para generar maniquíes 3D (Admin → Modelos 3D). Cada cuenta gratis
     // tiene su cuota diaria de GPU; se usa la que tenga cuota. Los tokens van solo en el .env.
     'huggingface' => [

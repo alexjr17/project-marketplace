@@ -98,6 +98,9 @@ export const mannequinModelsService = {
   /** Aprueba la foto de frente y arma la espalda y los lados. */
   approve: (id: number, editId: number) => http.post<MannequinEdit[]>(`/mannequin-models/${id}/edits/${editId}/approve`),
   redoView: (id: number, view: 'back' | 'left' | 'right', prompt?: string) => http.post<MannequinEdit>(`/mannequin-models/${id}/views/${view}`, { prompt }),
+  /** Fotos reales del producto como las 4 vistas (no gastan GPU). */
+  uploadViews: (id: number, images: Record<'front' | 'back' | 'left' | 'right', string>) =>
+    http.post<MannequinEdit[]>(`/mannequin-models/${id}/views/upload`, { images }),
   /** 3D con las 4 vistas. */
   generateFromViews: (id: number) => http.post<MannequinModel>(`/mannequin-models/${id}/views/generate`),
   published: () => http.get<PublishedModel3D[]>('/mannequin-models/public'),

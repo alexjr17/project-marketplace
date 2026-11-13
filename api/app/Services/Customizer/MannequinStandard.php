@@ -15,7 +15,8 @@ class MannequinStandard
     /** Soporte de cada tipo. */
     private const SUPPORT = [
         'maniqui' => 'worn by a matte graphite gray (#6E6C6D) armless half-body torso mannequin with a smooth featureless egg-shaped head, no arms and no hands, standing on a thin metal pole with a round metal base',
-        'cabeza' => 'worn on a matte graphite gray (#6E6C6D) smooth featureless egg-shaped mannequin head with a neck, no face details, mounted on a thin metal pole with a round metal base',
+        // La cabeza como la de los maniquíes de los suéteres: un huevo liso, sin cara (la IA tiende a dibujar rostros).
+        'cabeza' => 'worn on a matte graphite gray (#6E6C6D) mannequin head that is a completely smooth blank egg shape (like an egg: no eyes, no nose, no mouth, no ears, no face at all) on a straight cylindrical neck, mounted on a thin metal pole with a round metal base',
         'piernas' => 'worn by a matte graphite gray (#6E6C6D) lower-body mannequin (waist, hips and two legs, no feet details), standing on a thin metal pole with a round metal base',
         'objeto' => 'shown alone as a single object, with no mannequin, no person and no props',
     ];
@@ -23,9 +24,11 @@ class MannequinStandard
     /** Siempre de frente y a la altura: es la vista "frente" del 3D multivista. */
     private const SHOT = [
         'maniqui' => 'straight front view at eye level, facing the camera',
-        'cabeza' => 'straight front view at eye level, facing the camera (the brim or front points at the camera)',
+        // Gorras y objetos: tres cuartos (frente, lado y visera en una foto): con una sola foto la IA
+        // arma mucho mejor el 3D que solo de frente (de frente inventa la parte de atrás).
+        'cabeza' => 'three-quarter front view slightly from above, the brim pointing to the front-left, the whole head and the back of the cap partially visible',
         'piernas' => 'straight front view at eye level, facing the camera',
-        'objeto' => 'straight front view at eye level, facing the camera',
+        'objeto' => 'three-quarter front view slightly from above',
     ];
 
     /**

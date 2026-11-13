@@ -105,6 +105,20 @@ class MannequinModelController extends Controller
         return $this->created($this->edits->redoView($id, $view, (string) ($data['prompt'] ?? ''), $request->user()?->id), 'Rehaciendo la vista');
     }
 
+    /** POST /api/mannequin-models/{id}/views/upload: fotos reales como las 4 vistas (sin GPU). */
+    public function uploadViews(Request $request, int $id)
+    {
+        $data = $request->validate([
+            'images' => 'required|array',
+            'images.front' => 'required|string',
+            'images.back' => 'required|string',
+            'images.left' => 'required|string',
+            'images.right' => 'required|string',
+        ]);
+
+        return $this->success($this->edits->uploadViews($id, $data['images'], $request->user()?->id), 'Fotos cargadas como vistas');
+    }
+
     /** POST /api/mannequin-models/{id}/views/generate: el 3D con las 4 vistas. */
     public function generateFromViews(int $id)
     {

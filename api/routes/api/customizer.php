@@ -101,6 +101,7 @@ Route::prefix('mannequin-models')->group(function () {
         Route::post('{id}/edits', [MannequinModelController::class, 'storeEdit'])->whereNumber('id')->middleware('throttle:20,1');
         Route::post('{id}/edits/{editId}/apply', [MannequinModelController::class, 'applyEdit'])->whereNumber('id')->whereNumber('editId')->middleware('throttle:10,1');
         Route::post('{id}/edits/{editId}/approve', [MannequinModelController::class, 'approveEdit'])->whereNumber('id')->whereNumber('editId')->middleware('throttle:10,1');
+        Route::post('{id}/views/upload', [MannequinModelController::class, 'uploadViews'])->whereNumber('id')->middleware('throttle:10,1');
         Route::post('{id}/views/generate', [MannequinModelController::class, 'generateFromViews'])->whereNumber('id')->middleware('throttle:10,1');
         Route::post('{id}/views/{view}', [MannequinModelController::class, 'redoView'])->whereNumber('id')->whereIn('view', ['back', 'left', 'right'])->middleware('throttle:20,1');
     });

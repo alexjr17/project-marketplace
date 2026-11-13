@@ -9,6 +9,7 @@ use App\Http\Controllers\BotKnowledgeCategoryController;
 use App\Http\Controllers\BotKnowledgeController;
 use App\Http\Controllers\ChannelController;
 use App\Http\Controllers\ConversationController;
+use App\Http\Controllers\MarketingController;
 use App\Http\Controllers\MessageController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\SocialPostController;
@@ -72,6 +73,23 @@ Route::prefix('messaging')->middleware(['auth:sanctum', 'permission:messaging.ac
         Route::get('posts/{id}', [SocialPostController::class, 'show'])->whereNumber('id');
         Route::post('posts/{id}/publish', [SocialPostController::class, 'publishExisting'])->whereNumber('id');
         Route::delete('posts/{id}', [SocialPostController::class, 'destroy'])->whereNumber('id');
+
+        // Estudio de contenido y calendario (marketing)
+        Route::prefix('marketing')->group(function () {
+            Route::get('sources', [MarketingController::class, 'sources']);
+            Route::get('image', [MarketingController::class, 'image'])->middleware('throttle:240,1');
+            Route::post('copy', [MarketingController::class, 'copy'])->middleware('throttle:30,1');
+            Route::get('creatives', [MarketingController::class, 'index']);
+            Route::post('creatives', [MarketingController::class, 'store'])->middleware('throttle:30,1');
+            Route::patch('creatives/{id}', [MarketingController::class, 'update'])->whereNumber('id');
+            Route::delete('creatives/{id}', [MarketingController::class, 'destroy'])->whereNumber('id');
+            Route::post('publish', [MarketingController::class, 'publish'])->middleware('throttle:20,1');
+            Route::get('calendar', [MarketingController::class, 'calendar']);
+            Route::patch('posts/{id}/schedule', [MarketingController::class, 'reschedule'])->whereNumber('id');
+            Route::get('accounts', [MarketingController::class, 'accounts']);
+            Route::get('brand', [MarketingController::class, 'brand']);
+            Route::put('brand', [MarketingController::class, 'saveBrand']);
+        });
     });
 });
 
