@@ -109,6 +109,28 @@ class DesignLibraryTest extends TestCase
         $this->assertSame(0, DesignImage::whereNotNull('familyId')->count());
     }
 
+    public function test_disenio_por_capas_limpio_y_con_la_ruta_del_archivo(): void
+    {
+        $this->actingAsAdmin();
+        $d = $this->design([
+            'printUrl' => 'http://localhost:8000/uploads/designs/reno.png',
+            'editorData' => ['v' => 1, 'artboard' => ['key' => 'cuadrado', 'w' => 3000, 'h' => 3000], 'layers' => [
+                ['id' => 'a', 'kind' => 'svg', 'svg' => '<svg onload="x()"><script>alert(1)</script><rect fill="red"/></svg>', 'colors' => ['#FF0000' => '#C62828']],
+                ['id' => 'b', 'kind' => 'image', 'src' => '/uploads/designs/foto.png'],
+            ]],
+        ]);
+        // La ruta del archivo queda relativa; el SVG, sin scripts ni eventos.
+        $this->assertSame('/uploads/designs/reno.png', $d['printUrl']);
+        $this->assertSame('<svg><rect fill="red"/></svg>', $d['editorData']['layers'][0]['svg']);
+        $this->assertSame(['#FF0000' => '#C62828'], $d['editorData']['layers'][0]['colors']);
+        // Las imágenes van subidas, no incrustadas.
+        $this->putJson('/api/design-images/'.$d['id'], ['editorData' => ['layers' => [['kind' => 'image', 'src' => 'data:image/png;base64,AAA']]]])
+            ->assertUnprocessable();
+        // Muy grande: se rechaza.
+        $this->putJson('/api/design-images/'.$d['id'], ['editorData' => ['layers' => [['kind' => 'svg', 'svg' => '<svg>'.str_repeat('<rect/>', 400000).'</svg>']]]])
+            ->assertUnprocessable();
+    }
+
     public function test_permisos(): void
     {
         $this->getJson('/api/design-families')->assertOk();

@@ -21,6 +21,7 @@ class DesignImageController extends Controller
         'textFields.*' => 'array',
         'familyId' => 'nullable|integer|exists:design_families,id',
         'familyRole' => 'nullable|string|max:40',
+        'editorData' => 'nullable|array',
     ];
 
     public function index(Request $request)

@@ -19,6 +19,9 @@ class DesignLibraryService
 {
     public const MAX_FIELDS = 6;
 
+    /** El diseño por capas (con los SVG adentro) no pasa de esto. */
+    private const MAX_EDITOR_BYTES = 2_000_000;
+
     private const SHAPES = ['recto', 'arco', 'puente', 'circulo', 'onda'];
 
     /** Deja los textos editables en su forma (números en rango, solo lo que se conoce). */
@@ -88,6 +91,12 @@ class DesignLibraryService
         if (array_key_exists('season', $data)) {
             $data['season'] = $data['season'] ? Str::slug($data['season']) : null;
         }
+        if (array_key_exists('editorData', $data)) {
+            $data['editorData'] = $this->editorData($data['editorData']);
+        }
+        if (! empty($data['printUrl'])) {
+            $data['printUrl'] = $this->uploadPath($data['printUrl']);
+        }
         if (array_key_exists('familyId', $data) && ! $data['familyId']) {
             $data['familyId'] = null;
             $data['familyRole'] = null;
@@ -97,6 +106,48 @@ class DesignLibraryService
         }
 
         return $data;
+    }
+
+    /**
+     * Las capas del editor: dentro de su tamaño y con los SVG limpios (sin scripts, eventos ni enlaces
+     * javascript:), por si alguien manda uno armado a mano.
+     */
+    private function editorData(?array $d): ?array
+    {
+        if (! $d) {
+            return null;
+        }
+        foreach (($d['layers'] ?? []) as $i => $l) {
+            if (is_array($l) && ($l['kind'] ?? null) === 'svg') {
+                $d['layers'][$i]['svg'] = $this->cleanSvg((string) ($l['svg'] ?? ''));
+            }
+            if (is_array($l) && ($l['kind'] ?? null) === 'image' && isset($l['src']) && str_starts_with((string) $l['src'], 'data:')) {
+                throw new BusinessRuleException('Las imágenes del diseño se suben aparte', 422);
+            }
+        }
+        if (strlen((string) json_encode($d)) > self::MAX_EDITOR_BYTES) {
+            throw new BusinessRuleException('El diseño es demasiado grande (los SVG pesan mucho): simplifícalo', 422);
+        }
+
+        return $d;
+    }
+
+    public function cleanSvg(string $svg): string
+    {
+        $svg = preg_replace('#<script\b[^>]*>.*?</script\s*>#is', '', $svg) ?? '';
+        $svg = preg_replace('#<script\b[^>]*/>#is', '', $svg) ?? '';
+        $svg = preg_replace('#<foreignObject\b.*?</foreignObject\s*>#is', '', $svg) ?? '';
+        $svg = preg_replace('#\son[a-z]+\s*=\s*("[^"]*"|\'[^\']*\'|[^\s>]+)#i', '', $svg) ?? '';
+
+        return preg_replace('#(href|xlink:href)\s*=\s*(["\'])\s*javascript:[^"\']*\2#i', '$1="#"', $svg) ?? '';
+    }
+
+    /** "/uploads/…" (la API a veces recibe la dirección completa del mismo servidor). */
+    private function uploadPath(string $url): string
+    {
+        $i = strpos($url, '/uploads/');
+
+        return $i !== false ? substr($url, $i) : $url;
     }
 
     // ─── Familias ───────────────────────────────────────────────────────────

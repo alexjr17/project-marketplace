@@ -18,7 +18,7 @@ import {
   type ColorsLayer, type ContentKind, type Design, type DesignRatio, type ImageLayer, type Layer, type Paint,
 } from './design';
 import { drawDesign, hitLayer, textOf, type Box as LBox, type DesignData } from './designRender';
-import { BG_STYLES, type BgStyle } from './backgrounds';
+import { BG_STYLES, XMAS_COLORS, type BgStyle } from './backgrounds';
 import { LayerInspector } from './LayerInspector';
 import { AiImageDialog } from './AiImageDialog';
 import { AiBackdropDialog } from './AiBackdropDialog';
@@ -344,6 +344,14 @@ export function DesignEditor({
   const setBackground = (style: BgStyle) => {
     const basePaint: Paint = bg ? (bg.type === 'pattern' ? bg.base : bg.type === 'shape' ? bg.fill : 'primary') : 'primary';
     const prev = bg?.type === 'pattern' ? bg : null;
+    // Los fondos navideños arrancan con sus colores (rojo, verde, blanco y dorado).
+    const xmas = XMAS_COLORS[style];
+    if (xmas) {
+      const l = patternLayer({ ...(prev ?? {}), id: prev?.id ?? layerId(), style, w: W, h: H, x: 0, y: 0, base: xmas.base as Paint, ink: xmas.ink as Paint, accent: xmas.accent as Paint, density: xmas.density, size: xmas.size, angle: xmas.angle });
+      setLayers(bg ? [l, ...layers.slice(1)] : [l, ...layers]);
+      setSel(l.id);
+      return;
+    }
     const l = patternLayer({
       ...(prev ?? {}), id: prev?.id ?? layerId(), style, base: basePaint, w: W, h: H, x: 0, y: 0,
       ink: prev?.ink ?? (basePaint === 'accent' ? 'primary' : 'accent'), accent: prev?.accent ?? 'accent',

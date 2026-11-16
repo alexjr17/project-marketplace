@@ -1,51 +1,11 @@
-import { useState, useEffect, useRef } from 'react';
-import { designImagesService, type DesignImage, type NamedField } from '../../services/design-images.service';
-import { customizerService } from '../../services/customizer.service';
-import { NamedFieldsEditor } from '../../components/customizer/NamedFieldsEditor';
+import { useState, useEffect } from 'react';
+import { designImagesService, type DesignImage } from '../../services/design-images.service';
+import { DesignStudio } from '../../components/admin/designStudio/DesignStudio';
 import { DesignFamiliesPanel } from './DesignFamiliesPanel';
 import { CheckCircle, ImageIcon, Images, Pencil, Plus, Trash2 } from 'lucide-react';
 import {
-  Alert, Badge, Button, Dialog, EmptyState, Field, FilterBar, FormGrid, IconButton, ImageInput, NumberInput, Page,
-  PageHeader, SearchInput, SelectInput, Spinner, StatCard, Switch, Tabs, TextArea, TextInput, toast, useConfirm,
+  Alert, Badge, Button, EmptyState, FilterBar, IconButton, Page, PageHeader, SearchInput, SelectInput, Spinner, StatCard, Tabs, toast, useConfirm,
 } from '../../components/ui';
-
-const EMPTY_FORM = {
-  name: '',
-  description: '',
-  thumbnailUrl: '',
-  fullUrl: '',
-  category: '',
-  tags: '',
-  sortOrder: 0,
-  isActive: true,
-  season: '',
-  /** Archivo de producción ya subido (URL) o recién elegido (data URL, se sube al guardar). */
-  printUrl: '',
-  textFields: [] as NamedField[],
-};
-
-// Redimensiona a máx. `maxWidth` px y devuelve PNG en base64 (conserva la transparencia).
-const compressImage = (src: string, maxWidth: number): Promise<string> =>
-  new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => {
-      const canvas = document.createElement('canvas');
-      let { width, height } = img;
-      if (width > maxWidth) {
-        height = (height * maxWidth) / width;
-        width = maxWidth;
-      }
-      canvas.width = width;
-      canvas.height = height;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) { reject(new Error('No se pudo crear el contexto del canvas')); return; }
-      ctx.clearRect(0, 0, width, height);
-      ctx.drawImage(img, 0, 0, width, height);
-      resolve(canvas.toDataURL('image/png'));
-    };
-    img.onerror = () => reject(new Error('Error al cargar la imagen'));
-    img.src = src;
-  });
 
 export default function DesignImagesPage() {
   const confirm = useConfirm();
@@ -61,36 +21,8 @@ export default function DesignImagesPage() {
   const [filterCategory, setFilterCategory] = useState<string>('');
   const [filterActive, setFilterActive] = useState<string>('');
 
-  // Diálogo para crear/editar
-  const [showModal, setShowModal] = useState(false);
-  const [editingImage, setEditingImage] = useState<DesignImage | null>(null);
-  const [formData, setFormData] = useState(EMPTY_FORM);
-  const [uploadingFile, setUploadingFile] = useState(false);
-  const [saving, setSaving] = useState(false);
-  // Nombre del último archivo elegido (para usarlo como nombre por defecto)
-  const lastFileName = useRef<string | null>(null);
-
-  // La imagen subida se redimensiona para el personalizador (máx. 300 px); el archivo completo se guarda
-  // como archivo de producción (con él se compone el nombre en alta calidad).
-  const handleThumbnail = async (value: string) => {
-    if (!value || !value.startsWith('data:')) {
-      setFormData(prev => ({ ...prev, thumbnailUrl: value }));
-      return;
-    }
-    try {
-      setUploadingFile(true);
-      const thumbnailBase64 = await compressImage(value, 300);
-      const printBase64 = await compressImage(value, 4000);
-      const fileName = lastFileName.current?.replace(/\.[^/.]+$/, '') ?? '';
-      setFormData(prev => ({ ...prev, thumbnailUrl: thumbnailBase64, printUrl: printBase64, name: prev.name || fileName }));
-    } catch (err) {
-      console.error('Error al procesar imagen:', err);
-      toast.error('Error al procesar la imagen. Intenta con otra imagen.');
-    } finally {
-      setUploadingFile(false);
-      lastFileName.current = null;
-    }
-  };
+  // Editor de diseños: null = cerrado; 'nuevo' = diseño nuevo; o el diseño que se edita.
+  const [studio, setStudio] = useState<DesignImage | 'nuevo' | null>(null);
 
   useEffect(() => {
     loadImages();
@@ -138,85 +70,14 @@ export default function DesignImagesPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchQuery, filterCategory, filterActive]);
 
-  const openCreateModal = () => {
-    setEditingImage(null);
-    setFormData(EMPTY_FORM);
-    setShowModal(true);
-  };
-
-  const openEditModal = (image: DesignImage) => {
-    setEditingImage(image);
-    setFormData({
-      name: image.name,
-      description: image.description || '',
-      thumbnailUrl: image.thumbnailUrl,
-      fullUrl: image.fullUrl,
-      category: image.category || '',
-      tags: image.tags?.join(', ') || '',
-      sortOrder: image.sortOrder,
-      isActive: image.isActive,
-      season: image.season || '',
-      printUrl: image.printUrl || '',
-      textFields: image.textFields || [],
-    });
-    setShowModal(true);
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!formData.thumbnailUrl) {
-      toast.error('Sube la imagen que se muestra en el personalizador');
-      return;
-    }
-    if (!formData.fullUrl && !formData.printUrl) {
-      toast.error('Sube el archivo de alta calidad o pon su enlace');
-      return;
-    }
-
-    try {
-      setSaving(true);
-      // El archivo de producción recién elegido se sube al servidor.
-      const printUrl = formData.printUrl.startsWith('data:') ? await customizerService.uploadDesignImage(formData.printUrl) : formData.printUrl;
-      const data = {
-        name: formData.name,
-        description: formData.description || undefined,
-        thumbnailUrl: formData.thumbnailUrl,
-        fullUrl: formData.fullUrl || printUrl,
-        printUrl: printUrl || null,
-        season: formData.season.trim() || null,
-        textFields: formData.textFields.length ? formData.textFields : null,
-        category: formData.category || undefined,
-        tags: formData.tags ? formData.tags.split(',').map(t => t.trim()).filter(t => t) : undefined,
-        sortOrder: formData.sortOrder,
-        isActive: formData.isActive,
-      };
-
-      if (editingImage) {
-        await designImagesService.update(editingImage.id, data);
-        toast.success('Imagen actualizada');
-      } else {
-        await designImagesService.create(data);
-        toast.success('Imagen creada');
-      }
-
-      setShowModal(false);
-      loadImages();
-      loadCategories();
-    } catch (err) {
-      console.error('Error al guardar:', err);
-      toast.error(`Error al guardar la imagen: ${err instanceof Error ? err.message : 'Error desconocido'}`);
-    } finally {
-      setSaving(false);
-    }
-  };
+  const openCreateModal = () => setStudio('nuevo');
+  const openEditModal = (image: DesignImage) => setStudio(image);
 
   const handleDelete = async (image: DesignImage) => {
     if (!(await confirm({ title: `¿Eliminar la imagen "${image.name}"?`, message: 'Esta acción no se puede deshacer.', tone: 'danger' }))) return;
     try {
       await designImagesService.remove(image.id);
       toast.success('Imagen eliminada');
-      setShowModal(false);
       loadImages();
     } catch (err) {
       toast.error('Error al eliminar la imagen');
@@ -233,7 +94,7 @@ export default function DesignImagesPage() {
         icon={Images}
         title="Imágenes de diseño"
         subtitle="Catálogo de imágenes prediseñadas para el personalizador"
-        actions={<Button icon={<Plus className="w-4 h-4" />} onClick={openCreateModal}>Nueva imagen</Button>}
+        actions={<Button icon={<Plus className="w-4 h-4" />} onClick={openCreateModal}>Nuevo diseño</Button>}
       />
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -267,7 +128,7 @@ export default function DesignImagesPage() {
           {hasFilters
             ? <EmptyState icon={ImageIcon} title="Sin resultados" description="Prueba con otra búsqueda o quita los filtros." />
             : <EmptyState icon={ImageIcon} title="No hay imágenes de diseño" description="Sube imágenes para que los clientes las usen en el personalizador."
-                action={<Button size="sm" icon={<Plus className="w-4 h-4" />} onClick={openCreateModal}>Nueva imagen</Button>} />}
+                action={<Button size="sm" icon={<Plus className="w-4 h-4" />} onClick={openCreateModal}>Nuevo diseño</Button>} />}
         </div>
       ) : (
         <div className={`grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 ${loading ? 'opacity-60' : ''}`}>
@@ -303,75 +164,12 @@ export default function DesignImagesPage() {
 
       </>)}
 
-      <Dialog
-        open={showModal}
-        onClose={() => setShowModal(false)}
-        size="xl"
-        title={editingImage ? 'Editar imagen' : 'Nueva imagen de diseño'}
-        footer={(
-          <>
-            {editingImage && (
-              <Button variant="ghost" className="sm:mr-auto text-red-600 hover:text-red-700 hover:bg-red-50" icon={<Trash2 className="w-4 h-4" />} onClick={() => handleDelete(editingImage)}>
-                Eliminar
-              </Button>
-            )}
-            <Button variant="secondary" onClick={() => setShowModal(false)}>Cancelar</Button>
-            <Button type="submit" form="design-image-form" isLoading={saving} disabled={uploadingFile}>{editingImage ? 'Guardar cambios' : 'Crear'}</Button>
-          </>
-        )}
-      >
-        <form id="design-image-form" onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-[13rem_1fr] gap-5">
-          <Field label="Imagen para el personalizador" required hint={uploadingFile ? 'Procesando…' : 'Se redimensiona a 300 px (PNG con transparencia).'}>
-            <div
-              onChangeCapture={(e) => { const t = e.target as HTMLInputElement; if (t.type === 'file' && t.files?.[0]) lastFileName.current = t.files[0].name; }}
-              onDropCapture={(e) => { const f = e.dataTransfer?.files?.[0]; if (f) lastFileName.current = f.name; }}
-            >
-              <ImageInput value={formData.thumbnailUrl} onChange={handleThumbnail} maxSizeMB={50} disabled={uploadingFile} />
-            </div>
-          </Field>
-
-          <div className="space-y-4 min-w-0">
-            <Field label="Nombre" required htmlFor="di-name">
-              <TextInput id="di-name" required value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} placeholder="Ej: Corazón rojo" />
-            </Field>
-            <Field label="Enlace de alta calidad (opcional)" htmlFor="di-full"
-              hint={formData.printUrl ? 'Ya tiene el archivo de alta calidad guardado (el que subiste). El enlace es opcional.' : 'Si el archivo está en Google Drive, Dropbox… Al subir la imagen arriba se guarda también en alta calidad.'}>
-              <TextInput id="di-full" type="url" value={formData.fullUrl.startsWith('/uploads') ? '' : formData.fullUrl} onChange={(e) => setFormData({ ...formData, fullUrl: e.target.value })} placeholder="https://drive.google.com/…" />
-            </Field>
-            <Field label="Descripción" htmlFor="di-desc">
-              <TextArea id="di-desc" value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} rows={2} placeholder="Descripción opcional" />
-            </Field>
-            <FormGrid>
-              <Field label="Categoría" htmlFor="di-cat">
-                <TextInput id="di-cat" value={formData.category} onChange={(e) => setFormData({ ...formData, category: e.target.value })} placeholder="Ej: Iconos, Logos…" list="design-categories-list" />
-                <datalist id="design-categories-list">
-                  {categories.map((cat) => <option key={cat} value={cat} />)}
-                </datalist>
-              </Field>
-              <Field label="Temporada" htmlFor="di-season" hint="Ej: navidad. Sale como filtro en la galería.">
-                <TextInput id="di-season" value={formData.season} onChange={(e) => setFormData({ ...formData, season: e.target.value })} placeholder="navidad" list="design-seasons-list" />
-                <datalist id="design-seasons-list">{[...new Set(['navidad', ...seasons])].map((s) => <option key={s} value={s} />)}</datalist>
-              </Field>
-              <Field label="Orden" htmlFor="di-order">
-                <NumberInput id="di-order" value={formData.sortOrder} onChange={(e) => setFormData({ ...formData, sortOrder: parseInt(e.target.value) || 0 })} step="1" />
-              </Field>
-            </FormGrid>
-            <Field label="Etiquetas" htmlFor="di-tags" hint="Separadas por coma.">
-              <TextInput id="di-tags" value={formData.tags} onChange={(e) => setFormData({ ...formData, tags: e.target.value })} placeholder="amor, corazón, rojo" />
-            </Field>
-            <Switch checked={formData.isActive} onChange={(v) => setFormData({ ...formData, isActive: v })} label="Activa" description="Solo las imágenes activas aparecen en el personalizador." />
-            <Switch checked={formData.textFields.length > 0}
-              onChange={(v) => setFormData({ ...formData, textFields: v ? [{ key: 'nombre', label: 'Nombre', default: 'Sofía', maxLength: 14, box: { x: 15, y: 70, w: 70, h: 18 }, style: { font: 'Mountains of Christmas', weight: 700, italic: false, color: '#C62828', upper: false, spacing: 2, shape: 'arco', curve: 25, outline: { color: '#FFFFFF', width: 6 } } }] : [] })}
-              label="Lleva nombre editable" description="El cliente escribe el nombre (u otro texto) y se dibuja sobre el diseño." />
-          </div>
-          {formData.textFields.length > 0 && (
-            <div className="md:col-span-2 rounded-xl border border-gray-200 p-3">
-              <p className="text-sm font-semibold text-gray-900 mb-3">Textos editables</p>
-              <NamedFieldsEditor image={formData.printUrl || formData.thumbnailUrl} fields={formData.textFields} onChange={(textFields) => setFormData((prev) => ({ ...prev, textFields }))} />
-            </div>
-          )}
-        </form>
-      </Dialog>
+      {studio && (
+        <DesignStudio
+          design={studio === 'nuevo' ? null : studio} categories={categories} seasons={seasons}
+          onClose={() => setStudio(null)} onSaved={() => { setStudio(null); loadImages(); loadCategories(); }}
+        />
+      )}
     </Page>
   );
 }

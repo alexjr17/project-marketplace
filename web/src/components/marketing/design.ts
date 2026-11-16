@@ -217,11 +217,15 @@ export function logoLayer(p: Partial<LogoLayer>): LogoLayer {
 export type DesignTemplateId =
   | 'destacado' | 'oferta' | 'coleccion' | 'nuevo' | 'cupon' | 'personaliza' | 'minimal' | 'precio' | 'anuncio' | 'editorial'
   | 'resena' | 'encuesta' | 'top3' | 'regresiva' | 'collage' | 'beneficios' | 'outfit' | 'sticker'
-  | 'bento' | 'contorno' | 'vidrio' | 'revista' | 'drop' | 'dividido' | 'dosVistas' | 'tresVistas' | 'coleccionPremium';
+  | 'bento' | 'contorno' | 'vidrio' | 'revista' | 'drop' | 'dividido' | 'dosVistas' | 'tresVistas' | 'coleccionPremium'
+  | 'navidad' | 'navidadOferta' | 'familia';
 
-export type TemplateGroup = 'Personalizable' | 'Tendencia' | 'Venta' | 'Producto' | 'Interacción' | 'Marca';
-export const TEMPLATE_GROUPS: TemplateGroup[] = ['Personalizable', 'Tendencia', 'Venta', 'Producto', 'Interacción', 'Marca'];
+export type TemplateGroup = 'Navidad' | 'Personalizable' | 'Tendencia' | 'Venta' | 'Producto' | 'Interacción' | 'Marca';
+export const TEMPLATE_GROUPS: TemplateGroup[] = ['Navidad', 'Personalizable', 'Tendencia', 'Venta', 'Producto', 'Interacción', 'Marca'];
 export const DESIGN_TEMPLATES: { id: DesignTemplateId; label: string; hint: string; group: TemplateGroup }[] = [
+  { id: 'familia', label: 'Navidad en familia', hint: 'Las prendas de la familia en fila, cada una con su nombre', group: 'Navidad' },
+  { id: 'navidad', label: 'Feliz Navidad', hint: 'El producto con nieve, esferas colgando y el saludo', group: 'Navidad' },
+  { id: 'navidadOferta', label: 'Oferta navideña', hint: 'El descuento en dorado sobre verde con nieve', group: 'Navidad' },
   { id: 'coleccionPremium', label: 'Colección premium', hint: 'Flyer de lujo: la espalda en grande, el frente y detalles de pecho, manga, cuello y tela', group: 'Personalizable' },
   { id: 'dosVistas', label: 'Frente y espalda', hint: 'La prenda personalizable por delante y por detrás, cada vista con su diseño', group: 'Personalizable' },
   { id: 'tresVistas', label: '3 vistas', hint: 'Frente, espalda y manga, cada una con su diseño', group: 'Personalizable' },
@@ -252,9 +256,10 @@ export const DESIGN_TEMPLATES: { id: DesignTemplateId; label: string; hint: stri
 ];
 
 /** Qué se está mostrando: cada tipo tiene sus plantillas recomendadas. */
-export type ContentKind = 'producto' | 'varios' | 'coleccion' | 'promocion' | 'personalizable' | 'diseno';
+export type ContentKind = 'producto' | 'varios' | 'coleccion' | 'promocion' | 'personalizable' | 'diseno' | 'familia';
 export const CONTENT_LABEL: Record<ContentKind, string> = {
   producto: 'tu producto', varios: 'tus productos', coleccion: 'tu colección', promocion: 'tu promoción', personalizable: 'tu personalizable', diseno: 'tus diseños',
+  familia: 'tu familia',
 };
 /** Plantillas de post pensadas para cada tipo de contenido (las demás también sirven: se adaptan). */
 export const TEMPLATES_FOR: Record<ContentKind, DesignTemplateId[]> = {
@@ -264,6 +269,7 @@ export const TEMPLATES_FOR: Record<ContentKind, DesignTemplateId[]> = {
   promocion: ['oferta', 'precio', 'cupon', 'regresiva', 'sticker', 'destacado', 'coleccion'],
   personalizable: ['coleccionPremium', 'dosVistas', 'tresVistas', 'personaliza', 'destacado', 'nuevo', 'oferta', 'revista'],
   diseno: ['personaliza', 'anuncio', 'contorno', 'collage', 'bento'],
+  familia: ['familia', 'navidad', 'coleccion', 'collage', 'bento', 'outfit'],
 };
 
 /** Capas de una plantilla para el tamaño pedido. */
@@ -295,7 +301,62 @@ export function buildDesign(id: DesignTemplateId, ratio: DesignRatio, opts?: { c
     if (colors) L.push(colorsLayer({ x, y, w, h, colors, onDark }));
   };
 
+  /** Esfera de Navidad colgando de un hilo (con su brillo). */
+  const bauble = (cx: number, cy: number, r: number, fill: Paint) => {
+    L.push(shapeLayer({ name: 'Hilo', x: cx - 1.5, y: 0, w: 3, h: cy - r + 4, fill: '#FFFFFF', fillAlpha: 0.55 }));
+    L.push(shapeLayer({ name: 'Esfera', shape: 'ellipse', x: cx - r, y: cy - r, w: 2 * r, h: 2 * r, fill }));
+    L.push(shapeLayer({ name: 'Brillo', shape: 'ellipse', x: cx - r * 0.55, y: cy - r * 0.6, w: r * 0.55, h: r * 0.4, fill: 'white', fillAlpha: 0.45 }));
+    L.push(shapeLayer({ name: 'Tapa', x: cx - r * 0.22, y: cy - r - 10, w: r * 0.44, h: 14, fill: '#C9A227', radius: 4 }));
+  };
+  const GOLD = '#E3C46B' as Paint, RED = '#B3121C' as Paint, GREEN = '#0F4D32' as Paint, CREAM = '#F7EBD3' as Paint;
+
   switch (id) {
+    case 'navidad': {
+      pat('nieve', '#7C0F18' as Paint, 'white', { density: 0.45, size: 150 });
+      glow(W / 2, v(600, 720, 1020), W * 0.6, GOLD, 0.32);
+      bauble(W * 0.1, v(170, 190, 260), v(46, 50, 60), GOLD);
+      bauble(W * 0.22, v(96, 110, 160), v(34, 38, 46), GREEN);
+      bauble(W * 0.8, v(110, 124, 170), v(38, 42, 50), GREEN);
+      bauble(W * 0.92, v(190, 210, 290), v(50, 54, 64), GOLD);
+      logo(true, true);
+      L.push(textLayer({ name: 'Saludo', text: 'Feliz Navidad', x: m, y: v(150, 170, 290), w: W - 2 * m, h: v(110, 126, 170), size: v(92, 106, 136), color: CREAM, align: 'center', maxLines: 1, upper: false }));
+      const hy = v(250, 290, 460), hh = v(560, 720, 980) - CS;
+      hero(40, hy, W - 80, hh);
+      strip(m, hy + hh + 4, W - 2 * m, CS - 8, true);
+      const ty = hy + hh + CS + v(6, 14, 30);
+      L.push(textLayer({ name: 'Título', bind: 'title', x: m, y: ty, w: W - 2 * m, h: v(70, 84, 170), size: v(52, 60, 80), color: 'white', align: 'center', maxLines: v(1, 1, 2) }));
+      L.push(textLayer({ name: 'Precio', bind: 'price', x: m, y: H - v(112, 124, 210), w: 480, h: 84, font: 'body', size: v(60, 66, 80), weight: 900, color: GOLD, maxLines: 1 }));
+      cta(H - v(112, 124, 210), RED, GOLD, W - m - 400, 'center', 400);
+      break;
+    }
+    case 'navidadOferta': {
+      pat('nieve', GREEN, 'white', { density: 0.4, size: 140 });
+      logo(true, true);
+      L.push(textLayer({ name: 'Etiqueta', text: 'OFERTA NAVIDEÑA', x: W / 2 - 230, y: v(140, 150, 240), w: 460, h: 64, font: 'body', size: 30, weight: 800, color: 'white', bg: RED, radius: 999, align: 'center', maxLines: 1, letterSpacing: 3 }));
+      L.push(textLayer({ name: 'Oferta', bind: 'promo', x: 20, y: v(200, 220, 330), w: W - 40, h: v(250, 280, 340), size: v(240, 270, 320), weight: 900, color: GOLD, align: 'center', maxLines: 1, letterSpacing: -6 }));
+      glow(W / 2, v(640, 760, 1080), W * 0.55, GOLD, 0.28);
+      const hy = v(330, 380, 560), hh = v(540, 690, 960) - CS;
+      hero(40, hy, W - 80, hh);
+      strip(m, hy + hh + 4, W - 2 * m, CS - 8, true);
+      L.push(textLayer({ name: 'Nombre', bind: 'title', x: m, y: hy + hh + CS + 4, w: W - 2 * m, h: 66, size: v(46, 54, 66), color: 'white', align: 'center', maxLines: 1 }));
+      L.push(textLayer({ name: 'Precio', bind: 'price', x: m, y: hy + hh + CS + v(72, 82, 104), w: W - 2 * m, h: 80, font: 'body', size: v(58, 66, 82), weight: 900, color: GOLD, align: 'center', maxLines: 1 }));
+      if (!sq) cta(H - v(0, 130, 200), GREEN, GOLD, W / 2 - 220, 'center', 440);
+      break;
+    }
+    case 'familia': {
+      pat('nieve', GREEN, 'white', { density: 0.35, size: 130 });
+      glow(W / 2, v(640, 760, 1100), W * 0.7, GOLD, 0.22);
+      logo(true, true);
+      L.push(textLayer({ name: 'Saludo', text: 'Navidad en familia', x: m, y: v(140, 160, 270), w: W - 2 * m, h: v(100, 116, 160), size: v(80, 92, 120), color: CREAM, align: 'center', maxLines: 1, upper: false }));
+      L.push(shapeLayer({ name: 'Línea', x: W / 2 - 90, y: v(250, 282, 440), w: 180, h: 5, fill: GOLD, radius: 3 }));
+      // El espacio de la familia: se reparte entre los integrantes (ver layoutZones).
+      const hy = v(280, 320, 500), hh = v(620, 800, 1060) - CS;
+      hero(30, hy, W - 60, hh, { anchor: 'bottom' });
+      strip(m, hy + hh + 4, W - 2 * m, CS - 8, true);
+      L.push(textLayer({ name: 'Subtítulo', bind: 'subtitle', x: m, y: H - v(120, 200, 300), w: W - 2 * m, h: 60, font: 'body', size: v(30, 34, 40), weight: 500, color: CREAM, align: 'center', upper: false, maxLines: 1, hidden: sq }));
+      cta(H - v(110, 124, 200), GREEN, GOLD, W / 2 - 220, 'center', 440);
+      break;
+    }
     case 'destacado': {
       pat('malla', 'primary', 'accent', { accent: 'accent', density: 0.5 });
       glow(W / 2, v(430, 520, 760), W * 0.62);

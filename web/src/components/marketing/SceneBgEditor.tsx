@@ -5,7 +5,7 @@
  */
 import { ImagePlus, Sparkles, Wand2 } from 'lucide-react';
 import { Button, ColorInput, RadioGroup, Switch } from '../ui';
-import { BG_STYLES } from './backgrounds';
+import { BG_STYLES, XMAS_COLORS } from './backgrounds';
 import { DesignPicker } from './DesignPicker';
 import type { SceneBg } from './timeline';
 
@@ -64,7 +64,7 @@ export function SceneBgEditor({ value, onChange, palette, photos, defaults, onAi
         <>
           <div className="grid grid-cols-2 gap-1.5">
             {(Object.keys(STYLE_LABEL) as SceneBg['style'][]).map((st) => (
-              <button key={st} type="button" aria-pressed={g.style === st} onClick={() => set({ style: st })}
+              <button key={st} type="button" aria-pressed={g.style === st} onClick={() => { const x = st !== 'foto' ? XMAS_COLORS[st] : undefined; set(x ? { style: st, ...x } : { style: st }); }}
                 className={`rounded-lg border px-2 py-1.5 text-xs text-left ${g.style === st ? 'border-app-600 bg-app-50 text-app-800 font-medium' : 'border-gray-200 text-gray-700 hover:border-app-300'}`}>
                 {STYLE_LABEL[st]}
               </button>

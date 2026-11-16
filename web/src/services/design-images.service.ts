@@ -35,6 +35,8 @@ export interface DesignImage {
   familyId?: number | null;
   /** Rol en la familia (Papá, Mamá, Hijo…). */
   familyRole?: string | null;
+  /** El diseño por capas (editor de diseños), para volver a editarlo. */
+  editorData?: Record<string, unknown> | null;
 }
 
 /** Familia de diseños para el pack familiar. */
@@ -70,6 +72,7 @@ export interface CreateDesignImageInput {
   textFields?: NamedField[] | null;
   familyId?: number | null;
   familyRole?: string | null;
+  editorData?: object | null;
 }
 
 export interface UpdateDesignImageInput {
@@ -86,6 +89,7 @@ export interface UpdateDesignImageInput {
   textFields?: NamedField[] | null;
   familyId?: number | null;
   familyRole?: string | null;
+  editorData?: object | null;
 }
 
 // Listar todas las imágenes de diseño

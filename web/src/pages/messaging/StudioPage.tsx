@@ -35,9 +35,12 @@ import { ProjectsDialog } from '../../components/marketing/ProjectsDialog';
 import { ago, persistLocal, thumbOf } from '../../components/marketing/projectStore';
 import { GarmentViewsDialog } from '../../components/marketing/GarmentViewsDialog';
 import { SubjectPanel } from '../../components/marketing/SubjectPanel';
+import { FamilyPanel } from '../../components/marketing/FamilyPanel';
+import { designFamiliesService, type DesignFamily } from '../../services/design-images.service';
+import { composeNamed, defaultValues } from '../../lib/namedDesign';
 import { buildDesign, designSize, reflowDesign, type ColorsLayer, type ContentKind, type Design, type DesignRatio, type MockView, type PieceMock } from '../../components/marketing/design';
 import { canonicalView } from '../../components/customizer/customizerModel';
-import { defaultPlan, garmentSubject, garmentZones, layoutZones, productSubject, resolveDesign, type GarmentPlan, type Subject, type ZoneChoice } from '../../components/marketing/pieces';
+import { defaultPlan, familySubject, garmentSubject, garmentZones, layoutZones, productSubject, resolveDesign, type FamilyPlan, type GarmentPlan, type Subject, type ZoneChoice } from '../../components/marketing/pieces';
 import type { Mannequin3DHandle } from '../../components/mannequin/Mannequin3D';
 import { drawDesign, type DesignData } from '../../components/marketing/designRender';
 import { decodeAudio, extOf, loadImage, recordCanvas, syncClips, videoMime } from '../../components/marketing/media';
@@ -295,14 +298,53 @@ export const StudioPage = () => {
   const [skipOnboarding, setSkipOnboarding] = useState(false);
   const [panelReq, setPanelReq] = useState(0);
   const [aiAccountsOpen, setAiAccountsOpen] = useState(false);
+  /** Familia navideña en la personalizable (opcional): cada integrante con su diseño y su nombre. */
+  const [family, setFamily] = useState<FamilyPlan | null>(null);
+  const [families, setFamilies] = useState<DesignFamily[]>([]);
+  useEffect(() => {
+    let alive = true;
+    designFamiliesService.list().then((r) => { if (alive) setFamilies(r); }).catch(() => { /* sin familias */ });
+    return () => { alive = false; };
+  }, []);
+  /** El diseño de cada integrante ya con su nombre (se recompone un momento después de escribir). */
+  const [familyDesigns, setFamilyDesigns] = useState<Record<string, SceneDesign>>({});
+  const familyKey = JSON.stringify(family);
+  useEffect(() => {
+    if (!family) return;
+    let alive = true;
+    const t = window.setTimeout(async () => {
+      const fam = families.find((f) => f.id === family.familyId);
+      if (!fam) return;
+      const out: Record<string, SceneDesign> = {};
+      for (const m of family.members) {
+        const d = fam.designs.find((x) => x.id === m.designId);
+        if (!d) continue;
+        try {
+          const r = await composeNamed({ base: d.printUrl || d.thumbnailUrl, fields: d.textFields ?? [], values: { ...defaultValues(d.textFields ?? []), ...m.values } }, 900);
+          out[m.key] = { id: -d.id, name: `${d.name} · ${Object.values(m.values)[0] ?? ''}`, image: r.url };
+        } catch { /* queda sin diseño */ }
+      }
+      if (alive) setFamilyDesigns(out);
+    }, 350);
+    return () => { alive = false; window.clearTimeout(t); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [familyKey, families]);
   const garment = useMemo(() => (chosenTemplate ? mockTemplates.find((t) => t.id === chosenTemplate.id) ?? templates.find((t) => t.id === chosenTemplate.id) ?? chosenTemplate : null), [chosenTemplate, mockTemplates, templates]);
   const garmentColor = garment ? garmentColors[garment.id] ?? garment.colors?.[0] ?? null : null;
   const garmentPlan = useMemo(() => (garment ? garmentPlans[garment.id] ?? defaultPlan(garmentZones(garment)) : null), [garment, garmentPlans]);
   const subject = useMemo<Subject | null>(() => {
     if (sourceType === 'diseno') return null;
-    if (sourceType === 'plantilla') return garment && garmentPlan && garmentZones(garment).length ? garmentSubject(garment, garmentPlan, garmentColor) : null;
+    if (sourceType === 'plantilla') {
+      if (!garment || !garmentZones(garment).length) return null;
+      // La familia: un integrante por pieza, cada uno con su diseño y su nombre.
+      if (family) {
+        const fs = familySubject(garment, family.members.map((m) => ({ key: m.key, role: m.role, name: (Object.values(m.values)[0] ?? '').trim(), design: familyDesigns[m.key] ?? null })), garmentColor);
+        if (fs) return fs;
+      }
+      return garmentPlan ? garmentSubject(garment, garmentPlan, garmentColor) : null;
+    }
     return items.length ? productSubject(items, photoPicks) : null;
-  }, [sourceType, garment, garmentPlan, items, photoPicks, garmentColor]);
+  }, [sourceType, garment, garmentPlan, items, photoPicks, garmentColor, family, familyDesigns]);
   /** La plantilla adaptada a lo elegido (solo para dibujar). */
   const resolvedDesign = useMemo(() => resolveDesign(design, subject), [design, subject]);
   const resolveFn = useCallback((d: Design) => resolveDesign(d, subject), [subject]);
@@ -1042,8 +1084,15 @@ export const StudioPage = () => {
       <p className="text-xs text-gray-500 mt-2 mb-2">
         {MAX_ITEMS[sourceType] > 1 ? `Elige hasta ${MAX_ITEMS[sourceType]} (en los videos sale uno por escena).` : 'Elige uno.'}
       </p>
+      {sourceType === 'plantilla' && garment && (
+        <FamilyPanel families={families} value={family} onChange={(v) => {
+          setFamily(v);
+          // Al activar la familia, el post pasa a la plantilla "Navidad en familia" (después se puede cambiar).
+          if (v && !family && design.template !== 'familia') { designEdited.current = false; designReset(buildDesign('familia', design.ratio), true); }
+        }} />
+      )}
       {subject && (
-        <SubjectPanel
+        <SubjectPanel familyMode={!!family}
           subject={subject} products={sourceType === 'plantilla' ? [] : items} picks={photoPicks} onPicks={(id, urls) => setPhotoPicks((m) => ({ ...m, [id]: urls }))}
           garment={garment} plan={garmentPlan} onZone={setZoneChoice} onAllDesigns={setAllZoneDesigns}
           color={garmentColor} onColor={(c) => {
@@ -1335,7 +1384,7 @@ export const StudioPage = () => {
     music: music ? { name: music.name, url: music.url, offset: music.offset, volume: music.volume } : null,
     design, photos, scenes: scenes.map((sc) => (sc.clip ? { ...sc, clip: { ...sc.clip, thumb: null } } : sc)),
     title, subtitle, cta, showPrice, caption, hashtags, tone, brief,
-    photoPicks, garmentPlans, garmentColors, showcase, storyId: storyId.current,
+    photoPicks, garmentPlans, garmentColors, showcase, family, storyId: storyId.current,
   });
   /** Nombre del proyecto nuevo: lo que se muestra y el tipo de pieza. */
   const autoName = () => {
@@ -1392,7 +1441,7 @@ export const StudioPage = () => {
     const t = window.setTimeout(() => { void saveNow(); }, 2500);
     return () => window.clearTimeout(t);
   }, [saveNow, sourceType, selected, format, template, stage, ratio, showLogo, logoAt, endCard, sfxOn, sfxVolume, narrator, music, design, photos, scenes,
-    title, subtitle, cta, showPrice, caption, hashtags, tone, brief, photoPicks, garmentPlans, garmentColors, showcase]);
+    title, subtitle, cta, showPrice, caption, hashtags, tone, brief, photoPicks, garmentPlans, garmentColors, showcase, family]);
   // Al salir de la pestaña o del estudio, se guarda lo pendiente.
   useEffect(() => {
     const flush = () => { if (document.visibilityState === 'hidden') void saveNow(); };
@@ -1433,6 +1482,7 @@ export const StudioPage = () => {
     setCaption(g('caption', '')); setHashtags(g<string[]>('hashtags', [])); setTone(g<CopyTone>('tone', 'cercano')); setBrief(g('brief', ''));
     setPhotoPicks(g<Record<number, string[]>>('photoPicks', {})); setGarmentPlans(g<Record<number, GarmentPlan>>('garmentPlans', {}));
     setGarmentColors(g<Record<number, string>>('garmentColors', {})); setShowcase(g<string[] | null>('showcase', null));
+    setFamily(g<FamilyPlan | null>('family', null));
     setSkipOnboarding(true);
     setPlaying(false);
     setMedia([]);
@@ -1481,7 +1531,7 @@ export const StudioPage = () => {
     setSceneSel(null);
     setPhotos([]);
     setTitle(''); setSubtitle(''); setCta('Compra ya'); setCaption(''); setHashtags([]); setBrief('');
-    setPhotoPicks({}); setGarmentPlans({}); setGarmentColors({}); setShowcase(null);
+    setPhotoPicks({}); setGarmentPlans({}); setGarmentColors({}); setShowcase(null); setFamily(null);
     setSkipOnboarding(false);
     setParams((sp) => { sp.delete('proyecto'); return sp; }, { replace: true });
     settle(1000);
@@ -1597,7 +1647,7 @@ export const StudioPage = () => {
   const hasSubject = selected.length > 0;
   /** Qué se muestra (para recomendar sus plantillas). */
   const content: ContentKind | undefined = !hasSubject ? undefined
-    : sourceType === 'plantilla' ? 'personalizable' : sourceType === 'producto' ? (items.length > 1 ? 'varios' : 'producto') : sourceType;
+    : sourceType === 'plantilla' ? (family ? 'familia' : 'personalizable') : sourceType === 'producto' ? (items.length > 1 ? 'varios' : 'producto') : sourceType;
   /** Primer paso: qué se va a mostrar (todo lo demás se arma con eso). */
   const onboarding = !hasSubject && !skipOnboarding ? (
     <div className="w-full max-w-xl rounded-2xl bg-white border border-gray-200 shadow-xl p-6">

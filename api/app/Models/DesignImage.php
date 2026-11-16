@@ -12,6 +12,7 @@ class DesignImage extends BaseModel
     protected $casts = [
         'tags' => 'array',
         'textFields' => 'array',
+        'editorData' => 'array',
         'isActive' => 'boolean',
     ];
 

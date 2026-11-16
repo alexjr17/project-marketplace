@@ -118,6 +118,82 @@ export function garmentSubject(t: SourceProduct, plan: GarmentPlan, color?: stri
   return { kind: 'prenda', templateId: t.id, name: t.name, pieces, zones, color: color ?? null };
 }
 
+/** La familia elegida en el estudio: de qué familia de diseños y lo que dice cada integrante. */
+export interface FamilyPlan {
+  familyId: number;
+  members: { key: string; designId: number; role: string; values: Record<string, string> }[];
+}
+
+/** Un integrante de la familia: su rol, su nombre y su diseño ya con el nombre puesto. */
+export interface FamilyMember { key: string; role: string; name: string; design: SceneDesign | null }
+
+/**
+ * La familia en la prenda personalizable: una pieza por integrante, todas en el frente de la prenda
+ * (la primera zona del frente), cada una con su diseño con el nombre. El nombre de la pieza es el del
+ * integrante (lo usan los textos de la plantilla) y su etiqueta, "Rol · Nombre".
+ */
+export function familySubject(t: SourceProduct, members: FamilyMember[], color?: string | null): Subject | null {
+  const zones = garmentZones(t);
+  const front = zones.find((z) => z.view === 'front') ?? zones[0];
+  if (!front || !members.length) return null;
+  const pieces: Piece[] = members.slice(0, 6).map((m) => ({
+    key: `${t.id}:familia:${m.key}`, productId: t.id, name: m.name || m.role, price: t.price, listPrice: t.listPrice, discountPercent: t.discountPercent,
+    image: null, label: m.role ? `${m.role} · ${m.name || m.role}` : m.name,
+    mock: { templateId: t.id, zoneId: front.id, view: front.view ?? 'front', design: m.design, size: 0.85, ...(color ? { color } : {}) },
+  }));
+  return { kind: 'prenda', templateId: t.id, name: t.name, pieces, zones, color: color ?? null };
+}
+
+/** ¿Es un niño? (se dibuja un poco más chico en la fila de la familia). */
+const isKid = (label: string) => /hij|beb[eé]|niñ|niet|peque|junior/i.test(label);
+
+/**
+ * Plantilla "Navidad en familia": las prendas de la familia en fila dentro del espacio del producto,
+ * los adultos más grandes y los niños un poco más chicos, un poco encimadas, y el nombre de cada uno
+ * debajo. Sirve también con varios productos (uno por lugar, con su nombre).
+ */
+function layoutFamily(layers: Layer[], heroAt: number, pieces: Piece[]): Layer[] {
+  const hero = layers[heroAt] as ImageLayer;
+  const home = { x: hero.x, y: hero.y, w: hero.w, h: hero.h };
+  const list = pieces.slice(0, 6);
+  const n = list.length;
+  // En formatos altos (historia) y con 3 o más, en dos filas: así cada prenda se ve más grande.
+  const rows = hero.h > hero.w * 0.9 && n >= 3 ? 2 : 1;
+  const perRow = Math.ceil(n / rows);
+  const pillH = 52, pillGap = 10, over = 0.1, rowGap = 24;
+  const rowH = (hero.h - (rows - 1) * rowGap) / rows;
+  const added: Layer[] = [];
+  let main: ImageLayer = hero;
+  for (let r = 0; r < rows; r++) {
+    const idx = Array.from({ length: Math.min(perRow, n - r * perRow) }, (_, k) => r * perRow + k);
+    const scale = idx.map((i) => (isKid(list[i].label) ? 0.74 : 1));
+    const sum = scale.reduce((a, b) => a + b, 0);
+    const unit = hero.w / Math.max(1, sum - over * (idx.length - 1));
+    const top = hero.y + r * (rowH + rowGap);
+    const floor = top + rowH - pillH - pillGap;
+    // Cada fila centrada.
+    const used = idx.reduce((a, _, k) => a + unit * scale[k], 0) - unit * over * (idx.length - 1);
+    let x = hero.x + (hero.w - used) / 2;
+    idx.forEach((i, k) => {
+      const w = unit * scale[k];
+      const h = Math.min((floor - top) * scale[k], w * 1.35);
+      const box = { x, y: floor - h, w, h };
+      if (i === 0) main = { ...hero, ...box, item: 0, anchor: 'bottom', home };
+      else added.push(imageLayer({ id: `${hero.id}~f${i}`, auto: 'zonas', name: `Integrante ${i + 1}`, item: i, ...box, fit: 'contain', cutout: true, shadow: hero.shadow, anchor: 'bottom' }));
+      const pw = Math.min(w - 8, 260);
+      added.push(textLayer({
+        id: `${hero.id}~fn${i}`, auto: 'zonas', name: `Nombre ${i + 1}`, bind: 'name', item: i, x: x + (w - pw) / 2, y: floor + pillGap, w: pw, h: pillH,
+        font: 'body', size: 26, weight: 800, color: 'white', bg: '#B3121C', radius: 999, maxLines: 1, upper: false, align: 'center',
+      }));
+      x += w - unit * over;
+    });
+  }
+  // Los integrantes van detrás de los nombres: primero las prendas, después las etiquetas.
+  const figures = added.filter((l) => l.type === 'image');
+  const pills = added.filter((l) => l.type !== 'image');
+  return [...layers.slice(0, heroAt), main, ...figures, ...pills, ...layers.slice(heroAt + 1)];
+}
+
 /** Diseño para una vista de la prenda: el de su zona, o el de otra zona mostrada en esa vista. */
 function pieceForView(s: Extract<Subject, { kind: 'prenda' }>, m: PieceMock): Piece | undefined {
   const view = m.view ?? 'front';
@@ -287,6 +363,8 @@ export function layoutZones(d: Design, s: Subject | null): Design {
   const heroAt = layers.findIndex((l) => l.type === 'image' && !l.src && !l.mock && l.name === 'Foto del producto');
   const others = layers.filter((l, i) => i !== heroAt && l.type === 'image' && !l.src && !/^Fondo|^IA:/.test(l.name));
   if (heroAt < 0 || others.length || !s) return { ...d, layers };
+  // La familia: todos en fila con su nombre (también con varios productos).
+  if (d.template === 'familia') return { ...d, layers: s.pieces.length ? layoutFamily(layers, heroAt, s.pieces) : layers };
   // Varios productos (colección, promoción o elegidos): fotos en el espacio libre de la plantilla.
   if (s.kind === 'productos') return { ...d, layers: s.single || s.pieces.length < 2 ? layers : layoutProducts(layers, heroAt, s.pieces, designSize(d.ratio)) };
   if (s.pieces.length < 2) return { ...d, layers };

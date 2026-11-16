@@ -18,7 +18,7 @@ export interface RailItem {
   dot?: boolean;
 }
 
-export function StudioShell({ label, toolbar, actions, rail, active, onActive, panelTitle, panel, stage, inspectorTitle, inspector, bottom }: {
+export function StudioShell({ label, toolbar, actions, rail, active, onActive, panelTitle, panel, stage, inspectorTitle, inspector, bottom, fullHeight = false }: {
   /** Nombre del editor para lectores de pantalla ("Diseñador de piezas", "Editor de video"). */
   label: string;
   toolbar: ReactNode;
@@ -33,9 +33,11 @@ export function StudioShell({ label, toolbar, actions, rail, active, onActive, p
   inspectorTitle: ReactNode;
   inspector: ReactNode;
   bottom?: ReactNode;
+  /** Ocupa toda la pantalla (editor que se abre encima de la página). */
+  fullHeight?: boolean;
 }) {
   return (
-    <section aria-label={label} className="flex flex-col bg-gray-100 lg:h-[calc(100dvh-4rem)] lg:overflow-hidden">
+    <section aria-label={label} className={`flex flex-col bg-gray-100 lg:overflow-hidden ${fullHeight ? 'h-[100dvh] overflow-y-auto' : 'lg:h-[calc(100dvh-4rem)]'}`}>
       {/* Barra superior */}
       <header className="flex flex-wrap items-center gap-1.5 px-3 py-2 bg-white border-b border-gray-200 lg:h-14 lg:py-0">
         {toolbar}

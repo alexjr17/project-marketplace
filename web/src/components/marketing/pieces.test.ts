@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { SourceProduct } from '../../services/marketing.service';
 import { buildDesign, type ImageLayer } from './design';
-import { defaultPlan, garmentSubject, garmentZones, layoutZones, productSubject, resolveDesign } from './pieces';
+import { defaultPlan, familySubject, garmentSubject, garmentZones, layoutZones, productSubject, resolveDesign } from './pieces';
 import { buildStoryboard, canBuild, STORYBOARDS, type StoryContext } from './storyboards';
 
 const prod = (id: number, images: string[]): SourceProduct => ({ id, name: `P${id}`, price: 50000, listPrice: 50000, discountPercent: 0, image: images[0] ?? null, images });
@@ -171,5 +171,55 @@ describe('con qué trabaja la pieza', () => {
         }
       }
     }
+  });
+});
+
+describe('familia navideña', () => {
+  const members = [
+    { key: 'a', role: 'Papá', name: 'Carlos', design: { id: -1, name: 'Árbol · Carlos', image: 'data:papa' } },
+    { key: 'b', role: 'Mamá', name: 'Lucía', design: { id: -2, name: 'Árbol · Lucía', image: 'data:mama' } },
+    { key: 'c', role: 'Hijo', name: 'Mateo', design: { id: -3, name: 'Árbol · Mateo', image: 'data:hijo' } },
+  ];
+
+  it('una pieza por integrante, todas en el frente, con su diseño y su nombre', () => {
+    const s = familySubject(shirt, members, '#FF0000')!;
+    expect(s.kind).toBe('prenda');
+    expect(s.pieces.map((p) => [p.name, p.label, p.mock?.zoneId, p.mock?.view, p.mock?.design?.image, p.mock?.color]))
+      .toEqual([['Carlos', 'Papá · Carlos', 1, 'front', 'data:papa', '#FF0000'], ['Lucía', 'Mamá · Lucía', 1, 'front', 'data:mama', '#FF0000'], ['Mateo', 'Hijo · Mateo', 1, 'front', 'data:hijo', '#FF0000']]);
+    expect(familySubject(shirt, [])).toBeNull();
+  });
+
+  it('la plantilla los pone en fila con su nombre (en historia, en dos filas); los niños más chicos', () => {
+    const s = familySubject(shirt, members)!;
+    const post = resolveDesign(layoutZones(buildDesign('familia', '1:1'), s), s);
+    const figs = images(post).filter((l) => l.name === 'Foto del producto' || l.name.startsWith('Integrante'));
+    expect(figs.map((l) => l.item)).toEqual([0, 1, 2]);
+    expect(figs.map((l) => l.mock?.design?.image)).toEqual(['data:papa', 'data:mama', 'data:hijo']);
+    // En fila: misma base, de izquierda a derecha; el hijo más bajo.
+    expect(new Set(figs.map((l) => Math.round(l.y + l.h))).size).toBe(1);
+    expect(figs[0].x).toBeLessThan(figs[1].x);
+    expect(figs[2].h).toBeLessThan(figs[0].h);
+    const pills = post.layers.filter((l) => l.type === 'text' && l.bind === 'name');
+    expect(pills.map((l) => l.item)).toEqual([0, 1, 2]);
+    // Historia: dos filas.
+    const story = layoutZones(buildDesign('familia', '9:16'), s);
+    const rowsY = new Set(story.layers.filter((l) => l.type === 'text' && l.bind === 'name').map((l) => Math.round(l.y)));
+    expect(rowsY.size).toBe(2);
+    // Volver a armar no duplica.
+    expect(layoutZones(layoutZones(buildDesign('familia', '1:1'), s), s).layers.length).toBe(layoutZones(buildDesign('familia', '1:1'), s).layers.length);
+  });
+
+  it('el guion "Navidad en familia": una escena por integrante con su nombre y rol, sobre nieve', () => {
+    const s = familySubject(shirt, members)!;
+    const ctx: StoryContext = {
+      template: null, products: [], promo: null, title: '', subtitle: '',
+      garment: { kind: 'foto', templateId: 60, name: 'Oversize', pieces: s.pieces.map((p) => ({ zoneId: p.mock!.zoneId!, view: p.mock!.view ?? null, label: p.label, design: p.mock!.design })) },
+    };
+    const scenes = buildStoryboard('familia', ctx);
+    expect(scenes.map((x) => x.title)).toEqual(['Navidad en familia', 'Carlos', 'Lucía', 'Mateo', 'Pídelas con su nombre']);
+    expect(scenes.slice(1, 4).map((x) => [x.badge, x.design?.image])).toEqual([['PAPÁ', 'data:papa'], ['MAMÁ', 'data:mama'], ['HIJO', 'data:hijo']]);
+    expect(scenes.every((x) => x.bg?.style === 'nieve')).toBe(true);
+    expect(canBuild('navidad', ctx)).toBe(true);
+    expect(buildStoryboard('navidad', ctx)[0].title).toBe('Feliz Navidad');
   });
 });

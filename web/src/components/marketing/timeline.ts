@@ -209,7 +209,7 @@ export function elemMoveOf(v: unknown): ElemMove | null {
 
 /** Fondo propio de una escena: un estilo (como en los posts) o una foto (subida o creada con IA). */
 export interface SceneBg {
-  style: 'color' | 'degradado' | 'malla' | 'rayas' | 'mosaicoMarca' | 'mosaicoDisenos' | 'foto';
+  style: 'color' | 'degradado' | 'malla' | 'rayas' | 'mosaicoMarca' | 'mosaicoDisenos' | 'nieve' | 'bastones' | 'esferas' | 'copos' | 'luces' | 'pinos' | 'estrellas' | 'foto';
   base: string;
   ink: string;
   accent: string;
@@ -227,7 +227,7 @@ export interface SceneBg {
   designs: string[];
   useSceneDesigns: boolean;
 }
-export const SCENE_BG_STYLES: SceneBg['style'][] = ['color', 'degradado', 'malla', 'rayas', 'mosaicoMarca', 'mosaicoDisenos', 'foto'];
+export const SCENE_BG_STYLES: SceneBg['style'][] = ['color', 'degradado', 'malla', 'rayas', 'mosaicoMarca', 'mosaicoDisenos', 'nieve', 'bastones', 'esferas', 'copos', 'luces', 'pinos', 'estrellas', 'foto'];
 const HEX = /^#[0-9a-fA-F]{6}$/;
 export function sceneBgOf(v: unknown): SceneBg | null {
   if (!v || typeof v !== 'object') return null;

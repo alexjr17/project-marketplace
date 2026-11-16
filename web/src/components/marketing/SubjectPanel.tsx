@@ -20,7 +20,7 @@ function Range({ label, value, min, max, step, onChange, format }: { label: stri
   );
 }
 
-export function SubjectPanel({ subject, products, picks, onPicks, garment, plan, onZone, onAllDesigns, is3d, color, onColor, showcase, onShowcase, onShowcaseVideo }: {
+export function SubjectPanel({ subject, products, picks, onPicks, garment, plan, onZone, onAllDesigns, is3d, color, onColor, showcase, onShowcase, onShowcaseVideo, familyMode = false }: {
   subject: Subject;
   products: SourceProduct[];
   picks: Record<number, string[]>;
@@ -39,6 +39,8 @@ export function SubjectPanel({ subject, products, picks, onPicks, garment, plan,
   onShowcase: (colors: string[] | null) => void;
   /** Agrega ya el carrusel de colores al video (solo en el editor de video). */
   onShowcaseVideo?: () => void;
+  /** Se muestra una familia: las zonas no se eligen aquí (cada integrante va en el frente). */
+  familyMode?: boolean;
 }) {
   if (subject.kind === 'productos') {
     return (
@@ -135,10 +137,11 @@ export function SubjectPanel({ subject, products, picks, onPicks, garment, plan,
           )}
         </div>
       )}
-      {first && (
+      {first && !familyMode && (
         <Button size="sm" variant="secondary" className="mb-2" icon={<Copy className="w-4 h-4" />} onClick={() => onAllDesigns(first)}>Mismo diseño en todas las zonas</Button>
       )}
-      <ul className="space-y-2">
+      {familyMode && <p className="text-xs text-gray-500">Con la familia, cada integrante lleva su diseño en el frente de la prenda.</p>}
+      <ul className={`space-y-2 ${familyMode ? 'hidden' : ''}`}>
         {subject.zones.map((z) => {
           const c = plan?.[z.id] ?? { show: false, design: null };
           // Lugar de la zona en el post: Principal, 2, 3…

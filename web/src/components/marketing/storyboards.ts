@@ -3,10 +3,10 @@
  * con lo que se eligió promocionar. Después todo se puede editar escena por escena. Sirven para
  * reels, historias y posts de video (el formato se elige aparte).
  */
-import { newScene, type Scene, type SceneDesign, type SceneProduct } from './timeline';
+import { newScene, type Scene, type SceneBg, type SceneDesign, type SceneProduct } from './timeline';
 
 export type StoryboardId =
-  | 'reelRapido' | 'personaliza2d' | 'frenteEspalda2d' | 'premium2d' | 'disenoPrenda2d' | 'lanzamiento' | 'colores' | 'coleccion' | 'oferta' | 'mixto' | 'ritmo' | 'top3' | 'encuesta' | 'regresiva' | 'resena' | 'beneficios';
+  | 'navidad' | 'familia' | 'reelRapido' | 'personaliza2d' | 'frenteEspalda2d' | 'premium2d' | 'disenoPrenda2d' | 'lanzamiento' | 'colores' | 'coleccion' | 'oferta' | 'mixto' | 'ritmo' | 'top3' | 'encuesta' | 'regresiva' | 'resena' | 'beneficios';
 
 export interface StoryContext {
   /** Prenda 3D para las escenas 3D (la elegida o la primera con modelo). */
@@ -30,7 +30,8 @@ export interface StoryContext {
 }
 
 /** Plantillas de video pensadas para cada tipo de contenido (ver ContentKind en design.ts). */
-export const STORIES_FOR: Record<'producto' | 'varios' | 'coleccion' | 'promocion' | 'personalizable' | 'diseno', StoryboardId[]> = {
+export const STORIES_FOR: Record<'producto' | 'varios' | 'coleccion' | 'promocion' | 'personalizable' | 'diseno' | 'familia', StoryboardId[]> = {
+  familia: ['familia', 'navidad', 'personaliza2d', 'colores'],
   producto: ['reelRapido', 'lanzamiento', 'ritmo', 'regresiva', 'resena'],
   varios: ['coleccion', 'reelRapido', 'ritmo', 'top3', 'encuesta', 'mixto'],
   coleccion: ['coleccion', 'reelRapido', 'ritmo', 'top3', 'mixto'],
@@ -39,10 +40,12 @@ export const STORIES_FOR: Record<'producto' | 'varios' | 'coleccion' | 'promocio
   diseno: ['personaliza2d', 'disenoPrenda2d', 'ritmo'],
 };
 
-export type StoryGroup = 'Personalizable' | 'Productos' | 'Prenda 3D' | 'Venta' | 'Interacción' | 'Marca';
-export const STORY_GROUPS: StoryGroup[] = ['Personalizable', 'Productos', 'Venta', 'Prenda 3D', 'Interacción', 'Marca'];
+export type StoryGroup = 'Navidad' | 'Personalizable' | 'Productos' | 'Prenda 3D' | 'Venta' | 'Interacción' | 'Marca';
+export const STORY_GROUPS: StoryGroup[] = ['Navidad', 'Personalizable', 'Productos', 'Venta', 'Prenda 3D', 'Interacción', 'Marca'];
 
 export const STORYBOARDS: { id: StoryboardId; label: string; hint: string; group: StoryGroup; needs: '3d' | 'plantilla2d' | 'fotos' | 'dosFotos' | 'alguno' | 'nada' }[] = [
+  { id: 'familia', label: 'Navidad en familia', hint: 'Una escena por integrante con su nombre, sobre nieve, y el cierre', group: 'Navidad', needs: 'alguno' },
+  { id: 'navidad', label: 'Feliz Navidad', hint: 'El saludo, el producto sobre nieve y el regalo ideal', group: 'Navidad', needs: 'alguno' },
   { id: 'reelRapido', label: 'Reel rápido', hint: 'Una foto por producto a pantalla completa con su precio, y el cierre', group: 'Productos', needs: 'fotos' },
   { id: 'coleccion', label: 'Colección', hint: 'Portada y una escena por producto con su precio', group: 'Productos', needs: 'fotos' },
   { id: 'ritmo', label: 'Ritmo rápido', hint: 'Escenas cortas con cortes y efectos, para tendencias', group: 'Productos', needs: 'alguno' },
@@ -149,7 +152,43 @@ function buildBase(id: StoryboardId, ctx: StoryContext): Scene[] {
   const products = ctx.products.slice(0, 6);
   const title = ctx.title || t?.name || products[0]?.name || 'Nuevo';
 
+  /** Fondo de nieve para las escenas navideñas. */
+  const snow = (base: string): SceneBg => ({
+    style: 'nieve', base, ink: '#FFFFFF', accent: '#E3C46B', density: 0.4, size: 140, angle: 0, grain: true, move: true, image: null, dim: 0, designs: [], useSceneDesigns: false,
+  });
+  const RED = '#7C0F18', GREEN = '#0F4D32';
+
   switch (id) {
+    case 'navidad': {
+      const n = gx ? Math.min(3, gx.pieces.length) : Math.min(3, products.length);
+      const piece = (i: number, base: Partial<Scene>) => (gx ? gScene(i, base) : products[i] ? photoOf(products[i], i, base) : null);
+      return [
+        text('Feliz Navidad', { subtitle: ctx.subtitle || 'De parte de todo nuestro equipo', bg: snow(RED), textAnim: 'letras', seconds: 2.6, transition: 'fundido' }),
+        ...Array.from({ length: Math.max(1, n) }, (_, i) => piece(i, {
+          title: i === 0 ? title : '', badge: i === 0 ? 'EL REGALO IDEAL' : '', showPrice: i === n - 1, bg: snow(i % 2 ? RED : GREEN),
+          photoMove: i % 2 ? 'alejar' : 'acercar', seconds: 3, transition: i % 2 ? 'deslizar' : 'empujar',
+        })).filter((x): x is Scene => !!x),
+        text('Regala algo único', { subtitle: 'Pídelo hoy y llega a tiempo para Navidad', bg: snow(GREEN), textAnim: 'escribir', seconds: 2.6, transition: 'destello' }),
+      ];
+    }
+    case 'familia': {
+      // Una escena por integrante (su prenda con su nombre); con productos, uno por escena.
+      const n = gx ? Math.min(6, gx.pieces.length) : Math.min(6, products.length);
+      const who = (i: number) => {
+        const label = gx?.pieces[i]?.label ?? products[i]?.name ?? '';
+        const [role, name] = label.includes(' · ') ? label.split(' · ') : ['', label];
+        return { role, name };
+      };
+      return [
+        text('Navidad en familia', { subtitle: ctx.subtitle || 'Una para cada uno, con su nombre', bg: snow(GREEN), textAnim: 'letras', seconds: 2.6, transition: 'fundido' }),
+        ...Array.from({ length: Math.max(1, n) }, (_, i) => {
+          const w = who(i);
+          const base: Partial<Scene> = { title: w.name, badge: w.role.toUpperCase(), showPrice: false, bg: snow(i % 2 ? RED : GREEN), photoMove: 'acercar', seconds: 2.4, transition: i % 2 ? 'deslizar' : 'empujar', textAnim: 'pop' };
+          return gx ? gScene(i, base) : products[i] ? photoOf(products[i], i, base) : null;
+        }).filter((x): x is Scene => !!x),
+        text('Pídelas con su nombre', { subtitle: ctx.title || 'Pack familiar navideño', bg: snow(RED), textAnim: 'escribir', seconds: 2.8, transition: 'destello' }),
+      ];
+    }
     case 'lanzamiento':
       return [
         text(ctx.title || 'Nuevo lanzamiento', { subtitle: ctx.subtitle || t?.name || '', badge: 'NUEVO', textAnim: 'pop', transition: 'circulo', textBg: 'malla' }),
