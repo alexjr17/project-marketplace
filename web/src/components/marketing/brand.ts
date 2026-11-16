@@ -27,8 +27,9 @@ export async function loadFont(family: string): Promise<void> {
 export const colorOf = (kit: BrandKit, key: string, fallback: string) => kit.colors.find((c) => c.key === key)?.hex || fallback;
 
 export async function brandFromKit(kit: BrandKit): Promise<Brand> {
-  const [logo, logoOnDark, icon, iconOnDark] = await Promise.all([
+  const [logo, logoOnDark, icon, iconOnDark, full, fullOnDark] = await Promise.all([
     loadImage(kit.logos.wordmark), loadImage(kit.logos.wordmarkLight), loadImage(kit.logos.icon), loadImage(kit.logos.iconLight),
+    kit.logos.full ? loadImage(kit.logos.full) : Promise.resolve(null), kit.logos.fullLight ? loadImage(kit.logos.fullLight) : Promise.resolve(null),
     loadFont(kit.fonts.heading), loadFont(kit.fonts.body),
   ]);
   return {
@@ -38,7 +39,7 @@ export async function brandFromKit(kit: BrandKit): Promise<Brand> {
     accent: colorOf(kit, 'accent', '#ABD04C'),
     paper: colorOf(kit, 'paper', '#F3F3EE'),
     secondary: colorOf(kit, 'secondary', '#747474'),
-    logo, logoOnDark, icon, iconOnDark,
+    logo, logoOnDark, icon, iconOnDark, full, fullOnDark,
     headingFont: kit.fonts.heading,
     bodyFont: kit.fonts.body,
     uppercase: kit.fonts.headingUppercase,

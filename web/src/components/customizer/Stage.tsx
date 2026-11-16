@@ -6,6 +6,7 @@
  * Todo en % del escenario, así no depende del tamaño de pantalla.
  * Con `overlay` va encima del maniquí 3D: no pinta la prenda ni las imágenes (las pinta el 3D),
  * solo las zonas, las cajas de selección y sus asas.
+ * Con `clean` (ver sin guías) se ve solo la prenda con los diseños, como quedaría.
  */
 import { useRef, useState, type CSSProperties, type PointerEvent as RPointerEvent } from 'react';
 import { ImagePlus, Loader2, RotateCw, Maximize2 } from 'lucide-react';
@@ -32,7 +33,7 @@ function zoneClip(z?: StudioZone): string | undefined {
   return `inset(${z.y}% ${100 - z.x - z.width}% ${100 - z.y - z.height}% ${z.x}%)`;
 }
 
-export function Stage({ api, maxHeight = '68vh', onRequestUpload, overlay = false }: { api: CustomizerApi; maxHeight?: string; onRequestUpload: () => void; overlay?: boolean }) {
+export function Stage({ api, maxHeight = '68vh', onRequestUpload, overlay = false, clean = false }: { api: CustomizerApi; maxHeight?: string; onRequestUpload: () => void; overlay?: boolean; clean?: boolean }) {
   const { format } = useCurrency();
   const ref = useRef<HTMLDivElement>(null);
   const gesture = useRef<Gesture | null>(null);
@@ -44,6 +45,8 @@ export function Stage({ api, maxHeight = '68vh', onRequestUpload, overlay = fals
   const viewDesigns = studio.designs.filter((d) => d.viewSlug === view);
   const selected = api.selected && api.selected.viewSlug === view ? api.selected : null;
   const zoneById = (id: number) => zones.find((z) => z.id === id);
+  /** Zona activa chica (mangas, pecho): el aviso de subir va solo con el ícono. */
+  const small = !!activeZone && (activeZone.width < 16 || activeZone.height < 16);
 
   /** Punto del puntero en % del escenario. */
   const pct = (e: { clientX: number; clientY: number }) => {
@@ -141,7 +144,7 @@ export function Stage({ api, maxHeight = '68vh', onRequestUpload, overlay = fals
         )}
 
         {/* Zonas imprimibles */}
-        {viewPrintZones.map((z) => {
+        {!clean && viewPrintZones.map((z) => {
           const isActive = activeZone?.id === z.id;
           const has = viewDesigns.some((d) => d.templateZoneId === z.id);
           const show = isActive || !has || active;
@@ -164,7 +167,7 @@ export function Stage({ api, maxHeight = '68vh', onRequestUpload, overlay = fals
         })}
 
         {/* Zonas no imprimibles */}
-        {viewBlockedZones.map((z) => (
+        {!clean && viewBlockedZones.map((z) => (
           <div key={z.id} className="absolute pointer-events-none border border-red-300/70 bg-[repeating-linear-gradient(45deg,rgba(239,68,68,.10)_0,rgba(239,68,68,.10)_6px,transparent_6px,transparent_12px)]" style={zoneStyle(z)} title={`${z.name}: no imprimible`} />
         ))}
 
@@ -203,7 +206,7 @@ export function Stage({ api, maxHeight = '68vh', onRequestUpload, overlay = fals
           </div>
         </div>}
 
-        {/* Cajas de selección (encima, sin recorte) */}
+        {/* Cajas de selección (encima, sin recorte). Sin guías siguen ahí, invisibles: el diseño se puede mover igual. */}
         {viewDesigns.map((d) => {
           const isSel = selected?.id === d.id;
           return (
@@ -216,13 +219,13 @@ export function Stage({ api, maxHeight = '68vh', onRequestUpload, overlay = fals
               onPointerMove={onMove}
               onPointerUp={onUp}
               onPointerCancel={onUp}
-              className={`absolute cursor-move touch-none ${isSel ? 'outline outline-2 outline-app-600' : 'hover:outline hover:outline-1 hover:outline-app-400'}`}
+              className={`absolute cursor-move touch-none ${clean ? '' : isSel ? 'outline outline-2 outline-app-600' : 'hover:outline hover:outline-1 hover:outline-app-400'}`}
               style={{
                 left: `${d.position.x - d.size.width / 2}%`, top: `${d.position.y - d.size.height / 2}%`,
                 width: `${d.size.width}%`, height: `${d.size.height}%`, transform: `rotate(${d.rotation}deg)`,
               }}
             >
-              {isSel && (
+              {isSel && !clean && (
                 <>
                   <span
                     onPointerDown={(e) => startHandle(e, d, 'rotate')} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}
@@ -246,20 +249,23 @@ export function Stage({ api, maxHeight = '68vh', onRequestUpload, overlay = fals
         })}
 
         {/* Vista sin diseño: invitación a subir en la zona activa */}
-        {(garment || overlay) && activeZone && !viewDesigns.some((d) => d.templateZoneId === activeZone.id) && (
+        {!clean && (garment || overlay) && activeZone && !viewDesigns.some((d) => d.templateZoneId === activeZone.id) && (
           <button
             type="button"
             onPointerDown={(e) => e.stopPropagation()}
             onClick={onRequestUpload}
             disabled={api.processing}
-            className="absolute flex flex-col items-center justify-center gap-1.5 text-center rounded-lg text-gray-600 hover:text-app-700 transition-colors"
+            title={small ? 'Sube tu diseño (o arrástralo aquí)' : undefined}
+            aria-label="Sube tu diseño"
+            className="absolute flex flex-col items-center justify-center gap-1.5 text-center rounded-lg text-gray-600 hover:text-app-700 transition-colors overflow-hidden"
             style={zoneStyle(activeZone)}
           >
             {api.processing ? <Loader2 className="w-7 h-7 animate-spin text-app-600" /> : (
-              <span className="w-11 h-11 rounded-full bg-white/90 shadow-sm ring-1 ring-gray-200 flex items-center justify-center"><ImagePlus className="w-5 h-5 text-app-600" /></span>
+              <span className={`${small ? 'w-8 h-8' : 'w-11 h-11'} rounded-full bg-white/90 shadow-sm ring-1 ring-gray-200 flex items-center justify-center flex-shrink-0`}><ImagePlus className={small ? 'w-4 h-4 text-app-600' : 'w-5 h-5 text-app-600'} /></span>
             )}
-            <span className="text-xs sm:text-sm font-medium bg-white/85 rounded-md px-2 py-0.5">{api.processing ? 'Preparando imagen…' : 'Sube tu diseño'}</span>
-            <span className="hidden sm:block text-[11px] text-gray-500 bg-white/70 rounded px-1.5">o arrástralo aquí</span>
+            {/* En zonas chicas (mangas, pecho) solo el ícono: el texto no cabe. */}
+            {!small && <span className="text-xs sm:text-sm font-medium bg-white/85 rounded-md px-2 py-0.5">{api.processing ? 'Preparando imagen…' : 'Sube tu diseño'}</span>}
+            {!small && <span className="hidden sm:block text-[11px] text-gray-500 bg-white/70 rounded px-1.5">o arrástralo aquí</span>}
           </button>
         )}
       </div>

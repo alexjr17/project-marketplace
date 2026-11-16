@@ -5,7 +5,12 @@
  *
  * Unidad: el lienzo mide 1080 de ancho; las medidas se escriben en esa escala.
  */
-import { frameAt, layout, type Scene } from './timeline';
+import { clampSeconds, END_SECONDS, frameAt, layout, type Scene } from './timeline';
+import { composite, drawCover } from './transitions';
+import { clipVideo } from './media';
+import { paintBackground } from './backgrounds';
+import { contentBox, drawCutout, hasTransparency, quickCutout } from './cutout';
+import { designRectOf } from './mockup';
 
 export type Format = 'post' | 'historia' | 'reel' | 'video360';
 export type TemplateId = 'destacado' | 'oferta' | 'coleccion' | 'nuevo' | 'cupon' | 'personaliza';
@@ -20,6 +25,9 @@ export interface Brand {
   /** Logo de texto para fondos claros y su versión clara para fondos oscuros. */
   logo: HTMLImageElement | null;
   logoOnDark: HTMLImageElement | null;
+  /** Logo completo (ícono y nombre) y su versión para fondos oscuros: el que va en las piezas. */
+  full?: HTMLImageElement | null;
+  fullOnDark?: HTMLImageElement | null;
   /** Ícono de la marca (cierre del reel). */
   icon?: HTMLImageElement | null;
   iconOnDark?: HTMLImageElement | null;
@@ -35,6 +43,8 @@ export interface PieceItem {
   listPrice?: number;
   discountPercent?: number;
   image: HTMLImageElement | null;
+  /** La foto sin su fondo (recortada por la IA), si ya está. */
+  cutout?: HTMLImageElement | HTMLCanvasElement | null;
 }
 
 export interface PieceSpec {
@@ -157,7 +167,7 @@ function rgba(hex: string, a: number) {
 }
 
 function logo(ctx: CanvasRenderingContext2D, b: Brand, dark: boolean, x: number, y: number, h: number, align: 'left' | 'center' = 'left') {
-  const img = dark ? b.logoOnDark ?? b.logo : b.logo;
+  const img = (dark ? b.fullOnDark ?? b.full : b.full) ?? (dark ? b.logoOnDark ?? b.logo : b.logo);
   if (img && img.naturalWidth) {
     const w = (img.naturalWidth / img.naturalHeight) * h;
     ctx.drawImage(img, align === 'center' ? x - w / 2 : x, y, w, h);
@@ -480,6 +490,7 @@ function endCard(ctx: CanvasRenderingContext2D, s: PieceSpec, W: number, H: numb
   ctx.fillRect(0, 0, W, H);
   const a = ease(t * 2);
   ctx.globalAlpha = a;
+  // El ícono grande arriba y debajo solo el nombre (el logo completo repetiría el ícono).
   const icon = b.iconOnDark ?? b.icon;
   if (icon && icon.naturalWidth) {
     const ih = 220, iw = (icon.naturalWidth / icon.naturalHeight) * ih;
@@ -489,7 +500,7 @@ function endCard(ctx: CanvasRenderingContext2D, s: PieceSpec, W: number, H: numb
     ctx.drawImage(icon, -iw / 2, -ih / 2, iw, ih);
     ctx.restore();
   }
-  logo(ctx, b, true, W / 2, H * 0.36, 120, 'center');
+  logo(ctx, { ...b, full: null, fullOnDark: null }, true, W / 2, H * 0.36, 120, 'center');
   if (b.slogan) {
     font(ctx, 500, 34);
     ctx.fillStyle = 'rgba(255,255,255,0.6)';
@@ -508,7 +519,60 @@ function endCard(ctx: CanvasRenderingContext2D, s: PieceSpec, W: number, H: numb
   ctx.globalAlpha = 1;
 }
 
-// ─── Video 3D por escenas (ver timeline.ts) ─────────────────────────────────────────────────────
+// ─── Video por escenas (ver timeline.ts y transitions.ts) ───────────────────────────────────────
+
+export type VideoRatio = '9:16' | '4:5' | '1:1';
+export const VIDEO_RATIOS: { value: VideoRatio; label: string; hint: string }[] = [
+  { value: '9:16', label: 'Vertical 9:16', hint: 'Reels, historias y TikTok' },
+  { value: '4:5', label: 'Feed 4:5', hint: 'El que más ocupa en el feed de Instagram y Facebook' },
+  { value: '1:1', label: 'Cuadrado 1:1', hint: 'Feed y anuncios' },
+];
+export const videoSize = (r: VideoRatio): [number, number] => (r === '1:1' ? [1080, 1080] : r === '4:5' ? [1080, 1350] : [1080, 1920]);
+
+export interface VideoOptions {
+  endCard: boolean;
+  /** Logo de la marca arriba en todas las escenas. */
+  logo: boolean;
+}
+
+export interface SceneAssets {
+  /** Lienzos de los dos maniquíes 3D. */
+  frames: [HTMLCanvasElement | null, HTMLCanvasElement | null];
+  /** Qué escena tiene cargada cada maniquí (la escena j solo se pinta con el cuadro de su maniquí). */
+  slots: [number, number];
+  /** Fotos de los productos (por URL). */
+  images: Record<string, HTMLImageElement | null>;
+  /** Montajes 2D de las escenas de foto de plantilla (por id de escena). */
+  mockups: Record<string, HTMLCanvasElement>;
+  /** Foto sin fondo de cada producto (URL original → URL del recorte). */
+  cutouts?: Record<string, string | null>;
+  /** Precio "desde" de cada plantilla 3D. */
+  templates: Record<number, { name: string; price: number }>;
+  /** Dos lienzos de trabajo del tamaño del video (para las transiciones). */
+  layers: [HTMLCanvasElement, HTMLCanvasElement];
+}
+
+/** ¿El color es oscuro? (para elegir el logo y el color del texto). */
+export function isDark(hex: string) {
+  const h = hex.replace('#', '');
+  const n = parseInt(h.length === 3 ? h.split('').map((c) => c + c).join('') : h.slice(0, 6), 16);
+  if (!Number.isFinite(n)) return true;
+  const r = (n >> 16) & 255, g = (n >> 8) & 255, bl = n & 255;
+  return 0.2126 * r + 0.7152 * g + 0.0722 * bl < 150;
+}
+
+const clamp01 = (x: number) => Math.min(1, Math.max(0, x));
+const backOut = (x: number) => { const t = clamp01(x), c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2); };
+
+/** Fondo de una escena: el del escenario, o el elegido en las de texto. */
+function bgOf(s: PieceSpec, sc: Scene | null): string {
+  const b = s.brand;
+  if (!sc) return b.primary; // cierre
+  // Fondo propio: su color base (una foto oscurecida cuenta como oscura) para que los textos contrasten.
+  if (sc.bg) return sc.bg.style === 'foto' && sc.bg.dim >= 0.3 ? '#111111' : sc.bg.base;
+  if (sc.kind === 'texto') return sc.textBg === 'acento' || sc.textBg === 'rayas' ? b.accent : sc.textBg === 'claro' ? b.paper : b.primary;
+  return s.stage === 'oscuro' ? b.primary : b.paper;
+}
 
 /** Cuadro 3D a pantalla completa, con zoom opcional desde el centro. */
 function frameCover(ctx: CanvasRenderingContext2D, frame: HTMLCanvasElement | null, W: number, H: number, zoom = 1) {
@@ -517,155 +581,491 @@ function frameCover(ctx: CanvasRenderingContext2D, frame: HTMLCanvasElement | nu
   ctx.drawImage(frame, (W - frame.width * k) / 2, (H - frame.height * k) / 2, frame.width * k, frame.height * k);
 }
 
-/** Textos de una escena (título y subtítulo), entrando desde abajo al empezar la escena. */
-function sceneText(ctx: CanvasRenderingContext2D, s: PieceSpec, sc: Scene, local: number, alpha: number, W: number, H: number, ctaRoom: boolean) {
-  if (!sc.title && !sc.subtitle) return;
-  const dark = s.stage === 'oscuro';
-  const a = ease(local * 2.2) * alpha;
-  if (a <= 0) return;
-  ctx.save();
-  ctx.globalAlpha = a;
-  ctx.translate(0, (1 - ease(local * 2.2)) * 40);
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'top';
-  const bottom = ctaRoom ? H - 176 : H - 110;
-  let y = bottom;
-  if (sc.subtitle) {
-    font(ctx, 500, 38);
-    y -= 50;
-    ctx.fillStyle = dark ? 'rgba(255,255,255,0.78)' : '#5b5b5b';
-    wrap(ctx, sc.subtitle, W / 2, y, W - 200, 46, 1);
-    y -= 14;
+/** Foto que cubre un rectángulo, con zoom y corrimiento horizontal (paneo). */
+function coverAt(ctx: CanvasRenderingContext2D, img: HTMLImageElement | HTMLVideoElement | HTMLCanvasElement, x: number, y: number, w: number, h: number, zoom: number, dx: number) {
+  const nw = img instanceof HTMLVideoElement ? img.videoWidth : img instanceof HTMLCanvasElement ? img.width : img.naturalWidth;
+  const nh = img instanceof HTMLVideoElement ? img.videoHeight : img instanceof HTMLCanvasElement ? img.height : img.naturalHeight;
+  if (!nw || !nh) return;
+  const k = Math.max(w / nw, h / nh) * zoom;
+  const iw = nw * k, ih = nh * k;
+  const maxDx = (iw - w) / 2;
+  ctx.drawImage(img, x + (w - iw) / 2 + Math.max(-maxDx, Math.min(maxDx, dx)), y + (h - ih) / 2, iw, ih);
+}
+
+/** Movimiento de la foto: zoom y paneo según el avance de la escena. */
+function photoMotion(sc: Scene, local: number, W: number) {
+  const p = local / clampSeconds(sc.seconds);
+  switch (sc.photoMove) {
+    case 'alejar': return { zoom: 1.16 - 0.14 * p, dx: 0 };
+    case 'paneo': return { zoom: 1.14, dx: (p - 0.5) * W * 0.1 };
+    case 'quieta': return { zoom: 1.02, dx: 0 };
+    default: return { zoom: 1.02 + 0.14 * p, dx: 0 };
   }
-  if (sc.title) {
-    font(ctx, 800, 84, 'heading');
-    const t = up(sc.title);
-    const lines = lineCount(ctx, t, W - 140, 2);
-    ctx.fillStyle = dark ? '#ffffff' : s.brand.primary;
-    wrap(ctx, t, W / 2, y - lines * 90, W - 140, 90, 2);
-  }
-  ctx.restore();
+}
+
+/** La última prenda dibujada en una escena de foto: para agarrar su diseño en la vista previa. */
+let lastPhoto: { id: string; img: HTMLImageElement | HTMLCanvasElement; x: number; y: number; w: number; h: number; zoom: number } | null = null;
+
+/**
+ * Dónde quedó en el lienzo la prenda de la escena y su diseño: `span` es cuánto mide la foto completa
+ * (para pasar el arrastre a corrimiento del diseño) y `designRect` el diseño. Null si no se dibujó.
+ */
+export function photoSceneLayout(id: string): { span: [number, number]; designRect: { x: number; y: number; w: number; h: number } | null } | null {
+  const p = lastPhoto;
+  if (!p || p.id !== id) return null;
+  const [cx0, cy0, cw, ch] = contentBox(p.img, 0.005);
+  if (!cw || !ch) return null;
+  const k = Math.min(p.w / cw, p.h / ch) * p.zoom;
+  const ix = p.x + (p.w - cw * k) / 2, iy = p.y + p.h - ch * k;
+  const fw = p.img instanceof HTMLCanvasElement ? p.img.width : p.img.naturalWidth;
+  const fh = p.img instanceof HTMLCanvasElement ? p.img.height : p.img.naturalHeight;
+  const dr = designRectOf(p.img);
+  return { span: [fw * k, fh * k], designRect: dr ? { x: ix + (dr.x - cx0) * k, y: iy + (dr.y - cy0) * k, w: dr.w * k, h: dr.h * k } : null };
 }
 
 /**
- * Cuadro del video 3D por escenas en el segundo `time`. `frames` son los lienzos de los dos maniquíes
- * (la escena i se ve en frames[i % 2]). Encima van el logo, el precio, los textos de cada escena y,
- * al final, el cierre con el logo y el botón.
+ * Escena de foto de producto: el producto recortado y en grande (protagonista), o la foto a pantalla
+ * completa. Si la foto no se puede recortar (trae una escena), va en una tarjeta grande flotando.
  */
-export function drawScenes(
-  ctx: CanvasRenderingContext2D, s: PieceSpec, scenes: Scene[], withEnd: boolean,
-  frames: [HTMLCanvasElement | null, HTMLCanvasElement | null], time: number,
-) {
-  setBrandFonts(s.brand);
-  const [W, H] = sizeOf(s.format);
+function photoScene(ctx: CanvasRenderingContext2D, s: PieceSpec, sc: Scene, local: number, img: HTMLImageElement | HTMLCanvasElement | null, W: number, H: number, cut: HTMLImageElement | HTMLCanvasElement | null = null, ownBg = false) {
+  const base = bgOf(s, sc);
+  if (!ownBg) {
+    ctx.fillStyle = base;
+    ctx.fillRect(0, 0, W, H);
+  }
+  if (!img || !(img instanceof HTMLCanvasElement ? img.width : img.naturalWidth)) return;
+  const m = photoMotion(sc, local, W);
+  if (sc.photoFit === 'completa') {
+    ctx.save(); ctx.beginPath(); ctx.rect(0, 0, W, H); ctx.clip();
+    coverAt(ctx, img, 0, 0, W, H, m.zoom, m.dx);
+    ctx.restore();
+    return;
+  }
+  const hero = cut && cut.width ? cut : hasTransparency(img) ? img : quickCutout(img);
+  const textTop = sc.textPos === 'arriba';
+  const tall = H > W * 1.2;
+  if (hero) {
+    // Escenario: luz del color de acento detrás del producto, el nombre de la marca enorme y tenue, y el piso.
+    const cy = textTop ? H * 0.62 : H * 0.42;
+    const glow = ctx.createRadialGradient(W / 2, cy, 10, W / 2, cy, Math.max(W, H) * 0.6);
+    glow.addColorStop(0, rgba(s.brand.accent, 0.42));
+    glow.addColorStop(0.55, rgba(s.brand.accent, 0.1));
+    glow.addColorStop(1, rgba(s.brand.accent, 0));
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, 0, W, H);
+    const word = (s.brand.name || '').toUpperCase();
+    if (word) {
+      ctx.save();
+      ctx.globalAlpha = 0.07;
+      ctx.fillStyle = isDark(base) ? '#ffffff' : '#000000';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      const size = Math.min(W * 0.34, (W * 1.15) / Math.max(1, word.length * 0.62));
+      ctx.font = `900 ${Math.round(size)}px ${HEADING}`;
+      ctx.fillText(word, W / 2 + m.dx * 0.4, cy);
+      ctx.restore();
+    }
+    // El producto ocupa casi todo el ancho y lo que deja el texto, flotando despacio.
+    const bw = W * 0.94, bh = H * (tall ? 0.58 : 0.64);
+    const by = (textTop ? H * 0.3 : H * 0.1) + Math.sin(local * 1.3) * H * 0.006;
+    ctx.save();
+    ctx.translate(m.dx * 0.5, 0);
+    drawCutout(ctx, hero, (W - bw) / 2, by, bw, bh, { zoom: m.zoom });
+    lastPhoto = { id: sc.id, img: hero, x: (W - bw) / 2 + m.dx * 0.5, y: by, w: bw, h: bh, zoom: m.zoom };
+    ctx.restore();
+    return;
+  }
+  // Foto con escena: de fondo desenfocada (si la escena no tiene fondo propio) y en una tarjeta grande encima.
+  if (!ownBg) {
+    ctx.save();
+    ctx.filter = 'blur(48px)';
+    ctx.globalAlpha = 0.5;
+    coverAt(ctx, img, 0, 0, W, H, 1.35, -m.dx);
+    ctx.restore();
+    ctx.fillStyle = rgba(base, 0.55);
+    ctx.fillRect(0, 0, W, H);
+  }
+  const cw = Math.min(W * 0.88, (H * 0.66) / 1.15);
+  const ch = cw * 1.15;
+  const cy = (textTop ? H * 0.6 : H * 0.4) - ch / 2 + Math.sin(local * 1.3) * 8;
+  const cx = (W - cw) / 2;
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,0,0,0.38)';
+  ctx.shadowBlur = 70;
+  ctx.shadowOffsetY = 34;
+  ctx.fillStyle = '#ffffff';
+  rr(ctx, cx, cy, cw, ch, 36);
+  ctx.fill();
+  ctx.restore();
+  ctx.save();
+  rr(ctx, cx, cy, cw, ch, 36);
+  ctx.clip();
+  coverAt(ctx, img, cx, cy, cw, ch, m.zoom, m.dx * 0.5);
+  ctx.restore();
+}
+
+/** Escena de texto: fondo de la marca con luces suaves y el ícono de marca de agua. */
+function textScene(ctx: CanvasRenderingContext2D, s: PieceSpec, sc: Scene, local: number, W: number, H: number, designs: HTMLImageElement[] = []) {
   const b = s.brand;
-  const dark = s.stage === 'oscuro';
-  const base = dark ? b.primary : b.paper;
-  const f = frameAt(scenes, withEnd, time);
+  const base = bgOf(s, sc);
+  const dark = isDark(base);
+  // Fondos con estilo (los mismos del diseñador de posts), con un giro lento para que tengan vida.
+  if (sc.textBg === 'malla' || sc.textBg === 'rayas' || sc.textBg === 'mosaicoMarca' || sc.textBg === 'mosaicoDisenos') {
+    const style = sc.textBg;
+    paintBackground(ctx, 0, 0, W, H, {
+      style, base, ink: style === 'rayas' ? b.primary : b.accent, accent: style === 'malla' ? b.paper : b.accent,
+      density: style === 'malla' ? 0.55 : style === 'rayas' ? 0.08 : style === 'mosaicoMarca' ? 0.12 : 0.2,
+      size: style === 'rayas' ? 70 : 150, angle: -18 + local * 3, grain: true,
+      logo: (dark ? b.iconOnDark ?? b.icon ?? b.logoOnDark : b.icon ?? b.logo) ?? null, brandName: b.name, designs,
+    });
+    return;
+  }
   ctx.fillStyle = base;
   ctx.fillRect(0, 0, W, H);
-  if (!scenes.length) return;
+  const glowColor = sc.textBg === 'acento' ? b.primary : b.accent;
+  const blob = (x: number, y: number, r: number, a: number) => {
+    const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+    g.addColorStop(0, rgba(glowColor, a));
+    g.addColorStop(1, rgba(glowColor, 0));
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+  };
+  blob(W * (0.2 + 0.08 * Math.sin(local * 0.7)), H * (0.25 + 0.05 * Math.cos(local * 0.5)), W * 0.75, 0.28);
+  blob(W * (0.85 - 0.06 * Math.cos(local * 0.6)), H * (0.8 - 0.04 * Math.sin(local * 0.8)), W * 0.7, 0.22);
+  const icon = dark ? b.iconOnDark ?? b.icon : b.icon;
+  if (icon && icon.naturalWidth) {
+    const ih = Math.min(W, H) * 0.9, iw = (icon.naturalWidth / icon.naturalHeight) * ih;
+    ctx.save();
+    ctx.globalAlpha = 0.06;
+    ctx.translate(W * 0.78, H * 0.82);
+    ctx.rotate(-0.18 + local * 0.03);
+    ctx.drawImage(icon, -iw / 2, -ih / 2, iw, ih);
+    ctx.restore();
+  }
+}
 
-  if (f.index === -1) {
-    // Cierre: entra con un velo del color de la marca sobre la última escena.
-    if (f.end < 0.2) {
-      frameCover(ctx, frames[(scenes.length - 1) % 2], W, H);
-      ctx.fillStyle = rgba(b.primary, f.end / 0.2);
-      ctx.fillRect(0, 0, W, H);
-    } else {
-      endCard(ctx, s, W, H, (f.end - 0.2) / 0.8);
+/** Fondo propio de la escena (si lo tiene): estilo como en los posts, o una foto. Devuelve si lo pintó. */
+function sceneBackground(ctx: CanvasRenderingContext2D, s: PieceSpec, scenes: Scene[], sc: Scene, local: number, a: SceneAssets, W: number, H: number): boolean {
+  const g = sc.bg;
+  if (!g) return false;
+  const b = s.brand;
+  if (g.style === 'foto') {
+    ctx.fillStyle = g.base;
+    ctx.fillRect(0, 0, W, H);
+    const img = g.image ? a.images[g.image] ?? null : null;
+    if (img && img.naturalWidth) {
+      const p = local / clampSeconds(sc.seconds);
+      coverAt(ctx, img, 0, 0, W, H, g.move ? 1.03 + 0.07 * p : 1, 0);
+    }
+    if (g.dim > 0) { ctx.fillStyle = `rgba(0,0,0,${g.dim})`; ctx.fillRect(0, 0, W, H); }
+    return true;
+  }
+  const dark = isDark(g.base);
+  const designs = g.style === 'mosaicoDisenos'
+    ? Array.from(new Set(scenes.flatMap((x) => (x.design?.image ? [x.design.image] : [])))).map((u) => a.images[u]).filter((i): i is HTMLImageElement => !!i && i.naturalWidth > 0)
+    : [];
+  paintBackground(ctx, 0, 0, W, H, {
+    style: g.style, base: g.base, ink: g.ink, accent: g.accent, density: g.density, size: g.size,
+    angle: g.angle + (g.move ? local * 3 : 0), grain: g.grain,
+    logo: (dark ? b.iconOnDark ?? b.icon ?? b.logoOnDark : b.icon ?? b.logo) ?? null, brandName: b.name, designs,
+  });
+  return true;
+}
+
+/** Contenido de una escena (sin los textos) o del cierre (j = scenes.length). */
+function drawSceneBody(ctx: CanvasRenderingContext2D, s: PieceSpec, scenes: Scene[], j: number, local: number, a: SceneAssets, W: number, H: number) {
+  const sc = scenes[j];
+  if (!sc) { endCard(ctx, s, W, H, local / END_SECONDS); return; }
+  if (sc.kind === 'foto') {
+    // Foto de producto, o la foto de una plantilla personalizable con el diseño montado en su zona.
+    const img = sc.photoSource === 'plantilla' ? a.mockups[sc.id] ?? null : sc.product?.image ? a.images[sc.product.image] ?? null : null;
+    const cutUrl = sc.photoSource !== 'plantilla' && sc.product?.image ? a.cutouts?.[sc.product.image] : null;
+    const own = sceneBackground(ctx, s, scenes, sc, local, a, W, H);
+    photoScene(ctx, s, sc, local, img, W, H, cutUrl ? a.images[cutUrl] ?? null : null, own);
+    return;
+  }
+  if (sc.kind === 'texto' && sceneBackground(ctx, s, scenes, sc, local, a, W, H)) return;
+  if (sc.kind === 'texto') {
+    // El mosaico de diseños usa los diseños puestos en las escenas del video.
+    const designs = sc.textBg === 'mosaicoDisenos'
+      ? Array.from(new Set(scenes.flatMap((x) => (x.design?.image ? [x.design.image] : [])))).map((u) => a.images[u]).filter((i): i is HTMLImageElement => !!i && i.naturalWidth > 0)
+      : [];
+    textScene(ctx, s, sc, local, W, H, designs);
+    return;
+  }
+  if (!sceneBackground(ctx, s, scenes, sc, local, a, W, H)) {
+    ctx.fillStyle = bgOf(s, sc);
+    ctx.fillRect(0, 0, W, H);
+  }
+  if (sc.kind === 'clip') {
+    // Clip propio a pantalla completa (el cuadro lo deja listo syncClips), con el movimiento elegido.
+    const v = clipVideo(sc.clip?.id);
+    if (v && v.readyState >= 2) {
+      const m = sc.photoMove === 'quieta' ? { zoom: 1, dx: 0 } : photoMotion(sc, local, W);
+      ctx.save(); ctx.beginPath(); ctx.rect(0, 0, W, H); ctx.clip();
+      coverAt(ctx, v, 0, 0, W, H, m.zoom, m.dx);
+      ctx.restore();
     }
     return;
   }
+  if (a.slots[j % 2] === j) frameCover(ctx, a.frames[j % 2], W, H);
+}
 
-  // 1. Escenas 3D (con la transición si hay).
-  const tr = f.transition;
-  if (!tr) {
-    frameCover(ctx, frames[f.index % 2], W, H);
-  } else {
-    const A = frames[tr.from % 2], B = frames[tr.to % 2];
-    const p = Math.min(1, Math.max(0, tr.p));
-    switch (tr.kind) {
-      case 'barrido': {
-        frameCover(ctx, A, W, H);
-        const x = ease(p) * W;
-        ctx.save(); ctx.beginPath(); ctx.rect(0, 0, x, H); ctx.clip(); frameCover(ctx, B, W, H); ctx.restore();
-        ctx.fillStyle = b.accent;
-        ctx.fillRect(x - 10, 0, 20, H);
-        break;
+/** Líneas de texto centradas con su animación de entrada (t = segundos desde que empieza). */
+function animLines(ctx: CanvasRenderingContext2D, lines: string[], cx: number, y: number, lh: number, anim: Scene['textAnim'], t: number, alpha: number) {
+  if (t < 0 || alpha <= 0) return;
+  const outer = ctx.globalAlpha;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+  let shown = Infinity;
+  if (anim === 'escribir') shown = Math.floor(t * 24);
+  let used = 0;
+  lines.forEach((line, li) => {
+    const lw = ctx.measureText(line).width;
+    const x0 = cx - lw / 2;
+    const ly = y + li * lh;
+    const lt = t - li * 0.12;
+    switch (anim) {
+      case 'escribir': {
+        const n = Math.max(0, Math.min(line.length, shown - used));
+        used += line.length;
+        if (!n) return;
+        ctx.globalAlpha = outer * alpha;
+        ctx.fillText(line.slice(0, n), x0, ly);
+        if (n < line.length || (li === lines.length - 1 && Math.floor(t * 2.4) % 2 === 0 && t < line.length / 24 + 1.2)) {
+          const cw = ctx.measureText(line.slice(0, n)).width;
+          ctx.fillRect(x0 + cw + 6, ly + lh * 0.08, Math.max(4, lh * 0.06), lh * 0.78);
+        }
+        return;
       }
-      case 'zoom':
-        frameCover(ctx, B, W, H, 1.15 - 0.15 * ease(p));
-        ctx.globalAlpha = 1 - ease(p);
-        frameCover(ctx, A, W, H, 1 + 0.35 * ease(p));
-        ctx.globalAlpha = 1;
-        break;
-      case 'destello':
-      case 'cortina':
-        frameCover(ctx, p < 0.5 ? A : B, W, H);
-        break;
-      default: // fundido
-        frameCover(ctx, A, W, H);
-        ctx.globalAlpha = ease(p);
-        frameCover(ctx, B, W, H);
-        ctx.globalAlpha = 1;
+      case 'letras': {
+        for (let k = 0; k < line.length; k++) {
+          const ak = ease((lt - k * 0.035) * 4);
+          if (ak <= 0) break;
+          const off = ctx.measureText(line.slice(0, k)).width;
+          ctx.globalAlpha = outer * alpha * ak;
+          ctx.fillText(line[k], x0 + off, ly + (1 - ak) * lh * 0.45);
+        }
+        return;
+      }
+      case 'pop': {
+        const k = backOut(lt * 2.6);
+        ctx.save();
+        ctx.globalAlpha = outer * alpha * clamp01(lt * 5);
+        ctx.translate(cx, ly + lh / 2);
+        ctx.scale(0.55 + 0.45 * k, 0.55 + 0.45 * k);
+        ctx.fillText(line, -lw / 2, -lh / 2);
+        ctx.restore();
+        return;
+      }
+      case 'deslizar': {
+        const k = ease(lt * 2.4);
+        ctx.globalAlpha = outer * alpha * k;
+        ctx.fillText(line, x0 - (1 - k) * 160, ly);
+        return;
+      }
+      case 'ninguna':
+        ctx.globalAlpha = outer * alpha;
+        ctx.fillText(line, x0, ly);
+        return;
+      default: { // subir
+        const k = ease(lt * 2.2);
+        ctx.globalAlpha = outer * alpha * k;
+        ctx.fillText(line, x0, ly + (1 - k) * 46);
+      }
+    }
+  });
+  ctx.globalAlpha = outer;
+}
+
+/** Corta un texto en líneas que caben en un ancho. */
+function splitLines(ctx: CanvasRenderingContext2D, text: string, maxW: number, maxLines: number): string[] {
+  const words = text.split(/\s+/).filter(Boolean);
+  const lines: string[] = [];
+  let line = '';
+  for (const w of words) {
+    const test = line ? `${line} ${w}` : w;
+    if (ctx.measureText(test).width > maxW && line) { lines.push(line); line = w; } else line = test;
+  }
+  if (line) lines.push(line);
+  if (lines.length > maxLines) { lines.length = maxLines; lines[maxLines - 1] = lines[maxLines - 1].replace(/\s*\S*$/, '…'); }
+  return lines;
+}
+
+/** Precio de una escena: el de la foto del producto o el "desde" de la prenda 3D. */
+function scenePrice(sc: Scene, a: SceneAssets): PieceItem | null {
+  if (!sc.showPrice) return null;
+  if (sc.kind === 'foto' && sc.photoSource === 'plantilla' && sc.templateId != null && a.templates[sc.templateId]) return { name: '', image: null, price: a.templates[sc.templateId].price };
+  if (sc.kind === 'foto' && sc.product?.price != null) return { name: sc.product.name, image: null, price: sc.product.price, listPrice: sc.product.listPrice, discountPercent: sc.product.discountPercent };
+  if (sc.kind === '3d' && sc.templateId != null && a.templates[sc.templateId]) return { name: '', image: null, price: a.templates[sc.templateId].price };
+  return null;
+}
+
+/** Etiqueta, título, subtítulo y precio de una escena, con su animación y en su posición. */
+function sceneText(ctx: CanvasRenderingContext2D, s: PieceSpec, sc: Scene, local: number, alpha: number, W: number, H: number, ctaRoom: boolean, price: PieceItem | null) {
+  if (alpha <= 0 || (!sc.title && !sc.subtitle && !sc.badge && !price)) return;
+  const b = s.brand;
+  const dark = isDark(bgOf(s, sc));
+  const big = sc.kind === 'texto';
+  const maxW = W - 150;
+  // Medidas del bloque.
+  let tSize = sc.title ? posterSize(ctx, sc.title, maxW, big ? 128 : 88) : 0;
+  const maxTitleLines = big ? 3 : 2;
+  font(ctx, 800, tSize || 10, 'heading');
+  // El título completo, achicando la letra hasta que quepa en sus líneas (sin cortarlo).
+  while (sc.title && tSize > 48 && splitLines(ctx, up(sc.title), maxW, 99).length > maxTitleLines) {
+    tSize -= 6;
+    font(ctx, 800, tSize, 'heading');
+  }
+  const tLines = sc.title ? splitLines(ctx, up(sc.title), maxW, maxTitleLines) : [];
+  const tLh = tSize * 1.02;
+  font(ctx, 500, big ? 44 : 38);
+  const sLines = sc.subtitle ? splitLines(ctx, sc.subtitle, W - 200, 2) : [];
+  const sLh = big ? 54 : 48;
+  const badgeH = sc.badge ? 64 + 22 : 0;
+  const priceH = price ? (price.listPrice && price.price != null && price.listPrice > price.price ? 92 : 78) : 0;
+  const blockH = badgeH + tLines.length * tLh + (sLines.length ? 14 + sLines.length * sLh : 0) + (priceH ? 18 + priceH : 0);
+  const logoRoom = 190;
+  let y = sc.textPos === 'arriba' ? logoRoom + 20 : sc.textPos === 'centro' ? (H - blockH) / 2 : (ctaRoom ? H - 196 : H - 110) - blockH;
+  y = Math.max(logoRoom, y);
+  const fg = dark ? '#ffffff' : b.primary;
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  // Etiqueta.
+  if (sc.badge) {
+    const k = backOut(local * 2.8);
+    ctx.save();
+    ctx.globalAlpha = alpha * clamp01(local * 5);
+    ctx.translate(W / 2, y + 32);
+    ctx.scale(0.6 + 0.4 * k, 0.6 + 0.4 * k);
+    pill(ctx, up(sc.badge), 0, -32, 32, dark ? b.accent : b.primary, dark ? b.primary : '#ffffff', 'center');
+    ctx.restore();
+    y += badgeH;
+  }
+  // Título.
+  if (tLines.length) {
+    font(ctx, 800, tSize, 'heading');
+    ctx.fillStyle = fg;
+    animLines(ctx, tLines, W / 2, y, tLh, sc.textAnim, local - (sc.badge ? 0.15 : 0), 1);
+    y += tLines.length * tLh;
+  }
+  const typed = sc.textAnim === 'escribir' ? tLines.join('').length / 24 : 0;
+  // Subtítulo.
+  if (sLines.length) {
+    y += 14;
+    font(ctx, 500, big ? 44 : 38);
+    ctx.fillStyle = dark ? 'rgba(255,255,255,0.82)' : '#4b4b4b';
+    animLines(ctx, sLines, W / 2, y, sLh, sc.textAnim === 'letras' || sc.textAnim === 'escribir' ? 'subir' : sc.textAnim, local - 0.25 - typed, 1);
+    y += sLines.length * sLh;
+  }
+  // Precio.
+  if (price && price.price != null) {
+    y += 18;
+    const k = ease((local - 0.4 - typed) * 2.5);
+    ctx.globalAlpha = alpha * k;
+    const strike = price.listPrice && price.listPrice > price.price;
+    if (sc.kind === '3d') {
+      font(ctx, 700, 46);
+      ctx.fillStyle = dark ? b.accent : b.primary;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.fillText('desde ' + money(price.price), W / 2, y + (1 - k) * 20);
+    } else {
+      font(ctx, 800, 70);
+      let w = ctx.measureText(money(price.price)).width;
+      if (strike) { font(ctx, 500, 42); w += ctx.measureText(money(price.listPrice!)).width + 25; }
+      priceRow(ctx, price, (W - w) / 2, y + (1 - k) * 20, 70, dark ? b.accent : b.primary, dark ? 'rgba(255,255,255,0.6)' : '#888');
     }
   }
+  ctx.restore();
+  ctx.textAlign = 'left';
+}
 
-  // 2. Velos arriba y abajo para leer el logo y los textos.
+/** Velos arriba y abajo (sobre el 3D y las fotos) para que se lean el logo y los textos. */
+function veils(ctx: CanvasRenderingContext2D, base: string, W: number, H: number, amount: number) {
+  if (amount <= 0) return;
+  ctx.save();
+  ctx.globalAlpha = amount;
   const topG = ctx.createLinearGradient(0, 0, 0, 280);
   topG.addColorStop(0, rgba(base, 0.85));
   topG.addColorStop(1, rgba(base, 0));
   ctx.fillStyle = topG;
   ctx.fillRect(0, 0, W, 280);
-  const botG = ctx.createLinearGradient(0, H - 620, 0, H);
+  const h = Math.min(620, H * 0.42);
+  const botG = ctx.createLinearGradient(0, H - h, 0, H);
   botG.addColorStop(0, rgba(base, 0));
-  botG.addColorStop(0.45, rgba(base, 0.82));
-  botG.addColorStop(1, rgba(base, 0.96));
+  botG.addColorStop(0.45, rgba(base, 0.8));
+  botG.addColorStop(1, rgba(base, 0.95));
   ctx.fillStyle = botG;
-  ctx.fillRect(0, H - 620, W, 620);
+  ctx.fillRect(0, H - h, W, h);
+  ctx.restore();
+}
 
-  // 3. Marca, precio, textos de la escena y botón (en la última escena si no hay cierre).
-  logo(ctx, b, dark, W / 2, 80, 60, 'center');
-  const item = s.items[0];
-  if (s.showPrice && item?.price != null) {
-    font(ctx, 700, 40); ctx.fillStyle = dark ? '#ffffff' : b.primary; ctx.textAlign = 'right'; ctx.textBaseline = 'top';
-    ctx.fillText('desde ' + money(item.price), W - 64, 96); ctx.textAlign = 'left';
-  }
-  const last = scenes.length - 1;
-  const ctaRoom = !withEnd && !!s.cta;
-  if (tr) {
-    const p = Math.min(1, Math.max(0, tr.p));
-    const lenFrom = layout(scenes, withEnd).starts;
-    sceneText(ctx, s, scenes[tr.from], time - lenFrom[tr.from], Math.max(0, 1 - p * 2), W, H, ctaRoom && tr.from === last);
-    sceneText(ctx, s, scenes[tr.to], Math.max(0, time - lenFrom[tr.to]), Math.max(0, p * 2 - 1), W, H, ctaRoom && tr.to === last);
+const veilOf = (sc: Scene | undefined) => (!sc ? 0 : sc.kind === 'texto' ? 0 : sc.kind === 'foto' && sc.photoFit === 'tarjeta' ? 0.35 : 1);
+
+/**
+ * Cuadro del video por escenas en el segundo `time`. Cada escena se pinta en su capa (la 3D con el
+ * cuadro de su maniquí, la foto con su movimiento, el texto sobre la marca) y la transición mezcla
+ * las dos capas. Encima van los velos, el logo, los textos de cada escena (el que sale se va antes de
+ * que entre el nuevo), el botón y, al final, el cierre con el logo.
+ */
+export function drawScenes(ctx: CanvasRenderingContext2D, s: PieceSpec, scenes: Scene[], opts: VideoOptions, a: SceneAssets, time: number) {
+  setBrandFonts(s.brand);
+  const W = ctx.canvas.width, H = ctx.canvas.height;
+  const b = s.brand;
+  const n = scenes.length;
+  ctx.fillStyle = bgOf(s, scenes[0] ?? null);
+  ctx.fillRect(0, 0, W, H);
+  if (!n) return;
+  const f = frameAt(scenes, opts.endCard, time);
+  const { starts, body } = layout(scenes, opts.endCard);
+  const startOf = (j: number) => (j === n ? body : starts[j]);
+  const tr = f.transition;
+  const p = tr ? clamp01(tr.p) : 0;
+  const style = { accent: b.accent, primary: b.primary, base: b.primary, dark: s.stage === 'oscuro' };
+
+  // 1. Escenas (con la transición si hay).
+  if (!tr) {
+    drawSceneBody(ctx, s, scenes, f.index, f.local, a, W, H);
   } else {
-    sceneText(ctx, s, scenes[f.index], f.local, 1, W, H, ctaRoom && f.index === last);
+    a.layers.forEach((l) => { if (l.width !== W || l.height !== H) { l.width = W; l.height = H; } });
+    const [la, lb] = a.layers;
+    const ca = la.getContext('2d')!, cb = lb.getContext('2d')!;
+    drawSceneBody(ca, s, scenes, tr.from, time - startOf(tr.from), a, W, H);
+    drawSceneBody(cb, s, scenes, tr.to, time - startOf(tr.to), a, W, H);
+    composite(ctx, la, lb, tr.kind, p, style);
+  }
+
+  // 2. Velos, logo y textos (no en el cierre, que trae los suyos).
+  const shown = tr ? (p < 0.5 ? tr.from : tr.to) : f.index;
+  const endWeight = tr ? (tr.to === n ? p : tr.from === n ? 1 - p : 0) : f.index === n ? 1 : 0;
+  const veilAmount = tr ? veilOf(scenes[tr.from]) * (1 - p) + veilOf(scenes[tr.to]) * p : veilOf(scenes[f.index]);
+  // El velo toma el color del fondo de la escena (el del escenario o el propio), así los textos contrastan.
+  const stageBase = scenes[shown] ? bgOf(s, scenes[shown]) : s.stage === 'oscuro' ? b.primary : b.paper;
+  veils(ctx, stageBase, W, H, veilAmount);
+  if (opts.logo && endWeight < 1) {
+    ctx.save();
+    ctx.globalAlpha = 1 - endWeight;
+    logo(ctx, b, isDark(bgOf(s, scenes[Math.min(shown, n - 1)])), W / 2, 80, 60, 'center');
+    ctx.restore();
+  }
+  const last = n - 1;
+  const ctaRoom = !opts.endCard && !!s.cta;
+  if (tr) {
+    if (tr.from < n) sceneText(ctx, s, scenes[tr.from], time - starts[tr.from], Math.max(0, 1 - p * 2), W, H, ctaRoom && tr.from === last, scenePrice(scenes[tr.from], a));
+    if (tr.to < n) sceneText(ctx, s, scenes[tr.to], Math.max(0, time - starts[tr.to]), Math.max(0, p * 2 - 1), W, H, ctaRoom && tr.to === last, scenePrice(scenes[tr.to], a));
+  } else if (f.index < n) {
+    sceneText(ctx, s, scenes[f.index], f.local, 1, W, H, ctaRoom && f.index === last, scenePrice(scenes[f.index], a));
   }
   if (ctaRoom && f.index === last) {
-    ctx.globalAlpha = tr ? Math.min(1, Math.max(0, tr.p * 2 - 1)) : ease(f.local * 2);
-    pill(ctx, s.cta, W / 2, H - 140, 36, dark ? b.accent : b.primary, dark ? b.primary : '#ffffff', 'center');
+    const dark = isDark(bgOf(s, scenes[last]));
+    ctx.globalAlpha = tr ? clamp01(p * 2 - 1) : ease(f.local * 2);
+    pill(ctx, s.cta, W / 2, H - 150, 36, dark ? b.accent : b.primary, dark ? b.primary : '#ffffff', 'center');
     ctx.globalAlpha = 1;
   }
 
-  // 4. Velos de transición que tapan todo (escena, logo y textos).
+  // 3. Velos de transición que tapan todo (escena, logo y textos).
   if (tr && (tr.kind === 'destello' || tr.kind === 'cortina')) {
-    const p = Math.min(1, Math.max(0, tr.p));
-    if (tr.kind === 'destello') {
-      const a = 1 - Math.abs(p - 0.5) * 2;
-      ctx.fillStyle = dark ? rgba(b.accent, a) : `rgba(255,255,255,${a})`;
-      ctx.fillRect(0, 0, W, H);
-    } else {
-      // Un panel de la marca sube tapando la escena y sigue subiendo destapando la nueva.
-      const top = p < 0.5 ? H * (1 - ease(p * 2)) : 0;
-      const bottom = p < 0.5 ? H : H * (1 - ease((p - 0.5) * 2));
-      ctx.fillStyle = dark ? b.accent : b.primary;
-      ctx.fillRect(0, top, W, bottom - top);
-      const icon = dark ? b.icon : b.iconOnDark ?? b.icon;
-      if (icon && icon.naturalWidth && bottom - top > 300) {
-        const ih = 180, iw = (icon.naturalWidth / icon.naturalHeight) * ih;
-        ctx.drawImage(icon, W / 2 - iw / 2, (top + bottom) / 2 - ih / 2, iw, ih);
-      }
-    }
+    drawCover(ctx, tr.kind, p, style, style.dark ? b.icon : b.iconOnDark ?? b.icon);
   }
 }

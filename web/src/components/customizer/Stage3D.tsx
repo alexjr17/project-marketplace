@@ -47,7 +47,7 @@ function useDesignImages(sources: string[]) {
   }, [tick]);
 }
 
-export function Stage3D({ api, onRequestUpload }: { api: CustomizerApi; onRequestUpload: () => void }) {
+export function Stage3D({ api, onRequestUpload, clean = false }: { api: CustomizerApi; onRequestUpload: () => void; clean?: boolean }) {
   const model = api.model3d!;
   const [spin, setSpin] = useState(false);
   const [ready, setReady] = useState(false);
@@ -113,7 +113,7 @@ export function Stage3D({ api, onRequestUpload }: { api: CustomizerApi; onReques
         </WebGLBoundary>
       </div>
 
-      {!spin && <Stage api={api} overlay onRequestUpload={onRequestUpload} />}
+      {!spin && <Stage api={api} overlay onRequestUpload={onRequestUpload} clean={clean} />}
 
       <button
         type="button"

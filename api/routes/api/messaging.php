@@ -79,6 +79,18 @@ Route::prefix('messaging')->middleware(['auth:sanctum', 'permission:messaging.ac
             Route::get('sources', [MarketingController::class, 'sources']);
             Route::get('image', [MarketingController::class, 'image'])->middleware('throttle:240,1');
             Route::post('copy', [MarketingController::class, 'copy'])->middleware('throttle:30,1');
+            Route::post('video-advice', [MarketingController::class, 'videoAdvice'])->middleware('throttle:20,1');
+            Route::get('narration/voices', [MarketingController::class, 'voices']);
+            Route::post('ai-image', [MarketingController::class, 'aiImage'])->middleware('throttle:12,1');
+            Route::post('ai-backdrop', [MarketingController::class, 'aiBackdrop'])->middleware('throttle:12,1');
+            Route::post('ai-garment/front', [MarketingController::class, 'garmentFront'])->middleware('throttle:12,1');
+            Route::post('ai-garment/view', [MarketingController::class, 'garmentView'])->middleware('throttle:20,1');
+            Route::post('ai-garment/edit', [MarketingController::class, 'garmentEdit'])->middleware('throttle:20,1');
+            Route::post('product-cutout', [MarketingController::class, 'productCutout'])->middleware('throttle:60,1');
+            Route::post('ai-garment/cutout', [MarketingController::class, 'garmentCutout'])->middleware('throttle:30,1');
+            Route::post('ai-garment/mirror', [MarketingController::class, 'garmentMirror'])->middleware('throttle:30,1');
+            Route::post('narration/script', [MarketingController::class, 'narrationScript'])->middleware('throttle:20,1');
+            Route::post('narration/speak', [MarketingController::class, 'speak'])->middleware('throttle:60,1');
             Route::get('creatives', [MarketingController::class, 'index']);
             Route::post('creatives', [MarketingController::class, 'store'])->middleware('throttle:30,1');
             Route::patch('creatives/{id}', [MarketingController::class, 'update'])->whereNumber('id');

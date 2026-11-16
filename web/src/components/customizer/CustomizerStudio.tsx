@@ -4,7 +4,7 @@
  * - Celular: lienzo arriba, pasos en pestañas debajo y una barra fija con el total y el botón.
  */
 import { useEffect, useRef, useState } from 'react';
-import { Redo2, Undo2 } from 'lucide-react';
+import { Eye, EyeOff, Redo2, Undo2 } from 'lucide-react';
 import { useCurrency } from '../../hooks/useCurrency';
 import { getSizeChart } from '../../data/sizeCharts';
 import { SizeGuideModal } from './SizeGuideModal';
@@ -47,6 +47,8 @@ export function CustomizerStudio({ api }: { api: CustomizerApi }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [tab, setTab] = useState<MobileTab>('design');
   const [guide, setGuide] = useState(false);
+  /** Ver la prenda sin guías (zonas, avisos y recuadros), como quedaría. */
+  const [clean, setClean] = useState(false);
   useShortcuts(api);
 
   const chart = api.template ? getSizeChart(sizeChartType(api.template.typeSlug, api.template.typeName)) : undefined;
@@ -80,6 +82,8 @@ export function CustomizerStudio({ api }: { api: CustomizerApi }) {
               })}
             </div>
             <div className="flex items-center gap-1 flex-shrink-0">
+              <button type="button" title={clean ? 'Mostrar las guías' : 'Ver sin guías'} aria-label={clean ? 'Mostrar las guías' : 'Ver sin guías'} aria-pressed={clean} onClick={() => setClean((c) => !c)}
+                className={`p-2 rounded-lg hover:bg-gray-100 ${clean ? 'text-app-700 bg-app-50' : 'text-gray-600'}`}>{clean ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}</button>
               <button type="button" title="Deshacer (Ctrl+Z)" aria-label="Deshacer" disabled={!api.studio.past.length} onClick={() => api.dispatch({ type: 'undo' })}
                 className="p-2 rounded-lg text-gray-600 hover:bg-gray-100 disabled:opacity-30"><Undo2 className="w-4 h-4" /></button>
               <button type="button" title="Rehacer (Ctrl+Shift+Z)" aria-label="Rehacer" disabled={!api.studio.future.length} onClick={() => api.dispatch({ type: 'redo' })}
@@ -90,8 +94,8 @@ export function CustomizerStudio({ api }: { api: CustomizerApi }) {
           <div className="rounded-xl bg-gradient-to-b from-gray-50 to-gray-100/80 px-4 pt-9 pb-4 md:px-8 md:pt-10 md:pb-6">
             <div className="[--stage-h:44vh] lg:[--stage-h:60vh]">
               {api.model3d
-                ? <Stage3D api={api} onRequestUpload={requestUpload} />
-                : <Stage api={api} maxHeight="var(--stage-h)" onRequestUpload={requestUpload} />}
+                ? <Stage3D api={api} onRequestUpload={requestUpload} clean={clean} />
+                : <Stage api={api} maxHeight="var(--stage-h)" onRequestUpload={requestUpload} clean={clean} />}
             </div>
           </div>
 

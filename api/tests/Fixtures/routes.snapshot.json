@@ -633,6 +633,11 @@
         "permission:messaging.posts",
         "throttle:240,1"
     ],
+    "GET api/messaging/marketing/narration/voices": [
+        "auth:sanctum",
+        "permission:messaging.access",
+        "permission:messaging.posts"
+    ],
     "GET api/messaging/marketing/sources": [
         "auth:sanctum",
         "permission:messaging.access",
@@ -1429,6 +1434,48 @@
         "permission:messaging.access",
         "permission:messaging.knowledge"
     ],
+    "POST api/messaging/marketing/ai-backdrop": [
+        "auth:sanctum",
+        "permission:messaging.access",
+        "permission:messaging.posts",
+        "throttle:12,1"
+    ],
+    "POST api/messaging/marketing/ai-garment/cutout": [
+        "auth:sanctum",
+        "permission:messaging.access",
+        "permission:messaging.posts",
+        "throttle:30,1"
+    ],
+    "POST api/messaging/marketing/ai-garment/edit": [
+        "auth:sanctum",
+        "permission:messaging.access",
+        "permission:messaging.posts",
+        "throttle:20,1"
+    ],
+    "POST api/messaging/marketing/ai-garment/front": [
+        "auth:sanctum",
+        "permission:messaging.access",
+        "permission:messaging.posts",
+        "throttle:12,1"
+    ],
+    "POST api/messaging/marketing/ai-garment/mirror": [
+        "auth:sanctum",
+        "permission:messaging.access",
+        "permission:messaging.posts",
+        "throttle:30,1"
+    ],
+    "POST api/messaging/marketing/ai-garment/view": [
+        "auth:sanctum",
+        "permission:messaging.access",
+        "permission:messaging.posts",
+        "throttle:20,1"
+    ],
+    "POST api/messaging/marketing/ai-image": [
+        "auth:sanctum",
+        "permission:messaging.access",
+        "permission:messaging.posts",
+        "throttle:12,1"
+    ],
     "POST api/messaging/marketing/copy": [
         "auth:sanctum",
         "permission:messaging.access",
@@ -1441,7 +1488,31 @@
         "permission:messaging.posts",
         "throttle:30,1"
     ],
+    "POST api/messaging/marketing/narration/script": [
+        "auth:sanctum",
+        "permission:messaging.access",
+        "permission:messaging.posts",
+        "throttle:20,1"
+    ],
+    "POST api/messaging/marketing/narration/speak": [
+        "auth:sanctum",
+        "permission:messaging.access",
+        "permission:messaging.posts",
+        "throttle:60,1"
+    ],
+    "POST api/messaging/marketing/product-cutout": [
+        "auth:sanctum",
+        "permission:messaging.access",
+        "permission:messaging.posts",
+        "throttle:60,1"
+    ],
     "POST api/messaging/marketing/publish": [
+        "auth:sanctum",
+        "permission:messaging.access",
+        "permission:messaging.posts",
+        "throttle:20,1"
+    ],
+    "POST api/messaging/marketing/video-advice": [
         "auth:sanctum",
         "permission:messaging.access",
         "permission:messaging.posts",

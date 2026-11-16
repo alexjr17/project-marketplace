@@ -28,6 +28,8 @@ const COLOR_ROLES: Record<string, string> = {
 };
 
 const LOGOS: { key: keyof BrandKit['logos']; label: string; dark: boolean }[] = [
+  { key: 'full', label: 'Logo completo (ícono y nombre)', dark: false },
+  { key: 'fullLight', label: 'Logo completo (fondo oscuro)', dark: true },
   { key: 'wordmark', label: 'Logo de texto', dark: false },
   { key: 'wordmarkLight', label: 'Logo de texto (fondo oscuro)', dark: true },
   { key: 'icon', label: 'Ícono', dark: false },

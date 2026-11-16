@@ -61,13 +61,15 @@ export interface Mannequin3DProps {
   /** Escenario 3D de estudio (fondo curvo, piso y pedestal) para los videos: lienzo vertical, sin transparencia. */
   stage?: Stage3D;
   /** Movimiento manejado desde afuera (videos por escenas): giro desde el frente y acercamiento de la cámara. */
-  motionRef?: MutableRefObject<{ turn: number; zoom: number }>;
+  motionRef?: MutableRefObject<{ turn: number; zoom: number; lift?: number }>;
 }
 
 /** Colores del escenario: `base` es el fondo y el piso, `accent` la luz de la marca. */
 export interface Stage3D {
   base: string;
   accent: string;
+  /** Sin el estudio (fondo curvo, pedestal): el maniquí sobre transparente, para un fondo propio. */
+  bare?: boolean;
   dark: boolean;
 }
 
@@ -1033,7 +1035,7 @@ function glowTexture() {
  * Escenario de los videos: fondo curvo, piso, pedestal con aro de luz del acento, halo en la pared y
  * cámara vertical con aire arriba (logo) y abajo (textos). El modelo queda parado sobre el pedestal.
  */
-function StudioStage({ stage, box, size, motionRef }: { stage: Stage3D; box: THREE.Box3; size: THREE.Vector3; motionRef?: MutableRefObject<{ turn: number; zoom: number }> }) {
+function StudioStage({ stage, box, size, motionRef }: { stage: Stage3D; box: THREE.Box3; size: THREE.Vector3; motionRef?: MutableRefObject<{ turn: number; zoom: number; lift?: number }> }) {
   const { camera } = useThree();
   // La tapa del pedestal queda apenas debajo del modelo: la sombra de contacto no la toma como objeto.
   const top = box.min.y - 0.012;
@@ -1054,29 +1056,33 @@ function StudioStage({ stage, box, size, motionRef }: { stage: Stage3D; box: THR
 
   // Cámara un poco más lejos y alta: el modelo ocupa la franja media del video vertical. Con
   // acercamiento (zoom > 1) se arrima y baja la mirada hacia el pecho, donde va el diseño.
-  const place = useCallback((zoom: number) => {
+  // La altura (lift) sube o baja la cámara: abajo (-1) mira hacia arriba, como un plano héroe.
+  const place = useCallback((zoom: number, lift = 0) => {
     const cam = camera as THREE.PerspectiveCamera;
     const centerY = (box.max.y + floorY) / 2;
     const chestY = box.max.y - size.y * 0.36;
     const k = Math.min(1, Math.max(0, (zoom - 1) / 0.65));
-    const lookY = THREE.MathUtils.lerp(centerY - 0.3, chestY, k);
-    cam.position.set(0, THREE.MathUtils.lerp(centerY + 0.45, chestY + 0.15, k), (CAMERA.distance * 1.5) / Math.max(0.5, zoom));
+    const l = Math.min(1, Math.max(-1, lift));
+    const lookY = THREE.MathUtils.lerp(centerY - 0.3, chestY, k) - l * 0.12 * size.y;
+    const camY = THREE.MathUtils.lerp(centerY + 0.45, chestY + 0.15, k) + l * (l < 0 ? 0.55 : 0.7) * size.y;
+    cam.position.set(0, Math.max(floorY + 0.08, camY), (CAMERA.distance * 1.5) / Math.max(0.5, zoom));
     cam.lookAt(0, lookY, 0);
   }, [camera, box, floorY, size]);
   useEffect(() => { place(1); }, [place]);
-  useFrame(() => { if (motionRef) place(motionRef.current.zoom); });
+  useFrame(() => { if (motionRef) place(motionRef.current.zoom, motionRef.current.lift ?? 0); });
 
   return (
     <group>
-      <mesh geometry={cyc} position={[0, floorY, 0]}>
+      {!stage.bare && <mesh geometry={cyc} position={[0, floorY, 0]}>
         <meshStandardMaterial color={stage.base} roughness={0.92} metalness={0} envMapIntensity={stage.dark ? 0.35 : 0.6} />
-      </mesh>
+      </mesh>}
       {/* Halo de la marca detrás del modelo. */}
-      <mesh position={[0, (box.max.y + floorY) / 2 + 0.3, -6]}>
+      {!stage.bare && <mesh position={[0, (box.max.y + floorY) / 2 + 0.3, -6]}>
         <planeGeometry args={[9, 9]} />
         <meshBasicMaterial map={glow} color={stage.accent} transparent opacity={stage.dark ? 0.32 : 0.22} depthWrite={false} toneMapped={false} />
-      </mesh>
-      {/* Pedestal: base, cuerpo y aro de luz. */}
+      </mesh>}
+      {/* Pedestal: base, cuerpo y aro de luz (sin estudio, no va). */}
+      {!stage.bare && <>
       <mesh position={[0, floorY + 0.03, 0]}>
         <cylinderGeometry args={[r * 1.12, r * 1.14, 0.06, 96]} />
         <meshStandardMaterial color={colors.rim} roughness={0.5} metalness={0.2} />
@@ -1095,6 +1101,7 @@ function StudioStage({ stage, box, size, motionRef }: { stage: Stage3D; box: THR
         <cylinderGeometry args={[r + 0.004, r + 0.004, 0.022, 96, 1, true]} />
         <meshBasicMaterial color={stage.accent} toneMapped={false} />
       </mesh>
+      </>}
       {/* Pozo de luz sobre el pedestal y contraluz del acento. */}
       <spotLight position={[0, floorY + 6, 2.5]} angle={0.42} penumbra={0.9} intensity={stage.dark ? 40 : 22} distance={14} decay={1.6} />
       <pointLight position={[0, (box.max.y + floorY) / 2 + 0.6, -2]} color={stage.accent} intensity={stage.dark ? 6 : 3} distance={6} />
@@ -1546,13 +1553,13 @@ export default function Mannequin3D({ active = true, ...props }: Mannequin3DProp
       frameloop={active ? 'always' : 'never'}
       dpr={props.stage ? 2 : [1, 2]}
       camera={{ position: [0, 0, CAMERA.distance], fov: CAMERA.fov }}
-      gl={{ antialias: true, alpha: !props.stage, preserveDrawingBuffer: !!props.recordable, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.05 }}
+      gl={{ antialias: true, alpha: true, preserveDrawingBuffer: !!props.recordable, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.05 }}
       onCreated={() => setReady(true)}
       style={{ touchAction: props.locked ? 'auto' : 'pan-y', cursor: props.locked ? 'default' : 'grab', opacity: ready ? 1 : 0, transition: 'opacity .4s' }}
       aria-hidden="true"
     >
-      {props.stage && <color attach="background" args={[props.stage.base]} />}
-      {props.stage && <fog attach="fog" args={[props.stage.base, 9, 22]} />}
+      {props.stage && !props.stage.bare && <color attach="background" args={[props.stage.base]} />}
+      {props.stage && !props.stage.bare && <fog attach="fog" args={[props.stage.base, 9, 22]} />}
       <ambientLight intensity={0.35} />
       <directionalLight position={[2.5, 4, 3.5]} intensity={1.6} />
       {/* Luz de estudio armada en la escena (sin descargar mapas de entorno). */}

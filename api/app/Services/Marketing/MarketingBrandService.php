@@ -27,6 +27,9 @@ class MarketingBrandService
             'slogan' => $general['slogan'] ?? 'Made with intention',
             'description' => $general['siteDescription'] ?? 'Ropa con temáticas que te representan y prendas personalizadas.',
             'logos' => [
+                // Logo completo: el ícono con el nombre (el que va en las piezas).
+                'full' => '/brand/toclex-logo.png',
+                'fullLight' => '/brand/toclex-logo-light.png',
                 'wordmark' => '/brand/toclex-wordmark.png',
                 'wordmarkLight' => '/brand/toclex-wordmark-light.png',
                 'icon' => '/brand/toclex-icon.png',
@@ -70,7 +73,7 @@ class MarketingBrandService
     {
         $current = $this->get();
         $logos = $current['logos'];
-        foreach (['wordmark', 'wordmarkLight', 'icon', 'iconLight'] as $k) {
+        foreach (['full', 'fullLight', 'wordmark', 'wordmarkLight', 'icon', 'iconLight'] as $k) {
             $v = $data['logos'][$k] ?? null;
             if (is_string($v) && str_starts_with($v, 'data:')) {
                 $saved = $this->uploads->store($this->uploads->decodeBase64($v), 'marketing', 'logo-'.$k);

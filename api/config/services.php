@@ -59,6 +59,8 @@ return [
     'groq' => [
         'key' => env('GROQ_API_KEY', ''),
         'copy_model' => env('GROQ_COPY_MODEL', 'openai/gpt-oss-120b'),
+        // Modelo que ve imágenes (fondos con IA a partir de los diseños de la prenda).
+        'vision_model' => env('GROQ_VISION_MODEL', 'qwen/qwen3.8-27b'),
     ],
 
     // Hugging Face: cuentas para generar maniquíes 3D (Admin → Modelos 3D). Cada cuenta gratis

@@ -152,20 +152,26 @@ class MarketingSourceService
                     'discountPercent' => 0,
                     'model3d' => $t->model3d,
                     'image' => $images['front'] ?? ($gen['poster'] ?? null),
-                    'colors' => $t->productColors()->with('color:id,name,hexCode')->get()->map(fn ($pc) => $pc->color?->hexCode)->filter()->values()->all(),
-                    // Zonas de diseño (en % de la vista) para poner diseños sobre el modelo 3D en los videos.
-                    'zones' => $t->templateZones->map(fn ($z) => [
-                        'id' => $z->id,
-                        'name' => $z->name,
-                        'view' => $z->zoneType?->slug,
-                        'x' => $z->positionX,
-                        'y' => $z->positionY,
-                        'w' => $z->maxWidth,
-                        'h' => $z->maxHeight,
-                        'circle' => $z->shape === 'circle',
-                    ])->values()->all(),
+                    'colors' => ($colors = $t->productColors()->with('color:id,name,hexCode')->get()->filter(fn ($pc) => $pc->color?->hexCode)->values())->map(fn ($pc) => $pc->color->hexCode)->all(),
+                    'colorNames' => $colors->map(fn ($pc) => $pc->color->name)->all(),
+                    // Fotos de cada vista (para montar diseños en 2D): por vista y por tipo de zona.
+                    'viewImages' => $images,
+                    'zoneTypeImages' => array_filter((array) ($t->zoneTypeImages ?? []), fn ($v) => is_string($v) && $v !== ''),
+                    // Zonas de diseño (en % de la vista) para poner diseños sobre la prenda en 3D o sobre su foto.
+                    'zones' => $t->templateZones->map(fn ($z) => $this->zoneRow($z))->values()->all(),
                 ];
             })->all();
+    }
+
+    /** Zona en % de su vista. Las viejas se guardaron en píxeles sobre 500 y se convierten. */
+    private function zoneRow($z): array
+    {
+        [$x, $y, $w, $h] = [(float) $z->positionX, (float) $z->positionY, (float) $z->maxWidth, (float) $z->maxHeight];
+        if ($x + $w > 100.5 || $y + $h > 100.5) {
+            [$x, $y, $w, $h] = array_map(fn ($v) => round($v * 100 / 500, 2), [$x, $y, $w, $h]);
+        }
+
+        return ['id' => $z->id, 'name' => $z->name, 'view' => $z->zoneType?->slug, 'x' => $x, 'y' => $y, 'w' => $w, 'h' => $h, 'circle' => $z->shape === 'circle'];
     }
 
     /**
