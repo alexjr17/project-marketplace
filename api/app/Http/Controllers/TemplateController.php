@@ -7,6 +7,7 @@ use App\Models\Product;
 use App\Models\ProductColor;
 use App\Models\ProductSize;
 use App\Models\ProductType;
+use App\Services\Catalog\ProductBackdropService;
 use App\Services\Customizer\MannequinModelService;
 use App\Services\VariantService;
 use App\Support\TemplateImages;
@@ -53,7 +54,8 @@ class TemplateController extends Controller
             'typeSlug' => $t->productType?->slug,
             'typeName' => $t->productType?->name,
             'basePrice' => (float) $t->basePrice,
-            'images' => TemplateImages::normalize($t->images),
+            'images' => TemplateImages::withZones($t->images, $t->zoneTypeImages),
+            'backdrop' => app(ProductBackdropService::class)->format($t),
             'zoneTypeImages' => $t->zoneTypeImages,
             'designZones' => $t->designZones,
             'exclusionZones' => $t->exclusionZones,

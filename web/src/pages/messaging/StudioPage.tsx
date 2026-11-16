@@ -8,8 +8,8 @@
  */
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import type { SourceZone } from '../../services/marketing.service';
-import { useNavigate } from 'react-router-dom';
-import { CalendarClock, Download, Film, Image as ImageIcon, LayoutGrid, MoreVertical, Palette, Pause, Play, Save, Send, Shirt, ShoppingBag, Sparkles, Tag, Wand2, X } from 'lucide-react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { CalendarClock, Check, CloudOff, Download, FilePlus2, Film, FolderOpen, Loader2, Image as ImageIcon, LayoutGrid, MoreVertical, Palette, Pause, Play, Save, Send, Shirt, ShoppingBag, Sparkles, Tag, Wand2, X } from 'lucide-react';
 import {
   ActionMenu, Badge, Button, Card, CardTitle, Checkbox, Dialog, Field, FormActions, Page, PageHeader, RadioGroup, SearchInput,
   SelectInput, Spinner, Switch, TextArea, TextInput, toast,
@@ -30,7 +30,9 @@ import type { NarratorSettings } from '../../components/marketing/NarrationPanel
 import { DictateButton } from '../../components/marketing/DictateButton';
 import { appendText } from '../../components/marketing/dictation';
 import { DesignEditor } from '../../components/marketing/DesignEditor';
-import { StudioModeSwitch } from '../../components/marketing/StudioShell';
+import { StudioModeSwitch, ToolbarSep } from '../../components/marketing/StudioShell';
+import { ProjectsDialog } from '../../components/marketing/ProjectsDialog';
+import { ago, persistLocal, thumbOf } from '../../components/marketing/projectStore';
 import { GarmentViewsDialog } from '../../components/marketing/GarmentViewsDialog';
 import { SubjectPanel } from '../../components/marketing/SubjectPanel';
 import { buildDesign, designSize, reflowDesign, type ColorsLayer, type ContentKind, type Design, type DesignRatio, type MockView, type PieceMock } from '../../components/marketing/design';
@@ -43,7 +45,7 @@ import { AiAccountsCard } from '../../components/marketing/AiAccountsCard';
 import { isModel3D, view3DOf, type View3D } from '../../components/mannequin/models';
 import { useModels3D } from '../../components/mannequin/useModels3D';
 import {
-  marketingService, type CopyTone, type Creative, type SourceCollection, type SourceDesign, type SourceProduct, type SourcePromotion, type SourceType,
+  marketingService, type CopyTone, type Creative, type ProjectFormat, type StudioProjectSummary, type SourceCollection, type SourceDesign, type SourceProduct, type SourcePromotion, type SourceType,
 } from '../../services/marketing.service';
 
 const Mannequin3D = lazy(() => import('../../components/mannequin/Mannequin3D'));
@@ -1311,6 +1313,233 @@ export const StudioPage = () => {
     );
   });
 
+  // ─── Proyectos: el trabajo se guarda solo y se puede volver a abrir ─────────
+  const [params, setParams] = useSearchParams();
+  const [project, setProject] = useState<{ id: number; name: string } | null>(null);
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [savedAt, setSavedAt] = useState<string | null>(null);
+  const [projectsOpen, setProjectsOpen] = useState(false);
+  const [recent, setRecent] = useState<StudioProjectSummary[]>([]);
+  const [nameDraft, setNameDraft] = useState<string | null>(null);
+  /** Lo ya subido (data: o blob: → dirección del archivo), para no subirlo otra vez. */
+  const assetCache = useRef(new Map<string, string>());
+  /** Lo último guardado (para no guardar si nada cambió). */
+  const lastSaved = useRef('');
+  /** Abriendo un proyecto: lo que el estudio reacomoda en ese momento no cuenta como cambio. */
+  const applying = useRef(false);
+  const saving = useRef<Promise<void> | null>(null);
+  const projectRef = useRef(project);
+
+  const snapshot = () => ({
+    v: 1, sourceType, selected, format, template, stage, ratio, showLogo, logoAt, endCard, sfxOn, sfxVolume, narrator,
+    music: music ? { name: music.name, url: music.url, offset: music.offset, volume: music.volume } : null,
+    design, photos, scenes: scenes.map((sc) => (sc.clip ? { ...sc, clip: { ...sc.clip, thumb: null } } : sc)),
+    title, subtitle, cta, showPrice, caption, hashtags, tone, brief,
+    photoPicks, garmentPlans, garmentColors, showcase, storyId: storyId.current,
+  });
+  /** Nombre del proyecto nuevo: lo que se muestra y el tipo de pieza. */
+  const autoName = () => {
+    const what = (selected[0] as { name?: string } | undefined)?.name || title.trim() || 'Proyecto';
+    const more = selected.length > 1 && sourceType === 'producto' ? ` y ${selected.length - 1} más` : '';
+    return `${what}${more} · ${format === 'post' || format === 'historia' ? 'Post' : 'Video'}`;
+  };
+  const meta: { format: ProjectFormat; source: string; template: string } = {
+    format: format === 'video360' ? 'video360' : format === 'reel' ? 'reel' : 'post',
+    source: sourceType, template: format === 'post' || format === 'historia' ? design.template : template,
+  };
+  /** ¿Hay algo que valga guardar? (se eligió qué mostrar o se editó algo). */
+  const worth = selected.length > 0 || designEdited.current || edited.current || !!title.trim();
+  // Lo último de cada render, para guardar desde los temporizadores.
+  const live = useRef({ snapshot, autoName, meta, worth });
+  useEffect(() => { live.current = { snapshot, autoName, meta, worth }; });
+
+  /** Guarda ya (si hay cambios). El proyecto se crea solo con el primer cambio que vale la pena. */
+  const saveNow = useCallback(async () => {
+    if (applying.current) return;
+    if (saving.current) await saving.current;
+    const cur = live.current;
+    const snap = cur.snapshot();
+    const raw = JSON.stringify(snap);
+    if (raw === lastSaved.current || (!projectRef.current && !cur.worth)) return;
+    const run = (async () => {
+      setSaveState('saving');
+      try {
+        const data = await persistLocal(snap, assetCache.current, marketingService.projectAsset);
+        const thumb = thumbOf(document.querySelector<HTMLCanvasElement>('canvas[aria-label="Vista previa de la pieza"]'));
+        const body = { ...cur.meta, data, ...(thumb ? { thumb } : {}) };
+        if (projectRef.current) {
+          await marketingService.saveProject(projectRef.current.id, body);
+        } else {
+          const p = await marketingService.createProject({ name: cur.autoName(), ...body });
+          projectRef.current = { id: p.id, name: p.name };
+          setProject(projectRef.current);
+          setParams((sp) => { sp.set('proyecto', String(p.id)); return sp; }, { replace: true });
+        }
+        lastSaved.current = raw;
+        setSavedAt(new Date().toISOString());
+        setSaveState('saved');
+      } catch {
+        setSaveState('error');
+      }
+    })();
+    saving.current = run;
+    await run;
+    saving.current = null;
+  }, [setParams]);
+
+  // Guardado automático: un momento después del último cambio.
+  useEffect(() => {
+    const t = window.setTimeout(() => { void saveNow(); }, 2500);
+    return () => window.clearTimeout(t);
+  }, [saveNow, sourceType, selected, format, template, stage, ratio, showLogo, logoAt, endCard, sfxOn, sfxVolume, narrator, music, design, photos, scenes,
+    title, subtitle, cta, showPrice, caption, hashtags, tone, brief, photoPicks, garmentPlans, garmentColors, showcase]);
+  // Al salir de la pestaña o del estudio, se guarda lo pendiente.
+  useEffect(() => {
+    const flush = () => { if (document.visibilityState === 'hidden') void saveNow(); };
+    document.addEventListener('visibilitychange', flush);
+    return () => { document.removeEventListener('visibilitychange', flush); void saveNow(); };
+  }, [saveNow]);
+
+  /** Marca lo actual como guardado cuando el estudio terminó de reacomodarse. */
+  const settle = (ms: number) => window.setTimeout(() => { lastSaved.current = JSON.stringify(live.current.snapshot()); applying.current = false; }, ms);
+
+  /** Deja el estudio como lo dejó el proyecto. */
+  const applyProject = (id: number, name: string, d: Record<string, unknown>) => {
+    applying.current = true;
+    const g = <T,>(k: string, def: T): T => (d[k] === undefined || d[k] === null ? def : (d[k] as T));
+    setSourceType(g<SourceType>('sourceType', 'producto'));
+    setQ('');
+    setSelected(g<AnySource[]>('selected', []));
+    setFormat(g<Format>('format', 'post'));
+    setTemplate(g<TemplateId>('template', 'destacado'));
+    setStage(g<'claro' | 'oscuro'>('stage', 'oscuro'));
+    setRatio(g<VideoRatio>('ratio', '9:16'));
+    setShowLogo(g('showLogo', true));
+    setLogoAt(g<ElemMove | null>('logoAt', null));
+    setEndCard(g('endCard', true));
+    setSfxOn(g('sfxOn', true));
+    setSfxVolume(g('sfxVolume', 0.7));
+    setNarrator(g<NarratorSettings>('narrator', { mode: 'ia', voice: 'es-CO-SalomeNeural', rate: 0, volume: 1, duck: true }));
+    designEdited.current = true;
+    designReset(g<Design>('design', buildDesign('destacado', '1:1')));
+    setPhotos(g<SceneProduct[]>('photos', []));
+    // Los clips de video propios no se guardan (pesan y viven en este navegador).
+    const sc = g<Scene[]>('scenes', []).map((x) => (x.clip ? { ...x, clip: null } : x));
+    edited.current = sc.length > 0;
+    histReset(sc);
+    setSceneSel(sc[0]?.id ?? null);
+    storyId.current = g<StoryboardId | null>('storyId', null);
+    setTitle(g('title', '')); setSubtitle(g('subtitle', '')); setCta(g('cta', 'Compra ya')); setShowPrice(g('showPrice', true));
+    setCaption(g('caption', '')); setHashtags(g<string[]>('hashtags', [])); setTone(g<CopyTone>('tone', 'cercano')); setBrief(g('brief', ''));
+    setPhotoPicks(g<Record<number, string[]>>('photoPicks', {})); setGarmentPlans(g<Record<number, GarmentPlan>>('garmentPlans', {}));
+    setGarmentColors(g<Record<number, string>>('garmentColors', {})); setShowcase(g<string[] | null>('showcase', null));
+    setSkipOnboarding(true);
+    setPlaying(false);
+    setMedia([]);
+    setMusic(null);
+    projectRef.current = { id, name };
+    setProject(projectRef.current);
+    setSaveState('saved');
+    setSavedAt(null);
+    setParams((sp) => { sp.set('proyecto', String(id)); return sp; }, { replace: true });
+    const m = d.music as { name: string; url: string; offset: number; volume: number } | null | undefined;
+    if (m?.url) {
+      fetch(m.url).then((r) => r.blob()).then(decodeAudio).then((buffer) => setMusic({ ...m, buffer })).catch(() => toast.error('No se pudo cargar la música del proyecto'));
+    }
+    settle(2000);
+  };
+
+  const openProject = async (id: number) => {
+    setProjectsOpen(false);
+    await saveNow();
+    try {
+      const p = await marketingService.project(id);
+      applyProject(p.id, p.name, p.data);
+      toast.success(`Abriste "${p.name}"`);
+    } catch (e) {
+      toast.error(errorMessage(e, 'No se pudo abrir el proyecto'));
+      setParams((sp) => { sp.delete('proyecto'); return sp; }, { replace: true });
+    }
+  };
+
+  /** Proyecto nuevo: el estudio vacío (lo anterior ya quedó guardado). */
+  const newProject = async () => {
+    setProjectsOpen(false);
+    await saveNow();
+    applying.current = true;
+    projectRef.current = null;
+    setProject(null);
+    setSaveState('idle');
+    setSavedAt(null);
+    setSourceType('producto'); setQ(''); setSelected([]); setTemplate('destacado');
+    setLogoAt(null); setMusic(null); setMedia([]);
+    designEdited.current = false;
+    designReset(buildDesign('destacado', '1:1'));
+    edited.current = false;
+    storyId.current = null;
+    histReset([]);
+    setSceneSel(null);
+    setPhotos([]);
+    setTitle(''); setSubtitle(''); setCta('Compra ya'); setCaption(''); setHashtags([]); setBrief('');
+    setPhotoPicks({}); setGarmentPlans({}); setGarmentColors({}); setShowcase(null);
+    setSkipOnboarding(false);
+    setParams((sp) => { sp.delete('proyecto'); return sp; }, { replace: true });
+    settle(1000);
+  };
+
+  const renameProject = async (name: string) => {
+    setNameDraft(null);
+    const clean = name.trim();
+    if (!project || !clean || clean === project.name) return;
+    try {
+      const r = await marketingService.saveProject(project.id, { name: clean });
+      projectRef.current = { id: project.id, name: r.name };
+      setProject(projectRef.current);
+    } catch (e) {
+      toast.error(errorMessage(e, 'No se pudo cambiar el nombre'));
+    }
+  };
+
+  // Al entrar: el proyecto de la dirección (al recargar se sigue con el mismo).
+  const openedFromUrl = useRef(false);
+  useEffect(() => {
+    const id = Number(params.get('proyecto'));
+    if (id > 0 && !openedFromUrl.current) { openedFromUrl.current = true; void openProject(id); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  // Los recientes, para el inicio del estudio.
+  useEffect(() => {
+    if (project || selected.length) return;
+    let alive = true;
+    marketingService.projects().then((r) => { if (alive) setRecent(r.slice(0, 4)); }).catch(() => { /* sin recientes */ });
+    return () => { alive = false; };
+  }, [project, selected.length]);
+
+  const projectBar = (
+    <div className="flex items-center gap-1 min-w-0">
+      <button type="button" onClick={() => setProjectsOpen(true)} title="Proyectos" aria-label="Proyectos"
+        className="grid place-items-center w-9 h-9 rounded-lg text-gray-600 hover:bg-gray-100 flex-shrink-0"><FolderOpen className="w-4 h-4" /></button>
+      {project && nameDraft !== null ? (
+        <input autoFocus value={nameDraft} maxLength={120} aria-label="Nombre del proyecto"
+          onChange={(e) => setNameDraft(e.target.value)} onBlur={(e) => void renameProject(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') setNameDraft(null); }}
+          className="h-8 w-52 rounded-md border border-app-300 px-2 text-sm focus:outline-none focus:ring-2 focus:ring-app-200" />
+      ) : project ? (
+        <button type="button" onClick={() => setNameDraft(project.name)} title="Cambiar el nombre"
+          className="max-w-[220px] truncate rounded-md px-2 h-8 text-sm font-medium text-gray-800 hover:bg-gray-100">{project.name}</button>
+      ) : (
+        <span className="px-2 text-sm text-gray-500 whitespace-nowrap">Proyecto nuevo</span>
+      )}
+      <span className="hidden lg:flex items-center gap-1 text-xs text-gray-500 whitespace-nowrap" role="status" aria-live="polite">
+        {saveState === 'saving' && <><Loader2 className="w-3.5 h-3.5 animate-spin" />Guardando…</>}
+        {saveState === 'saved' && <span className="flex items-center gap-1" title={savedAt ? `Guardado ${ago(savedAt)}` : undefined}><Check className="w-3.5 h-3.5 text-green-600" />Guardado</span>}
+        {saveState === 'error' && (
+          <button type="button" onClick={() => void saveNow()} className="flex items-center gap-1 text-red-600 hover:underline"><CloudOff className="w-3.5 h-3.5" />No se guardó. Reintentar</button>
+        )}
+      </span>
+    </div>
+  );
+
   const studioExtras = (
     <>
       {mannequins}
@@ -1337,21 +1566,28 @@ export const StudioPage = () => {
           <AiAccountsCard />
         </Dialog>
       )}
+      {projectsOpen && <ProjectsDialog currentId={project?.id ?? null} onOpen={(p) => void openProject(p.id)} onNew={() => void newProject()} onClose={() => setProjectsOpen(false)} />}
       {publishFor && <PublishDialog creative={publishFor} caption={caption} hashtags={hashtags} onClose={() => setPublishFor(null)} onDone={() => { setPublishFor(null); navigate('/messaging/calendar'); }} />}
     </>
   );
 
   const modeSwitch = (
-    <StudioModeSwitch
-      value={format === 'video360' ? 'video360' : 'post'}
-      onChange={(v) => { setFormat(v as Format); setPlaying(v === 'video360'); }}
-      options={[{ value: 'post', label: 'Post', icon: ImageIcon }, { value: 'video360', label: 'Video', icon: Film }]}
-    />
+    <>
+      {projectBar}
+      <ToolbarSep />
+      <StudioModeSwitch
+        value={format === 'video360' ? 'video360' : 'post'}
+        onChange={(v) => { setFormat(v as Format); setPlaying(v === 'video360'); }}
+        options={[{ value: 'post', label: 'Post', icon: ImageIcon }, { value: 'video360', label: 'Video', icon: Film }]}
+      />
+    </>
   );
   const studioMenu = (
     <ActionMenu
       trigger={<button type="button" title="Más opciones" aria-label="Más opciones" className="grid place-items-center w-9 h-9 rounded-lg text-gray-600 hover:bg-gray-100"><MoreVertical className="w-4 h-4" /></button>}
       items={[
+        { label: 'Proyectos', icon: <FolderOpen className="w-4 h-4" />, onClick: () => setProjectsOpen(true) },
+        { label: 'Nuevo proyecto', icon: <FilePlus2 className="w-4 h-4" />, onClick: () => void newProject() },
         { label: 'Marca', icon: <Palette className="w-4 h-4" />, onClick: () => navigate('/messaging/brand') },
         { label: 'Calendario y biblioteca', icon: <CalendarClock className="w-4 h-4" />, onClick: () => navigate('/messaging/calendar') },
         { label: 'Cuentas de IA', icon: <Sparkles className="w-4 h-4" />, onClick: () => setAiAccountsOpen(true) },
@@ -1380,6 +1616,26 @@ export const StudioPage = () => {
         })}
       </div>
       <button type="button" onClick={() => setSkipOnboarding(true)} className="mt-4 text-sm text-app-700 hover:underline">Empezar sin producto (solo con plantillas y textos)</button>
+      {recent.length > 0 && (
+        <div className="mt-5 pt-4 border-t border-gray-100">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-sm font-semibold text-gray-900">O sigue con un proyecto</h3>
+            <button type="button" onClick={() => setProjectsOpen(true)} className="text-xs text-app-700 hover:underline">Ver todos</button>
+          </div>
+          <div className="grid grid-cols-4 gap-2">
+            {recent.map((p) => (
+              <button key={p.id} type="button" onClick={() => void openProject(p.id)} aria-label={`Abrir ${p.name}`}
+                className="rounded-lg border border-gray-200 overflow-hidden text-left hover:border-app-300">
+                <span className="block aspect-square bg-gray-100">{p.thumb && <img src={p.thumb} alt="" className="w-full h-full object-contain" />}</span>
+                <span className="block px-1.5 py-1">
+                  <span className="block text-[11px] font-medium text-gray-800 truncate">{p.name}</span>
+                  <span className="block text-[10px] text-gray-500 truncate">{ago(p.updatedAt)}</span>
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   ) : null;
 

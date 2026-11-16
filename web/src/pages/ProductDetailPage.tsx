@@ -6,6 +6,7 @@ import { QuantityStepper } from '../components/cart/QuantityStepper';
 import { PageHeader } from '../components/shared/PageHeader';
 import { StoreContainer } from '../components/shared/StoreContainer';
 import { ProductImage } from '../components/products/ProductImage';
+import { ProductPhoto } from '../components/products/ProductPhoto';
 import { useCatalogs } from '../context/CatalogsContext';
 import { useSettings } from '../context/SettingsContext';
 import { getSizeChart } from '../data/sizeCharts';
@@ -383,6 +384,10 @@ export default function ProductDetailPage() {
               onMouseLeave={handleMouseLeave}
               onMouseMove={handleMouseMove}
             >
+              {/* La foto principal sobre su fondo de la tienda (si tiene). */}
+              {currentImageIndex === 0 && product.backdrop?.url && !isZooming && (
+                <ProductPhoto src={productImages[0]?.url} backdrop={product.backdrop} alt={product.name} className="absolute inset-0 z-[1]" />
+              )}
               <ProductImage
                 key={productImages[currentImageIndex]?.url ?? 'none'}
                 src={productImages[currentImageIndex]?.url}

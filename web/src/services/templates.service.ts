@@ -19,6 +19,8 @@ export type ExclusionZone = DesignZone;
 
 export interface Template {
   id: number;
+  /** Fondo de su foto en la tienda (con la foto recortada encima). */
+  backdrop?: import('../types/product').ProductBackdrop | null;
   sku: string;
   slug: string;
   name: string;

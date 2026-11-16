@@ -112,6 +112,22 @@ export interface ProductsResponse {
 }
 
 export const productsService = {
+  /** Pone (o quita, con null) el fondo de la foto en la tienda; el servidor recorta la foto principal. */
+  async setBackdrop(id: number, url: string | null): Promise<{ backdrop: import('../types/product').ProductBackdrop | null; warning: string | null }> {
+    const r = await api.put<{ backdrop: import('../types/product').ProductBackdrop | null; warning: string | null }>(`/products/${id}/backdrop`, { url });
+    return r.data!;
+  },
+  /** Fondo generado con IA para la foto de un producto. */
+  async aiBackdrop(data: { style: string; idea?: string; palette: string[]; designs: string[]; ratio: string }): Promise<{ url: string; concept: string }> {
+    const r = await api.post<{ url: string; concept: string }>('/products/backdrop/ai', data);
+    return r.data!;
+  },
+  /** Sube una imagen (data URL) a la carpeta de productos y devuelve su dirección. */
+  async uploadImage(dataUrl: string): Promise<string> {
+    const r = await api.post<{ url?: string }>('/uploads/base64', { image: dataUrl, folder: 'products' });
+    if (!r.data?.url) throw new Error('La imagen no se pudo subir');
+    return r.data.url;
+  },
   // Obtener todos los productos con filtros
   async getAll(filters?: ProductFilters): Promise<ProductsResponse> {
     const response = await api.get<any[]>('/products', filters);

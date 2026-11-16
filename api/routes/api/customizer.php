@@ -6,6 +6,7 @@
 */
 
 use App\Http\Controllers\CustomizerController;
+use App\Http\Controllers\DesignFamilyController;
 use App\Http\Controllers\DesignImageController;
 use App\Http\Controllers\MannequinModelController;
 use App\Http\Controllers\TemplateController;
@@ -76,6 +77,7 @@ Route::prefix('zone-types')->group(function () {
 Route::prefix('design-images')->group(function () {
     Route::get('/', [DesignImageController::class, 'index']);
     Route::get('categories', [DesignImageController::class, 'categories']);
+    Route::get('seasons', [DesignImageController::class, 'seasons']);
     Route::get('{id}', [DesignImageController::class, 'show'])->whereNumber('id');
     Route::middleware(['auth:sanctum', 'permission:design_images.view'])->group(function () {
         Route::post('/', [DesignImageController::class, 'store']);
@@ -83,6 +85,18 @@ Route::prefix('design-images')->group(function () {
         Route::put('{id}', [DesignImageController::class, 'update'])->whereNumber('id');
         Route::delete('{id}', [DesignImageController::class, 'destroy'])->whereNumber('id');
     });
+});
+
+// ==================== FAMILIAS DE DISEÑOS (pack familiar) ====================
+Route::prefix('design-families')->group(function () {
+    Route::get('/', [DesignFamilyController::class, 'index']);
+    Route::middleware(['auth:sanctum', 'permission:design_images.view'])->group(function () {
+        Route::get('admin', [DesignFamilyController::class, 'adminIndex']);
+        Route::post('/', [DesignFamilyController::class, 'store']);
+        Route::put('{id}', [DesignFamilyController::class, 'update'])->whereNumber('id');
+        Route::delete('{id}', [DesignFamilyController::class, 'destroy'])->whereNumber('id');
+    });
+    Route::get('{id}', [DesignFamilyController::class, 'show'])->whereNumber('id');
 });
 
 // ==================== MODELOS 3D (maniquíes generados con IA) ====================

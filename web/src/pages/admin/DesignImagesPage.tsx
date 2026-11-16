@@ -1,9 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
-import { designImagesService, type DesignImage } from '../../services/design-images.service';
+import { designImagesService, type DesignImage, type NamedField } from '../../services/design-images.service';
+import { customizerService } from '../../services/customizer.service';
+import { NamedFieldsEditor } from '../../components/customizer/NamedFieldsEditor';
+import { DesignFamiliesPanel } from './DesignFamiliesPanel';
 import { CheckCircle, ImageIcon, Images, Pencil, Plus, Trash2 } from 'lucide-react';
 import {
   Alert, Badge, Button, Dialog, EmptyState, Field, FilterBar, FormGrid, IconButton, ImageInput, NumberInput, Page,
-  PageHeader, SearchInput, SelectInput, Spinner, StatCard, Switch, TextArea, TextInput, toast, useConfirm,
+  PageHeader, SearchInput, SelectInput, Spinner, StatCard, Switch, Tabs, TextArea, TextInput, toast, useConfirm,
 } from '../../components/ui';
 
 const EMPTY_FORM = {
@@ -15,6 +18,10 @@ const EMPTY_FORM = {
   tags: '',
   sortOrder: 0,
   isActive: true,
+  season: '',
+  /** Archivo de producción ya subido (URL) o recién elegido (data URL, se sube al guardar). */
+  printUrl: '',
+  textFields: [] as NamedField[],
 };
 
 // Redimensiona a máx. `maxWidth` px y devuelve PNG en base64 (conserva la transparencia).
@@ -44,6 +51,8 @@ export default function DesignImagesPage() {
   const confirm = useConfirm();
   const [images, setImages] = useState<DesignImage[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
+  const [seasons, setSeasons] = useState<string[]>([]);
+  const [tab, setTab] = useState<'disenos' | 'familias'>('disenos');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -61,7 +70,8 @@ export default function DesignImagesPage() {
   // Nombre del último archivo elegido (para usarlo como nombre por defecto)
   const lastFileName = useRef<string | null>(null);
 
-  // La imagen subida se redimensiona para el personalizador (máx. 300 px)
+  // La imagen subida se redimensiona para el personalizador (máx. 300 px); el archivo completo se guarda
+  // como archivo de producción (con él se compone el nombre en alta calidad).
   const handleThumbnail = async (value: string) => {
     if (!value || !value.startsWith('data:')) {
       setFormData(prev => ({ ...prev, thumbnailUrl: value }));
@@ -70,8 +80,9 @@ export default function DesignImagesPage() {
     try {
       setUploadingFile(true);
       const thumbnailBase64 = await compressImage(value, 300);
+      const printBase64 = await compressImage(value, 4000);
       const fileName = lastFileName.current?.replace(/\.[^/.]+$/, '') ?? '';
-      setFormData(prev => ({ ...prev, thumbnailUrl: thumbnailBase64, name: prev.name || fileName }));
+      setFormData(prev => ({ ...prev, thumbnailUrl: thumbnailBase64, printUrl: printBase64, name: prev.name || fileName }));
     } catch (err) {
       console.error('Error al procesar imagen:', err);
       toast.error('Error al procesar la imagen. Intenta con otra imagen.');
@@ -112,6 +123,7 @@ export default function DesignImagesPage() {
     try {
       const data = await designImagesService.getCategories();
       setCategories(Array.isArray(data) ? data : []);
+      setSeasons(await designImagesService.getSeasons().catch(() => []));
     } catch (err) {
       console.error('Error cargando categorías:', err);
     }
@@ -143,6 +155,9 @@ export default function DesignImagesPage() {
       tags: image.tags?.join(', ') || '',
       sortOrder: image.sortOrder,
       isActive: image.isActive,
+      season: image.season || '',
+      printUrl: image.printUrl || '',
+      textFields: image.textFields || [],
     });
     setShowModal(true);
   };
@@ -154,18 +169,23 @@ export default function DesignImagesPage() {
       toast.error('Sube la imagen que se muestra en el personalizador');
       return;
     }
-    if (!formData.fullUrl) {
-      toast.error('Ingresa la URL de alta calidad');
+    if (!formData.fullUrl && !formData.printUrl) {
+      toast.error('Sube el archivo de alta calidad o pon su enlace');
       return;
     }
 
     try {
       setSaving(true);
+      // El archivo de producción recién elegido se sube al servidor.
+      const printUrl = formData.printUrl.startsWith('data:') ? await customizerService.uploadDesignImage(formData.printUrl) : formData.printUrl;
       const data = {
         name: formData.name,
         description: formData.description || undefined,
         thumbnailUrl: formData.thumbnailUrl,
-        fullUrl: formData.fullUrl,
+        fullUrl: formData.fullUrl || printUrl,
+        printUrl: printUrl || null,
+        season: formData.season.trim() || null,
+        textFields: formData.textFields.length ? formData.textFields : null,
         category: formData.category || undefined,
         tags: formData.tags ? formData.tags.split(',').map(t => t.trim()).filter(t => t) : undefined,
         sortOrder: formData.sortOrder,
@@ -183,9 +203,9 @@ export default function DesignImagesPage() {
       setShowModal(false);
       loadImages();
       loadCategories();
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error al guardar:', err);
-      toast.error(`Error al guardar la imagen: ${err?.message || 'Error desconocido'}`);
+      toast.error(`Error al guardar la imagen: ${err instanceof Error ? err.message : 'Error desconocido'}`);
     } finally {
       setSaving(false);
     }
@@ -222,6 +242,9 @@ export default function DesignImagesPage() {
         <StatCard icon={Images} tone="gray" label="Categorías" value={categories.length} />
       </div>
 
+      <Tabs value={tab} onChange={setTab} tabs={[{ value: 'disenos', label: 'Diseños', count: images.length }, { value: 'familias', label: 'Familias (pack familiar)' }]} />
+
+      {tab === 'familias' ? <DesignFamiliesPanel designs={images} seasons={seasons} onChanged={loadImages} /> : (<>
       <FilterBar>
         <div className="sm:col-span-2"><SearchInput value={searchQuery} onChange={setSearchQuery} placeholder="Buscar por nombre…" /></div>
         <SelectInput value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)} aria-label="Categoría">
@@ -263,6 +286,12 @@ export default function DesignImagesPage() {
                 <div className="flex-1 min-w-0">
                   <p className="font-medium text-sm text-gray-900 truncate" title={image.name}>{image.name}</p>
                   <p className="text-xs text-gray-500 truncate">{image.category || 'Sin categoría'}</p>
+                  {(!!image.textFields?.length || image.season) && (
+                    <div className="mt-1 flex flex-wrap gap-1">
+                      {!!image.textFields?.length && <Badge tone="app">Con nombre</Badge>}
+                      {image.season && <Badge>{image.season}</Badge>}
+                    </div>
+                  )}
                 </div>
                 <IconButton title="Editar" tone="app" className="!p-1.5" onClick={() => openEditModal(image)}><Pencil className="w-4 h-4" /></IconButton>
                 <IconButton title="Eliminar" tone="danger" className="!p-1.5" onClick={() => handleDelete(image)}><Trash2 className="w-4 h-4" /></IconButton>
@@ -272,10 +301,12 @@ export default function DesignImagesPage() {
         </div>
       )}
 
+      </>)}
+
       <Dialog
         open={showModal}
         onClose={() => setShowModal(false)}
-        size="lg"
+        size="xl"
         title={editingImage ? 'Editar imagen' : 'Nueva imagen de diseño'}
         footer={(
           <>
@@ -303,9 +334,9 @@ export default function DesignImagesPage() {
             <Field label="Nombre" required htmlFor="di-name">
               <TextInput id="di-name" required value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} placeholder="Ej: Corazón rojo" />
             </Field>
-            <Field label="URL de alta calidad (para pedidos)" required htmlFor="di-full"
-              hint="Se usa al tomar el pedido para descargar la imagen en alta calidad (Google Drive, Dropbox, OneDrive…).">
-              <TextInput id="di-full" type="url" required value={formData.fullUrl} onChange={(e) => setFormData({ ...formData, fullUrl: e.target.value })} placeholder="https://drive.google.com/…" />
+            <Field label="Enlace de alta calidad (opcional)" htmlFor="di-full"
+              hint={formData.printUrl ? 'Ya tiene el archivo de alta calidad guardado (el que subiste). El enlace es opcional.' : 'Si el archivo está en Google Drive, Dropbox… Al subir la imagen arriba se guarda también en alta calidad.'}>
+              <TextInput id="di-full" type="url" value={formData.fullUrl.startsWith('/uploads') ? '' : formData.fullUrl} onChange={(e) => setFormData({ ...formData, fullUrl: e.target.value })} placeholder="https://drive.google.com/…" />
             </Field>
             <Field label="Descripción" htmlFor="di-desc">
               <TextArea id="di-desc" value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} rows={2} placeholder="Descripción opcional" />
@@ -317,6 +348,10 @@ export default function DesignImagesPage() {
                   {categories.map((cat) => <option key={cat} value={cat} />)}
                 </datalist>
               </Field>
+              <Field label="Temporada" htmlFor="di-season" hint="Ej: navidad. Sale como filtro en la galería.">
+                <TextInput id="di-season" value={formData.season} onChange={(e) => setFormData({ ...formData, season: e.target.value })} placeholder="navidad" list="design-seasons-list" />
+                <datalist id="design-seasons-list">{[...new Set(['navidad', ...seasons])].map((s) => <option key={s} value={s} />)}</datalist>
+              </Field>
               <Field label="Orden" htmlFor="di-order">
                 <NumberInput id="di-order" value={formData.sortOrder} onChange={(e) => setFormData({ ...formData, sortOrder: parseInt(e.target.value) || 0 })} step="1" />
               </Field>
@@ -325,7 +360,16 @@ export default function DesignImagesPage() {
               <TextInput id="di-tags" value={formData.tags} onChange={(e) => setFormData({ ...formData, tags: e.target.value })} placeholder="amor, corazón, rojo" />
             </Field>
             <Switch checked={formData.isActive} onChange={(v) => setFormData({ ...formData, isActive: v })} label="Activa" description="Solo las imágenes activas aparecen en el personalizador." />
+            <Switch checked={formData.textFields.length > 0}
+              onChange={(v) => setFormData({ ...formData, textFields: v ? [{ key: 'nombre', label: 'Nombre', default: 'Sofía', maxLength: 14, box: { x: 15, y: 70, w: 70, h: 18 }, style: { font: 'Mountains of Christmas', weight: 700, italic: false, color: '#C62828', upper: false, spacing: 2, shape: 'arco', curve: 25, outline: { color: '#FFFFFF', width: 6 } } }] : [] })}
+              label="Lleva nombre editable" description="El cliente escribe el nombre (u otro texto) y se dibuja sobre el diseño." />
           </div>
+          {formData.textFields.length > 0 && (
+            <div className="md:col-span-2 rounded-xl border border-gray-200 p-3">
+              <p className="text-sm font-semibold text-gray-900 mb-3">Textos editables</p>
+              <NamedFieldsEditor image={formData.printUrl || formData.thumbnailUrl} fields={formData.textFields} onChange={(textFields) => setFormData((prev) => ({ ...prev, textFields }))} />
+            </div>
+          )}
         </form>
       </Dialog>
     </Page>

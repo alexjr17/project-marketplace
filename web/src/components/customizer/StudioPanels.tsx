@@ -5,12 +5,16 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import {
   AlertTriangle, ArrowUpToLine, Check, CheckCircle2, Copy, Crosshair, Download, Expand, ImagePlus,
-  Loader2, Pencil, Ruler, ShoppingCart, Trash2,
+  Loader2, Pencil, Ruler, ShoppingCart, Trash2, Type,
 } from 'lucide-react';
+import { TextTools } from './TextTools';
+import { textLabel } from '../../lib/textArt';
 import { Alert, Badge, Button, FileDrop } from '../ui';
 import { QuantityStepper } from '../cart/QuantityStepper';
 import { useCurrency } from '../../hooks/useCurrency';
-import { designImagesService, type DesignImage } from '../../services/design-images.service';
+import { designFamiliesService, designImagesService, type DesignFamily, type DesignImage } from '../../services/design-images.service';
+import { FamilyPackButton } from './FamilyPack';
+import { namedLabel } from '../../lib/namedDesign';
 import { assetUrl } from '../../utils/assetUrl';
 import { ACCEPTED_TYPES, MAX_INPUT_MB } from './designImage';
 import { dpiLevel, estimateDpi, printSizeCm, printZonesOf, MIN_DESIGN_SIZE, type StudioDesign } from './customizerModel';
@@ -113,30 +117,76 @@ export function OptionsStep({ api, onSizeGuide }: { api: CustomizerApi; onSizeGu
 
 // ─── Paso 2 ──────────────────────────────────────────────────────────────────
 
-function DesignGallery({ onPick, disabled }: { onPick: (img: DesignImage) => void; disabled?: boolean }) {
+const seasonLabel = (s: string) => s.charAt(0).toUpperCase() + s.slice(1).replace(/-/g, ' ');
+
+/** Galería: filtros por temporada y "con nombre", el pack familiar y los diseños. */
+function DesignGallery({ api, onPick, disabled }: { api: CustomizerApi; onPick: (img: DesignImage) => void; disabled?: boolean }) {
   const [images, setImages] = useState<DesignImage[]>([]);
+  const [families, setFamilies] = useState<DesignFamily[]>([]);
+  const [filter, setFilter] = useState<string>('');
   const [all, setAll] = useState(false);
   useEffect(() => {
     let alive = true;
     designImagesService.getAll({ isActive: true }).then((r) => alive && setImages(r)).catch(() => {});
+    designFamiliesService.list().then((r) => alive && setFamilies(r)).catch(() => {});
     return () => { alive = false; };
   }, []);
   if (!images.length) return null;
-  const list = all ? images : images.slice(0, 8);
+  const seasons = [...new Set(images.map((i) => i.season).filter((s): s is string => !!s))];
+  const hasNamed = images.some((i) => i.textFields?.length);
+  const chips = [{ value: '', label: 'Todos' }, ...seasons.map((s) => ({ value: `t:${s}`, label: seasonLabel(s) })), ...(hasNamed ? [{ value: 'nombre', label: 'Con nombre' }] : [])];
+  const shown = images.filter((i) => !filter || (filter === 'nombre' ? !!i.textFields?.length : i.season === filter.slice(2)));
+  const list = all ? shown : shown.slice(0, 8);
   return (
-    <div>
-      <div className="flex items-center justify-between mb-2">
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
         <p className="text-sm font-medium text-gray-700">O usa un diseño de la galería</p>
-        {images.length > 8 && <button type="button" onClick={() => setAll((v) => !v)} className="text-xs font-medium text-app-700">{all ? 'Ver menos' : `Ver todos (${images.length})`}</button>}
+        {shown.length > 8 && <button type="button" onClick={() => setAll((v) => !v)} className="text-xs font-medium text-app-700">{all ? 'Ver menos' : `Ver todos (${shown.length})`}</button>}
       </div>
+      {chips.length > 1 && (
+        <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Filtrar diseños">
+          {chips.map((c) => (
+            <button key={c.value} type="button" role="radio" aria-checked={filter === c.value} onClick={() => { setFilter(c.value); setAll(false); }}
+              className={`h-7 px-2.5 rounded-full text-xs ${filter === c.value ? 'bg-app-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>
+              {c.label}
+            </button>
+          ))}
+        </div>
+      )}
+      <FamilyPackButton api={api} families={filter.startsWith('t:') ? families.filter((f) => !f.season || f.season === filter.slice(2)) : families} />
       <div className="grid grid-cols-4 gap-2">
         {list.map((img) => (
-          <button key={img.id} type="button" disabled={disabled} onClick={() => onPick(img)} title={img.name}
-            className="aspect-square rounded-lg border border-gray-200 bg-gray-50 p-1.5 hover:border-app-400 hover:bg-app-50 transition-colors disabled:opacity-50">
+          <button key={img.id} type="button" disabled={disabled} onClick={() => onPick(img)} title={img.textFields?.length ? `${img.name} (le pones el nombre)` : img.name}
+            className="relative aspect-square rounded-lg border border-gray-200 bg-gray-50 p-1.5 hover:border-app-400 hover:bg-app-50 transition-colors disabled:opacity-50">
             <img src={assetUrl(img.thumbnailUrl || img.fullUrl)} alt={img.name} loading="lazy" className="w-full h-full object-contain" />
+            {!!img.textFields?.length && <span className="absolute bottom-1 left-1 right-1 rounded bg-white/90 text-[10px] font-semibold text-app-700 leading-4 truncate">Con nombre</span>}
           </button>
         ))}
       </div>
+    </div>
+  );
+}
+
+/** Diseño con nombre: lo que se escribe en cada texto (el resto del diseño no cambia). */
+function NamedTools({ api, design }: { api: CustomizerApi; design: StudioDesign }) {
+  const n = design.named!;
+  return (
+    <div className="rounded-xl border border-app-200 bg-white p-3 space-y-2.5" aria-label="Nombre del diseño">
+      <p className="text-xs text-gray-600">Escribe lo que va en <span className="font-medium text-gray-900">{n.name}</span>.</p>
+      {n.fields.map((f) => {
+        const v = n.values[f.key] ?? '';
+        return (
+          <label key={f.key} className="block">
+            <span className="flex items-center justify-between text-xs font-medium text-gray-600">{f.label}<span className="font-normal text-gray-400 tabular-nums">{v.length}/{f.maxLength}</span></span>
+            <input
+              value={v} maxLength={f.maxLength} aria-label={f.label}
+              onFocus={() => api.dispatch({ type: 'begin' })}
+              onChange={(e) => void api.setNamedValues(design.id, { [f.key]: e.target.value }, false)}
+              className="mt-1 w-full h-10 rounded-lg border border-gray-300 px-3 text-base focus:outline-none focus:ring-2 focus:ring-app-200 focus:border-app-400"
+            />
+          </label>
+        );
+      })}
     </div>
   );
 }
@@ -184,12 +234,12 @@ export function DesignTools({ api, design }: { api: CustomizerApi; design: Studi
           <img src={assetUrl(design.imageData)} alt="" className="w-full h-full object-contain" />
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium text-gray-900 truncate">{design.originalFileName || 'Diseño'}</p>
+          <p className="text-sm font-medium text-gray-900 truncate">{design.text ? textLabel(design.text) : design.named ? `${design.named.name}: ${namedLabel(design.named) || 'sin nombre'}` : design.originalFileName || 'Diseño'}</p>
           <p className="text-xs text-gray-500">{zone?.name || design.zoneName} · aprox. {cm.width} × {cm.height} cm</p>
         </div>
       </div>
 
-      {level !== 'unknown' && (
+      {level !== 'unknown' && !design.text && !design.named && (
         <p className={`flex items-center gap-1.5 text-xs font-medium ${level === 'good' ? 'text-emerald-700' : level === 'fair' ? 'text-amber-700' : 'text-red-600'}`}>
           {level === 'good' ? <CheckCircle2 className="w-3.5 h-3.5" /> : <AlertTriangle className="w-3.5 h-3.5" />}
           {DPI_TEXT[level].text} ({dpi} dpi)
@@ -250,8 +300,13 @@ export function DesignStep({ api }: { api: CustomizerApi }) {
         ) : (
           api.zonesReady && <Alert tone="warning">Este modelo aún no tiene zonas de diseño configuradas.</Alert>
         )}
+        {api.views.length > 0 && api.activeZone && (
+          <Button variant="secondary" fullWidth icon={<Type className="w-4 h-4" />} onClick={() => void api.addText()}>
+            Agregar texto en {api.activeZone.name.toLowerCase()}
+          </Button>
+        )}
 
-        <DesignGallery onPick={(img) => api.addPreset(img)} disabled={api.processing || !api.activeZone} />
+        <DesignGallery api={api} onPick={(img) => api.addPreset(img)} disabled={api.processing || !api.activeZone} />
 
         {others.length > 0 && (
           <div>
@@ -266,7 +321,7 @@ export function DesignStep({ api }: { api: CustomizerApi }) {
                       className={`w-full flex items-center gap-3 rounded-lg border px-2.5 py-2 text-left transition-colors ${on ? 'border-app-400 bg-app-50/60' : 'border-gray-200 hover:bg-gray-50'}`}>
                       <img src={assetUrl(d.imageData)} alt="" className="w-9 h-9 rounded bg-gray-50 object-contain ring-1 ring-gray-200" />
                       <span className="min-w-0 flex-1">
-                        <span className="block text-sm text-gray-900 truncate">{d.originalFileName || 'Diseño'}</span>
+                        <span className="block text-sm text-gray-900 truncate">{d.text ? <><Type className="inline w-3.5 h-3.5 mr-1 text-gray-400" />{textLabel(d.text)}</> : d.named ? `${d.named.name}: ${namedLabel(d.named) || 'sin nombre'}` : d.originalFileName || 'Diseño'}</span>
                         <span className="block text-xs text-gray-500">{v?.name} · {d.zoneName}</span>
                       </span>
                       <Pencil className={`w-4 h-4 ${on ? 'text-app-600' : 'text-gray-400'}`} />
@@ -278,6 +333,8 @@ export function DesignStep({ api }: { api: CustomizerApi }) {
           </div>
         )}
 
+        {selected?.text && <TextTools api={api} design={selected} />}
+        {selected?.named && <NamedTools api={api} design={selected} />}
         {selected && <DesignTools api={api} design={selected} />}
         {!others.length && api.activeZone && (
           <p className="flex items-start gap-2 text-xs text-gray-500">

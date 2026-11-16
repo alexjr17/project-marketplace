@@ -6,6 +6,7 @@ import {
   dpiLevel, estimateDpi, fitSize, localQuote, missingRequiredZones, normalizeTemplateImages, normalizeZone,
   resolveViewImage, restoreDesigns, sizeChartType, templateCover, usedZoneIds, type StudioDesign,
 } from './customizerModel';
+import { DEFAULT_TEXT } from '../../lib/textArt';
 
 const zone = (over: Partial<TemplateZone> = {}): TemplateZone => ({
   id: 1, templateId: 4, zoneTypeId: 1, zoneId: 'zone-frente', name: 'Frente', shape: 'rect',
@@ -138,6 +139,19 @@ describe('carrito y pedido', () => {
       originalImageData: 'data:orig-front', originalFileName: undefined, position: { x: 50, y: 50 }, size: { width: 30, height: 30 }, rotation: 0, opacity: 1,
     });
     expect(Object.keys(c.previews!)).toEqual(['frente', 'espalda']);
+  });
+
+  it('un texto viaja al carrito y al pedido con su configuración (se puede volver a editar)', () => {
+    const text = { ...DEFAULT_TEXT, text: 'Sofía', font: 'Pacifico', shape: 'arco' as const };
+    const withText = [design({ id: 't1', originalImageData: 'data:texto-hd', originalFileName: 'texto-Sofia.png', text })];
+    const p = buildCustomizedProduct({
+      template, color: { id: 2, hexCode: '#1A1A1A', name: 'Negro' }, size: { id: 4, abbreviation: 'M' }, designs: withText,
+      previews: { frente: 'data:prev-front' }, quote: localQuote(70000, zones, withText), views,
+    });
+    expect(p.designs[0].text).toEqual(text);
+    expect(buildOrderCustomization(p).designs![0]).toMatchObject({ text, originalImageData: 'data:texto-hd', originalFileName: 'texto-Sofia.png' });
+    // Al editar desde el carrito el texto vuelve con su configuración.
+    expect(restoreDesigns(p.designs, zones, views)[0].text).toEqual(text);
   });
 
   it('un ítem viejo del carrito manda solo las claves viejas y se puede seguir mostrando', () => {

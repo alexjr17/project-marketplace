@@ -62,12 +62,14 @@ async function paletteOf(urls: string[], max = 5): Promise<string[]> {
   return out.map((c) => '#' + c.map((v) => Math.round(v).toString(16).padStart(2, '0')).join('').toUpperCase());
 }
 
-export function AiBackdropDialog({ designUrls, ratio, onClose, onUse }: {
+export function AiBackdropDialog({ designUrls, ratio, onClose, onUse, generateWith }: {
   /** Diseños que lleva la prenda (para sacar el tema y los tonos). */
   designUrls: string[];
   ratio: '1:1' | '4:5' | '9:16' | '16:9';
   onClose: () => void;
   onUse: (img: { url: string; name: string }) => void;
+  /** Quién genera (por defecto el estudio de marketing; la ficha del producto usa la suya). */
+  generateWith?: (data: { style: string; idea?: string; palette: string[]; designs: string[]; ratio: string }) => Promise<{ url: string; concept: string }>;
 }) {
   const [style, setStyle] = useState<BackdropStyle>('lujo');
   const [idea, setIdea] = useState('');
@@ -87,7 +89,7 @@ export function AiBackdropDialog({ designUrls, ratio, onClose, onUse }: {
     setBusy(true);
     try {
       const designs = (await Promise.all(picked.map(thumb))).filter((d): d is string => !!d);
-      const r = await marketingService.aiBackdrop({ style, idea: idea.trim() || undefined, palette, designs, ratio });
+      const r = await (generateWith ?? marketingService.aiBackdrop)({ style, idea: idea.trim() || undefined, palette, designs, ratio });
       setResults((x) => [{ url: r.url, concept: r.concept }, ...x]);
       setPick(0);
     } catch (e) {

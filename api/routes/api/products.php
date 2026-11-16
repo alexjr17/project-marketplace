@@ -6,6 +6,7 @@
 */
 
 use App\Http\Controllers\BarcodeController;
+use App\Http\Controllers\ProductBackdropController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ReviewController;
 use App\Http\Controllers\VariantController;
@@ -29,6 +30,11 @@ Route::prefix('products')->group(function () {
         Route::put('{id}', [ProductController::class, 'update'])->whereNumber('id');
         Route::delete('{id}', [ProductController::class, 'destroy'])->whereNumber('id');
         Route::patch('{id}/stock', [ProductController::class, 'updateStock'])->whereNumber('id');
+    });
+    // Fondo de la foto en la tienda (productos y plantillas personalizables), con IA si se quiere.
+    Route::middleware(['auth:sanctum', 'permission:products.manage,templates.view'])->group(function () {
+        Route::put('{id}/backdrop', [ProductBackdropController::class, 'update'])->whereNumber('id')->middleware('throttle:30,1');
+        Route::post('backdrop/ai', [ProductBackdropController::class, 'ai'])->middleware('throttle:12,1');
     });
 });
 

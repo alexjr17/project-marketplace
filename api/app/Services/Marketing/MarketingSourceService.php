@@ -141,7 +141,7 @@ class MarketingSourceService
             ->with(['templateZones' => fn ($q) => $q->where('isActive', true)->where('isBlocked', false)->orderBy('sortOrder')->with('zoneType:id,name,slug')])
             ->get()
             ->map(function ($t) use ($published) {
-                $images = TemplateImages::normalize($t->images);
+                $images = TemplateImages::withZones($t->images, $t->zoneTypeImages);
                 $gen = $t->model3d ? $published->get($t->model3d) : null;
 
                 return [
@@ -151,7 +151,7 @@ class MarketingSourceService
                     'listPrice' => (float) $t->basePrice,
                     'discountPercent' => 0,
                     'model3d' => $t->model3d,
-                    'image' => $images['front'] ?? ($gen['poster'] ?? null),
+                    'image' => $images['front'] ?: ($gen['poster'] ?? null),
                     'colors' => ($colors = $t->productColors()->with('color:id,name,hexCode')->get()->filter(fn ($pc) => $pc->color?->hexCode)->values())->map(fn ($pc) => $pc->color->hexCode)->all(),
                     'colorNames' => $colors->map(fn ($pc) => $pc->color->name)->all(),
                     // Fotos de cada vista (para montar diseños en 2D): por vista y por tipo de zona.

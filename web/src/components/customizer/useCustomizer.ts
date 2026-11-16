@@ -12,11 +12,13 @@ import { useCart } from '../../context/CartContext';
 import toast from '../../lib/toast';
 import type { CustomizedProduct } from '../../types/design';
 import {
-  blockedZonesOf, buildCustomizedProduct, buildViews, buildZones, fitSize, localQuote, missingRequiredZones,
+  blockedZonesOf, buildCustomizedProduct, buildViews, buildZones, canonicalView, fitSize, localQuote, missingRequiredZones,
   printZonesOf, resolveViewImage, restoreDesigns, usedZoneIds, zoneCenter,
   type Quote, type StudioDesign, type StudioView, type StudioZone,
 } from './customizerModel';
-import { initialStudioState, studioReducer } from './studioReducer';
+import { initialStudioState, studioReducer, type DesignPatch } from './studioReducer';
+import { DEFAULT_TEXT, measureText, textImage, type TextSpec } from '../../lib/textArt';
+import { composeNamed, defaultValues, namedLabel, type NamedDesign } from '../../lib/namedDesign';
 import { prepareGarment, renderMockup, silhouetteGarment, type Garment } from './garment';
 import { processDesignFile, type ProcessedDesignImage } from './designImage';
 import { assetUrl } from '../../utils/assetUrl';
@@ -27,6 +29,12 @@ import { useModels3D } from '../mannequin/useModels3D';
 import type { Mannequin3DHandle } from '../mannequin/Mannequin3D';
 
 export type AddedImage = Pick<ProcessedDesignImage, 'preview' | 'original' | 'fileName' | 'fileSize' | 'width' | 'height'>;
+
+/** Diseño con nombre listo para la prenda (la imagen con lo escrito en cada texto). */
+export const namedFrom = (img: DesignImage, values?: Record<string, string>): NamedDesign => ({
+  designId: img.id, name: img.name, base: img.printUrl || img.thumbnailUrl, fields: img.textFields ?? [],
+  values: { ...defaultValues(img.textFields ?? []), ...values },
+});
 
 const newId = () => `d-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
 
@@ -235,7 +243,7 @@ export function useCustomizer() {
     dispatch({ type: 'select', id: first?.id ?? null });
   }, [studio.designs]);
 
-  const addImage = useCallback((img: AddedImage) => {
+  const addImage = useCallback((img: AddedImage, extra?: Partial<StudioDesign>) => {
     if (!view || !activeZone) { toast.warning('Este modelo no tiene zonas de diseño en esta vista'); return; }
     const aspect = img.width && img.height ? img.width / img.height : 1;
     const size = fitSize(activeZone, aspect, stageAspect, 0.8);
@@ -256,6 +264,7 @@ export function useCustomizer() {
       size,
       rotation: 0,
       opacity: 1,
+      ...extra,
     };
     dispatch({ type: 'add', design, zone: activeZone });
   }, [view, activeZone, stageAspect]);
@@ -282,6 +291,17 @@ export function useCustomizer() {
 
   /** Diseño de la galería: se muestra la miniatura y producción recibe la imagen completa. */
   const addPreset = useCallback(async (img: DesignImage) => {
+    // Con nombre editable: se compone con el nombre de ejemplo y el cliente lo cambia.
+    if (img.textFields?.length) {
+      const named = namedFrom(img);
+      try {
+        const out = await composeNamed(named, 900);
+        addImage({ preview: out.url, original: '', fileName: img.name, fileSize: 0, width: out.width, height: out.height }, { named, originalImageData: undefined });
+      } catch {
+        toast.error('No se pudo cargar ese diseño');
+      }
+      return;
+    }
     const preview = img.thumbnailUrl || img.fullUrl;
     const original = img.fullUrl || img.thumbnailUrl;
     let width = 0, height = 0;
@@ -295,11 +315,101 @@ export function useCustomizer() {
 
   const zoneOf = useCallback((d: StudioDesign) => zones.find((z) => z.id === d.templateZoneId), [zones]);
 
-  const update = useCallback((id: string, patch: Partial<Pick<StudioDesign, 'position' | 'size' | 'rotation' | 'opacity'>>, record = true) => {
+  const update = useCallback((id: string, patch: DesignPatch, record = true) => {
     const d = studio.designs.find((x) => x.id === id);
     if (!d) return;
     dispatch({ type: 'update', id, patch, zone: zoneOf(d), record });
   }, [studio.designs, zoneOf]);
+
+  // ── Texto ──
+  /** Lado mayor de la imagen del texto: para ver y para producción (alta resolución). */
+  const TEXT_PREVIEW = 900, TEXT_PRINT = 3000;
+  const textRun = useRef(new Map<string, number>());
+  /** Ancho (en unidades de letra) del texto que tiene hoy cada diseño: con él se conserva el tamaño de la letra. */
+  const textUnits = useRef(new Map<string, number>());
+  const designsRef = useRef(studio.designs);
+  useEffect(() => { designsRef.current = studio.designs; }, [studio.designs]);
+
+  /** Agrega un texto en la zona activa (con lo último usado o el estilo por defecto). */
+  const addText = useCallback(async (spec?: Partial<TextSpec>) => {
+    if (!view || !activeZone) { toast.warning('Este modelo no tiene zonas de diseño en esta vista'); return; }
+    const last = [...designsRef.current].reverse().find((d) => d.text)?.text;
+    const full: TextSpec = { ...DEFAULT_TEXT, ...(last ? { ...last, text: DEFAULT_TEXT.text } : {}), ...spec };
+    const img = await textImage(full, TEXT_PREVIEW);
+    const aspect = img.width / img.height;
+    const design: StudioDesign = {
+      id: newId(), viewSlug: view, viewType: view, zoneId: `view-${view}`, templateZoneId: activeZone.id, zoneName: activeZone.name,
+      imageData: img.url, originalFileName: 'Texto', pixelWidth: Math.round(img.width * (TEXT_PRINT / TEXT_PREVIEW)), pixelHeight: Math.round(img.height * (TEXT_PRINT / TEXT_PREVIEW)),
+      position: zoneCenter(activeZone), size: fitSize(activeZone, aspect, stageAspect, 0.7), rotation: 0, opacity: 1, text: full,
+    };
+    textUnits.current.set(design.id, img.units);
+    dispatch({ type: 'add', design, zone: activeZone });
+  }, [view, activeZone, stageAspect]);
+
+  /**
+   * Cambia el texto (lo que dice, la fuente, la forma…): se vuelve a dibujar y conserva su alto y su
+   * centro (un nombre más largo crece a lo ancho, sin salirse de la zona).
+   */
+  const setText = useCallback(async (id: string, patch: Partial<TextSpec>, record = true) => {
+    const d = designsRef.current.find((x) => x.id === id);
+    if (!d?.text) return;
+    const spec: TextSpec = { ...d.text, ...patch };
+    const run = (textRun.current.get(id) ?? 0) + 1;
+    textRun.current.set(id, run);
+    // Lo escrito se ve al instante en el panel; la imagen llega enseguida.
+    dispatch({ type: 'update', id, patch: { text: spec }, record });
+    // El texto al que corresponde el tamaño actual (al volver del carrito se mide de nuevo).
+    const prevUnits = textUnits.current.get(id) ?? measureText(d.text).width;
+    const img = await textImage(spec, TEXT_PREVIEW);
+    if (textRun.current.get(id) !== run) return;
+    const cur = designsRef.current.find((x) => x.id === id);
+    if (!cur) return;
+    const aspect = img.width / img.height;
+    // La letra conserva su tamaño: el ancho crece o se achica con el texto (sin salirse de la zona).
+    const width = cur.size.width * (img.units / Math.max(1, prevUnits));
+    textUnits.current.set(id, img.units);
+    const height = (width * stageAspect) / aspect;
+    dispatch({
+      type: 'update', id, record: false, zone: zoneOf(cur),
+      patch: {
+        imageData: img.url, originalImageData: undefined,
+        pixelWidth: Math.round(img.width * (TEXT_PRINT / TEXT_PREVIEW)), pixelHeight: Math.round(img.height * (TEXT_PRINT / TEXT_PREVIEW)),
+        size: { width, height },
+      },
+    });
+  }, [zoneOf, stageAspect]);
+
+  /** Cambia lo escrito en un diseño con nombre: se vuelve a componer (el tamaño no cambia). */
+  const setNamedValues = useCallback(async (id: string, values: Record<string, string>, record = true) => {
+    const d = designsRef.current.find((x) => x.id === id);
+    if (!d?.named) return;
+    const named: NamedDesign = { ...d.named, values: { ...d.named.values, ...values } };
+    const run = (textRun.current.get(id) ?? 0) + 1;
+    textRun.current.set(id, run);
+    dispatch({ type: 'update', id, patch: { named, originalImageData: undefined }, record });
+    try {
+      const img = await composeNamed(named, TEXT_PREVIEW);
+      if (textRun.current.get(id) !== run) return;
+      dispatch({ type: 'update', id, record: false, patch: { imageData: img.url } });
+    } catch { /* queda la imagen anterior */ }
+  }, []);
+
+  /** Antes de comprar o descargar: cada texto en alta resolución para producción. */
+  const withPrintText = useCallback(async (list: StudioDesign[]): Promise<StudioDesign[]> => {
+    const out: StudioDesign[] = [];
+    for (const d of list) {
+      if (d.named && !d.originalImageData) {
+        // Diseño con nombre: el diseño en su tamaño real con el nombre, para producción.
+        const img = await composeNamed(d.named, TEXT_PRINT);
+        out.push({ ...d, originalImageData: img.url, pixelWidth: img.width, pixelHeight: img.height, originalFileName: `${d.named.name}-${namedLabel(d.named) || 'nombre'}.png`.replace(/[^\w.\-áéíóúñÁÉÍÓÚÑ]+/g, '-') });
+        continue;
+      }
+      if (!d.text || d.originalImageData) { out.push(d); continue; }
+      const img = await textImage(d.text, TEXT_PRINT);
+      out.push({ ...d, originalImageData: img.url, pixelWidth: img.width, pixelHeight: img.height, originalFileName: `texto-${d.text.text.replace(/\W+/g, '-').slice(0, 30) || 'diseno'}.png` });
+    }
+    return out;
+  }, []);
 
   const fitToZone = useCallback((id: string) => {
     const d = studio.designs.find((x) => x.id === id);
@@ -378,7 +488,7 @@ export function useCustomizer() {
         .catch(() => quote);
       const product: CustomizedProduct = buildCustomizedProduct({
         template, color: { id: color.id, hexCode: color.hexCode, name: color.name }, size: { id: size.id, abbreviation: size.abbreviation },
-        designs: studio.designs, previews, quote: finalQuote, views, id: editItem?.customizedProduct.id,
+        designs: await withPrintText(studio.designs), previews, quote: finalQuote, views, id: editItem?.customizedProduct.id,
       });
       if (editItem) {
         await updateCustomizedProduct(editItem.id, product, quantity);
@@ -393,20 +503,85 @@ export function useCustomizer() {
     } finally {
       setSaving(false);
     }
-  }, [template, color, size, canSubmit, blockers, buildPreviews, studio.designs, quote, views, editItem, updateCustomizedProduct, addCustomizedProduct, quantity, navigate]);
+  }, [template, color, size, canSubmit, blockers, buildPreviews, withPrintText, studio.designs, quote, views, editItem, updateCustomizedProduct, addCustomizedProduct, quantity, navigate]);
+
+  // ── Pack familiar ──
+  /** Vista y zona donde va el diseño de cada integrante (el frente; si no, la primera con zona). */
+  const packPlace = useMemo(() => {
+    const ordered = [...views].sort((a, b) => (canonicalView(a.slug) === 'front' ? -1 : canonicalView(b.slug) === 'front' ? 1 : 0));
+    for (const v of ordered) {
+      const z = printZonesOf(zones, v.slug)[0];
+      if (z) return { view: v, zone: z };
+    }
+    return null;
+  }, [views, zones]);
+
+  /**
+   * Varias prendas de una vez (una por integrante): el diseño de cada uno con su nombre, en el frente,
+   * del color elegido y con su talla. Revisa el stock de cada talla antes de agregar.
+   */
+  const addFamilyPack = useCallback(async (members: { design: DesignImage; values: Record<string, string>; sizeId: number }[]): Promise<boolean> => {
+    if (!template || !color || !packPlace || !members.length) return false;
+    const { view: v, zone } = packPlace;
+    // Stock de cada talla para las prendas que la piden.
+    const need = new Map<number, number>();
+    members.forEach((m) => need.set(m.sizeId, (need.get(m.sizeId) ?? 0) + 1));
+    for (const [sid, n] of need) {
+      const info = await templateRecipesService.getVariantStock(template.id, color.id, sid).catch(() => null);
+      const have = typeof info?.availableStock === 'number' ? info.availableStock : null;
+      if (have !== null && have < n) {
+        const sz = template.sizes?.find((s) => s.id === sid);
+        toast.warning(have === 0 ? `No hay stock en talla ${sz?.abbreviation ?? ''} de este color` : `En talla ${sz?.abbreviation ?? ''} solo hay ${have}`);
+        return false;
+      }
+    }
+    setSaving(true);
+    try {
+      const q: Quote = await customizerService.quote(template.id, [zone.id])
+        .then((r) => ({ basePrice: r.basePrice, listPrice: r.listPrice, zones: r.zones || [], customizationPrice: r.customizationPrice, total: r.total }))
+        .catch(() => localQuote(template.basePrice || 0, zones, [{ templateZoneId: zone.id }]));
+      const g = garments[v.slug] || silhouetteGarment(v.kind, colorHex);
+      const aspect3d = model3d ? 1 : g.aspect || 1;
+      for (const m of members) {
+        const named = namedFrom(m.design, m.values);
+        const [prev, hd] = await Promise.all([composeNamed(named, TEXT_PREVIEW), composeNamed(named, TEXT_PRINT)]);
+        const d: StudioDesign = {
+          id: newId(), viewSlug: v.slug, viewType: v.slug, zoneId: `view-${v.slug}`, templateZoneId: zone.id, zoneName: zone.name,
+          imageData: prev.url, originalImageData: hd.url, originalFileName: `${m.design.name}-${namedLabel(named) || 'nombre'}.png`,
+          pixelWidth: hd.width, pixelHeight: hd.height, named,
+          position: zoneCenter(zone), size: fitSize(zone, prev.width / prev.height, aspect3d, 0.85), rotation: 0, opacity: 1,
+        };
+        const mock = await renderMockup({ garment: g, kind: v.kind, color: colorHex, designs: [d], zones, blocked: blockedZonesOf(zones, v.slug) }).catch(() => '');
+        const sz = template.sizes?.find((s) => s.id === m.sizeId);
+        const product = buildCustomizedProduct({
+          template, color: { id: color.id, hexCode: color.hexCode, name: color.name }, size: { id: m.sizeId, abbreviation: sz?.abbreviation ?? '' },
+          designs: [d], previews: mock ? { [v.slug]: mock } : {}, quote: q, views,
+        });
+        await addCustomizedProduct(product, 1);
+      }
+      toast.success(`${members.length} prendas de la familia agregadas al carrito`);
+      navigate('/cart');
+      return true;
+    } catch {
+      toast.error('No se pudo agregar el pack. Inténtalo de nuevo.');
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  }, [template, color, colorHex, packPlace, zones, views, garments, model3d, addCustomizedProduct, navigate]);
 
   const exportZip = useCallback(async () => {
     if (!template || !hasDesign) return;
     setExporting(true);
     try {
       const previews = await buildPreviews();
-      await exportDesignsZip({ templateName: template.name, color: color?.name || colorHex, size: size?.abbreviation || '', designs: studio.designs, previews, views });
+      await exportDesignsZip({ templateName: template.name, color: color?.name || colorHex, size: size?.abbreviation || '', designs: await withPrintText(studio.designs), previews, views });
     } catch {
       toast.error('No se pudieron descargar los diseños');
     } finally {
       setExporting(false);
     }
-  }, [template, hasDesign, buildPreviews, color, colorHex, size, studio.designs, views]);
+  }, [template, hasDesign, buildPreviews, withPrintText, color, colorHex, size, studio.designs, views]);
 
   return {
     // datos
@@ -416,7 +591,7 @@ export function useCustomizer() {
     studio, selected, isEditMode, editItem, saving, exporting, canSubmit, blockers, missing,
     // acciones
     selectTemplate, setColorId, setSizeId, changeView, setQuantity, setActiveZone,
-    addImage, addFiles, addPreset, processing, update, fitToZone, center, duplicateTo, moveToZone, dispatch, submit, exportZip,
+    addImage, addFiles, addPreset, addText, setText, setNamedValues, addFamilyPack, packPlace, processing, update, fitToZone, center, duplicateTo, moveToZone, dispatch, submit, exportZip,
     cancelEdit: () => navigate('/cart'),
   };
 }

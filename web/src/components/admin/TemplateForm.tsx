@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react';
-import { Box, Check, Eye, Image as ImageIcon, Info, Layers, Save, Tag, Trash2 } from 'lucide-react';
+import { ProductBackdropCard } from './ProductBackdropCard';
+import type { ProductBackdrop } from '../../types/product';
+import { Box, Check, Eye, Info, Layers, Save, Tag, Trash2 } from 'lucide-react';
 import { isModel3D, MODELS_3D, type Model3D } from '../mannequin/models';
 import { useModels3D } from '../mannequin/useModels3D';
 import type { Template } from '../../services/templates.service';
 import { catalogsService } from '../../services/catalogs.service';
 import type { Color, Size, Category, ProductType as CatalogProductType } from '../../types/catalog';
 import {
-  Alert, Button, Card, CardTitle, Field, FormActions, FormGrid, ImageInput, MoneyInput, SelectInput, Switch,
+  Alert, Button, Card, CardTitle, Field, FormActions, FormGrid, MoneyInput, SelectInput, Switch,
   TextArea, TextInput,
 } from '../ui';
 
@@ -42,12 +44,6 @@ export interface TemplateImages {
   side: string;
 }
 
-const IMAGE_SLOTS: { key: keyof TemplateImages; label: string; hint: string }[] = [
-  { key: 'front', label: 'Frente', hint: 'Vista principal del personalizador y del catálogo.' },
-  { key: 'back', label: 'Espalda', hint: 'Opcional.' },
-  { key: 'side', label: 'Lado', hint: 'Opcional.' },
-];
-
 /** Imágenes del modelo como {front, back, side}; acepta también la lista que se guardaba antes. */
 const getTemplateImages = (template?: Template): TemplateImages => {
   const raw = template?.images as unknown;
@@ -72,11 +68,14 @@ export const TemplateForm = ({ template, onSubmit, onDelete, onCancel }: Templat
     model3d: (template?.model3d || null) as Model3D | null,
   });
   const [saving, setSaving] = useState(false);
+  // Fondo de la foto en la tienda (se guarda al elegirlo, aparte del formulario).
+  const [backdrop, setBackdrop] = useState<ProductBackdrop | null>(template?.backdrop ?? null);
   useModels3D();
   const modelCfg = formData.model3d && isModel3D(formData.model3d) ? MODELS_3D[formData.model3d] : null;
 
-  // Vistas base: frente, espalda y lado
-  const [images, setImages] = useState<TemplateImages>(getTemplateImages(template));
+  // Fotos viejas de las vistas: ya no se editan aquí (las imágenes son las de cada zona), se conservan
+  // como respaldo tal como estaban.
+  const images: TemplateImages = getTemplateImages(template);
 
   // Catálogos disponibles
   const [availableColors, setAvailableColors] = useState<Color[]>([]);
@@ -261,7 +260,7 @@ export const TemplateForm = ({ template, onSubmit, onDelete, onCancel }: Templat
           <Card>
             <CardTitle icon={Box}>Personalizador</CardTitle>
             <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-4 items-start">
-              <Field label="Modelo 3D" htmlFor="tf-model3d" hint="Con maniquí 3D, el cliente ve la prenda girar y las zonas se dibujan sobre el maniquí (frente, espalda y mangas). Sin 3D se usan las fotos de abajo.">
+              <Field label="Modelo 3D" htmlFor="tf-model3d" hint="Con maniquí 3D, el cliente ve la prenda girar y las zonas se dibujan sobre el maniquí (frente, espalda y mangas). Sin 3D se usan las imágenes de cada zona (se cargan en el editor de zonas).">
                 <SelectInput id="tf-model3d" value={formData.model3d ?? ''} onChange={(e) => setFormData({ ...formData, model3d: e.target.value || null })}>
                   <option value="">Sin 3D (editor con fotos)</option>
                   {(Object.keys(MODELS_3D) as Model3D[]).map((m) => <option key={m} value={m}>Maniquí · {MODELS_3D[m].label}</option>)}
@@ -274,19 +273,7 @@ export const TemplateForm = ({ template, onSubmit, onDelete, onCancel }: Templat
             </div>
           </Card>
 
-          {/* Imágenes */}
-          <Card>
-            <CardTitle icon={ImageIcon}>Imágenes</CardTitle>
-            {formData.model3d && <p className="text-xs text-gray-500 mb-3">Opcionales con maniquí 3D: si no hay foto de frente, la tienda muestra la del maniquí.</p>}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              {IMAGE_SLOTS.map(({ key, label, hint }) => (
-                <Field key={key} label={label} hint={hint}>
-                  <ImageInput value={images[key]} onChange={(v) => setImages(prev => ({ ...prev, [key]: v }))} maxSizeMB={5} />
-                </Field>
-              ))}
-            </div>
-            {!images.front && !formData.model3d && <p className="text-xs text-gray-400 mt-2">Sin imagen de frente: el personalizador muestra una silueta de respaldo. Las imágenes de cada zona (Frente, Espalda, Mangas…) se cargan en el editor de zonas.</p>}
-          </Card>
+          <ProductBackdropCard productId={template?.id} mainImage={template?.images?.front || (modelCfg?.poster ?? null)} value={backdrop} onChange={setBackdrop} />
 
           {/* Variantes */}
           <Card>

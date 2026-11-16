@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { ProductPhoto } from '../products/ProductPhoto';
 import { ArrowRight, Palette, Sparkles } from 'lucide-react';
 import { EmptyState, Skeleton } from '../ui';
 import { useCurrency } from '../../hooks/useCurrency';
@@ -44,7 +45,9 @@ export function ModelPicker({ templates, loading, onPick }: { templates: Templat
               className="group text-left rounded-2xl border border-gray-200 bg-white overflow-hidden hover:shadow-md hover:border-app-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-app-500 transition"
             >
               <div className="aspect-[4/3] bg-gradient-to-b from-gray-50 to-gray-100">
-                <GarmentThumb src={templateCover(t)} alt={t.name} />
+                {t.backdrop?.url
+                  ? <ProductPhoto src={templateCover(t)} backdrop={t.backdrop} alt={t.name} />
+                  : <GarmentThumb src={templateCover(t)} alt={t.name} />}
               </div>
               <div className="p-4 md:p-5">
                 {t.typeName && <p className="text-xs font-medium text-gray-500 mb-0.5">{t.typeName}</p>}

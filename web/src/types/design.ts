@@ -1,4 +1,6 @@
 import type { ProductTypeSlug } from './product';
+import type { TextSpec } from '../lib/textArt';
+import type { NamedDesign } from '../lib/namedDesign';
 
 /**
  * Diseño colocado sobre una vista del modelo. Posición y tamaño en % de la imagen de la
@@ -31,6 +33,10 @@ export interface Design {
   size: { width: number; height: number };
   rotation: number; // grados
   opacity: number; // 0 a 1
+  /** Texto del cliente: la imagen se dibuja con esto (y se puede volver a editar). */
+  text?: TextSpec;
+  /** Diseño de la galería con nombre editable: la imagen es el diseño con lo que escribió el cliente. */
+  named?: NamedDesign;
 }
 
 /** Imágenes de producción (originales). */
@@ -95,6 +101,10 @@ export interface OrderCustomizationDesign {
   size: { width: number; height: number };
   rotation: number;
   opacity: number;
+  /** Si es un texto: lo que dice y cómo (fuente, forma, colores), para producción. */
+  text?: TextSpec;
+  /** Si es un diseño con nombre: cuál y qué nombre lleva. */
+  named?: NamedDesign;
 }
 
 /**

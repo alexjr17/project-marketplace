@@ -17,10 +17,13 @@ export interface StudioState {
   future: StudioDesign[][];
 }
 
+/** Lo que se puede cambiar de un diseño (el texto vuelve a dibujar su imagen). */
+export type DesignPatch = Partial<Pick<StudioDesign, 'position' | 'size' | 'rotation' | 'opacity' | 'text' | 'named' | 'imageData' | 'originalImageData' | 'pixelWidth' | 'pixelHeight' | 'originalFileName'>>;
+
 export type StudioAction =
   | { type: 'load'; designs: StudioDesign[] }
   | { type: 'add'; design: StudioDesign; zone: StudioZone }
-  | { type: 'update'; id: string; patch: Partial<Pick<StudioDesign, 'position' | 'size' | 'rotation' | 'opacity'>>; zone?: StudioZone; record?: boolean }
+  | { type: 'update'; id: string; patch: DesignPatch; zone?: StudioZone; record?: boolean }
   | { type: 'begin' }
   | { type: 'remove'; id: string }
   | { type: 'select'; id: string | null }

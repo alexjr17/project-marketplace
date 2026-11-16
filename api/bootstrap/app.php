@@ -32,6 +32,12 @@ return Application::configure(basePath: dirname(__DIR__))
             ForceJsonResponse::class,
         ]);
 
+        // Los proyectos del estudio se guardan tal cual (textos vacíos y espacios incluidos): el editor
+        // los vuelve a abrir exactamente como quedaron.
+        $studioProjects = fn (Request $request) => $request->is('api/messaging/marketing/projects', 'api/messaging/marketing/projects/*');
+        $middleware->convertEmptyStringsToNull(except: [$studioProjects]);
+        $middleware->trimStrings(except: [$studioProjects]);
+
         // Alias de middleware para proteger rutas.
         $middleware->alias([
             'permission' => CheckPermission::class,

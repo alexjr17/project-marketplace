@@ -21,6 +21,7 @@ use App\Services\NumberSequenceService;
 use App\Services\ShippingQuoteService;
 use App\Services\StockService;
 use App\Services\TemplateStockService;
+use App\Support\TemplateImages;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
@@ -89,7 +90,9 @@ class OrderService
             // Si el ítem no guardó imagen, usar la imagen actual del producto.
             $image = $item->productImage;
             if (empty($image)) {
-                $image = $this->firstImage($item->product?->images);
+                $image = $item->product?->isTemplate
+                    ? TemplateImages::withZones($item->product->images, $item->product->zoneTypeImages)['front']
+                    : $this->firstImage($item->product?->images);
             }
 
             return [
@@ -239,7 +242,9 @@ class OrderService
                 'discounted' => $salePrice < (float) $product->basePrice,
             ];
 
-            $firstImage = $this->firstImage($product->images);
+            $firstImage = $product->isTemplate
+                ? TemplateImages::withZones($product->images, $product->zoneTypeImages)['front']
+                : $this->firstImage($product->images);
 
             $orderItems[] = [
                 'productId' => $product->id,

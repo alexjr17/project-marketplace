@@ -8,6 +8,7 @@ class Product extends BaseModel
 
     protected $casts = [
         'images' => 'array',
+        'backdrop' => 'array',
         'tags' => 'array',
         'zoneTypeImages' => 'array',
         'designZones' => 'array',

@@ -332,6 +332,8 @@ function toStoredDesign(d: StudioDesign): Design {
     size: d.size,
     rotation: d.rotation || 0,
     opacity: d.opacity ?? 1,
+    ...(d.text ? { text: d.text } : {}),
+    ...(d.named ? { named: d.named } : {}),
   };
 }
 
@@ -412,6 +414,8 @@ export function buildOrderCustomization(cp: CustomizedProduct): OrderCustomizati
       size: d.size,
       rotation: d.rotation || 0,
       opacity: d.opacity ?? 1,
+      ...(d.text ? { text: d.text } : {}),
+      ...(d.named ? { named: d.named } : {}),
     })),
     previews,
     designFront: (front && previews[front]) || legacy.designFront,

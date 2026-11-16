@@ -4,6 +4,7 @@ import { useCurrency } from '../../hooks/useCurrency';
 import type { Product } from '../../types/product';
 import { FavoriteButton } from './FavoriteButton';
 import { ProductImage } from './ProductImage';
+import { ProductPhoto } from './ProductPhoto';
 import { Badge } from '../ui';
 
 interface ProductCardProps {
@@ -48,12 +49,16 @@ export const ProductCard = ({ product, priority = false }: ProductCardProps) => 
     >
       {/* Imagen (proporción fija; respaldo limpio si falla) */}
       <div className="relative aspect-square bg-gray-100 overflow-hidden">
-        <ProductImage
-          src={product.images.front}
-          alt={product.name}
-          priority={priority}
-          className={inStock ? '' : 'opacity-60'}
-        />
+        {product.backdrop?.url ? (
+          <ProductPhoto src={product.images.front} backdrop={product.backdrop} alt={product.name} className={inStock ? '' : 'opacity-60'} />
+        ) : (
+          <ProductImage
+            src={product.images.front}
+            alt={product.name}
+            priority={priority}
+            className={inStock ? '' : 'opacity-60'}
+          />
+        )}
         <div className="absolute top-2 left-2 right-12 flex flex-wrap items-start gap-1 pointer-events-none">
           {sale != null && (
             <Badge tone="green" className="shadow-sm ring-1 ring-white/70">{pct > 0 ? `-${pct}%` : 'Oferta'}</Badge>

@@ -7,6 +7,7 @@ use App\Models\Category;
 use App\Models\Product;
 use App\Models\ProductType;
 use App\Services\Catalog\ProductAdminService;
+use App\Services\Catalog\ProductBackdropService;
 use App\Services\DiscountService;
 use App\Services\ProductCatalogService;
 use App\Support\ImageUrls;
@@ -78,6 +79,8 @@ class ProductController extends Controller
             'featured' => $product->featured,
             'isActive' => $product->isActive,
             'images' => ImageUrls::forModel($product->images, 'product', $product->id, $product->updatedAt),
+            // Fondo de la foto en la tienda (y la foto principal recortada para ponerla encima).
+            'backdrop' => app(ProductBackdropService::class)->format($product),
             'colors' => $product->productColors->map(fn ($pc) => [
                 'id' => $pc->color?->id,
                 'name' => $pc->color?->name,

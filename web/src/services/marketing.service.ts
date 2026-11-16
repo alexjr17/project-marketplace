@@ -43,6 +43,26 @@ export interface CopyResult {
   scenes?: { title: string; subtitle: string }[];
 }
 
+/** Proyecto del estudio: el trabajo en curso de un post o un video, para volver a abrirlo. */
+export type ProjectFormat = 'post' | 'video360' | 'reel';
+export interface StudioProjectSummary {
+  id: number;
+  name: string;
+  format: ProjectFormat;
+  source: string;
+  template: string | null;
+  thumb: string | null;
+  updatedBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+export interface StudioProject extends StudioProjectSummary {
+  data: Record<string, unknown>;
+}
+export interface ProjectSave {
+  name?: string; format?: ProjectFormat; source?: string; template?: string | null; data?: Record<string, unknown>; thumb?: string | null;
+}
+
 export interface Creative {
   id: number;
   title: string;
@@ -156,5 +176,17 @@ export const marketingService = {
   calendar: (month: string) => http.get<CalendarPost[]>('/messaging/marketing/calendar', { month }),
   reschedule: (postId: number, scheduledAt: string) => http.patch<CalendarPost>(`/messaging/marketing/posts/${postId}/schedule`, { scheduledAt }),
   cancel: (postId: number) => http.delete<null>(`/messaging/posts/${postId}`),
+  projects: (format?: ProjectFormat) => http.get<StudioProjectSummary[]>('/messaging/marketing/projects', format ? { format } : undefined),
+  project: (id: number) => http.get<StudioProject>(`/messaging/marketing/projects/${id}`),
+  createProject: (data: ProjectSave & { name: string; format: ProjectFormat; data: Record<string, unknown> }) => http.post<StudioProject>('/messaging/marketing/projects', data),
+  saveProject: (id: number, data: ProjectSave) => http.put<StudioProjectSummary>(`/messaging/marketing/projects/${id}`, data),
+  duplicateProject: (id: number) => http.post<StudioProjectSummary>(`/messaging/marketing/projects/${id}/duplicate`),
+  deleteProject: (id: number) => http.delete<null>(`/messaging/marketing/projects/${id}`),
+  /** Sube una imagen del proyecto (diseño, foto o fondo subido en el editor) y devuelve su URL. */
+  projectAsset: (image: Blob) => {
+    const form = new FormData();
+    form.append('image', image, `imagen.${image.type.split('/')[1] ?? 'png'}`);
+    return http.upload<{ url: string }>('/messaging/marketing/projects/assets', form);
+  },
   accounts: (fresh = false) => http.get<HfAccounts>('/messaging/marketing/accounts', fresh ? { fresh: 1 } : undefined),
 };

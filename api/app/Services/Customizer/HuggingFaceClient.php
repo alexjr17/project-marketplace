@@ -65,7 +65,9 @@ class HuggingFaceClient
         foreach ($accounts as $n => $token) {
             $q = $this->quota($token);
             if ($q !== null && ($q['left'] < $seconds || $q['runsLeft'] < 1)) {
-                $last = "la cuenta {$n} tiene {$q['left']} s y este paso pide {$seconds} s";
+                $last = $q['runsLeft'] < 1
+                    ? "la cuenta {$n} ya usó todas sus generaciones de hoy"
+                    : "la cuenta {$n} tiene {$q['left']} s y este paso pide {$seconds} s";
                 continue;
             }
             try {

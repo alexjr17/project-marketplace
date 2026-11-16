@@ -29,4 +29,34 @@ class TemplateImages
             'side' => $pick('side', 2),
         ];
     }
+
+    /**
+     * Imágenes de la plantilla tal como se muestran: las de sus zonas (Frente, Espalda, Mangas… del
+     * editor de zonas) y, si una vista no tiene, la foto vieja de esa vista.
+     *
+     * @return array{front: string, back: string, side: string}
+     */
+    public static function withZones(mixed $images, mixed $zoneTypeImages): array
+    {
+        $base = self::normalize($images);
+        if (is_string($zoneTypeImages)) {
+            $zoneTypeImages = json_decode($zoneTypeImages, true);
+        }
+        $zones = array_filter(is_array($zoneTypeImages) ? $zoneTypeImages : [], fn ($v) => is_string($v) && $v !== '');
+        $find = function (string $pattern) use ($zones): string {
+            foreach ($zones as $slug => $url) {
+                if (preg_match($pattern, (string) $slug)) {
+                    return $url;
+                }
+            }
+
+            return '';
+        };
+
+        return [
+            'front' => $find('/^(frente|front|delantero|pecho)/i') ?: ($base['front'] ?: (string) (reset($zones) ?: '')),
+            'back' => $find('/^(espalda|back|trasero)/i') ?: $base['back'],
+            'side' => $find('/(manga|lado|side|sleeve)/i') ?: $base['side'],
+        ];
+    }
 }

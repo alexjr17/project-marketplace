@@ -13,6 +13,7 @@ import {
   Dialog, Field, TextInput, TextArea, SelectInput, RadioGroup, EmptyState, Spinner, Thumb,
 } from '../../components/ui';
 import { ORDER_TONE, fmtDateTime, money } from './orderUi';
+import { TEXT_SHAPES } from '../../lib/textArt';
 
 type TabType = 'summary' | 'items' | 'shipping' | 'history';
 
@@ -361,7 +362,12 @@ export const OrderDetailPage = () => {
                                           {d.zoneName || `Diseño ${i + 1}`}
                                           {d.originalImageData && <Badge tone="green">Original</Badge>}
                                         </p>
-                                        {d.originalFileName && <p className="text-gray-500 truncate">{d.originalFileName}</p>}
+                                        {d.text ? (
+                                          <p className="text-gray-700 truncate" title={d.text.text}>
+                                            Texto: <span className="font-medium">«{d.text.text.replace(/\n/g, ' / ')}»</span> · {d.text.font} · {TEXT_SHAPES.find((s) => s.value === d.text!.shape)?.label ?? d.text.shape} · {d.text.color}
+                                            {d.text.outline ? ` · contorno ${d.text.outline.color}` : ''}
+                                          </p>
+                                        ) : d.originalFileName && <p className="text-gray-500 truncate">{d.originalFileName}</p>}
                                         <p className="text-gray-500 tabular-nums">
                                           Centro {Math.round(d.position.x)}% · {Math.round(d.position.y)}% — {Math.round(d.size.width)}% × {Math.round(d.size.height)}%
                                           {d.rotation ? ` — ${Math.round(d.rotation)}°` : ''}

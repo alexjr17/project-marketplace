@@ -29,6 +29,10 @@
         "auth:sanctum",
         "permission:sizes.view"
     ],
+    "DELETE api/design-families/{id}": [
+        "auth:sanctum",
+        "permission:design_images.view"
+    ],
     "DELETE api/design-images/{id}": [
         "auth:sanctum",
         "permission:design_images.view"
@@ -168,6 +172,11 @@
         "permission:messaging.access",
         "permission:messaging.posts"
     ],
+    "DELETE api/messaging/marketing/projects/{id}": [
+        "auth:sanctum",
+        "permission:messaging.access",
+        "permission:messaging.posts"
+    ],
     "DELETE api/messaging/posts/{id}": [
         "auth:sanctum",
         "permission:messaging.access",
@@ -300,8 +309,15 @@
     "GET api/catalogs/tags/stats": [
         "throttle:storefront"
     ],
+    "GET api/design-families": [],
+    "GET api/design-families/admin": [
+        "auth:sanctum",
+        "permission:design_images.view"
+    ],
+    "GET api/design-families/{id}": [],
     "GET api/design-images": [],
     "GET api/design-images/categories": [],
+    "GET api/design-images/seasons": [],
     "GET api/design-images/{id}": [],
     "GET api/discounts": [
         "auth:sanctum",
@@ -634,6 +650,16 @@
         "throttle:240,1"
     ],
     "GET api/messaging/marketing/narration/voices": [
+        "auth:sanctum",
+        "permission:messaging.access",
+        "permission:messaging.posts"
+    ],
+    "GET api/messaging/marketing/projects": [
+        "auth:sanctum",
+        "permission:messaging.access",
+        "permission:messaging.posts"
+    ],
+    "GET api/messaging/marketing/projects/{id}": [
         "auth:sanctum",
         "permission:messaging.access",
         "permission:messaging.posts"
@@ -1159,6 +1185,10 @@
     "POST api/customizer/quote": [
         "throttle:30,1"
     ],
+    "POST api/design-families": [
+        "auth:sanctum",
+        "permission:design_images.view"
+    ],
     "POST api/design-images": [
         "auth:sanctum",
         "permission:design_images.view"
@@ -1506,6 +1536,24 @@
         "permission:messaging.posts",
         "throttle:60,1"
     ],
+    "POST api/messaging/marketing/projects": [
+        "auth:sanctum",
+        "permission:messaging.access",
+        "permission:messaging.posts",
+        "throttle:60,1"
+    ],
+    "POST api/messaging/marketing/projects/assets": [
+        "auth:sanctum",
+        "permission:messaging.access",
+        "permission:messaging.posts",
+        "throttle:120,1"
+    ],
+    "POST api/messaging/marketing/projects/{id}/duplicate": [
+        "auth:sanctum",
+        "permission:messaging.access",
+        "permission:messaging.posts",
+        "throttle:30,1"
+    ],
     "POST api/messaging/marketing/publish": [
         "auth:sanctum",
         "permission:messaging.access",
@@ -1608,6 +1656,11 @@
     "POST api/products": [
         "auth:sanctum",
         "permission:products.manage"
+    ],
+    "POST api/products/backdrop/ai": [
+        "auth:sanctum",
+        "permission:products.manage,templates.view",
+        "throttle:12,1"
     ],
     "POST api/purchase-orders": [
         "auth:sanctum",
@@ -1746,6 +1799,10 @@
         "auth:sanctum",
         "permission:sizes.view"
     ],
+    "PUT api/design-families/{id}": [
+        "auth:sanctum",
+        "permission:design_images.view"
+    ],
     "PUT api/design-images/sort-order": [
         "auth:sanctum",
         "permission:design_images.view"
@@ -1843,6 +1900,12 @@
         "permission:messaging.access",
         "permission:messaging.posts"
     ],
+    "PUT api/messaging/marketing/projects/{id}": [
+        "auth:sanctum",
+        "permission:messaging.access",
+        "permission:messaging.posts",
+        "throttle:120,1"
+    ],
     "PUT api/pos/sale/{id}": [
         "auth:sanctum",
         "permission:pos.cancel_sale"
@@ -1850,6 +1913,11 @@
     "PUT api/products/{id}": [
         "auth:sanctum",
         "permission:products.manage"
+    ],
+    "PUT api/products/{id}/backdrop": [
+        "auth:sanctum",
+        "permission:products.manage,templates.view",
+        "throttle:30,1"
     ],
     "PUT api/purchase-orders/{id}": [
         "auth:sanctum",

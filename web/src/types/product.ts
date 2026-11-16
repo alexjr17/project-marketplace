@@ -75,6 +75,12 @@ export interface ProductTypeConfig {
 }
 
 // Producto base del catálogo
+/** Fondo de la foto en la tienda: la imagen de fondo y la foto principal recortada para ponerla encima. */
+export interface ProductBackdrop {
+  url: string;
+  cutout: string | null;
+}
+
 export interface Product {
   id: number;
   sku?: string;
@@ -105,6 +111,7 @@ export interface Product {
     extra1?: string;  // Imagen adicional 4
     extra2?: string;  // Imagen adicional 5
   };
+  backdrop?: ProductBackdrop | null;
   colors: ProductColor[];
   sizes: ProductSize[] | string[]; // Puede ser array de objetos (BD) o strings (legacy)
   featured: boolean;

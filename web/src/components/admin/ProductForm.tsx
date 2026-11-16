@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react';
+import { ProductBackdropCard } from './ProductBackdropCard';
+import type { ProductBackdrop } from '../../types/product';
 import type { Product } from '../../types/product';
 import { Check, Image as ImageIcon, Info, Layers, Save, Star, Tag, Trash2 } from 'lucide-react';
 import { catalogsService } from '../../services/catalogs.service';
@@ -31,6 +33,8 @@ interface ProductFormProps {
 
 /** Ficha de producto: una tarjeta por tema y el pie de botones fijo abajo. */
 export const ProductForm = ({ product, onSubmit, onDelete, onCancel, saving }: ProductFormProps) => {
+  // Fondo de la foto en la tienda (se guarda al elegirlo, aparte del formulario).
+  const [backdrop, setBackdrop] = useState<ProductBackdrop | null>(product?.backdrop ?? null);
   const confirm = useConfirm();
   const [formData, setFormData] = useState({
     name: product?.name || '',
@@ -237,6 +241,8 @@ export const ProductForm = ({ product, onSubmit, onDelete, onCancel, saving }: P
             <ImageGallery value={images} onChange={setImages} max={MAX_IMAGES} maxSizeMB={5} />
             {images.length === 0 && <p className="text-xs text-gray-400 mt-1">Sin imagen: se mostrará un marcador de posición.</p>}
           </Card>
+
+          <ProductBackdropCard productId={product?.id} mainImage={product?.images?.front} value={backdrop} onChange={setBackdrop} />
 
           {/* Variantes */}
           <Card>

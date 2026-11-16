@@ -15,6 +15,7 @@ use App\Services\NumberSequenceService;
 use App\Services\StockService;
 use App\Services\TemplateStockService;
 use App\Support\ImageUrls;
+use App\Support\TemplateImages;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -126,7 +127,7 @@ class POSService
             'productId' => $t->id,
             'templateId' => $t->id,
             'name' => $t->name,
-            'image' => $this->firstImage($t->images),
+            'image' => TemplateImages::withZones($t->images, $t->zoneTypeImages)['front'] ?: null,
             'sku' => $t->sku,
             'barcode' => $t->barcode,
             'basePrice' => (float) $t->basePrice,

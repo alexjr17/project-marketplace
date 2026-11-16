@@ -52,7 +52,7 @@ class CatalogTest extends TestCase
         $this->assertSame([
             'id', 'sku', 'slug', 'name', 'description', 'categoryId', 'categorySlug', 'categoryName', 'typeId', 'typeSlug',
             'typeName', 'basePrice', 'discountType', 'discountValue', 'salePrice', 'hasDiscount', 'stock', 'featured',
-            'isActive', 'images', 'colors', 'sizes', 'tags', 'rating', 'reviewsCount', 'createdAt', 'updatedAt',
+            'isActive', 'images', 'backdrop', 'colors', 'sizes', 'tags', 'rating', 'reviewsCount', 'createdAt', 'updatedAt',
         ], array_keys($sueter));
         $this->assertSame(10, $sueter['stock']); // suma de variantes activas
         $this->assertSame(['none', 0, 58000, false], [$sueter['discountType'], $sueter['discountValue'], $sueter['salePrice'], $sueter['hasDiscount']]);

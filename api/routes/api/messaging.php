@@ -10,6 +10,7 @@ use App\Http\Controllers\BotKnowledgeController;
 use App\Http\Controllers\ChannelController;
 use App\Http\Controllers\ConversationController;
 use App\Http\Controllers\MarketingController;
+use App\Http\Controllers\MarketingProjectController;
 use App\Http\Controllers\MessageController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\SocialPostController;
@@ -95,6 +96,14 @@ Route::prefix('messaging')->middleware(['auth:sanctum', 'permission:messaging.ac
             Route::post('creatives', [MarketingController::class, 'store'])->middleware('throttle:30,1');
             Route::patch('creatives/{id}', [MarketingController::class, 'update'])->whereNumber('id');
             Route::delete('creatives/{id}', [MarketingController::class, 'destroy'])->whereNumber('id');
+            // Proyectos: el trabajo en curso del estudio, para volver a abrirlo y seguir editando.
+            Route::get('projects', [MarketingProjectController::class, 'index']);
+            Route::post('projects', [MarketingProjectController::class, 'store'])->middleware('throttle:60,1');
+            Route::post('projects/assets', [MarketingProjectController::class, 'asset'])->middleware('throttle:120,1');
+            Route::get('projects/{id}', [MarketingProjectController::class, 'show'])->whereNumber('id');
+            Route::put('projects/{id}', [MarketingProjectController::class, 'update'])->whereNumber('id')->middleware('throttle:120,1');
+            Route::post('projects/{id}/duplicate', [MarketingProjectController::class, 'duplicate'])->whereNumber('id')->middleware('throttle:30,1');
+            Route::delete('projects/{id}', [MarketingProjectController::class, 'destroy'])->whereNumber('id');
             Route::post('publish', [MarketingController::class, 'publish'])->middleware('throttle:20,1');
             Route::get('calendar', [MarketingController::class, 'calendar']);
             Route::patch('posts/{id}/schedule', [MarketingController::class, 'reschedule'])->whereNumber('id');
