@@ -160,6 +160,17 @@ describe('diseño de la escena sobre el maniquí', () => {
     expect(art.front).toBeUndefined();
   });
 
+  it('el diseño se corre y se agranda en el 3D; si sale de su zona, la textura lo alcanza', () => {
+    const base = sceneArt(newScene({ design: { id: 1, name: 'x', image: '/x.png' }, zoneId: 5, size: 1 }), zones, img);
+    const moved = sceneArt(newScene({ design: { id: 1, name: 'x', image: '/x.png' }, zoneId: 5, size: 1, offsetY: 0.2 }), zones, img);
+    const l0 = Object.values(base.art)[0]!.layers[0], l1 = Object.values(moved.art)[0]!.layers[0];
+    expect(l1.cy - l0.cy).toBeCloseTo(20);
+    const f0 = Object.values(base.frames)[0]!, f1 = Object.values(moved.frames)[0]!;
+    expect(f1.y + f1.h).toBeGreaterThan(f0.y + f0.h);
+    // Dentro de su zona conserva la forma de la zona (redonda).
+    expect((l0.clip as { circle?: boolean }).circle).toBe(true);
+  });
+
   it('sin diseño o sin imagen cargada la prenda va lisa', () => {
     expect(sceneArt(newScene(), zones, img).art).toEqual({});
     expect(sceneArt(newScene({ design: { id: 1, name: 'x', image: '/x.png' } }), zones, null).art).toEqual({});
@@ -201,5 +212,17 @@ describe('fondo propio de la escena', () => {
     // Nada de imágenes incrustadas en el borrador.
     expect(normalizeScene({ kind: 'foto', bg: { style: 'foto', image: 'data:image/png;base64,AAAA' } })?.bg?.image).toBeNull();
     expect(normalizeScene({ kind: 'foto', bg: { style: 'foto', image: '/uploads/marketing/ia/fondo.webp', dim: 0.4 } })?.bg).toMatchObject({ image: '/uploads/marketing/ia/fondo.webp', dim: 0.4 });
+    // Mosaico de diseños: los elegidos (sin incrustados) y si suma los de las prendas.
+    const mos = normalizeScene({ kind: 'texto', bg: { style: 'mosaicoDisenos', designs: ['/uploads/a.png', 'data:image/png;base64,AA', 7], useSceneDesigns: false } })?.bg;
+    expect(mos).toMatchObject({ designs: ['/uploads/a.png'], useSceneDesigns: false });
+    expect(normalizeScene({ kind: 'texto', bg: { style: 'mosaicoDisenos' } })?.bg).toMatchObject({ designs: [], useSceneDesigns: true });
+  });
+});
+
+describe('elementos movidos en el video', () => {
+  it('se guardan acotados y solo los que existen', () => {
+    expect(newScene().moves).toEqual({});
+    const sc = normalizeScene({ kind: 'foto', moves: { prenda: { x: 0.2, y: -3, s: 9 }, titulo: { x: 'a' }, raro: { x: 1 } } });
+    expect(sc?.moves).toEqual({ prenda: { x: 0.2, y: -1, s: 3 }, titulo: { x: 0, y: 0, s: 1 } });
   });
 });

@@ -29,6 +29,16 @@ export interface StoryContext {
   subtitle: string;
 }
 
+/** Plantillas de video pensadas para cada tipo de contenido (ver ContentKind en design.ts). */
+export const STORIES_FOR: Record<'producto' | 'varios' | 'coleccion' | 'promocion' | 'personalizable' | 'diseno', StoryboardId[]> = {
+  producto: ['reelRapido', 'lanzamiento', 'ritmo', 'regresiva', 'resena'],
+  varios: ['coleccion', 'reelRapido', 'ritmo', 'top3', 'encuesta', 'mixto'],
+  coleccion: ['coleccion', 'reelRapido', 'ritmo', 'top3', 'mixto'],
+  promocion: ['oferta', 'regresiva', 'reelRapido', 'coleccion'],
+  personalizable: ['premium2d', 'frenteEspalda2d', 'personaliza2d', 'disenoPrenda2d', 'colores', 'lanzamiento'],
+  diseno: ['personaliza2d', 'disenoPrenda2d', 'ritmo'],
+};
+
 export type StoryGroup = 'Personalizable' | 'Productos' | 'Prenda 3D' | 'Venta' | 'Interacción' | 'Marca';
 export const STORY_GROUPS: StoryGroup[] = ['Personalizable', 'Productos', 'Venta', 'Prenda 3D', 'Interacción', 'Marca'];
 

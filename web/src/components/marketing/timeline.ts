@@ -157,6 +157,8 @@ export interface Scene {
   textBg: TextBg;
   /** Fondo propio de la escena (cualquier tipo), con la misma libertad que en los posts; null: el de la plantilla. */
   bg: SceneBg | null;
+  /** Elementos movidos a mano en la vista previa: corrimiento (fracción del ancho y alto) y tamaño. */
+  moves: Partial<Record<MoveKey, ElemMove>>;
   // ── Clip de video
   clip: SceneClip | null;
   /** Desde qué segundo del clip empieza la escena. */
@@ -194,6 +196,17 @@ export const SPEED_MAX = 2;
 let seq = 0;
 export const newSceneId = () => `s${Date.now().toString(36)}${(seq++).toString(36)}`;
 
+/** Elementos de la escena que se pueden mover en la vista previa. */
+export type MoveKey = 'prenda' | 'etiqueta' | 'titulo' | 'subtitulo' | 'precio' | 'boton';
+export const MOVE_KEYS: MoveKey[] = ['prenda', 'etiqueta', 'titulo', 'subtitulo', 'precio', 'boton'];
+/** Corrimiento (fracción del ancho y del alto del video) y tamaño (1 = el de la plantilla). */
+export interface ElemMove { x: number; y: number; s: number }
+export function elemMoveOf(v: unknown): ElemMove | null {
+  if (!v || typeof v !== 'object') return null;
+  const r = v as Record<string, unknown>;
+  return { x: num(r.x, -1, 1, 0), y: num(r.y, -1, 1, 0), s: num(r.s, 0.3, 3, 1) };
+}
+
 /** Fondo propio de una escena: un estilo (como en los posts) o una foto (subida o creada con IA). */
 export interface SceneBg {
   style: 'color' | 'degradado' | 'malla' | 'rayas' | 'mosaicoMarca' | 'mosaicoDisenos' | 'foto';
@@ -210,6 +223,9 @@ export interface SceneBg {
   image: string | null;
   /** Oscurecer la foto para que se lean los textos (0..0.7). */
   dim: number;
+  /** Mosaico de diseños: los elegidos y si suma los de las prendas del video. */
+  designs: string[];
+  useSceneDesigns: boolean;
 }
 export const SCENE_BG_STYLES: SceneBg['style'][] = ['color', 'degradado', 'malla', 'rayas', 'mosaicoMarca', 'mosaicoDisenos', 'foto'];
 const HEX = /^#[0-9a-fA-F]{6}$/;
@@ -225,6 +241,8 @@ export function sceneBgOf(v: unknown): SceneBg | null {
     grain: r.grain !== false, move: r.move !== false,
     image: typeof r.image === 'string' && r.image.length < 400 && !r.image.startsWith('data:') ? r.image : null,
     dim: num(r.dim, 0, 0.7, 0),
+    designs: Array.isArray(r.designs) ? r.designs.filter((u): u is string => typeof u === 'string' && u.length < 400 && !u.startsWith('data:')).slice(0, 12) : [],
+    useSceneDesigns: r.useSceneDesigns !== false,
   };
 }
 
@@ -232,7 +250,7 @@ export function newScene(base?: Partial<Scene>): Scene {
   const transition = base?.transition ?? 'fundido';
   return {
     id: newSceneId(), kind: '3d', templateId: null, design: null, zoneId: null, size: 0.85, offsetX: 0, offsetY: 0, color: '#FFFFFF', motion: 'giro', speed: 1,
-    product: null, photoSource: 'producto', photoMove: 'acercar', photoFit: 'tarjeta', textBg: 'marca', bg: null, clip: null, clipStart: 0,
+    product: null, photoSource: 'producto', photoMove: 'acercar', photoFit: 'tarjeta', textBg: 'marca', bg: null, moves: {}, clip: null, clipStart: 0,
     title: '', subtitle: '', badge: '', narration: '', textAnim: 'subir', textPos: 'abajo', showPrice: false,
     seconds: 4, transition: 'fundido', transitionSeconds: TRANSITION_SECONDS, sound: TRANSITION_SOUND_DEFAULT[transition], ...base,
   };
@@ -265,6 +283,10 @@ export function normalizeScene(raw: Partial<Scene> | Record<string, unknown>): S
     photoFit: r.photoFit === 'completa' ? 'completa' : 'tarjeta',
     textBg: pick(r.textBg, TEXT_BGS, 'marca'),
     bg: sceneBgOf(r.bg),
+    moves: Object.fromEntries(MOVE_KEYS.flatMap((k) => {
+      const m = elemMoveOf((r.moves as Record<string, unknown> | undefined)?.[k]);
+      return m ? [[k, m]] : [];
+    })),
     clip: r.clip && typeof r.clip === 'object' ? (r.clip as SceneClip) : null,
     clipStart: num(r.clipStart, 0, 3600, 0),
     title: str(r.title, 60),

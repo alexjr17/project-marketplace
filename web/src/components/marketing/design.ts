@@ -73,6 +73,10 @@ interface Base {
   rotation?: number;
   hidden?: boolean;
   locked?: boolean;
+  /** La armó el estudio para las zonas de la personalizable (se rearma al cambiar las zonas). */
+  auto?: 'zonas';
+  /** Lugar original del producto en la plantilla (para volver a él si cambian las zonas). */
+  home?: { x: number; y: number; w: number; h: number };
 }
 
 export interface TextLayer extends Base {
@@ -246,6 +250,21 @@ export const DESIGN_TEMPLATES: { id: DesignTemplateId; label: string; hint: stri
   { id: 'beneficios', label: 'Beneficios', hint: 'Envío, cambios, pagos: por qué comprar', group: 'Marca' },
   { id: 'anuncio', label: 'Anuncio', hint: 'Un mensaje grande sobre la marca', group: 'Marca' },
 ];
+
+/** Qué se está mostrando: cada tipo tiene sus plantillas recomendadas. */
+export type ContentKind = 'producto' | 'varios' | 'coleccion' | 'promocion' | 'personalizable' | 'diseno';
+export const CONTENT_LABEL: Record<ContentKind, string> = {
+  producto: 'tu producto', varios: 'tus productos', coleccion: 'tu colección', promocion: 'tu promoción', personalizable: 'tu personalizable', diseno: 'tus diseños',
+};
+/** Plantillas de post pensadas para cada tipo de contenido (las demás también sirven: se adaptan). */
+export const TEMPLATES_FOR: Record<ContentKind, DesignTemplateId[]> = {
+  producto: ['destacado', 'minimal', 'editorial', 'nuevo', 'revista', 'contorno', 'vidrio', 'dividido', 'drop', 'sticker'],
+  varios: ['coleccion', 'bento', 'collage', 'outfit', 'top3', 'encuesta', 'destacado', 'editorial'],
+  coleccion: ['coleccion', 'bento', 'collage', 'outfit', 'top3', 'destacado', 'editorial', 'revista'],
+  promocion: ['oferta', 'precio', 'cupon', 'regresiva', 'sticker', 'destacado', 'coleccion'],
+  personalizable: ['coleccionPremium', 'dosVistas', 'tresVistas', 'personaliza', 'destacado', 'nuevo', 'oferta', 'revista'],
+  diseno: ['personaliza', 'anuncio', 'contorno', 'collage', 'bento'],
+};
 
 /** Capas de una plantilla para el tamaño pedido. */
 export function buildDesign(id: DesignTemplateId, ratio: DesignRatio, opts?: { colors?: string[] | null }): Design {
@@ -726,7 +745,7 @@ export function buildDesign(id: DesignTemplateId, ratio: DesignRatio, opts?: { c
     }
     case 'outfit': {
       pat('malla', 'paper', 'accent', { accent: 'white', density: 0.3 });
-      L.push(textLayer({ name: 'Título', text: 'Look completo', x: m, y: v(70, 90, 170), w: W * 0.42, h: 200, size: v(80, 88, 104), color: 'primary', maxLines: 2 }));
+      L.push(textLayer({ name: 'Título', text: 'Look completo', x: m, y: v(70, 90, 170), w: W * 0.42, h: 200, size: v(62, 68, 84), color: 'primary', maxLines: 2 }));
       L.push(textLayer({ name: 'Subtítulo', bind: 'subtitle', x: m, y: v(270, 300, 420), w: W * 0.36, h: colors ? 110 : 160, font: 'body', size: 32, weight: 400, color: '#55534F' as Paint, upper: false, maxLines: 4, lineHeight: 1.3 }));
       // Las prendas del look grandes y encimadas en diagonal, cada una con su precio.
       const spots: [number, number, number, number][] = [

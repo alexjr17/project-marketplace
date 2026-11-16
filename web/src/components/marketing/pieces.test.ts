@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { SourceProduct } from '../../services/marketing.service';
 import { buildDesign, type ImageLayer } from './design';
-import { defaultPlan, garmentSubject, garmentZones, productSubject, resolveDesign } from './pieces';
+import { defaultPlan, garmentSubject, garmentZones, layoutZones, productSubject, resolveDesign } from './pieces';
 import { buildStoryboard, canBuild, STORYBOARDS, type StoryContext } from './storyboards';
 
 const prod = (id: number, images: string[]): SourceProduct => ({ id, name: `P${id}`, price: 50000, listPrice: 50000, discountPercent: 0, image: images[0] ?? null, images });
@@ -20,9 +20,11 @@ const images = (d: { layers: unknown[] }) => d.layers.filter((l): l is ImageLaye
 
 describe('con qué trabaja la pieza', () => {
   it('un producto: cada foto es una pieza; varios: una por producto con su foto principal', () => {
+    // Producto sin zonas: su foto principal; si se marcan más fotos, también esas.
     const one = productSubject([prod(1, ['/a.png', '/b.png', '/c.png'])], {});
     expect(one.kind === 'productos' && one.single).toBe(true);
-    expect(one.pieces.map((p) => p.image)).toEqual(['/a.png', '/b.png', '/c.png']);
+    expect(one.pieces.map((p) => p.image)).toEqual(['/a.png']);
+    expect(productSubject([prod(1, ['/a.png', '/b.png', '/c.png'])], { 1: ['/a.png', '/b.png', '/c.png'] }).pieces.map((p) => p.image)).toEqual(['/a.png', '/b.png', '/c.png']);
     // Solo las fotos elegidas.
     expect(productSubject([prod(1, ['/a.png', '/b.png', '/c.png'])], { 1: ['/c.png'] }).pieces.map((p) => p.image)).toEqual(['/c.png']);
     const many = productSubject([prod(1, ['/a.png', '/b.png']), prod(2, ['/x.png'])], { 1: ['/b.png'] });
@@ -53,7 +55,7 @@ describe('con qué trabaja la pieza', () => {
     const views = images(resolveDesign(buildDesign('dosVistas', '1:1'), s)).filter((l) => l.mock);
     expect(views.map((l) => [l.mock?.view, l.mock?.design?.id])).toEqual([['front', 9], ['back', 10]]);
     // Producto normal con frente y espalda: la vista de espalda usa su segunda foto, sin montaje.
-    const p = productSubject([prod(1, ['/a.png', '/b.png'])], {});
+    const p = productSubject([prod(1, ['/a.png', '/b.png'])], { 1: ['/a.png', '/b.png'] });
     const pv = images(resolveDesign(buildDesign('dosVistas', '1:1'), p)).filter((l) => l.name.startsWith('Vista'));
     expect(pv.map((l) => [l.mock ?? null, l.item])).toEqual([[null, 0], [null, 1]]);
   });
@@ -109,5 +111,65 @@ describe('con qué trabaja la pieza', () => {
     }
     // Sin la opción, nada extra.
     expect(buildStoryboard('frenteEspalda2d', { ...ctx, showcase: null }).some((x) => x.badge === 'ROJO')).toBe(false);
+  });
+
+  it('personalizable: la primera zona elegida es la principal; con 2 zonas van a la par y con más, como detalles (capas reales)', () => {
+    const plan = { 1: { show: true, design: laurel, order: 2 }, 3: { show: true, design: null, order: 1 }, 4: { show: true, design: null, order: 3 } };
+    const s = garmentSubject(shirt, plan);
+    // Orden de elección: Espalda (1), Frente (2), Manga (3).
+    expect(s.pieces.map((p) => p.mock?.zoneId)).toEqual([3, 1, 4]);
+    const built = buildDesign('destacado', '1:1');
+    const heroBox = images(built).find((l) => l.name === 'Foto del producto')!;
+    const laid = layoutZones(built, s);
+    const d = resolveDesign(laid, s);
+    const hero = images(d).find((l) => l.name === 'Foto del producto')!;
+    expect(hero.mock?.zoneId).toBe(3);
+    const details = images(d).filter((l) => l.name.startsWith('Zona '));
+    expect(details.map((l) => l.mock?.zoneId)).toEqual([1, 4]);
+    expect(details.every((l) => l.mock?.closeUp && l.auto === 'zonas')).toBe(true);
+    // Rearmar no duplica; con una sola zona vuelve a la plantilla tal cual (el producto a su lugar).
+    expect(layoutZones(laid, s).layers.length).toBe(laid.layers.length);
+    const one = layoutZones(laid, garmentSubject(shirt, { 1: { show: true, design: laurel } }));
+    expect(one.layers.some((l) => l.auto === 'zonas')).toBe(false);
+    expect(images(one).find((l) => l.name === 'Foto del producto')).toMatchObject({ x: heroBox.x, y: heroBox.y, w: heroBox.w, h: heroBox.h });
+    // Dos zonas: las dos a la par, del mismo tamaño, con su nombre.
+    const two = resolveDesign(layoutZones(built, garmentSubject(shirt, { 1: { show: true, design: laurel, order: 1 }, 3: { show: true, design: null, order: 2 } })), s);
+    const [a, b] = [images(two).find((l) => l.name === 'Foto del producto')!, images(two).find((l) => l.name.startsWith('Zona '))!];
+    expect(Math.round(a.w)).toBe(Math.round(b.w));
+    expect(Math.round(a.h)).toBe(Math.round(b.h));
+    expect(b.mock?.closeUp).toBeFalsy();
+    expect(two.layers.filter((l) => l.name.startsWith('Etiqueta ')).length).toBe(2);
+    // Plantillas de varios espacios: no se tocan.
+    expect(layoutZones(buildDesign('coleccion', '1:1'), s).layers.some((l) => l.auto === 'zonas')).toBe(false);
+    // En cualquier formato, los detalles no tapan la zona principal (van a un lado o abajo, donde no tapen textos).
+    for (const ratio of ['1:1', '4:5', '9:16'] as const) {
+      for (const id of ['destacado', 'oferta', 'nuevo', 'minimal', 'editorial', 'sticker', 'drop', 'revista', 'dividido'] as const) {
+        const all = images(layoutZones(buildDesign(id, ratio), s));
+        const h = all.find((l) => l.name === 'Foto del producto')!;
+        const det = all.filter((l) => l.name.startsWith('Zona '));
+        expect(det.length, `${id} ${ratio}`).toBe(2);
+        expect(det.every((l) => l.x >= h.x + h.w || l.x + l.w <= h.x || l.y >= h.y + h.h), `${id} ${ratio}`).toBe(true);
+      }
+    }
+  });
+
+  it('producto normal y varios productos: fotos tal cual (sin recortar) que no tapan logo ni textos', () => {
+    const hit = (a: { x: number; y: number; w: number; h: number }, b: { x: number; y: number; w: number; h: number }) => a.x < b.x + b.w - 1 && a.x + a.w > b.x + 1 && a.y < b.y + b.h - 1 && a.y + a.h > b.y + 1;
+    const one = productSubject([prod(1, ['/a.png'])], {});
+    const three = productSubject([prod(1, ['/a.png']), prod(2, ['/b.png']), prod(3, ['/c.png'])], {});
+    const two = productSubject([prod(1, ['/a.png']), prod(2, ['/b.png'])], {});
+    for (const ratio of ['1:1', '4:5', '9:16'] as const) {
+      for (const id of ['destacado', 'oferta', 'nuevo', 'editorial', 'sticker', 'drop', 'revista', 'personaliza'] as const) {
+        for (const [sub, n] of [[one, 1], [two, 2], [three, 3]] as const) {
+          const d = resolveDesign(layoutZones(buildDesign(id, ratio), sub), sub);
+          const photos = images(d).filter((l) => l.name === 'Foto del producto' || l.name.startsWith('Producto '));
+          expect(photos.length, `${id} ${ratio} ${n}`).toBe(n);
+          expect(photos.every((l) => !l.cutout), `${id} ${ratio} ${n} sin recortar`).toBe(true);
+          const texts = d.layers.filter((l) => (l.type === 'text' || l.type === 'logo') && !l.locked && l.auto !== 'zonas');
+          const bad = photos.flatMap((ph) => texts.filter((t) => hit(ph, t)).map((t) => `${ph.name}/${t.name}`));
+          expect(bad, `${id} ${ratio} ${n}`).toEqual([]);
+        }
+      }
+    }
   });
 });

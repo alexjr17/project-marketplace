@@ -5,11 +5,11 @@
  *
  * Unidad: el lienzo mide 1080 de ancho; las medidas se escriben en esa escala.
  */
-import { clampSeconds, END_SECONDS, frameAt, layout, type Scene } from './timeline';
+import { clampSeconds, END_SECONDS, frameAt, layout, type ElemMove, type MoveKey, type Scene } from './timeline';
 import { composite, drawCover } from './transitions';
 import { clipVideo } from './media';
 import { paintBackground } from './backgrounds';
-import { contentBox, drawCutout, hasTransparency, quickCutout } from './cutout';
+import { contentBox, drawCutout, hasTransparency } from './cutout';
 import { designRectOf } from './mockup';
 
 export type Format = 'post' | 'historia' | 'reel' | 'video360';
@@ -533,6 +533,8 @@ export interface VideoOptions {
   endCard: boolean;
   /** Logo de la marca arriba en todas las escenas. */
   logo: boolean;
+  /** Logo movido a mano (para todo el video). */
+  logoAt?: ElemMove | null;
 }
 
 export interface SceneAssets {
@@ -603,8 +605,29 @@ function photoMotion(sc: Scene, local: number, W: number) {
   }
 }
 
+type Rect = { x: number; y: number; w: number; h: number };
+/** Dónde quedó cada elemento de cada escena (y el logo) en el último cuadro dibujado. */
+const elementBoxes = new Map<string, Partial<Record<MoveKey | 'logo', Rect>>>();
+/** Elementos de la escena y dónde están (en píxeles del video). */
+export function sceneElements(id: string): Partial<Record<MoveKey | 'logo', Rect>> {
+  return elementBoxes.get(id) ?? {};
+}
+/** Mueve y escala alrededor del centro (cx, cy) según el corrimiento guardado. */
+function place(ctx: CanvasRenderingContext2D, m: ElemMove | undefined, cx: number, cy: number, W: number, H: number) {
+  if (!m) return;
+  ctx.translate(m.x * W, m.y * H);
+  if (m.s !== 1) { ctx.translate(cx, cy); ctx.scale(m.s, m.s); ctx.translate(-cx, -cy); }
+}
+/** Anota dónde quedó un elemento (ya movido y escalado). */
+function note(id: string, key: MoveKey | 'logo', r: Rect, m: ElemMove | undefined, cx: number, cy: number, W: number, H: number) {
+  const k = m?.s ?? 1, dx = (m?.x ?? 0) * W, dy = (m?.y ?? 0) * H;
+  let e = elementBoxes.get(id);
+  if (!e) { e = {}; elementBoxes.set(id, e); }
+  e[key] = { x: cx + (r.x - cx) * k + dx, y: cy + (r.y - cy) * k + dy, w: r.w * k, h: r.h * k };
+}
+
 /** La última prenda dibujada en una escena de foto: para agarrar su diseño en la vista previa. */
-let lastPhoto: { id: string; img: HTMLImageElement | HTMLCanvasElement; x: number; y: number; w: number; h: number; zoom: number } | null = null;
+let lastPhoto: { id: string; img: HTMLImageElement | HTMLCanvasElement; x: number; y: number; w: number; h: number; zoom: number; m?: ElemMove; cx: number; cy: number; W: number; H: number } | null = null;
 
 /**
  * Dónde quedó en el lienzo la prenda de la escena y su diseño: `span` es cuánto mide la foto completa
@@ -620,15 +643,19 @@ export function photoSceneLayout(id: string): { span: [number, number]; designRe
   const fw = p.img instanceof HTMLCanvasElement ? p.img.width : p.img.naturalWidth;
   const fh = p.img instanceof HTMLCanvasElement ? p.img.height : p.img.naturalHeight;
   const dr = designRectOf(p.img);
-  return { span: [fw * k, fh * k], designRect: dr ? { x: ix + (dr.x - cx0) * k, y: iy + (dr.y - cy0) * k, w: dr.w * k, h: dr.h * k } : null };
+  // Con la prenda movida o escalada, el diseño también.
+  const sc = p.m?.s ?? 1, mx = (p.m?.x ?? 0) * p.W, my = (p.m?.y ?? 0) * p.H;
+  const tf = (r: Rect): Rect => ({ x: p.cx + (r.x - p.cx) * sc + mx, y: p.cy + (r.y - p.cy) * sc + my, w: r.w * sc, h: r.h * sc });
+  return { span: [fw * k * sc, fh * k * sc], designRect: dr ? tf({ x: ix + (dr.x - cx0) * k, y: iy + (dr.y - cy0) * k, w: dr.w * k, h: dr.h * k }) : null };
 }
 
 /**
  * Escena de foto de producto: el producto recortado y en grande (protagonista), o la foto a pantalla
  * completa. Si la foto no se puede recortar (trae una escena), va en una tarjeta grande flotando.
  */
-function photoScene(ctx: CanvasRenderingContext2D, s: PieceSpec, sc: Scene, local: number, img: HTMLImageElement | HTMLCanvasElement | null, W: number, H: number, cut: HTMLImageElement | HTMLCanvasElement | null = null, ownBg = false) {
+function photoScene(ctx: CanvasRenderingContext2D, s: PieceSpec, sc: Scene, local: number, img: HTMLImageElement | HTMLCanvasElement | null, W: number, H: number, cut: HTMLImageElement | HTMLCanvasElement | null = null, ownBg = false, text: { ctaRoom: boolean; price: PieceItem | null } = { ctaRoom: false, price: null }) {
   const base = bgOf(s, sc);
+  textBelow.delete(sc.id);
   if (!ownBg) {
     ctx.fillStyle = base;
     ctx.fillRect(0, 0, W, H);
@@ -641,12 +668,26 @@ function photoScene(ctx: CanvasRenderingContext2D, s: PieceSpec, sc: Scene, loca
     ctx.restore();
     return;
   }
-  const hero = cut && cut.width ? cut : hasTransparency(img) ? img : quickCutout(img);
+  // Recortada solo si ya viene sin fondo (la prenda personalizable); la foto de un producto va tal cual.
+  const hero = cut && cut.width ? cut : hasTransparency(img) ? img : null;
   const textTop = sc.textPos === 'arriba';
   const tall = H > W * 1.2;
+  // El espacio que dejan el logo y los textos: ahí va el producto, centrado.
+  const tb = textBlock(ctx, sc, W, H, text.ctaRoom, text.price);
+  const over = sc.textPos === 'centro' || tb.empty;
+  const top0 = 170, bot0 = H - 70;
+  const area = over ? { y: top0, h: bot0 - top0 } : textTop ? { y: tb.y + tb.h + 40, h: bot0 - (tb.y + tb.h + 40) } : { y: top0, h: tb.y - 40 - top0 };
+  // Solo una etiqueta o el precio (sin título): la prenda y su texto van juntos, centrados.
+  const compact = !over && !textTop && !sc.title && !sc.subtitle;
   if (hero) {
+    const bw = W * 0.94, maxH = Math.min(H * (tall ? 0.62 : 0.66), compact ? bot0 - top0 - tb.h - 40 : area.h);
+    const [, , cw0, ch0] = contentBox(hero, 0.005);
+    const gh = cw0 && ch0 ? Math.min(maxH, (bw / cw0) * ch0) : maxH;
+    const groupH = compact ? gh + 30 + tb.h : gh;
+    const gy0 = compact ? top0 + (bot0 - top0 - groupH) / 2 : area.y + (area.h - gh) / 2;
+    if (compact) textBelow.set(sc.id, gy0 + gh + 30);
     // Escenario: luz del color de acento detrás del producto, el nombre de la marca enorme y tenue, y el piso.
-    const cy = textTop ? H * 0.62 : H * 0.42;
+    const cy = gy0 + gh / 2;
     const glow = ctx.createRadialGradient(W / 2, cy, 10, W / 2, cy, Math.max(W, H) * 0.6);
     glow.addColorStop(0, rgba(s.brand.accent, 0.42));
     glow.addColorStop(0.55, rgba(s.brand.accent, 0.1));
@@ -666,13 +707,21 @@ function photoScene(ctx: CanvasRenderingContext2D, s: PieceSpec, sc: Scene, loca
       ctx.restore();
     }
     // El producto ocupa casi todo el ancho y lo que deja el texto, flotando despacio.
-    const bw = W * 0.94, bh = H * (tall ? 0.58 : 0.64);
-    const by = (textTop ? H * 0.3 : H * 0.1) + Math.sin(local * 1.3) * H * 0.006;
+    const bh = gh;
+    const by = gy0 + Math.sin(local * 1.3) * H * 0.006;
+    const mv = sc.moves?.prenda, gcx = W / 2, gcy = by + bh / 2;
     ctx.save();
+    place(ctx, mv, gcx, gcy, W, H);
     ctx.translate(m.dx * 0.5, 0);
     drawCutout(ctx, hero, (W - bw) / 2, by, bw, bh, { zoom: m.zoom });
-    lastPhoto = { id: sc.id, img: hero, x: (W - bw) / 2 + m.dx * 0.5, y: by, w: bw, h: bh, zoom: m.zoom };
+    lastPhoto = { id: sc.id, img: hero, x: (W - bw) / 2 + m.dx * 0.5, y: by, w: bw, h: bh, zoom: m.zoom, m: mv, cx: gcx, cy: gcy, W, H };
     ctx.restore();
+    // Lo que se agarra de la prenda: la silueta dibujada.
+    {
+      const [, , cw, ch] = contentBox(hero, 0.005);
+      const k = cw && ch ? Math.min(bw / cw, bh / ch) * m.zoom : 0;
+      note(sc.id, 'prenda', { x: (W - cw * k) / 2 + m.dx * 0.5, y: by + bh - ch * k, w: cw * k, h: ch * k }, mv, gcx, gcy, W, H);
+    }
     return;
   }
   // Foto con escena: de fondo desenfocada (si la escena no tiene fondo propio) y en una tarjeta grande encima.
@@ -685,10 +734,16 @@ function photoScene(ctx: CanvasRenderingContext2D, s: PieceSpec, sc: Scene, loca
     ctx.fillStyle = rgba(base, 0.55);
     ctx.fillRect(0, 0, W, H);
   }
-  const cw = Math.min(W * 0.88, (H * 0.66) / 1.15);
+  const cw = Math.min(W * 0.88, (Math.min(H * 0.66, compact ? bot0 - top0 - tb.h - 40 : area.h)) / 1.15);
   const ch = cw * 1.15;
-  const cy = (textTop ? H * 0.6 : H * 0.4) - ch / 2 + Math.sin(local * 1.3) * 8;
+  const cy0 = compact ? top0 + (bot0 - top0 - (ch + 30 + tb.h)) / 2 : area.y + (area.h - ch) / 2;
+  if (compact) textBelow.set(sc.id, cy0 + ch + 30);
+  const cy = cy0 + Math.sin(local * 1.3) * 8;
   const cx = (W - cw) / 2;
+  const mv = sc.moves?.prenda;
+  note(sc.id, 'prenda', { x: cx, y: cy, w: cw, h: ch }, mv, cx + cw / 2, cy + ch / 2, W, H);
+  ctx.save();
+  place(ctx, mv, cx + cw / 2, cy + ch / 2, W, H);
   ctx.save();
   ctx.shadowColor = 'rgba(0,0,0,0.38)';
   ctx.shadowBlur = 70;
@@ -701,6 +756,7 @@ function photoScene(ctx: CanvasRenderingContext2D, s: PieceSpec, sc: Scene, loca
   rr(ctx, cx, cy, cw, ch, 36);
   ctx.clip();
   coverAt(ctx, img, cx, cy, cw, ch, m.zoom, m.dx * 0.5);
+  ctx.restore();
   ctx.restore();
 }
 
@@ -761,8 +817,10 @@ function sceneBackground(ctx: CanvasRenderingContext2D, s: PieceSpec, scenes: Sc
     return true;
   }
   const dark = isDark(g.base);
+  // Mosaico de diseños: los elegidos para el fondo y (si se pide) los de las prendas del video.
   const designs = g.style === 'mosaicoDisenos'
-    ? Array.from(new Set(scenes.flatMap((x) => (x.design?.image ? [x.design.image] : [])))).map((u) => a.images[u]).filter((i): i is HTMLImageElement => !!i && i.naturalWidth > 0)
+    ? Array.from(new Set([...(g.designs ?? []), ...(g.useSceneDesigns !== false ? scenes.flatMap((x) => (x.design?.image ? [x.design.image] : [])) : [])]))
+      .map((u) => a.images[u]).filter((i): i is HTMLImageElement => !!i && i.naturalWidth > 0)
     : [];
   paintBackground(ctx, 0, 0, W, H, {
     style: g.style, base: g.base, ink: g.ink, accent: g.accent, density: g.density, size: g.size,
@@ -781,7 +839,7 @@ function drawSceneBody(ctx: CanvasRenderingContext2D, s: PieceSpec, scenes: Scen
     const img = sc.photoSource === 'plantilla' ? a.mockups[sc.id] ?? null : sc.product?.image ? a.images[sc.product.image] ?? null : null;
     const cutUrl = sc.photoSource !== 'plantilla' && sc.product?.image ? a.cutouts?.[sc.product.image] : null;
     const own = sceneBackground(ctx, s, scenes, sc, local, a, W, H);
-    photoScene(ctx, s, sc, local, img, W, H, cutUrl ? a.images[cutUrl] ?? null : null, own);
+    photoScene(ctx, s, sc, local, img, W, H, cutUrl ? a.images[cutUrl] ?? null : null, own, { ctaRoom: !!s.cta && j === scenes.length - 1, price: scenePrice(sc, a) });
     return;
   }
   if (sc.kind === 'texto' && sceneBackground(ctx, s, scenes, sc, local, a, W, H)) return;
@@ -808,7 +866,14 @@ function drawSceneBody(ctx: CanvasRenderingContext2D, s: PieceSpec, scenes: Scen
     }
     return;
   }
-  if (a.slots[j % 2] === j) frameCover(ctx, a.frames[j % 2], W, H);
+  if (a.slots[j % 2] === j) {
+    const mv = sc.moves?.prenda;
+    ctx.save();
+    place(ctx, mv, W / 2, H / 2, W, H);
+    frameCover(ctx, a.frames[j % 2], W, H);
+    ctx.restore();
+    note(sc.id, 'prenda', { x: W * 0.18, y: H * 0.14, w: W * 0.64, h: H * 0.62 }, mv, W / 2, H / 2, W, H);
+  }
 }
 
 /** Líneas de texto centradas con su animación de entrada (t = segundos desde que empieza). */
@@ -902,13 +967,13 @@ function scenePrice(sc: Scene, a: SceneAssets): PieceItem | null {
 }
 
 /** Etiqueta, título, subtítulo y precio de una escena, con su animación y en su posición. */
-function sceneText(ctx: CanvasRenderingContext2D, s: PieceSpec, sc: Scene, local: number, alpha: number, W: number, H: number, ctaRoom: boolean, price: PieceItem | null) {
-  if (alpha <= 0 || (!sc.title && !sc.subtitle && !sc.badge && !price)) return;
-  const b = s.brand;
-  const dark = isDark(bgOf(s, sc));
+/** Dónde empieza el texto suelto (etiqueta o precio sin título) de una escena: justo debajo de la prenda. */
+const textBelow = new Map<string, number>();
+
+/** Medidas del bloque de textos de una escena (etiqueta, título, subtítulo y precio) y dónde empieza. */
+function textBlock(ctx: CanvasRenderingContext2D, sc: Scene, W: number, H: number, ctaRoom: boolean, price: PieceItem | null) {
   const big = sc.kind === 'texto';
   const maxW = W - 150;
-  // Medidas del bloque.
   let tSize = sc.title ? posterSize(ctx, sc.title, maxW, big ? 128 : 88) : 0;
   const maxTitleLines = big ? 3 : 2;
   font(ctx, 800, tSize || 10, 'heading');
@@ -924,18 +989,36 @@ function sceneText(ctx: CanvasRenderingContext2D, s: PieceSpec, sc: Scene, local
   const sLh = big ? 54 : 48;
   const badgeH = sc.badge ? 64 + 22 : 0;
   const priceH = price ? (price.listPrice && price.price != null && price.listPrice > price.price ? 92 : 78) : 0;
-  const blockH = badgeH + tLines.length * tLh + (sLines.length ? 14 + sLines.length * sLh : 0) + (priceH ? 18 + priceH : 0);
+  const h = badgeH + tLines.length * tLh + (sLines.length ? 14 + sLines.length * sLh : 0) + (priceH ? 18 + priceH : 0);
   const logoRoom = 190;
-  let y = sc.textPos === 'arriba' ? logoRoom + 20 : sc.textPos === 'centro' ? (H - blockH) / 2 : (ctaRoom ? H - 196 : H - 110) - blockH;
-  y = Math.max(logoRoom, y);
+  const y = Math.max(logoRoom, sc.textPos === 'arriba' ? logoRoom + 20 : sc.textPos === 'centro' ? (H - h) / 2 : (ctaRoom ? H - 196 : H - 110) - h);
+  return { big, tSize, tLines, tLh, sLines, sLh, badgeH, h, y, empty: !sc.title && !sc.subtitle && !sc.badge && !price };
+}
+
+function sceneText(ctx: CanvasRenderingContext2D, s: PieceSpec, sc: Scene, local: number, alpha: number, W: number, H: number, ctaRoom: boolean, price: PieceItem | null) {
+  if (alpha <= 0 || (!sc.title && !sc.subtitle && !sc.badge && !price)) return;
+  const b = s.brand;
+  const dark = isDark(bgOf(s, sc));
+  const tb = textBlock(ctx, sc, W, H, ctaRoom, price);
+  const { big, tSize, tLines, tLh, sLines, sLh, badgeH } = tb;
+  let y = tb.y;
+  // Con la prenda en la escena, la etiqueta o el precio sueltos van justo debajo de ella.
+  const below = textBelow.get(sc.id);
+  if (below != null && sc.textPos !== 'arriba' && sc.textPos !== 'centro') y = below;
   const fg = dark ? '#ffffff' : b.primary;
+  const mv = sc.moves ?? {};
+  const widest = (lines: string[]) => Math.max(0, ...lines.map((l) => ctx.measureText(l).width));
   ctx.save();
   ctx.globalAlpha = alpha;
   // Etiqueta.
   if (sc.badge) {
     const k = backOut(local * 2.8);
+    font(ctx, 700, 32);
+    const bw = ctx.measureText(up(sc.badge)).width + 32 * 1.6;
+    note(sc.id, 'etiqueta', { x: W / 2 - bw / 2, y, w: bw, h: 64 }, mv.etiqueta, W / 2, y + 32, W, H);
     ctx.save();
     ctx.globalAlpha = alpha * clamp01(local * 5);
+    place(ctx, mv.etiqueta, W / 2, y + 32, W, H);
     ctx.translate(W / 2, y + 32);
     ctx.scale(0.6 + 0.4 * k, 0.6 + 0.4 * k);
     pill(ctx, up(sc.badge), 0, -32, 32, dark ? b.accent : b.primary, dark ? b.primary : '#ffffff', 'center');
@@ -946,8 +1029,13 @@ function sceneText(ctx: CanvasRenderingContext2D, s: PieceSpec, sc: Scene, local
   if (tLines.length) {
     font(ctx, 800, tSize, 'heading');
     ctx.fillStyle = fg;
+    const tw = widest(tLines), th = tLines.length * tLh;
+    note(sc.id, 'titulo', { x: W / 2 - tw / 2, y, w: tw, h: th }, mv.titulo, W / 2, y + th / 2, W, H);
+    ctx.save();
+    place(ctx, mv.titulo, W / 2, y + th / 2, W, H);
     animLines(ctx, tLines, W / 2, y, tLh, sc.textAnim, local - (sc.badge ? 0.15 : 0), 1);
-    y += tLines.length * tLh;
+    ctx.restore();
+    y += th;
   }
   const typed = sc.textAnim === 'escribir' ? tLines.join('').length / 24 : 0;
   // Subtítulo.
@@ -955,8 +1043,13 @@ function sceneText(ctx: CanvasRenderingContext2D, s: PieceSpec, sc: Scene, local
     y += 14;
     font(ctx, 500, big ? 44 : 38);
     ctx.fillStyle = dark ? 'rgba(255,255,255,0.82)' : '#4b4b4b';
+    const sw = widest(sLines), sh = sLines.length * sLh;
+    note(sc.id, 'subtitulo', { x: W / 2 - sw / 2, y, w: sw, h: sh }, mv.subtitulo, W / 2, y + sh / 2, W, H);
+    ctx.save();
+    place(ctx, mv.subtitulo, W / 2, y + sh / 2, W, H);
     animLines(ctx, sLines, W / 2, y, sLh, sc.textAnim === 'letras' || sc.textAnim === 'escribir' ? 'subir' : sc.textAnim, local - 0.25 - typed, 1);
-    y += sLines.length * sLh;
+    ctx.restore();
+    y += sh;
   }
   // Precio.
   if (price && price.price != null) {
@@ -966,15 +1059,24 @@ function sceneText(ctx: CanvasRenderingContext2D, s: PieceSpec, sc: Scene, local
     const strike = price.listPrice && price.listPrice > price.price;
     if (sc.kind === '3d') {
       font(ctx, 700, 46);
+      const pw = ctx.measureText('desde ' + money(price.price)).width;
+      note(sc.id, 'precio', { x: W / 2 - pw / 2, y, w: pw, h: 50 }, mv.precio, W / 2, y + 25, W, H);
+      ctx.save();
+      place(ctx, mv.precio, W / 2, y + 25, W, H);
       ctx.fillStyle = dark ? b.accent : b.primary;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'top';
       ctx.fillText('desde ' + money(price.price), W / 2, y + (1 - k) * 20);
+      ctx.restore();
     } else {
       font(ctx, 800, 70);
       let w = ctx.measureText(money(price.price)).width;
       if (strike) { font(ctx, 500, 42); w += ctx.measureText(money(price.listPrice!)).width + 25; }
+      note(sc.id, 'precio', { x: (W - w) / 2, y, w, h: 76 }, mv.precio, W / 2, y + 38, W, H);
+      ctx.save();
+      place(ctx, mv.precio, W / 2, y + 38, W, H);
       priceRow(ctx, price, (W - w) / 2, y + (1 - k) * 20, 70, dark ? b.accent : b.primary, dark ? 'rgba(255,255,255,0.6)' : '#888');
+      ctx.restore();
     }
   }
   ctx.restore();
@@ -1046,8 +1148,10 @@ export function drawScenes(ctx: CanvasRenderingContext2D, s: PieceSpec, scenes: 
   if (opts.logo && endWeight < 1) {
     ctx.save();
     ctx.globalAlpha = 1 - endWeight;
+    place(ctx, opts.logoAt ?? undefined, W / 2, 110, W, H);
     logo(ctx, b, isDark(bgOf(s, scenes[Math.min(shown, n - 1)])), W / 2, 80, 60, 'center');
     ctx.restore();
+    note('__video', 'logo', { x: W / 2 - 170, y: 74, w: 340, h: 72 }, opts.logoAt ?? undefined, W / 2, 110, W, H);
   }
   const last = n - 1;
   const ctaRoom = !opts.endCard && !!s.cta;
@@ -1060,7 +1164,12 @@ export function drawScenes(ctx: CanvasRenderingContext2D, s: PieceSpec, scenes: 
   if (ctaRoom && f.index === last) {
     const dark = isDark(bgOf(s, scenes[last]));
     ctx.globalAlpha = tr ? clamp01(p * 2 - 1) : ease(f.local * 2);
-    pill(ctx, s.cta, W / 2, H - 150, 36, dark ? b.accent : b.primary, dark ? b.primary : '#ffffff', 'center');
+    const mv = scenes[last].moves?.boton;
+    ctx.save();
+    place(ctx, mv, W / 2, H - 114, W, H);
+    const cw = pill(ctx, s.cta, W / 2, H - 150, 36, dark ? b.accent : b.primary, dark ? b.primary : '#ffffff', 'center');
+    ctx.restore();
+    note(scenes[last].id, 'boton', { x: W / 2 - cw / 2, y: H - 150, w: cw, h: 72 }, mv, W / 2, H - 114, W, H);
     ctx.globalAlpha = 1;
   }
 

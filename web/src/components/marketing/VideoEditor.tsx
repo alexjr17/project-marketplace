@@ -21,7 +21,8 @@ import { isSound, playSound, SOUNDS, TRANSITION_SOUNDS } from './sfx';
 import {
   clampSeconds, layout, MAX_SCENES, MOTIONS, newScene, newSceneId, TEXT_ANIMS, TRANSITIONS, type Scene, type SceneClip, type SceneKind, type SceneProduct,
 } from './timeline';
-import { buildStoryboard, canBuild, STORY_GROUPS, STORYBOARDS, type StoryboardId, type StoryContext } from './storyboards';
+import { buildStoryboard, canBuild, STORIES_FOR, STORY_GROUPS, STORYBOARDS, type StoryboardId, type StoryContext } from './storyboards';
+import { CONTENT_LABEL, type ContentKind } from './design';
 import { VIDEO_RATIOS, type VideoRatio } from './render';
 import { createClip, decodeAudio } from './media';
 import { SceneInspector, type InspectorSection } from './SceneInspector';
@@ -59,7 +60,7 @@ export function VideoEditor({
   scenes, onChange, selectedId, onSelect, endCard, onEndCard, logo, onLogo, ratio, onRatio, stage, onStage,
   templates, defaultTemplate, photoTemplates, products, story, onStoryboard, playheadRef, onPreview, onSeek,
   history, music, onMusic, onAiScenes, aiBusy, palette, media, onMedia, sfxOn, onSfxOn, sfxVolume, onSfxVolume, onAskAdvice, narration, prompter,
-  modeSwitch, menu, onboarding, hasSubject, size, panelReq = 0,
+  modeSwitch, menu, onboarding, hasSubject, size, panelReq = 0, logoMoved = false, onResetLogo, content,
 }: {
   preview: ReactNode;
   sourcePanel: ReactNode;
@@ -123,6 +124,11 @@ export function VideoEditor({
   size: [number, number];
   /** Cada vez que cambia, se abre el panel de Producto (desde el primer paso). */
   panelReq?: number;
+  /** El logo se movió a mano en la vista previa; volverlo a su lugar. */
+  logoMoved?: boolean;
+  onResetLogo?: () => void;
+  /** Qué se muestra: sus plantillas van primero. */
+  content?: ContentKind;
 }) {
   const { starts, total } = layout(scenes, endCard);
   const idx = Math.max(0, scenes.findIndex((s) => s.id === selectedId));
@@ -337,6 +343,12 @@ export function VideoEditor({
   const toolBtn = 'inline-flex items-center gap-1.5 rounded-lg px-2.5 h-9 text-sm text-gray-700 hover:bg-gray-100 disabled:opacity-40 disabled:hover:bg-transparent';
 
   const secTitle = RAIL.find((r) => r.id === bin)?.title ?? '';
+  // Primero las plantillas pensadas para lo que se muestra.
+  const rec = content ? STORIES_FOR[content] : [];
+  const storyGroups = [
+    ...(rec.length ? [{ name: `Para ${CONTENT_LABEL[content!]}`, rec: true, items: rec.map((id) => STORYBOARDS.find((b) => b.id === id)!).filter(Boolean) }] : []),
+    ...STORY_GROUPS.map((g) => ({ name: rec.length ? `Más: ${g}` : g, rec: false, items: STORYBOARDS.filter((b) => b.group === g && !rec.includes(b.id)) })).filter((g) => g.items.length),
+  ];
   const rail = RAIL.map((r) => ({ ...r, dot: r.id === 'medios' && !hasSubject }));
 
   return (
@@ -347,7 +359,7 @@ export function VideoEditor({
           onClose={() => setBgAi(false)}
           onUse={(img) => {
             onMedia([{ type: 'image', product: { id: -Date.now(), name: `Fondo IA: ${img.name}`, image: img.url } }, ...media]);
-            patch({ bg: { ...(sc.bg ?? { base: palette[0]?.hex ?? '#1F1D1E', ink: '#ABD04C', accent: '#F3F3EE', density: 0.5, size: 150, angle: -18, grain: false, move: true, dim: 0 }), style: 'foto', image: img.url } as Scene['bg'] });
+            patch({ bg: { ...(sc.bg ?? { base: palette[0]?.hex ?? '#1F1D1E', ink: '#ABD04C', accent: '#F3F3EE', density: 0.5, size: 150, angle: -18, grain: false, move: true, dim: 0, designs: [], useSceneDesigns: true }), style: 'foto', image: img.url } as Scene['bg'] });
           }}
         />
       )}
@@ -384,11 +396,11 @@ export function VideoEditor({
             {bin === 'plantillas' && (
               <div className="space-y-4">
                 <p className="text-xs text-gray-500">Se arman con lo que eliges en Productos. Sirven para reels, historias y posts de video: el formato va arriba.</p>
-                {STORY_GROUPS.map((g) => (
-                  <div key={g}>
-                    <p className="text-xs font-semibold text-gray-700 mb-1.5">{g}</p>
+                {storyGroups.map((g) => (
+                  <div key={g.name}>
+                    <p className={`text-xs font-semibold mb-1.5 ${g.rec ? 'text-app-700' : 'text-gray-700'}`}>{g.name}</p>
                     <div className="space-y-2">
-                      {STORYBOARDS.filter((b) => b.group === g).map((b) => {
+                      {g.items.map((b) => {
                         const ok = canBuild(b.id, story);
                         const preview = ok ? buildStoryboard(b.id, story) : [];
                         const secs = layout(preview, endCard).total;
@@ -524,7 +536,8 @@ export function VideoEditor({
                   <p className="text-sm font-medium text-gray-700">Escenario de las escenas 3D y fotos</p>
                   <RadioGroup variant="segmented" value={stage} onChange={onStage} options={[{ value: 'oscuro', label: 'Oscuro' }, { value: 'claro', label: 'Claro' }]} />
                 </div>
-                <Switch checked={logo} onChange={onLogo} label="Logo en las escenas" description="Arriba, en todas las escenas." />
+                <Switch checked={logo} onChange={onLogo} label="Logo en las escenas" description="Arriba, en todas las escenas. Con el video en pausa se puede arrastrar." />
+                {logoMoved && onResetLogo && <Button size="sm" variant="secondary" onClick={onResetLogo}>Logo a su lugar</Button>}
                 <Switch checked={endCard} onChange={onEndCard} label="Cierre con el logo" description="Al final, con el título, el subtítulo y el botón." />
               </div>
             )}

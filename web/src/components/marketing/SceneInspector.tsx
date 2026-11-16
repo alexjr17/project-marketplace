@@ -5,7 +5,7 @@
  * (hacia la siguiente o al cierre, con su duración).
  */
 import { useEffect, useState } from 'react';
-import { ArrowLeft, ArrowRight, Box, Clapperboard, Copy, Image as ImageIcon, Trash2, Type, Volume2, Wand2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Box, Clapperboard, Copy, Image as ImageIcon, Trash2, Type, Undo2, Volume2, Wand2 } from 'lucide-react';
 import { Button, ColorInput, Field, RadioGroup, SearchInput, SelectInput, Spinner, Switch, Tabs, TextInput, toast } from '../ui';
 import { errorMessage } from '../../lib/http';
 import { marketingService, type SourceProduct } from '../../services/marketing.service';
@@ -311,7 +311,7 @@ export function SceneInspector({
                 value={sc.bg} onChange={(bg, merge) => patch({ bg }, merge)} palette={bgPalette} photos={bgPhotos}
                 defaults={{
                   style: 'malla', base: bgPalette[0]?.hex ?? '#1F1D1E', ink: bgPalette[1]?.hex ?? '#ABD04C', accent: bgPalette[2]?.hex ?? '#F3F3EE',
-                  density: 0.5, size: 150, angle: -18, grain: true, move: true, image: null, dim: 0,
+                  density: 0.5, size: 150, angle: -18, grain: true, move: true, image: null, dim: 0, designs: [], useSceneDesigns: true,
                 }}
                 onAi={onBgAi} onApplyAll={onBgApplyAll} onUpload={onBgUpload}
               />
@@ -408,7 +408,13 @@ export function SceneInspector({
           </>
         )}
 
-        <div className="flex flex-wrap gap-2 pt-3 border-t border-gray-100">
+        <div className="space-y-2 pt-3 border-t border-gray-100">
+          <p className="text-xs text-gray-500">Con el video en pausa, arrastra en la vista previa la prenda, los textos, las etiquetas o el logo; la esquina del contorno cambia su tamaño.</p>
+          {Object.keys(sc.moves ?? {}).length > 0 && (
+            <Button size="sm" variant="secondary" icon={<Undo2 className="w-4 h-4" />} onClick={() => patch({ moves: {} })}>Volver a acomodar esta escena</Button>
+          )}
+        </div>
+        <div className="flex flex-wrap gap-2">
           <Button size="sm" variant="secondary" icon={<ArrowLeft className="w-4 h-4" />} onClick={() => onMove(-1)} disabled={index === 0} aria-label="Mover antes" />
           <Button size="sm" variant="secondary" icon={<ArrowRight className="w-4 h-4" />} onClick={() => onMove(1)} disabled={isLast} aria-label="Mover después" />
           <Button size="sm" variant="secondary" icon={<Copy className="w-4 h-4" />} onClick={onDuplicate} disabled={!canAdd}>Duplicar</Button>

@@ -17,9 +17,9 @@ import {
 import { errorMessage } from '../../lib/http';
 import { useBrandKit } from '../../components/marketing/brand';
 import {
-  drawReel, drawScenes, drawStill, photoSceneLayout, reelLength, sizeOf, TEMPLATES, videoSize, type Format, type PieceItem, type PieceSpec, type TemplateId, type VideoRatio,
+  drawReel, drawScenes, drawStill, photoSceneLayout, reelLength, sceneElements, sizeOf, TEMPLATES, videoSize, type Format, type PieceItem, type PieceSpec, type TemplateId, type VideoRatio,
 } from '../../components/marketing/render';
-import { clampSeconds as clampSecondsOf, frameAt, layout, motionAt, newScene, slotsAt, transitionTurn, type Scene, type SceneDesign, type SceneProduct } from '../../components/marketing/timeline';
+import { clampSeconds as clampSecondsOf, frameAt, layout, motionAt, newScene, slotsAt, transitionTurn, type ElemMove, type MoveKey, type Scene, type SceneDesign, type SceneProduct } from '../../components/marketing/timeline';
 import { buildStoryboard, canBuild, colorScenes, type StoryboardId, type StoryContext } from '../../components/marketing/storyboards';
 import { sceneArt } from '../../components/marketing/sceneArt';
 import { VideoEditor, type MediaItem, type StudioMusic } from '../../components/marketing/VideoEditor';
@@ -33,9 +33,9 @@ import { DesignEditor } from '../../components/marketing/DesignEditor';
 import { StudioModeSwitch } from '../../components/marketing/StudioShell';
 import { GarmentViewsDialog } from '../../components/marketing/GarmentViewsDialog';
 import { SubjectPanel } from '../../components/marketing/SubjectPanel';
-import { buildDesign, designSize, reflowDesign, type ColorsLayer, type Design, type DesignRatio, type MockView, type PieceMock } from '../../components/marketing/design';
+import { buildDesign, designSize, reflowDesign, type ColorsLayer, type ContentKind, type Design, type DesignRatio, type MockView, type PieceMock } from '../../components/marketing/design';
 import { canonicalView } from '../../components/customizer/customizerModel';
-import { defaultPlan, garmentSubject, garmentZones, productSubject, resolveDesign, type GarmentPlan, type Subject, type ZoneChoice } from '../../components/marketing/pieces';
+import { defaultPlan, garmentSubject, garmentZones, layoutZones, productSubject, resolveDesign, type GarmentPlan, type Subject, type ZoneChoice } from '../../components/marketing/pieces';
 import type { Mannequin3DHandle } from '../../components/mannequin/Mannequin3D';
 import { drawDesign, type DesignData } from '../../components/marketing/designRender';
 import { decodeAudio, extOf, loadImage, recordCanvas, syncClips, videoMime } from '../../components/marketing/media';
@@ -89,7 +89,7 @@ type AnySource = SourceProduct | SourceCollection | SourcePromotion | SourceDesi
 const VIEW3D: Record<MockView, View3D> = { front: 'front', back: 'back', side: 'rightSleeve' };
 type MockPlan =
   | { kind: 'foto'; zone: SourceZone; baseUrl: string }
-  | { kind: '3d'; key: string; model: string; color: string; view3d: View3D; zone: SourceZone | null; zones: SourceZone[]; design: PieceMock['design']; size: number; closeUp: boolean };
+  | { kind: '3d'; key: string; model: string; color: string; view3d: View3D; zone: SourceZone | null; zones: SourceZone[]; design: PieceMock['design']; size: number; closeUp: boolean; offset: { x: number; y: number } };
 
 const canvasOf = (h: RefObject<HTMLDivElement | null>) => (h.current?.querySelector('canvas') as HTMLCanvasElement | null) ?? null;
 const toSceneProduct = (p: SourceProduct): SceneProduct => ({ id: p.id, name: p.name, image: p.image, price: p.price, listPrice: p.listPrice, discountPercent: p.discountPercent });
@@ -121,6 +121,8 @@ export const StudioPage = () => {
   const [stage, setStage] = useState<'claro' | 'oscuro'>('oscuro');
   const [ratio, setRatio] = useState<VideoRatio>('9:16');
   const [showLogo, setShowLogo] = useState(true);
+  /** Logo movido a mano en el video (vale para todas las escenas). */
+  const [logoAt, setLogoAt] = useState<ElemMove | null>(null);
   const [endCard, setEndCard] = useState(true);
   const [music, setMusic] = useState<StudioMusic | null>(null);
   const [sfxOn, setSfxOn] = useState(true);
@@ -240,9 +242,9 @@ export const StudioPage = () => {
   };
   const changeDesignRatio = (ratio: DesignRatio) => {
     if (ratio === design.ratio) return;
-    if (designEdited.current) designSet(reflowDesign(design, ratio));
+    if (designEdited.current) designSet(layoutZones(reflowDesign(design, ratio), subject));
     // Los colores disponibles (si están) se quedan en el formato nuevo.
-    else designReset(buildDesign(design.template, ratio, { colors: design.layers.find((l) => l.type === 'colors')?.type === 'colors' ? (design.layers.find((l) => l.type === 'colors') as ColorsLayer).colors : null }), true);
+    else designReset(layoutZones(buildDesign(design.template, ratio, { colors: design.layers.find((l) => l.type === 'colors')?.type === 'colors' ? (design.layers.find((l) => l.type === 'colors') as ColorsLayer).colors : null }), subject), true);
   };
 
   const toggle = (o: AnySource) => {
@@ -302,38 +304,34 @@ export const StudioPage = () => {
   /** La plantilla adaptada a lo elegido (solo para dibujar). */
   const resolvedDesign = useMemo(() => resolveDesign(design, subject), [design, subject]);
   const resolveFn = useCallback((d: Design) => resolveDesign(d, subject), [subject]);
+  /**
+   * Zonas de la personalizable como capas reales (editables) del post: se rearman al cambiar las zonas
+   * elegidas, la plantilla o el formato; entre medio, lo que se mueva o cambie se respeta.
+   */
+  const zoneKey = subject ? `${subject.kind}:${subject.pieces.map((p) => p.key).join(',')}` : 'ninguna';
+  useEffect(() => {
+    if (format !== 'post') return;
+    const next = layoutZones(design, subject);
+    const shape = (d: Design) => JSON.stringify(d.layers.map((l) => [l.id, Math.round(l.x), Math.round(l.y), Math.round(l.w), Math.round(l.h)]));
+    if (shape(next) !== shape(design)) designSet(next, 'zonas');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [zoneKey, design.template, design.ratio, format]);
   const setZoneChoice = (zoneId: number, patch: Partial<ZoneChoice>) => {
     if (!garment || !garmentPlan) return;
     setGarmentPlans((m) => {
       const plan = m[garment.id] ?? garmentPlan;
-      return { ...m, [garment.id]: { ...plan, [zoneId]: { ...(plan[zoneId] ?? { show: false, design: null }), ...patch } } };
+      const prev = plan[zoneId] ?? { show: false, design: null };
+      // Al elegir una zona, va de última en el orden (la primera elegida es la principal).
+      const order = patch.show && !prev.show ? Date.now() : patch.order ?? prev.order;
+      return { ...m, [garment.id]: { ...plan, [zoneId]: { ...prev, ...patch, order } } };
     });
   };
   const setAllZoneDesigns = (d: SceneDesign | null) => {
     if (!garment || !garmentPlan) return;
     setGarmentPlans((m) => ({ ...m, [garment.id]: Object.fromEntries(Object.entries(m[garment.id] ?? garmentPlan).map(([k, v]) => [k, { ...v, design: d }])) }));
   };
-  // Fotos de los productos sin su fondo (las recorta la IA una vez y quedan guardadas): así el producto
-  // sale grande y recortado en los posts y videos. Mientras llegan, se recorta rápido en el navegador.
-  const [cutouts, setCutouts] = useState<Record<string, string | null>>({});
-  const cutoutBusy = useRef(new Set<string>());
-  useEffect(() => {
-    if (sourceType === 'diseno') return;
-    const urls = (subject?.pieces ?? []).map((i) => i.image).filter((u): u is string => !!u && !(u in cutouts) && !cutoutBusy.current.has(u));
-    if (!urls.length) return;
-    let alive = true;
-    (async () => {
-      for (const u of urls) {
-        cutoutBusy.current.add(u);
-        let out: string | null = null;
-        try { out = (await marketingService.productCutout(u)).url; } catch { out = null; }
-        cutoutBusy.current.delete(u);
-        if (!alive) return;
-        setCutouts((m) => ({ ...m, [u]: out }));
-      }
-    })();
-    return () => { alive = false; };
-  }, [subject, cutouts, sourceType]);
+  // Los productos normales van con su foto tal cual (sin recortar): no se pide el recorte con IA.
+  const cutouts = useMemo<Record<string, string | null>>(() => ({}), []);
   /**
    * Cómo se arma una prenda con diseño: montaje sobre la foto de la vista (si la plantilla la tiene)
    * o foto del maniquí 3D girado a esa vista.
@@ -354,7 +352,8 @@ export const StudioPage = () => {
       const z3 = zones.find((z) => z.id === m.zoneId) ?? (m.zoneHint ? zones.find((z) => view3DOf(z.view) === view3d && z.name.toLowerCase().includes(m.zoneHint!.toLowerCase())) : undefined) ?? zones.find((z) => view3DOf(z.view) === view3d) ?? null;
       const color = m.color ?? tpl.colors?.[0] ?? '#FFFFFF';
       const closeUp = !!m.closeUp && (!!z3 || !!m.crop);
-      return { kind: '3d', key: `${tpl.model3d}|${color}|${view3d}|${z3?.id ?? ''}|${m.design?.image ?? ''}|${m.size}|${closeUp ? 'cerca' : ''}`, model: tpl.model3d, color, view3d, zone: z3, zones, design: m.design, size: m.size, closeUp };
+      const offset = m.offset ?? { x: 0, y: 0 };
+      return { kind: '3d', key: `${tpl.model3d}|${color}|${view3d}|${z3?.id ?? ''}|${m.design?.image ?? ''}|${m.size}|${offset.x}|${offset.y}|${closeUp ? 'cerca' : ''}`, model: tpl.model3d, color, view3d, zone: z3, zones, design: m.design, size: m.size, closeUp, offset };
     }
     return null;
   }, [mockTemplates, defaultMockTemplate]);
@@ -418,6 +417,7 @@ export const StudioPage = () => {
       if (sc.design?.image) urls.add(sc.design.image);
       if (sc.product?.image) urls.add(sc.product.image);
       if (sc.bg?.image) urls.add(sc.bg.image);
+      sc.bg?.designs?.forEach((u) => urls.add(u));
       if (sc.kind === 'foto' && sc.photoSource === 'plantilla') {
         const t = photoTemplates.find((x) => x.id === sc.templateId);
         const z = t && (photoZones(t).find((x) => x.id === sc.zoneId) ?? photoZones(t)[0]);
@@ -534,9 +534,10 @@ export const StudioPage = () => {
       const shot = captures[plan.key];
       if (!shot) return null;
       // Acercamiento: recorte alrededor de la zona (la foto del maniquí se tomó al doble para que no se pixele).
-      const area = m.crop ?? plan.zone;
+      // En el maniquí la foto incluye la cabeza: el cuello y la tela quedan más abajo que en una foto plana.
+      const area = m.crop ? { ...m.crop, y: Math.min(100 - m.crop.h, m.crop.y + 19) } : plan.zone;
       if (plan.closeUp && area) {
-        const ck = `${plan.key}|recorte|${JSON.stringify(m.crop ?? null)}|${z}`;
+        const ck = `${plan.key}|recorte|${JSON.stringify(area)}|${z}`;
         let c = mockCache.current.get(ck);
         if (!c) { c = zoneCrop(shot, area, m.crop ? 0 : 0.9, z); cacheMock(mockCache.current, ck, c); }
         return c;
@@ -580,7 +581,7 @@ export const StudioPage = () => {
     return null;
   }, [format, resolvedDesign, planMock, captures, images]);
   const captureArt = useMemo(() => (captureJob
-    ? sceneArt({ design: captureJob.design, zoneId: captureJob.zone?.id ?? null, size: captureJob.size } as Scene, captureJob.zones, captureJob.design ? images[captureJob.design.image] : null)
+    ? sceneArt({ design: captureJob.design, zoneId: captureJob.zone?.id ?? null, size: captureJob.size, offsetX: captureJob.offset.x, offsetY: captureJob.offset.y } as Scene, captureJob.zones, captureJob.design ? images[captureJob.design.image] : null)
     : null), [captureJob, images]);
   const onCaptureReady = (job: Extract<MockPlan, { kind: '3d' }>) => {
     if (capturing.current === job.key) return;
@@ -660,7 +661,7 @@ export const StudioPage = () => {
         mm.turn += transitionTurn(scenes, endCard, time, j);
         m.current = mm;
       });
-      drawScenes(ctx, spec, effScenes, { endCard, logo: showLogo }, {
+      drawScenes(ctx, spec, effScenes, { endCard, logo: showLogo, logoAt }, {
         frames: [canvasOf(holder3d), canvasOf(holder3dB)], slots: slotsRef.current, images, mockups: sceneMockups, templates: tplPrices, layers, cutouts,
       }, time);
       const ph = playheadRef.current;
@@ -668,7 +669,7 @@ export const StudioPage = () => {
       const tc = timecodeRef.current;
       if (tc) tc.textContent = `${Math.floor(time / 60)}:${(time % 60).toFixed(1).padStart(4, '0')}`;
     } else drawStill(ctx, spec);
-  }, [spec, format, scenes, effScenes, endCard, timing, showLogo, images, tplPrices, layers, sceneMockups, cutouts]);
+  }, [spec, format, scenes, effScenes, endCard, timing, showLogo, logoAt, images, tplPrices, layers, sceneMockups, cutouts]);
 
   // Música de la vista previa (la del video final se mezcla al grabar).
   const musicUrl = music?.url;
@@ -831,7 +832,7 @@ export const StudioPage = () => {
         title, subtitle, cta, showPrice,
         ...(isDesign ? { design: { ...design, layers: design.layers.map((l) => (l.type === 'image' && l.src?.startsWith('blob:') ? { ...l, src: null } : l)) } } : {}),
         ...(isScenes ? {
-          ratio, stage, endCard, logo: showLogo, music: music?.name ?? null, sfx: sfxOn ? sfxVolume : 0,
+          ratio, stage, endCard, logo: showLogo, logoAt, music: music?.name ?? null, sfx: sfxOn ? sfxVolume : 0,
           narrator: { mode: narrator.mode, voice: narrator.voice, rate: narrator.rate },
           // Lo subido en el momento (diseños, fotos y clips) no se guarda: pesa y vive solo en este navegador.
           scenes: scenes.map((sc) => ({
@@ -1126,38 +1127,113 @@ export const StudioPage = () => {
     </div>
   );
 
-  // ─── Video: arrastrar el diseño sobre la prenda en la vista previa (en pausa) ───
-  const vdrag = useRef<null | { id: string; sx: number; sy: number; ox: number; oy: number; span: [number, number]; design: SceneDesign; size: number; rw: number; rh: number }>(null);
-  const [overDesign, setOverDesign] = useState(false);
-  /** La escena de la prenda que se ve ahora y dónde quedó su diseño (en coordenadas del lienzo). */
-  const designUnder = (e: { clientX: number; clientY: number }) => {
+  // ─── Video: mover los elementos en la vista previa (en pausa) ───
+  // Se agarra lo que esté encima: botón, precio, textos, etiqueta, logo; luego el diseño de la prenda y
+  // por último la prenda. La esquina del contorno agranda o achica lo elegido.
+  type VTarget = { id: string; key: MoveKey | 'logo' | 'diseno' };
+  const vdrag = useRef<null | {
+    mode: 'move' | 'scale' | 'design'; t: VTarget; sx: number; sy: number; rw: number; rh: number;
+    orig: ElemMove; rect: { x: number; y: number; w: number; h: number };
+    span?: [number, number]; design?: SceneDesign; size?: number;
+  }>(null);
+  const [vsel, setVsel] = useState<VTarget | null>(null);
+  const [vhover, setVhover] = useState<VTarget | null>(null);
+  const [vlive, setVlive] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
+  const [, setVtick] = useState(0);
+  const currentScene = () => effScenes[frameAt(scenes, endCard, timeRef.current).index] ?? null;
+  const toCanvas = (e: { clientX: number; clientY: number }) => {
+    const r = canvasRef.current!.getBoundingClientRect();
+    return { x: ((e.clientX - r.left) / r.width) * W, y: ((e.clientY - r.top) / r.height) * H, r };
+  };
+  const inRect = (p: { x: number; y: number }, b: { x: number; y: number; w: number; h: number }, pad = 10) => p.x >= b.x - pad && p.x <= b.x + b.w + pad && p.y >= b.y - pad && p.y <= b.y + b.h + pad;
+  const rectOf = (t: VTarget) => {
+    if (t.key === 'logo') return sceneElements('__video').logo ?? null;
+    if (t.key === 'diseno') return photoSceneLayout(t.id)?.designRect ?? null;
+    return sceneElements(t.id)[t.key] ?? null;
+  };
+  const moveOf = (t: VTarget): ElemMove => (t.key === 'logo' ? logoAt : t.key === 'diseno' ? null : scenes.find((x) => x.id === t.id)?.moves?.[t.key]) ?? { x: 0, y: 0, s: 1 };
+  /** Qué hay bajo el puntero en la escena que se ve. */
+  const hitVideo = (e: { clientX: number; clientY: number }): VTarget | null => {
     if (!isScenes || playing || !canvasRef.current) return null;
-    const sc = effScenes[frameAt(scenes, endCard, timeRef.current).index];
-    if (!sc || sc.kind !== 'foto' || sc.photoSource !== 'plantilla' || !sc.design) return null;
-    const lay = photoSceneLayout(sc.id);
-    if (!lay?.designRect) return null;
-    const r = canvasRef.current.getBoundingClientRect();
-    const x = ((e.clientX - r.left) / r.width) * W, y = ((e.clientY - r.top) / r.height) * H;
-    const d = lay.designRect, pad = 24;
-    const inside = x >= d.x - pad && x <= d.x + d.w + pad && y >= d.y - pad && y <= d.y + d.h + pad;
-    return inside ? { sc, lay, r } : null;
+    const sc = currentScene();
+    const p = toCanvas(e);
+    if (sc) {
+      const els = sceneElements(sc.id);
+      for (const k of ['boton', 'precio', 'subtitulo', 'titulo', 'etiqueta'] as MoveKey[]) {
+        const b2 = els[k];
+        if (b2 && inRect(p, b2)) return { id: sc.id, key: k };
+      }
+    }
+    if (showLogo) { const lb = sceneElements('__video').logo; if (lb && inRect(p, lb)) return { id: '__video', key: 'logo' }; }
+    if (sc && sc.kind === 'foto' && sc.photoSource === 'plantilla' && sc.design) {
+      const lay = photoSceneLayout(sc.id);
+      if (lay?.designRect && inRect(p, lay.designRect, 18)) return { id: sc.id, key: 'diseno' };
+    }
+    if (sc) { const g2 = sceneElements(sc.id).prenda; if (g2 && inRect(p, g2, 0)) return { id: sc.id, key: 'prenda' }; }
+    return null;
+  };
+  const startVideoDrag = (e: React.PointerEvent<HTMLElement>, t: VTarget, mode: 'move' | 'scale' | 'design') => {
+    const rect = rectOf(t);
+    if (!rect) return;
+    (e.currentTarget as Element).setPointerCapture?.(e.pointerId);
+    const { r } = toCanvas(e);
+    const sc = scenes.find((x) => x.id === t.id);
+    const eff = effScenes.find((x) => x.id === t.id);
+    vdrag.current = {
+      mode, t, sx: e.clientX, sy: e.clientY, rw: r.width, rh: r.height, orig: moveOf(t), rect,
+      ...(mode === 'design' && eff ? { span: photoSceneLayout(t.id)?.span, design: eff.design ?? undefined, size: eff.size, orig: { x: eff.offsetX, y: eff.offsetY, s: 1 } } : {}),
+    };
+    if (t.id !== '__video' && sc) setSceneSel(t.id);
+    setVsel(t);
+    setVlive(rect);
   };
   const onVideoDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    const hit = designUnder(e);
-    if (!hit) return;
-    (e.currentTarget as Element).setPointerCapture?.(e.pointerId);
-    setSceneSel(hit.sc.id);
-    vdrag.current = { id: hit.sc.id, sx: e.clientX, sy: e.clientY, ox: hit.sc.offsetX, oy: hit.sc.offsetY, span: hit.lay.span, design: hit.sc.design!, size: hit.sc.size, rw: hit.r.width, rh: hit.r.height };
+    const t = hitVideo(e);
+    if (!t) { setVsel(null); return; }
+    startVideoDrag(e, t, t.key === 'diseno' ? 'design' : 'move');
   };
-  const onVideoMove = (e: React.PointerEvent<HTMLDivElement>) => {
+  const fit = (n: number, lim = 0.5) => { const c = Math.max(-lim, Math.min(lim, n)); return Math.abs(c) < 0.004 ? 0 : Math.round(c * 1000) / 1000; };
+  const onVideoMove = (e: React.PointerEvent<HTMLElement>) => {
     const v = vdrag.current;
-    if (!v) { setOverDesign(!!designUnder(e)); return; }
+    if (!v) { setVhover(hitVideo(e)); return; }
     const dx = ((e.clientX - v.sx) / v.rw) * W, dy = ((e.clientY - v.sy) / v.rh) * H;
-    const fit = (n: number) => { const c = Math.max(-0.5, Math.min(0.5, n)); return Math.abs(c) < 0.006 ? 0 : Math.round(c * 1000) / 1000; };
-    // El diseño queda propio de la escena (con la posición nueva).
-    setScenes(scenes.map((s) => (s.id === v.id ? { ...s, design: v.design, size: v.size, offsetX: fit(v.ox + dx / v.span[0]), offsetY: fit(v.oy + dy / v.span[1]) } : s)), `voff:${v.id}`);
+    if (v.mode === 'design') {
+      if (!v.span) return;
+      const id = v.t.id;
+      setScenes(scenes.map((x) => (x.id === id ? { ...x, design: v.design ?? x.design, size: v.size ?? x.size, offsetX: fit(v.orig.x + dx / v.span![0]), offsetY: fit(v.orig.y + dy / v.span![1]) } : x)), `voff:${id}`);
+      setVlive({ ...v.rect, x: v.rect.x + dx, y: v.rect.y + dy });
+      return;
+    }
+    let next: ElemMove;
+    if (v.mode === 'move') {
+      next = { ...v.orig, x: fit(v.orig.x + dx / W, 1), y: fit(v.orig.y + dy / H, 1) };
+      setVlive({ ...v.rect, x: v.rect.x + dx, y: v.rect.y + dy });
+    } else {
+      // Agrandar o achicar desde el centro, según cuánto se aleja el puntero.
+      const cx = v.rect.x + v.rect.w / 2, cy = v.rect.y + v.rect.h / 2;
+      const p0 = { x: v.rect.x + v.rect.w, y: v.rect.y + v.rect.h };
+      const p1 = { x: p0.x + dx, y: p0.y + dy };
+      const k = Math.hypot(p1.x - cx, p1.y - cy) / Math.max(1, Math.hypot(p0.x - cx, p0.y - cy));
+      const s2 = Math.max(0.3, Math.min(3, Math.round(v.orig.s * k * 100) / 100));
+      next = { ...v.orig, s: s2 };
+      const f = s2 / v.orig.s;
+      setVlive({ x: cx - (v.rect.w * f) / 2, y: cy - (v.rect.h * f) / 2, w: v.rect.w * f, h: v.rect.h * f });
+    }
+    if (v.t.key === 'logo') setLogoAt(next);
+    else {
+      const id = v.t.id, key = v.t.key as MoveKey;
+      setScenes(scenes.map((x) => (x.id === id ? { ...x, moves: { ...x.moves, [key]: next } } : x)), `vmove:${id}:${key}`);
+    }
   };
-  const onVideoUp = () => { vdrag.current = null; };
+  const onVideoUp = () => {
+    vdrag.current = null;
+    setVlive(null);
+    // El contorno toma la posición del cuadro ya dibujado.
+    window.setTimeout(() => setVtick((t) => t + 1), 60);
+  };
+  const VLABEL: Record<VTarget['key'], string> = { prenda: 'Prenda', etiqueta: 'Etiqueta', titulo: 'Título', subtitulo: 'Subtítulo', precio: 'Precio', boton: 'Botón', logo: 'Logo', diseno: 'Diseño' };
+  const vbox = vsel && !playing ? vlive ?? rectOf(vsel) : null;
+  const vhoverBox = vhover && !playing && (!vsel || vhover.key !== vsel.key || vhover.id !== vsel.id) ? rectOf(vhover) : null;
 
   const canvasEl = (
     <div className={isScenes ? 'relative w-full h-full' : 'relative'} style={isScenes ? undefined : { maxWidth: previewWidth, width: '100%' }}>
@@ -1168,10 +1244,29 @@ export const StudioPage = () => {
       />
       {isScenes && (
         <div
-          className="absolute inset-0 touch-none" style={{ cursor: vdrag.current ? 'grabbing' : overDesign ? 'grab' : 'default' }}
-          onPointerDown={onVideoDown} onPointerMove={onVideoMove} onPointerUp={onVideoUp} onPointerCancel={onVideoUp} onPointerLeave={() => setOverDesign(false)}
-          title={overDesign ? 'Arrastra el diseño para moverlo en la prenda' : undefined}
-        />
+          className="absolute inset-0 touch-none" style={{ cursor: vhover ? 'grab' : 'default' }}
+          onPointerDown={onVideoDown} onPointerMove={onVideoMove} onPointerUp={onVideoUp} onPointerCancel={onVideoUp} onPointerLeave={() => setVhover(null)}
+          aria-label="Vista previa: con el video en pausa, arrastra la prenda, los textos, las etiquetas o el logo"
+        >
+          {vhoverBox && (
+            <div className="absolute border border-dashed border-white/80 ring-1 ring-black/30 rounded-sm pointer-events-none"
+              style={{ left: `${(vhoverBox.x / W) * 100}%`, top: `${(vhoverBox.y / H) * 100}%`, width: `${(vhoverBox.w / W) * 100}%`, height: `${(vhoverBox.h / H) * 100}%` }} />
+          )}
+          {vbox && vsel && (
+            <div className="absolute ring-2 ring-app-500 rounded-sm pointer-events-none"
+              style={{ left: `${(vbox.x / W) * 100}%`, top: `${(vbox.y / H) * 100}%`, width: `${(vbox.w / W) * 100}%`, height: `${(vbox.h / H) * 100}%` }}>
+              <span className="absolute -top-6 left-0 rounded bg-app-600 px-1.5 py-0.5 text-[10px] leading-none text-white whitespace-nowrap">{VLABEL[vsel.key]}</span>
+              {vsel.key !== 'diseno' && (
+                <span
+                  role="button" tabIndex={-1} title="Agrandar o achicar" aria-label="Agrandar o achicar"
+                  className="absolute -right-2 -bottom-2 w-4 h-4 rounded-sm bg-white ring-2 ring-app-500 cursor-nwse-resize pointer-events-auto"
+                  onPointerDown={(e) => { e.stopPropagation(); startVideoDrag(e, vsel, 'scale'); }}
+                  onPointerMove={onVideoMove} onPointerUp={onVideoUp} onPointerCancel={onVideoUp}
+                />
+              )}
+            </div>
+          )}
+        </div>
       )}
       {!ready && (
         <div className="absolute inset-0 flex items-center justify-center rounded-xl bg-white/85 text-sm text-gray-600 text-center px-6">
@@ -1230,7 +1325,7 @@ export const StudioPage = () => {
         <div aria-hidden="true" style={{ position: 'fixed', left: -12000, top: 0, width: 800, height: 800, pointerEvents: 'none' }}>
           <Suspense fallback={null}>
             <Mannequin3D
-              key={captureJob.key} model={captureJob.model} color={captureJob.color} art={captureArt.art} frames={captureArt.frames}
+              key={captureJob.model} model={captureJob.model} color={captureJob.color} art={captureArt.art} frames={captureArt.frames}
               focus={captureJob.view3d} still locked recordable handleRef={captureHandle} onReady={() => onCaptureReady(captureJob)}
             />
           </Suspense>
@@ -1264,6 +1359,9 @@ export const StudioPage = () => {
     />
   );
   const hasSubject = selected.length > 0;
+  /** Qué se muestra (para recomendar sus plantillas). */
+  const content: ContentKind | undefined = !hasSubject ? undefined
+    : sourceType === 'plantilla' ? 'personalizable' : sourceType === 'producto' ? (items.length > 1 ? 'varios' : 'producto') : sourceType;
   /** Primer paso: qué se va a mostrar (todo lo demás se arma con eso). */
   const onboarding = !hasSubject && !skipOnboarding ? (
     <div className="w-full max-w-xl rounded-2xl bg-white border border-gray-200 shadow-xl p-6">
@@ -1290,9 +1388,9 @@ export const StudioPage = () => {
       <>
         {isDesign ? (
           <DesignEditor
-            modeSwitch={modeSwitch} menu={studioMenu} onboarding={onboarding} hasSubject={hasSubject} panelReq={panelReq}
+            modeSwitch={modeSwitch} menu={studioMenu} onboarding={onboarding} hasSubject={hasSubject} panelReq={panelReq} content={content}
             resolve={resolveFn} onMoveDesign={(zoneId, offset) => setZoneChoice(zoneId, { offset })}
-            design={design} onChange={setDesign} onTemplate={(d) => { designEdited.current = false; designReset(d, true); }} data={designData}
+            design={design} onChange={setDesign} onTemplate={(d) => { designEdited.current = false; designReset(layoutZones(d, subject), true); }} data={designData}
             history={{ undo: designHist.undo, redo: designHist.redo, canUndo: designHist.canUndo, canRedo: designHist.canRedo }}
             sourcePanel={sourcePanel} publishPanel={textsPanel} exportActions={exportButtons}
             products={items.map(toSceneProduct)} photos={photos} onPhotos={setPhotos} onRatio={changeDesignRatio}
@@ -1300,7 +1398,8 @@ export const StudioPage = () => {
           />
         ) : (
           <VideoEditor
-            modeSwitch={modeSwitch} menu={studioMenu} onboarding={onboarding} hasSubject={hasSubject} size={[W, H]} panelReq={panelReq}
+            modeSwitch={modeSwitch} menu={studioMenu} onboarding={onboarding} hasSubject={hasSubject} size={[W, H]} panelReq={panelReq} content={content}
+            logoMoved={!!logoAt} onResetLogo={() => setLogoAt(null)}
             palette={brand ? [
               { label: 'Principal', hex: brand.primary }, { label: 'Acento', hex: brand.accent }, { label: 'Claro', hex: brand.paper },
               ...(brand.secondary ? [{ label: 'Secundario', hex: brand.secondary }] : []), { label: 'Blanco', hex: '#FFFFFF' }, { label: 'Negro', hex: '#000000' },

@@ -14,8 +14,8 @@ import {
 import { Button, toast } from '../ui';
 import { FitBox, RatioSwitch, StudioShell, ToolbarSep, type RailItem } from './StudioShell';
 import {
-  buildDesign, DESIGN_RATIOS, DESIGN_TEMPLATES, designSize, imageLayer, layerId, logoLayer, patternLayer, shapeLayer, TEMPLATE_GROUPS, textLayer,
-  type ColorsLayer, type Design, type DesignRatio, type ImageLayer, type Layer, type Paint,
+  buildDesign, CONTENT_LABEL, DESIGN_RATIOS, DESIGN_TEMPLATES, TEMPLATES_FOR, designSize, imageLayer, layerId, logoLayer, patternLayer, shapeLayer, TEMPLATE_GROUPS, textLayer,
+  type ColorsLayer, type ContentKind, type Design, type DesignRatio, type ImageLayer, type Layer, type Paint,
 } from './design';
 import { drawDesign, hitLayer, textOf, type Box as LBox, type DesignData } from './designRender';
 import { BG_STYLES, type BgStyle } from './backgrounds';
@@ -41,7 +41,7 @@ const SNAP = 12;
 
 export function DesignEditor({
   design, onChange, onTemplate, data, history, sourcePanel, publishPanel, exportActions, products, photos, onPhotos, onRatio, mockTemplates, defaultMockTemplate, onGarment, resolve, onMoveDesign,
-  modeSwitch, menu, onboarding, hasSubject, panelReq = 0,
+  modeSwitch, menu, onboarding, hasSubject, panelReq = 0, content,
 }: {
   design: Design;
   onChange: (d: Design, merge?: string) => void;
@@ -75,6 +75,8 @@ export function DesignEditor({
   hasSubject: boolean;
   /** Cada vez que cambia, se abre el panel de Producto (desde el primer paso). */
   panelReq?: number;
+  /** Qué se muestra: sus plantillas van primero. */
+  content?: ContentKind;
 }) {
   const [W, H] = designSize(design.ratio);
   const [tab, setTab] = useState<Tab | null>(() => (hasSubject ? 'plantillas' : 'producto'));
@@ -118,6 +120,8 @@ export function DesignEditor({
 
   // Vistas previas de las plantillas con los datos reales.
   const [thumbs, setThumbs] = useState<Record<string, string>>({});
+  // Plantillas que piden más productos, fotos o vistas de las que hay (quedarían con huecos).
+  const [short, setShort] = useState<Record<string, number>>({});
   useEffect(() => {
     if (!data || tab !== 'plantillas') return;
     let alive = true;
@@ -128,15 +132,20 @@ export function DesignEditor({
       small.width = 216; small.height = Math.round((216 * H) / W);
       const bctx = big.getContext('2d')!, sctx = small.getContext('2d')!;
       const out: Record<string, string> = {};
+      const miss: Record<string, number> = {};
+      const hasPhotos = !!data.items[0]?.image;
       for (const tpl of DESIGN_TEMPLATES) {
         if (!alive) return;
         const built = buildDesign(tpl.id, design.ratio, { colors: showColors });
-        drawDesign(bctx, resolve ? resolve(built) : built, data, true);
+        const res = resolve ? resolve(built) : built;
+        const empty = res.layers.filter((l) => l.type === 'image' && !l.hidden && !l.src && !l.mock && !data.items[l.item]?.image).length;
+        if (hasPhotos && empty) miss[tpl.id] = empty;
+        drawDesign(bctx, res, data, true);
         sctx.clearRect(0, 0, small.width, small.height);
         sctx.drawImage(big, 0, 0, small.width, small.height);
         out[tpl.id] = small.toDataURL('image/jpeg', 0.78);
       }
-      if (alive) setThumbs(out);
+      if (alive) { setThumbs(out); setShort(miss); }
     }, 350);
     return () => { alive = false; window.clearTimeout(t); };
   }, [data, design.ratio, W, H, tab, resolve, showColors]);
@@ -354,6 +363,15 @@ export function DesignEditor({
   ];
 
   const sec = RAIL.find((r) => r.id === tab);
+  // Primero las plantillas pensadas para lo que se muestra (producto, colección, promoción, personalizable).
+  const rec = content ? TEMPLATES_FOR[content] : [];
+  // Al final, las que piden más de lo que hay (con cuántos huecos quedarían).
+  const fits = (id: string) => !short[id];
+  const galleryGroups = [
+    ...(rec.length ? [{ name: `Para ${CONTENT_LABEL[content!]}`, rec: true, items: rec.map((id) => DESIGN_TEMPLATES.find((t) => t.id === id)!).filter((t) => t && fits(t.id)) }] : []),
+    ...TEMPLATE_GROUPS.map((g) => ({ name: rec.length ? `Más: ${g}` : g, rec: false, items: DESIGN_TEMPLATES.filter((t) => t.group === g && !rec.includes(t.id) && fits(t.id)) })),
+    { name: 'Necesitan más productos o fotos', rec: false, items: DESIGN_TEMPLATES.filter((t) => !fits(t.id)) },
+  ].filter((g) => g.items.length);
   const rail = RAIL.map((r) => ({ ...r, dot: r.id === 'producto' && !hasSubject }));
   const ELEMENTS: { k: Parameters<typeof add>[0]; label: string; icon: typeof Type }[] = [
     { k: 'title', label: 'Título', icon: Type }, { k: 'text', label: 'Texto', icon: Type }, { k: 'tag', label: 'Etiqueta', icon: Tag },
@@ -388,11 +406,12 @@ export function DesignEditor({
             {tab === 'plantillas' && (
               <div className="space-y-4">
                 <p className="text-xs text-gray-500">Se arman con lo que promocionas y los colores de tu marca. Después cambias lo que quieras.</p>
-                {TEMPLATE_GROUPS.map((g) => (
-                  <div key={g}>
-                    <p className="text-xs font-semibold text-gray-700 mb-1.5">{g}</p>
+                {galleryGroups.map((g) => (
+                  <div key={g.name}>
+                    <p className={`text-xs font-semibold mb-1.5 ${g.rec ? 'text-app-700' : 'text-gray-700'}`}>{g.name}</p>
+                    {g.items.some((t) => short[t.id]) && <p className="text-[11px] text-gray-500 -mt-1 mb-1.5">Quedan espacios libres: elige más productos, fotos o zonas para llenarlos.</p>}
                     <div className="grid grid-cols-2 gap-2">
-                      {DESIGN_TEMPLATES.filter((t) => t.group === g).map((t) => (
+                      {g.items.map((t) => (
                         <button
                           key={t.id} type="button" title={t.hint} aria-pressed={design.template === t.id}
                           onClick={() => { onTemplate(buildDesign(t.id, design.ratio, { colors: showColors })); setSel(null); }}
@@ -401,7 +420,9 @@ export function DesignEditor({
                           <span className="block bg-gray-100" style={{ aspectRatio: `${W} / ${H}` }}>
                             {thumbs[t.id] && <img src={thumbs[t.id]} alt="" className="w-full h-full object-cover" />}
                           </span>
-                          <span className="block px-1.5 py-1 text-[11px] font-medium text-gray-800 truncate">{t.label}</span>
+                          <span className="block px-1.5 py-1 text-[11px] font-medium text-gray-800 truncate">
+                            {t.label}{short[t.id] ? <span className="text-gray-500 font-normal"> · faltan {short[t.id]}</span> : null}
+                          </span>
                         </button>
                       ))}
                     </div>

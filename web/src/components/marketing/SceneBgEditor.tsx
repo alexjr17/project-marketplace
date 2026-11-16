@@ -6,6 +6,7 @@
 import { ImagePlus, Sparkles, Wand2 } from 'lucide-react';
 import { Button, ColorInput, RadioGroup, Switch } from '../ui';
 import { BG_STYLES } from './backgrounds';
+import { DesignPicker } from './DesignPicker';
 import type { SceneBg } from './timeline';
 
 const STYLE_LABEL: Record<SceneBg['style'], string> = {
@@ -91,7 +92,9 @@ export function SceneBgEditor({ value, onChange, palette, photos, defaults, onAi
           ) : (
             <>
               <Swatches label="Color de fondo" value={g.base} palette={palette} onChange={(c) => set({ base: c }, 'bgbase')} />
-              {g.style !== 'color' && <Swatches label={g.style === 'degradado' ? 'Hacia el color' : 'Color del dibujo'} value={g.ink} palette={palette} onChange={(c) => set({ ink: c }, 'bgink')} />}
+              {g.style !== 'color' && g.style !== 'mosaicoDisenos' && (
+                <Swatches label={g.style === 'degradado' ? 'Hacia el color' : g.style === 'malla' ? 'Color de las manchas' : g.style === 'mosaicoMarca' ? 'Color del texto (si no hay logo)' : 'Color del dibujo'} value={g.ink} palette={palette} onChange={(c) => set({ ink: c }, 'bgink')} />
+              )}
               {g.style === 'malla' && <Swatches label="Tercer color" value={g.accent} palette={palette} onChange={(c) => set({ accent: c }, 'bgacc')} />}
               {g.style !== 'color' && g.style !== 'degradado' && (
                 <Range label="Cuánto se nota" value={Math.round(g.density * 100)} min={2} max={100} step={1} format={(v) => `${v}%`} onChange={(v) => set({ density: v / 100 }, 'bgden')} />
@@ -104,7 +107,21 @@ export function SceneBgEditor({ value, onChange, palette, photos, defaults, onAi
               )}
               <Switch checked={g.grain} onChange={(v) => set({ grain: v })} label="Grano de película" />
               <Switch checked={g.move} onChange={(v) => set({ move: v })} label="Movimiento suave" description="El dibujo gira despacio durante la escena." />
-              {g.style === 'mosaicoDisenos' && <p className="text-xs text-gray-500">Usa los diseños puestos en las escenas de prenda del video.</p>}
+              {g.style === 'mosaicoDisenos' && (
+                <div className="space-y-2 rounded-lg bg-gray-50 p-2.5">
+                  <Switch checked={g.useSceneDesigns !== false} onChange={(v) => set({ useSceneDesigns: v })} label="Usar los diseños de las prendas" description="Los de las escenas de la prenda del video (y los del post)." />
+                  {(g.designs ?? []).length > 0 && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {g.designs.map((u) => (
+                        <button key={u} type="button" title="Quitar del mosaico" aria-label="Quitar este diseño del mosaico" onClick={() => set({ designs: g.designs.filter((x) => x !== u) })}
+                          className="w-12 h-12 rounded-lg ring-1 ring-gray-200 bg-white p-1 hover:ring-red-300"><img src={u} alt="" className="w-full h-full object-contain" /></button>
+                      ))}
+                    </div>
+                  )}
+                  <p className="text-xs text-gray-600">Agregar diseños al mosaico:</p>
+                  <DesignPicker idPrefix="scbg" value={null} onChange={(d) => { if (d && !(g.designs ?? []).includes(d.image)) set({ designs: [...(g.designs ?? []), d.image] }); }} />
+                </div>
+              )}
             </>
           )}
           <Button size="sm" variant="secondary" className="w-full" icon={<Wand2 className="w-4 h-4" />} onClick={onApplyAll}>Usar este fondo en todas las escenas</Button>

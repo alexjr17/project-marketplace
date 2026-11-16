@@ -165,6 +165,31 @@ function rr(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: n
   ctx.roundRect(x, y, w, h, Math.max(0, Math.min(r, w / 2, h / 2)));
 }
 
+/**
+ * Texto en contorno limpio: el trazo va solo por FUERA de la letra. (Trazar el borde directo deja ver
+ * los contornos internos que se cruzan en las tipografías muy gruesas: líneas rotas dentro de la letra.)
+ */
+function outlineText(ctx: CanvasRenderingContext2D, line: string, x: number, y: number, lw: number, size: number, ink: string, spacing: string) {
+  const sw = Math.max(2, size * 0.025);
+  const pad = Math.ceil(sw * 2 + 4);
+  const c = document.createElement('canvas');
+  c.width = Math.max(1, Math.ceil(lw + pad * 2 + size * 0.2));
+  c.height = Math.max(1, Math.ceil(size * 1.5 + pad * 2));
+  const o = c.getContext('2d')!;
+  o.font = ctx.font;
+  if ('letterSpacing' in o) (o as CanvasRenderingContext2D & { letterSpacing: string }).letterSpacing = spacing;
+  o.textBaseline = 'top';
+  o.textAlign = 'left';
+  o.lineJoin = 'round';
+  o.strokeStyle = ink;
+  o.lineWidth = sw * 2;
+  o.strokeText(line, pad, pad);
+  // Se borra el interior de la letra: queda solo el borde de afuera, parejo.
+  o.globalCompositeOperation = 'destination-out';
+  o.fillText(line, pad, pad);
+  ctx.drawImage(c, x - pad, y - pad);
+}
+
 function drawText(ctx: CanvasRenderingContext2D, l: TextLayer, d: DesignData): Box {
   const b = d.brand;
   const text = textOf(l, d);
@@ -194,12 +219,8 @@ function drawText(ctx: CanvasRenderingContext2D, l: TextLayer, d: DesignData): B
     const lw = m.widths[i];
     const x = l.align === 'center' ? innerX + (innerW - lw) / 2 : l.align === 'right' ? innerX + innerW - lw : innerX;
     const y = l.y + m.padY + i * m.lh + (m.lh - m.size) / 2;
-    if (l.outline) {
-      ctx.strokeStyle = ink;
-      ctx.lineWidth = Math.max(2, m.size * 0.025);
-      ctx.lineJoin = 'round';
-      ctx.strokeText(line, x, y);
-    } else ctx.fillText(line, x, y);
+    if (l.outline) outlineText(ctx, line, x, y, lw, m.size, ink, `${l.letterSpacing}px`);
+    else ctx.fillText(line, x, y);
     if (l.strike) ctx.fillRect(x, y + m.size * 0.52, lw, Math.max(2, m.size * 0.07));
   });
   ctx.shadowColor = 'transparent';
@@ -297,8 +318,8 @@ function drawImageLayer(ctx: CanvasRenderingContext2D, l: ImageLayer, d: DesignD
         ctx.drawImage(off, vx, vy);
       }
     } else ctx.drawImage(img, sx, sy, nw, nh, ix, iy, iw, ih);
-  } else if (placeholders && l.cutout) {
-    // Hueco para otro producto: discreto, con la invitación a elegirlo.
+  } else if (placeholders) {
+    // Hueco vacío (otro producto, foto o vista): discreto, con la invitación a elegirlo.
     ctx.restore();
     ctx.save();
     ctx.setLineDash([14, 12]);
@@ -313,13 +334,7 @@ function drawImageLayer(ctx: CanvasRenderingContext2D, l: ImageLayer, d: DesignD
     ctx.font = `600 ${Math.round(Math.max(22, Math.min(34, l.w * 0.06)))}px Inter, system-ui, sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('+ Otra foto o vista', l.x + l.w / 2, l.y + l.h / 2);
-  } else if (placeholders) {
-    ctx.fillStyle = 'rgba(140,140,140,0.25)';
-    ctx.fillRect(l.x, l.y, l.w, l.h);
-    ctx.strokeStyle = 'rgba(140,140,140,0.6)';
-    ctx.lineWidth = 3;
-    ctx.beginPath(); ctx.moveTo(l.x, l.y); ctx.lineTo(l.x + l.w, l.y + l.h); ctx.moveTo(l.x + l.w, l.y); ctx.lineTo(l.x, l.y + l.h); ctx.stroke();
+    ctx.fillText(l.w < 300 ? '+ Foto' : '+ Otra foto o vista', l.x + l.w / 2, l.y + l.h / 2);
   }
   ctx.restore();
   if (l.border) {

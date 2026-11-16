@@ -8,7 +8,7 @@ import { Button, Switch } from '../ui';
 import type { SourceProduct } from '../../services/marketing.service';
 import { DesignPicker } from './DesignPicker';
 import { viewImageOf } from './mockup';
-import { photosOf, VIEW_LABEL, type GarmentPlan, type Subject, type ZoneChoice } from './pieces';
+import { allPhotosOf, photosOf, VIEW_LABEL, type GarmentPlan, type Subject, type ZoneChoice } from './pieces';
 import type { SceneDesign } from './timeline';
 
 function Range({ label, value, min, max, step, onChange, format }: { label: string; value: number; min: number; max: number; step: number; onChange: (v: number) => void; format: (v: number) => string }) {
@@ -46,12 +46,12 @@ export function SubjectPanel({ subject, products, picks, onPicks, garment, plan,
         <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-1.5"><Images className="w-4 h-4 text-app-600" />Qué se muestra</h3>
         <p className="text-xs text-gray-500 mt-0.5 mb-2">
           {subject.single
-            ? 'Un producto: cada foto que marques llena un espacio de la plantilla (frente, espalda, detalle…).'
-            : 'Varios productos: va uno por espacio con su foto principal (la primera que marques).'}
+            ? 'Un producto sin zonas: sale con su foto principal. Si marcas más fotos suyas, las plantillas de varios espacios las usan.'
+            : 'Varios productos: va uno por espacio, cada uno con su foto principal.'}
         </p>
         <div className="space-y-2.5">
           {products.map((p) => {
-            const all = photosOf(p);
+            const all = allPhotosOf(p);
             const used = photosOf(p, picks[p.id]);
             return (
               <div key={p.id}>
@@ -84,7 +84,7 @@ export function SubjectPanel({ subject, products, picks, onPicks, garment, plan,
     <section className="mt-4 rounded-xl border border-gray-200 p-3" aria-label="Qué se muestra">
       <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-1.5"><Box className="w-4 h-4 text-app-600" />Vistas y diseños de la prenda</h3>
       <p className="text-xs text-gray-500 mt-0.5 mb-2">
-        Elige qué vistas o zonas se muestran y sube el diseño de cada una. Todas las plantillas (posts y videos) usan estas vistas, en este orden.
+        Elige las zonas que salen en el post y sube el diseño de cada una. La primera es la principal (va en grande); las demás salen como detalle. Todas las plantillas las usan.
         {is3d ? ' Se muestran con el maniquí 3D.' : ''}
       </p>
       <div className="mb-3">
@@ -141,17 +141,25 @@ export function SubjectPanel({ subject, products, picks, onPicks, garment, plan,
       <ul className="space-y-2">
         {subject.zones.map((z) => {
           const c = plan?.[z.id] ?? { show: false, design: null };
+          // Lugar de la zona en el post: Principal, 2, 3…
+          const pos = subject.pieces.findIndex((x) => x.mock?.zoneId === z.id);
           const thumb = garment ? viewImageOf(garment, { view: z.slug ?? z.view }) : null;
           return (
             <li key={z.id} className={`rounded-lg border p-2 ${c.show ? 'border-app-300 bg-app-50/40' : 'border-gray-200'}`}>
               <div className="flex items-center gap-2">
                 <span className="w-10 h-10 rounded-md bg-gray-100 overflow-hidden flex-shrink-0">{thumb && <img src={thumb} alt="" className="w-full h-full object-contain" />}</span>
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium text-gray-800 truncate">{z.name}</p>
+                  <p className="text-sm font-medium text-gray-800 truncate flex items-center gap-1.5">
+                    {c.show && pos >= 0 && <span className={`inline-flex items-center rounded-full px-1.5 text-[10px] font-semibold ${pos === 0 ? 'bg-app-600 text-white' : 'bg-gray-200 text-gray-700'}`}>{pos === 0 ? 'Principal' : pos + 1}</span>}
+                    <span className="truncate">{z.name}</span>
+                  </p>
                   <p className="text-xs text-gray-500">{z.view ? VIEW_LABEL[z.view] : 'Zona'}{c.design ? ` · ${c.design.name}` : ' · sin diseño'}</p>
                 </div>
                 <Switch checked={c.show} onChange={(v) => onZone(z.id, { show: v })} label="Mostrar" />
               </div>
+              {c.show && pos > 0 && (
+                <button type="button" className="mt-1 text-xs text-app-700 hover:underline" onClick={() => onZone(z.id, { order: Math.min(...Object.values(plan ?? {}).map((x) => x.order ?? 0)) - 1 })}>Hacer principal</button>
+              )}
               {c.show && (
                 <div className="mt-2">
                   <DesignPicker idPrefix={`zona-${z.id}`} value={c.design} onChange={(d) => onZone(z.id, { design: d })} />
