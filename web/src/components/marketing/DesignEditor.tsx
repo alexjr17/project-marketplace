@@ -1,18 +1,18 @@
 /**
- * Diseñador de posts e historias por capas, con la forma de un estudio de diseño:
- * - barra de herramientas: deshacer/rehacer, agregar elementos, formato (1:1, 4:5, 9:16) y exportar;
- * - izquierda: plantillas (con su vista previa armada con tus productos), qué se promociona, mis
- *   fotos, capas y la publicación;
+ * Diseñador de posts e historias por capas, en el armazón del estudio (StudioShell):
+ * - barra: Post / Video, deshacer/rehacer, formato (1:1, 4:5, 9:16) y descargar, guardar o publicar;
+ * - riel: Producto (qué se muestra), Plantillas, Fondo, Elementos, Archivos, Capas y Textos;
  * - centro: el lienzo, donde se elige una capa con un clic, se mueve arrastrando y se cambia de tamaño
- *   con las esquinas (con guías al centro y a los bordes);
+ *   con las esquinas (con guías al centro y a los bordes); el diseño de la prenda se agarra y se mueve;
  * - derecha: las propiedades de la capa elegida (LayerInspector).
  * Atajos: flechas mueven 1 px (con Mayús 10), Supr quita, Ctrl+D duplica, Ctrl+Z / Ctrl+Y, Esc suelta.
  */
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent, type CSSProperties, type PointerEvent as RPointerEvent, type ReactNode } from 'react';
 import {
-  Box, Circle, Eye, EyeOff, LayoutGrid, Palette, Shirt, Sparkles, FolderOpen, Image as ImageIcon, Layers, LayoutTemplate, Lock, ShoppingBag, Plus, Redo2, Square, Tag, Type, Undo2, Upload,
+  Circle, Eye, EyeOff, LayoutGrid, MousePointerClick, Palette, Shapes, Shirt, Sparkles, FolderOpen, Image as ImageIcon, Layers, LayoutTemplate, Lock, ShoppingBag, Plus, Redo2, Square, Tag, Type, Undo2, Upload,
 } from 'lucide-react';
-import { ActionMenu, Button, toast } from '../ui';
+import { Button, toast } from '../ui';
+import { FitBox, RatioSwitch, StudioShell, ToolbarSep, type RailItem } from './StudioShell';
 import {
   buildDesign, DESIGN_RATIOS, DESIGN_TEMPLATES, designSize, imageLayer, layerId, logoLayer, patternLayer, shapeLayer, TEMPLATE_GROUPS, textLayer,
   type ColorsLayer, type Design, type DesignRatio, type ImageLayer, type Layer, type Paint,
@@ -25,13 +25,15 @@ import { AiBackdropDialog } from './AiBackdropDialog';
 import type { SceneProduct } from './timeline';
 import type { SourceProduct } from '../../services/marketing.service';
 
-type Tab = 'plantillas' | 'promocion' | 'fotos' | 'capas' | 'publicar';
-const TABS: { value: Tab; label: string; icon: typeof Box }[] = [
-  { value: 'plantillas', label: 'Plantillas', icon: LayoutTemplate },
-  { value: 'promocion', label: 'Productos', icon: ShoppingBag },
-  { value: 'fotos', label: 'Mis fotos', icon: FolderOpen },
-  { value: 'capas', label: 'Capas', icon: Layers },
-  { value: 'publicar', label: 'Publicación', icon: Type },
+type Tab = 'producto' | 'plantillas' | 'fondo' | 'elementos' | 'fotos' | 'capas' | 'publicar';
+const RAIL: (RailItem & { id: Tab; title: string })[] = [
+  { id: 'producto', label: 'Producto', title: 'Qué vas a mostrar', icon: ShoppingBag },
+  { id: 'plantillas', label: 'Plantillas', title: 'Plantillas', icon: LayoutTemplate },
+  { id: 'fondo', label: 'Fondo', title: 'Fondo', icon: Palette },
+  { id: 'elementos', label: 'Elementos', title: 'Agregar elementos', icon: Shapes },
+  { id: 'fotos', label: 'Archivos', title: 'Mis fotos', icon: FolderOpen },
+  { id: 'capas', label: 'Capas', title: 'Capas', icon: Layers },
+  { id: 'publicar', label: 'Textos', title: 'Textos y publicación', icon: Type },
 ];
 const TYPE_ICON = { text: Type, image: ImageIcon, shape: Square, logo: Tag, pattern: LayoutGrid, colors: Palette } as const;
 type Handle = 'nw' | 'ne' | 'sw' | 'se' | 'e' | 'w';
@@ -39,6 +41,7 @@ const SNAP = 12;
 
 export function DesignEditor({
   design, onChange, onTemplate, data, history, sourcePanel, publishPanel, exportActions, products, photos, onPhotos, onRatio, mockTemplates, defaultMockTemplate, onGarment, resolve, onMoveDesign,
+  modeSwitch, menu, onboarding, hasSubject, panelReq = 0,
 }: {
   design: Design;
   onChange: (d: Design, merge?: string) => void;
@@ -63,9 +66,20 @@ export function DesignEditor({
   resolve?: (d: Design) => Design;
   /** Mover el diseño de una zona de la personalizable (cuando la capa usa el diseño de "Qué se muestra"). */
   onMoveDesign?: (zoneId: number, offset: { x: number; y: number }) => void;
+  /** Interruptor Post / Video y menú (marca, calendario, cuentas de IA), en la barra. */
+  modeSwitch: ReactNode;
+  menu: ReactNode;
+  /** Primer paso sobre el lienzo cuando aún no se eligió qué mostrar. */
+  onboarding: ReactNode;
+  /** Ya se eligió qué mostrar. */
+  hasSubject: boolean;
+  /** Cada vez que cambia, se abre el panel de Producto (desde el primer paso). */
+  panelReq?: number;
 }) {
   const [W, H] = designSize(design.ratio);
-  const [tab, setTab] = useState<Tab>('plantillas');
+  const [tab, setTab] = useState<Tab | null>(() => (hasSubject ? 'plantillas' : 'producto'));
+  const [seenReq, setSeenReq] = useState(panelReq);
+  if (panelReq !== seenReq) { setSeenReq(panelReq); setTab('producto'); }
   const [sel, setSel] = useState<string | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const boxesRef = useRef<Record<string, LBox>>({});
@@ -329,7 +343,7 @@ export function DesignEditor({
     setLayers(bg ? [l, ...layers.slice(1)] : [l, ...layers]);
     setSel(l.id);
   };
-  const toolBtn = 'inline-flex items-center gap-1.5 rounded-lg px-2.5 h-9 text-sm text-gray-200 hover:bg-white/10 disabled:opacity-40 disabled:hover:bg-transparent';
+  const toolBtn = 'inline-flex items-center gap-1.5 rounded-lg px-2.5 h-9 text-sm text-gray-700 hover:bg-gray-100 disabled:opacity-40 disabled:hover:bg-transparent';
   const handles: { h: Handle; cls: string; style: (b: LBox) => CSSProperties }[] = [
     { h: 'nw', cls: 'cursor-nwse-resize', style: () => ({ left: -6, top: -6 }) },
     { h: 'ne', cls: 'cursor-nesw-resize', style: () => ({ right: -6, top: -6 }) },
@@ -339,62 +353,38 @@ export function DesignEditor({
     { h: 'e', cls: 'cursor-ew-resize', style: () => ({ right: -5, top: 'calc(50% - 8px)', height: 16, width: 10 }) },
   ];
 
+  const sec = RAIL.find((r) => r.id === tab);
+  const rail = RAIL.map((r) => ({ ...r, dot: r.id === 'producto' && !hasSubject }));
+  const ELEMENTS: { k: Parameters<typeof add>[0]; label: string; icon: typeof Type }[] = [
+    { k: 'title', label: 'Título', icon: Type }, { k: 'text', label: 'Texto', icon: Type }, { k: 'tag', label: 'Etiqueta', icon: Tag },
+    { k: 'cta', label: 'Botón', icon: Square }, { k: 'price', label: 'Precio', icon: Tag }, { k: 'photo', label: 'Foto del producto', icon: ImageIcon },
+    { k: 'rect', label: 'Rectángulo', icon: Square }, { k: 'circle', label: 'Círculo', icon: Circle }, { k: 'logo', label: 'Logo', icon: Tag }, { k: 'icon', label: 'Ícono de la marca', icon: Tag },
+  ];
+
   return (
-    <section className="rounded-2xl bg-gray-950 p-3 ring-1 ring-black/40 shadow-xl" aria-label="Diseñador de piezas">
+    <>
       {backdropOpen && (
         <AiBackdropDialog designUrls={designUrls} ratio={design.ratio} onClose={() => setBackdropOpen(false)}
           onUse={(img) => { onPhotos([{ id: -Date.now(), name: `Fondo IA: ${img.name}`, image: img.url }, ...photos]); setPhotoBackground(img.url); }} />
       )}
-      {/* Barra de herramientas */}
-      <div className="flex flex-wrap items-center gap-1 mb-3">
-        <button type="button" className={toolBtn} title="Deshacer (Ctrl+Z)" aria-label="Deshacer (Ctrl+Z)" onClick={history.undo} disabled={!history.canUndo}><Undo2 className="w-4 h-4" /></button>
-        <button type="button" className={toolBtn} title="Rehacer (Ctrl+Y)" aria-label="Rehacer (Ctrl+Y)" onClick={history.redo} disabled={!history.canRedo}><Redo2 className="w-4 h-4" /></button>
-        <span className="w-px h-6 bg-white/10 mx-1" />
-        <button type="button" className={toolBtn} onClick={() => setTab('plantillas')}><LayoutTemplate className="w-4 h-4" />Plantillas</button>
-        <ActionMenu
-          trigger={<button type="button" className={toolBtn}><Plus className="w-4 h-4" />Agregar</button>}
-          items={[
-            { label: 'Título', icon: <Type className="w-4 h-4" />, onClick: () => add('title') },
-            { label: 'Texto', icon: <Type className="w-4 h-4" />, onClick: () => add('text') },
-            { label: 'Etiqueta', icon: <Tag className="w-4 h-4" />, onClick: () => add('tag') },
-            { label: 'Botón', icon: <Square className="w-4 h-4" />, onClick: () => add('cta') },
-            { label: 'Precio', icon: <Tag className="w-4 h-4" />, onClick: () => add('price') },
-            { label: 'Foto del producto', icon: <ImageIcon className="w-4 h-4" />, onClick: () => add('photo') },
-            { label: 'Rectángulo', icon: <Square className="w-4 h-4" />, onClick: () => add('rect') },
-            { label: 'Círculo', icon: <Circle className="w-4 h-4" />, onClick: () => add('circle') },
-            { label: 'Logo', icon: <Tag className="w-4 h-4" />, onClick: () => add('logo') },
-            { label: 'Ícono de la marca', icon: <Tag className="w-4 h-4" />, onClick: () => add('icon') },
-          ]}
-        />
-        <span className="w-px h-6 bg-white/10 mx-1" />
-        <div className="flex rounded-lg bg-white/5 p-0.5" role="radiogroup" aria-label="Formato de la pieza">
-          {DESIGN_RATIOS.map((r) => (
-            <button
-              key={r.value} type="button" role="radio" aria-checked={design.ratio === r.value} title={r.hint} onClick={() => onRatio(r.value)}
-              className={`px-2.5 h-8 rounded-md text-xs font-medium tabular-nums ${design.ratio === r.value ? 'bg-app-600 text-white' : 'text-gray-300 hover:bg-white/10'}`}
-            >
-              {r.value} <span className="font-normal opacity-80">{r.value === '9:16' ? 'Historia' : 'Post'}</span>
-            </button>
-          ))}
-        </div>
-        <div className="ml-auto flex flex-wrap items-center gap-2">{exportActions}</div>
-      </div>
-
-      <div className="grid grid-cols-1 xl:grid-cols-[320px_minmax(0,1fr)_360px] gap-3">
-        {/* Biblioteca */}
-        <aside className="rounded-xl bg-white overflow-hidden flex flex-col xl:max-h-[calc(min(70vh,720px)+24px)]">
-          <nav className="grid grid-cols-5 border-b border-gray-200" role="tablist" aria-label="Biblioteca del diseñador">
-            {TABS.map((t) => {
-              const Icon = t.icon;
-              return (
-                <button key={t.value} type="button" role="tab" aria-selected={tab === t.value} title={t.label} onClick={() => setTab(t.value)}
-                  className={`flex flex-col items-center gap-0.5 py-2 text-[10px] font-medium border-b-2 ${tab === t.value ? 'border-app-600 text-app-700' : 'border-transparent text-gray-500 hover:text-gray-800'}`}>
-                  <Icon className="w-4 h-4" />{t.label}
-                </button>
-              );
-            })}
-          </nav>
-          <div className="p-3 overflow-y-auto flex-1 min-h-0">
+      <StudioShell
+        label="Diseñador de piezas"
+        toolbar={(
+          <>
+            {modeSwitch}
+            <ToolbarSep />
+            <button type="button" className={toolBtn} title="Deshacer (Ctrl+Z)" aria-label="Deshacer (Ctrl+Z)" onClick={history.undo} disabled={!history.canUndo}><Undo2 className="w-4 h-4" /></button>
+            <button type="button" className={toolBtn} title="Rehacer (Ctrl+Y)" aria-label="Rehacer (Ctrl+Y)" onClick={history.redo} disabled={!history.canRedo}><Redo2 className="w-4 h-4" /></button>
+            <ToolbarSep />
+            <RatioSwitch label="Formato de la pieza" value={design.ratio} onChange={onRatio} options={DESIGN_RATIOS.map((r) => ({ value: r.value, label: `${r.value} ${r.value === '9:16' ? 'Historia' : 'Post'}`, hint: r.hint }))} />
+          </>
+        )}
+        actions={<>{exportActions}{menu}</>}
+        rail={rail} active={tab} onActive={(id) => setTab(id as Tab | null)}
+        panelTitle={sec?.title ?? ''}
+        panel={(
+          <>
+            {tab === 'producto' && sourcePanel}
             {tab === 'plantillas' && (
               <div className="space-y-4">
                 <p className="text-xs text-gray-500">Se arman con lo que promocionas y los colores de tu marca. Después cambias lo que quieras.</p>
@@ -419,11 +409,41 @@ export function DesignEditor({
                 ))}
               </div>
             )}
-            {tab === 'promocion' && (
-              <>
-                <p className="text-xs text-gray-500 mb-2">Elige los productos de la pieza: la plantilla se queda y cambian sus fotos, precios y nombres.</p>
-                {sourcePanel}
-              </>
+            {tab === 'fondo' && (
+              <div className="space-y-4">
+          {data && (
+            <div>
+              <p className="text-sm font-medium text-gray-700 mb-1.5">Fondo</p>
+              <div className="grid grid-cols-2 gap-1.5">
+                {BG_STYLES.map((st) => {
+                  const on = bg?.type === 'pattern' ? bg.style === st.value : st.value === 'color' && !!bg;
+                  return (
+                    <button key={st.value} type="button" title={st.hint} aria-pressed={on} onClick={() => setBackground(st.value)}
+                      className={`rounded-lg border px-2 py-1.5 text-xs text-left ${on ? 'border-app-600 bg-app-50 text-app-800 font-medium' : 'border-gray-200 text-gray-700 hover:border-app-300'}`}>
+                      {st.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="mt-1.5 text-xs text-gray-500">Elige uno y afínalo: colores, densidad, tamaño, giro, grano y qué diseños usar.</p>
+              <Button className="w-full mt-2" variant="outline" icon={<Sparkles className="w-4 h-4" />} onClick={() => setBackdropOpen(true)}>Fondo profesional con IA</Button>
+              <p className="mt-1 text-xs text-gray-500">Una escenografía que combina con los diseños de la prenda.</p>
+            </div>
+          )}
+              </div>
+            )}
+            {tab === 'elementos' && (
+              <div className="grid grid-cols-2 gap-2">
+                {ELEMENTS.map((e) => {
+                  const Icon = e.icon;
+                  return (
+                    <button key={e.k} type="button" onClick={() => add(e.k)}
+                      className="flex flex-col items-center gap-1.5 rounded-xl border border-gray-200 px-2 py-3 text-xs font-medium text-gray-700 hover:border-app-300 hover:bg-app-50/40">
+                      <Icon className="w-5 h-5 text-app-600" />{e.label}
+                    </button>
+                  );
+                })}
+              </div>
             )}
             {tab === 'fotos' && (
               <div className="space-y-3">
@@ -478,13 +498,12 @@ export function DesignEditor({
               </ul>
             )}
             {tab === 'publicar' && publishPanel}
-          </div>
-        </aside>
-
-        {/* Lienzo */}
-        <div className="min-w-0 rounded-xl bg-gray-900 ring-1 ring-white/10 p-3 grid place-items-center min-h-[360px] overflow-hidden">
-          <div className="relative" style={{ lineHeight: 0 }}>
-            <canvas ref={canvasRef} width={W} height={H} className="block h-[min(70vh,720px)] w-auto max-w-full rounded shadow-2xl" aria-label="Vista previa de la pieza" />
+          </>
+        )}
+        stage={(
+          <>
+            <FitBox w={W} h={H}>
+              <canvas ref={canvasRef} width={W} height={H} className="block w-full h-full rounded-sm shadow-[0_12px_40px_rgb(0_0_0/0.18)] bg-white" aria-label="Vista previa de la pieza" />
             <div
               className="absolute inset-0 cursor-default touch-none"
               onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}
@@ -516,12 +535,12 @@ export function DesignEditor({
                 </div>
               )}
             </div>
-          </div>
-        </div>
-
-        {/* Propiedades */}
-        <aside className="rounded-xl bg-white p-3 overflow-y-auto xl:max-h-[calc(min(70vh,720px)+24px)]">
-          {selected && data ? (
+            </FitBox>
+            {onboarding && <div className="absolute inset-0 z-10 grid place-items-center p-6 bg-gray-100/70 backdrop-blur-[2px]">{onboarding}</div>}
+          </>
+        )}
+        inspectorTitle={selected ? <span className="truncate">{selected.name}</span> : <span className="inline-flex items-center gap-2"><MousePointerClick className="w-4 h-4 text-gray-400" />Lienzo</span>}
+        inspector={selected && data ? (
             <LayerInspector
               key={selected.id}
               layer={selected} brand={data.brand} W={W} H={H}
@@ -531,36 +550,17 @@ export function DesignEditor({
               mockTemplates={mockTemplates} defaultMockTemplate={defaultMockTemplate}
               onDesignAll={(d) => setLayers(layers.map((x) => (x.type === 'image' && x.mock ? { ...x, mock: { ...x.mock, design: d } } : x)))}
             />
-          ) : (
-            <div className="space-y-4">
-              <div>
-                <p className="text-sm font-medium text-gray-900">Lienzo</p>
-                <p className="text-sm text-gray-500 mt-1">Haz clic en un elemento para editarlo, arrástralo para moverlo y usa las esquinas para cambiar su tamaño. Doble clic en un texto para escribir.</p>
-              </div>
-              {data && (
-                <div>
-                  <p className="text-sm font-medium text-gray-700 mb-1.5">Fondo</p>
-                  <div className="grid grid-cols-2 gap-1.5">
-                    {BG_STYLES.map((st) => {
-                      const on = bg?.type === 'pattern' ? bg.style === st.value : st.value === 'color' && !!bg;
-                      return (
-                        <button key={st.value} type="button" title={st.hint} aria-pressed={on} onClick={() => setBackground(st.value)}
-                          className={`rounded-lg border px-2 py-1.5 text-xs text-left ${on ? 'border-app-600 bg-app-50 text-app-800 font-medium' : 'border-gray-200 text-gray-700 hover:border-app-300'}`}>
-                          {st.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  <p className="mt-1.5 text-xs text-gray-500">Elige uno y afínalo: colores, densidad, tamaño, giro, grano y qué diseños usar.</p>
-                  <Button className="w-full mt-2" variant="outline" icon={<Sparkles className="w-4 h-4" />} onClick={() => setBackdropOpen(true)}>Fondo profesional con IA</Button>
-                  <p className="mt-1 text-xs text-gray-500">Una escenografía que combina con los diseños de la prenda.</p>
-                </div>
-              )}
-              <p className="text-xs text-gray-500">Atajos: flechas para mover (Mayús: 10 px), Supr para quitar, Ctrl+D para duplicar, Ctrl+Z para deshacer.</p>
+        ) : (
+          <div className="space-y-4">
+            <p className="text-sm text-gray-600">Haz clic en un elemento para editarlo, arrástralo para moverlo y usa las esquinas para cambiar su tamaño. Doble clic en un texto para escribir.</p>
+            <div className="grid grid-cols-2 gap-2">
+              <Button size="sm" variant="secondary" icon={<Palette className="w-4 h-4" />} onClick={() => setTab('fondo')}>Fondo</Button>
+              <Button size="sm" variant="secondary" icon={<Plus className="w-4 h-4" />} onClick={() => setTab('elementos')}>Agregar</Button>
             </div>
-          )}
-        </aside>
-      </div>
-    </section>
+            <p className="text-xs text-gray-500">Atajos: flechas para mover (Mayús: 10 px), Supr para quitar, Ctrl+D para duplicar, Ctrl+Z para deshacer.</p>
+          </div>
+        )}
+      />
+    </>
   );
 }

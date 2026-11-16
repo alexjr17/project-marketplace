@@ -12,10 +12,10 @@ import {
 import type { StudioMusic } from './VideoEditor';
 
 const KIND: Record<SceneKind, { icon: typeof Box; cls: string; label: string }> = {
-  '3d': { icon: Box, cls: 'bg-sky-800/90 border-sky-500/60', label: '3D' },
-  foto: { icon: ImageIcon, cls: 'bg-emerald-800/90 border-emerald-500/60', label: 'Foto' },
-  texto: { icon: Type, cls: 'bg-amber-700/90 border-amber-400/60', label: 'Texto' },
-  clip: { icon: Clapperboard, cls: 'bg-violet-800/90 border-violet-500/60', label: 'Clip' },
+  '3d': { icon: Box, cls: 'bg-sky-100 border-sky-300 text-sky-900', label: '3D' },
+  foto: { icon: ImageIcon, cls: 'bg-emerald-100 border-emerald-300 text-emerald-900', label: 'Foto' },
+  texto: { icon: Type, cls: 'bg-amber-100 border-amber-300 text-amber-900', label: 'Texto' },
+  clip: { icon: Clapperboard, cls: 'bg-violet-100 border-violet-300 text-violet-900', label: 'Clip' },
 };
 
 const TRACK_H = { scenes: 64, text: 30, music: 40 };
@@ -135,7 +135,7 @@ export function EditorTimeline({
     }
     // Normalizada: la parte más fuerte ocupa toda la pista.
     const top = Math.max(0.01, ...peaks);
-    ctx.fillStyle = 'rgba(167, 243, 208, 0.85)';
+    ctx.fillStyle = 'rgba(5, 150, 105, 0.55)';
     peaks.forEach((pk, b) => {
       const h = Math.max(1, (pk / top) * c.height);
       ctx.fillRect(b * 3, (c.height - h) / 2, 2, h);
@@ -148,18 +148,18 @@ export function EditorTimeline({
   for (let t = 0; t <= total + 1e-6; t += step) ticks.push(Math.round(t * 10) / 10);
 
   return (
-    <div className="rounded-xl bg-gray-900 ring-1 ring-white/10 text-gray-300 select-none">
-      <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-white/10">
-        <p className="text-xs font-medium text-gray-400">Línea de tiempo · arrastra el borde de una escena para cambiar su duración y el bloque para moverla</p>
+    <div className="bg-white text-gray-600 select-none">
+      <div className="flex items-center justify-between gap-2 px-3 py-1.5 border-b border-gray-200">
+        <p className="text-xs text-gray-500">Arrastra un bloque para moverlo y su borde para cambiar la duración</p>
         <div className="flex items-center gap-1">
-          <button type="button" title="Alejar" aria-label="Alejar la línea de tiempo" onClick={() => { setZoomed(true); setPxps((p) => Math.max(18, p / 1.4)); }} className="p-1.5 rounded-md hover:bg-white/10"><ZoomOut className="w-4 h-4" /></button>
-          <button type="button" title="Acercar" aria-label="Acercar la línea de tiempo" onClick={() => { setZoomed(true); setPxps((p) => Math.min(260, p * 1.4)); }} className="p-1.5 rounded-md hover:bg-white/10"><ZoomIn className="w-4 h-4" /></button>
-          <button type="button" title="Ajustar al ancho" aria-label="Ajustar la línea de tiempo al ancho" onClick={() => { setZoomed(false); fit(); }} className="p-1.5 rounded-md hover:bg-white/10"><Maximize2 className="w-4 h-4" /></button>
+          <button type="button" title="Alejar" aria-label="Alejar la línea de tiempo" onClick={() => { setZoomed(true); setPxps((p) => Math.max(18, p / 1.4)); }} className="p-1.5 rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-800"><ZoomOut className="w-4 h-4" /></button>
+          <button type="button" title="Acercar" aria-label="Acercar la línea de tiempo" onClick={() => { setZoomed(true); setPxps((p) => Math.min(260, p * 1.4)); }} className="p-1.5 rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-800"><ZoomIn className="w-4 h-4" /></button>
+          <button type="button" title="Ajustar al ancho" aria-label="Ajustar la línea de tiempo al ancho" onClick={() => { setZoomed(false); fit(); }} className="p-1.5 rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-800"><Maximize2 className="w-4 h-4" /></button>
         </div>
       </div>
       <div className="flex">
         {/* Nombres de las pistas */}
-        <div className="w-20 flex-shrink-0 border-r border-white/10 text-[11px] text-gray-400">
+        <div className="w-20 flex-shrink-0 border-r border-gray-200 text-[11px] text-gray-500">
           <div className="h-7" />
           <div className="flex items-center gap-1.5 px-2" style={{ height: TRACK_H.scenes }}><Clapperboard className="w-3.5 h-3.5" />Escenas</div>
           <div className="flex items-center gap-1.5 px-2" style={{ height: TRACK_H.text }}><Type className="w-3.5 h-3.5" />Textos</div>
@@ -171,14 +171,14 @@ export function EditorTimeline({
               {/* Regla */}
               <div
                 role="slider" tabIndex={0} aria-label="Recorrer el video" aria-valuemin={0} aria-valuemax={Math.round(total)}
-                className="relative h-7 cursor-pointer border-b border-white/10"
+                className="relative h-7 cursor-pointer border-b border-gray-200"
                 onPointerDown={(e) => { (e.currentTarget as Element).setPointerCapture?.(e.pointerId); seekFrom(e); }}
                 onPointerMove={(e) => { if (e.buttons === 1 && !drag.current) seekFrom(e); }}
               >
                 {ticks.map((t) => (
                   <span key={t} className="absolute bottom-0 pointer-events-none" style={{ left: t * pxps }}>
-                    <span className={`block w-px ${Number.isInteger(t / (step * 2)) ? 'h-3 bg-gray-500' : 'h-1.5 bg-gray-600'}`} />
-                    {Number.isInteger(t / (step * 2)) && <span className="absolute -top-4 left-1 text-[10px] text-gray-500 tabular-nums">{fmt(t)}</span>}
+                    <span className={`block w-px ${Number.isInteger(t / (step * 2)) ? 'h-3 bg-gray-400' : 'h-1.5 bg-gray-300'}`} />
+                    {Number.isInteger(t / (step * 2)) && <span className="absolute -top-4 left-1 text-[10px] text-gray-400 tabular-nums">{fmt(t)}</span>}
                   </span>
                 ))}
               </div>
@@ -195,25 +195,25 @@ export function EditorTimeline({
                   return (
                     <div
                       key={s.id}
-                      className={`absolute top-1.5 bottom-1.5 rounded-lg border overflow-hidden cursor-grab active:cursor-grabbing ${k.cls} ${sel ? 'ring-2 ring-app-400 z-10' : ''} ${dx ? 'opacity-80 z-20 shadow-2xl' : ''}`}
+                      className={`absolute top-1.5 bottom-1.5 rounded-lg border overflow-hidden cursor-grab active:cursor-grabbing ${k.cls} ${sel ? 'ring-2 ring-app-500 z-10' : ''} ${dx ? 'opacity-80 z-20 shadow-2xl' : ''}`}
                       style={{ left: starts[i] * pxps + 1, width: Math.max(8, len * pxps - 2), transform: dx ? `translateX(${dx}px)` : undefined }}
                       onPointerDown={(e) => startDrag(e, 'move', i)}
                       title={`Escena ${i + 1} · ${k.label} · ${len} s`}
                     >
-                      {th && <div className="absolute inset-0 opacity-40" style={{ backgroundImage: `url("${th}")`, backgroundSize: 'auto 100%', backgroundRepeat: 'repeat-x' }} />}
-                      <div className="relative flex items-center gap-1 px-2 pt-1 text-[11px] font-medium text-white whitespace-nowrap">
+                      {th && <div className="absolute inset-0 opacity-25" style={{ backgroundImage: `url("${th}")`, backgroundSize: 'auto 100%', backgroundRepeat: 'repeat-x' }} />}
+                      <div className="relative flex items-center gap-1 px-2 pt-1 text-[11px] font-medium whitespace-nowrap">
                         <Icon className="w-3 h-3 flex-shrink-0" />
                         <span className="truncate">{i + 1}. {s.kind === 'foto' ? s.product?.name ?? 'Foto' : s.kind === 'clip' ? s.clip?.name ?? 'Clip' : s.kind === 'texto' ? s.title || 'Texto' : k.label}</span>
                       </div>
-                      <span className="relative block px-2 text-[10px] text-white/70 tabular-nums">{len.toFixed(1)} s</span>
+                      <span className="relative block px-2 text-[10px] opacity-70 tabular-nums">{len.toFixed(1)} s</span>
                       {s.kind === 'clip' && (
                         <span
-                          className="absolute left-0 inset-y-0 w-2 cursor-ew-resize bg-white/0 hover:bg-white/40" aria-label="Recortar el inicio del clip"
+                          className="absolute left-0 inset-y-0 w-2 cursor-ew-resize bg-black/0 hover:bg-black/20" aria-label="Recortar el inicio del clip"
                           onPointerDown={(e) => startDrag(e, 'trimL', i)}
                         />
                       )}
                       <span
-                        className="absolute right-0 inset-y-0 w-2 cursor-ew-resize bg-white/10 hover:bg-white/50" aria-label="Cambiar la duración"
+                        className="absolute right-0 inset-y-0 w-2 cursor-ew-resize bg-black/5 hover:bg-black/20" aria-label="Cambiar la duración"
                         onPointerDown={(e) => startDrag(e, 'trimR', i)}
                       />
                     </div>
@@ -231,7 +231,7 @@ export function EditorTimeline({
                       aria-label={`Transición después de la escena ${i + 1}`}
                       onPointerDown={(e) => e.stopPropagation()}
                       onClick={() => onTransition(s.id)}
-                      className="absolute top-1/2 -translate-y-1/2 z-30 h-5 rounded-full bg-white/90 text-gray-900 text-[10px] font-semibold shadow ring-1 ring-black/20 hover:bg-app-200 px-1 overflow-hidden whitespace-nowrap"
+                      className="absolute top-1/2 -translate-y-1/2 z-30 h-5 rounded-full bg-white text-gray-900 text-[10px] font-semibold shadow ring-1 ring-gray-300 hover:bg-app-100 px-1 overflow-hidden whitespace-nowrap"
                       style={{ left: cut - w / 2, width: w }}
                     >
                       {w > 46 ? TRANSITIONS.find((t) => t.value === s.transition)?.label.split(' ')[0] : '⇄'}{s.sound ? ' ♪' : ''}
@@ -240,7 +240,7 @@ export function EditorTimeline({
                 })}
                 {endCard && (
                   <div
-                    className="absolute top-1.5 bottom-1.5 rounded-lg border border-dashed border-white/30 bg-white/5 text-[11px] text-gray-400 grid place-items-center"
+                    className="absolute top-1.5 bottom-1.5 rounded-lg border border-dashed border-gray-300 bg-gray-50 text-[11px] text-gray-500 grid place-items-center"
                     style={{ left: layout(scenes, false).body * pxps + 1, width: END_SECONDS * pxps - 2 }}
                   >
                     Cierre
@@ -249,11 +249,11 @@ export function EditorTimeline({
               </div>
 
               {/* Pista de textos */}
-              <div className="relative border-t border-white/5" style={{ height: TRACK_H.text }} onPointerDown={(e) => { if (e.target === e.currentTarget) seekFrom(e); }}>
+              <div className="relative border-t border-gray-100" style={{ height: TRACK_H.text }} onPointerDown={(e) => { if (e.target === e.currentTarget) seekFrom(e); }}>
                 {scenes.map((s, i) => (s.title || s.subtitle || s.badge) && (
                   <button
                     key={s.id} type="button" onClick={() => onSelect(s.id, true)}
-                    className={`absolute top-1 bottom-1 rounded-md px-2 text-left text-[11px] truncate ${s.id === selectedId ? 'bg-app-500 text-white' : 'bg-white/15 text-gray-200 hover:bg-white/25'}`}
+                    className={`absolute top-1 bottom-1 rounded-md px-2 text-left text-[11px] truncate ${s.id === selectedId ? 'bg-app-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
                     style={{ left: starts[i] * pxps + 1, width: Math.max(8, clampSeconds(s.seconds) * pxps - 2) }}
                   >
                     {[s.badge, s.title, s.subtitle].filter(Boolean).join(' · ')}
@@ -262,15 +262,15 @@ export function EditorTimeline({
               </div>
 
               {/* Pista de música */}
-              <div className="relative border-t border-white/5" style={{ height: TRACK_H.music }} onPointerDown={(e) => seekFrom(e)}>
+              <div className="relative border-t border-gray-100" style={{ height: TRACK_H.music }} onPointerDown={(e) => seekFrom(e)}>
                 {music
-                  ? <div className="absolute inset-x-0 top-1 bottom-1 rounded-md bg-emerald-900/60 ring-1 ring-emerald-500/40 overflow-hidden"><canvas ref={wave} className="absolute left-0 top-1 h-[calc(100%-8px)]" style={{ width }} aria-hidden="true" /><span className="absolute left-2 top-0.5 text-[10px] text-emerald-200">{music.name}</span></div>
-                  : <p className="absolute inset-0 flex items-center px-2 text-[11px] text-gray-500 pointer-events-none">Sin música: agrégala en la pestaña Audio.</p>}
+                  ? <div className="absolute inset-x-0 top-1 bottom-1 rounded-md bg-emerald-50 ring-1 ring-emerald-200 overflow-hidden"><canvas ref={wave} className="absolute left-0 top-1 h-[calc(100%-8px)]" style={{ width }} aria-hidden="true" /><span className="absolute left-2 top-0.5 text-[10px] text-emerald-800">{music.name}</span></div>
+                  : <p className="absolute inset-0 flex items-center px-2 text-[11px] text-gray-400 pointer-events-none">Sin música: agrégala en Audio.</p>}
               </div>
 
               {/* Cabezal de reproducción */}
-              <div ref={playheadRef} className="absolute top-0 bottom-0 w-px bg-app-400 pointer-events-none z-40" style={{ left: 0, opacity: 0 }}>
-                <span className="absolute -top-0 -left-1.5 w-3 h-3 rotate-45 bg-app-400 rounded-sm" />
+              <div ref={playheadRef} className="absolute top-0 bottom-0 w-px bg-app-600 pointer-events-none z-40" style={{ left: 0, opacity: 0 }}>
+                <span className="absolute -top-0 -left-1.5 w-3 h-3 rotate-45 bg-app-600 rounded-sm" />
               </div>
             </div>
           </div>

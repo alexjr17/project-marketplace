@@ -130,13 +130,13 @@ export function SubjectPanel({ subject, products, picks, onPicks, garment, plan,
                   );
                 })}
               </div>
-              {onShowcaseVideo && <Button size="sm" variant="secondary" className="mt-2" onClick={onShowcaseVideo}>Agregar el carrusel de colores al video</Button>}
+              {onShowcaseVideo && <Button size="sm" variant="secondary" className="mt-2" onClick={onShowcaseVideo}>Agregar el carrusel al video</Button>}
             </>
           )}
         </div>
       )}
       {first && (
-        <Button size="sm" variant="secondary" className="mb-2" icon={<Copy className="w-4 h-4" />} onClick={() => onAllDesigns(first)}>Usar el primer diseño en todas las zonas</Button>
+        <Button size="sm" variant="secondary" className="mb-2" icon={<Copy className="w-4 h-4" />} onClick={() => onAllDesigns(first)}>Mismo diseño en todas las zonas</Button>
       )}
       <ul className="space-y-2">
         {subject.zones.map((z) => {

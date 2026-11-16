@@ -9,9 +9,9 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import type { SourceZone } from '../../services/marketing.service';
 import { useNavigate } from 'react-router-dom';
-import { CalendarClock, Download, Film, Palette, Pause, Play, Save, Send, Sparkles, Wand2, X } from 'lucide-react';
+import { CalendarClock, Download, Film, Image as ImageIcon, LayoutGrid, MoreVertical, Palette, Pause, Play, Save, Send, Shirt, ShoppingBag, Sparkles, Tag, Wand2, X } from 'lucide-react';
 import {
-  Badge, Button, Card, CardTitle, Checkbox, Dialog, Field, FormActions, Page, PageHeader, RadioGroup, SearchInput,
+  ActionMenu, Badge, Button, Card, CardTitle, Checkbox, Dialog, Field, FormActions, Page, PageHeader, RadioGroup, SearchInput,
   SelectInput, Spinner, Switch, TextArea, TextInput, toast,
 } from '../../components/ui';
 import { errorMessage } from '../../lib/http';
@@ -30,6 +30,7 @@ import type { NarratorSettings } from '../../components/marketing/NarrationPanel
 import { DictateButton } from '../../components/marketing/DictateButton';
 import { appendText } from '../../components/marketing/dictation';
 import { DesignEditor } from '../../components/marketing/DesignEditor';
+import { StudioModeSwitch } from '../../components/marketing/StudioShell';
 import { GarmentViewsDialog } from '../../components/marketing/GarmentViewsDialog';
 import { SubjectPanel } from '../../components/marketing/SubjectPanel';
 import { buildDesign, designSize, reflowDesign, type ColorsLayer, type Design, type DesignRatio, type MockView, type PieceMock } from '../../components/marketing/design';
@@ -52,6 +53,14 @@ const SOURCES: { value: SourceType; label: string }[] = [
   { value: 'coleccion', label: 'Colección' },
   { value: 'promocion', label: 'Promoción' },
   { value: 'plantilla', label: 'Personalizables' },
+];
+
+/** Primer paso del estudio: qué se va a mostrar. */
+const START_OPTIONS: { value: SourceType; label: string; hint: string; icon: typeof Film }[] = [
+  { value: 'producto', label: 'Productos', hint: 'Uno (con sus fotos) o varios de la tienda', icon: ShoppingBag },
+  { value: 'plantilla', label: 'Personalizable', hint: 'La prenda con tus diseños, por zonas y colores', icon: Shirt },
+  { value: 'coleccion', label: 'Colección', hint: 'Los productos de una colección', icon: LayoutGrid },
+  { value: 'promocion', label: 'Promoción', hint: 'Una oferta o cupón con sus productos', icon: Tag },
 ];
 
 /** Dos estudios: Post (imagen: post 1:1 o 4:5 e historia 9:16) y Video (reels, historias y posts de video). */
@@ -278,6 +287,10 @@ export const StudioPage = () => {
   const [garmentColors, setGarmentColors] = useState<Record<number, string>>({});
   /** Colores disponibles que se muestran (opcional; null: no). */
   const [showcase, setShowcase] = useState<string[] | null>(null);
+  /** Primer paso del estudio: se puede saltar; pedir el panel de Producto desde él. */
+  const [skipOnboarding, setSkipOnboarding] = useState(false);
+  const [panelReq, setPanelReq] = useState(0);
+  const [aiAccountsOpen, setAiAccountsOpen] = useState(false);
   const garment = useMemo(() => (chosenTemplate ? mockTemplates.find((t) => t.id === chosenTemplate.id) ?? templates.find((t) => t.id === chosenTemplate.id) ?? chosenTemplate : null), [chosenTemplate, mockTemplates, templates]);
   const garmentColor = garment ? garmentColors[garment.id] ?? garment.colors?.[0] ?? null : null;
   const garmentPlan = useMemo(() => (garment ? garmentPlans[garment.id] ?? defaultPlan(garmentZones(garment)) : null), [garment, garmentPlans]);
@@ -1021,7 +1034,7 @@ export const StudioPage = () => {
       </div>
       {sourceType !== 'promocion' && sourceType !== 'plantilla' && <SearchInput value={q} onChange={setQ} placeholder="Buscar…" />}
       {sourceType === 'plantilla' && (
-        <Button className="w-full mb-1" size="sm" variant="outline" icon={<Sparkles className="w-4 h-4" />} onClick={() => setGarmentOpen(true)}>Crear una personalizable con IA (4 vistas)</Button>
+        <Button className="w-full mb-1" size="sm" variant="outline" icon={<Sparkles className="w-4 h-4" />} onClick={() => setGarmentOpen(true)}>Crear una con IA (4 vistas)</Button>
       )}
       <p className="text-xs text-gray-500 mt-2 mb-2">
         {MAX_ITEMS[sourceType] > 1 ? `Elige hasta ${MAX_ITEMS[sourceType]} (en los videos sale uno por escena).` : 'Elige uno.'}
@@ -1147,10 +1160,10 @@ export const StudioPage = () => {
   const onVideoUp = () => { vdrag.current = null; };
 
   const canvasEl = (
-    <div className="relative" style={isScenes ? undefined : { maxWidth: previewWidth, width: '100%' }}>
+    <div className={isScenes ? 'relative w-full h-full' : 'relative'} style={isScenes ? undefined : { maxWidth: previewWidth, width: '100%' }}>
       <canvas
         ref={canvasRef} width={W} height={H}
-        className={isScenes ? 'block h-[min(62vh,640px)] w-auto max-w-full rounded-lg shadow-2xl' : 'w-full h-auto rounded-xl ring-1 ring-gray-200 bg-gray-50'}
+        className={isScenes ? 'block w-full h-full rounded-sm shadow-[0_12px_40px_rgb(0_0_0/0.18)] bg-white' : 'w-full h-auto rounded-xl ring-1 ring-gray-200 bg-gray-50'}
         aria-label="Vista previa de la pieza"
       />
       {isScenes && (
@@ -1203,8 +1216,116 @@ export const StudioPage = () => {
     );
   });
 
+  const studioExtras = (
+    <>
+      {mannequins}
+      {garmentOpen && (
+        <GarmentViewsDialog
+          onClose={() => setGarmentOpen(false)}
+          onUse={isDesign ? (views) => setPhotos((p) => [...views.map((v, i) => ({ id: -Date.now() - i, name: v.label, image: v.url })), ...p]) : undefined}
+          onTemplateCreated={reloadTemplates}
+        />
+      )}
+      {captureJob && captureArt && (
+        <div aria-hidden="true" style={{ position: 'fixed', left: -12000, top: 0, width: 800, height: 800, pointerEvents: 'none' }}>
+          <Suspense fallback={null}>
+            <Mannequin3D
+              key={captureJob.key} model={captureJob.model} color={captureJob.color} art={captureArt.art} frames={captureArt.frames}
+              focus={captureJob.view3d} still locked recordable handleRef={captureHandle} onReady={() => onCaptureReady(captureJob)}
+            />
+          </Suspense>
+        </div>
+      )}
+
+      {aiAccountsOpen && (
+        <Dialog open onClose={() => setAiAccountsOpen(false)} size="lg" title="Cuentas de IA" description="Las cuentas que crean imágenes, voces y textos, y su cuota de hoy.">
+          <AiAccountsCard />
+        </Dialog>
+      )}
+      {publishFor && <PublishDialog creative={publishFor} caption={caption} hashtags={hashtags} onClose={() => setPublishFor(null)} onDone={() => { setPublishFor(null); navigate('/messaging/calendar'); }} />}
+    </>
+  );
+
+  const modeSwitch = (
+    <StudioModeSwitch
+      value={format === 'video360' ? 'video360' : 'post'}
+      onChange={(v) => { setFormat(v as Format); setPlaying(v === 'video360'); }}
+      options={[{ value: 'post', label: 'Post', icon: ImageIcon }, { value: 'video360', label: 'Video', icon: Film }]}
+    />
+  );
+  const studioMenu = (
+    <ActionMenu
+      trigger={<button type="button" title="Más opciones" aria-label="Más opciones" className="grid place-items-center w-9 h-9 rounded-lg text-gray-600 hover:bg-gray-100"><MoreVertical className="w-4 h-4" /></button>}
+      items={[
+        { label: 'Marca', icon: <Palette className="w-4 h-4" />, onClick: () => navigate('/messaging/brand') },
+        { label: 'Calendario y biblioteca', icon: <CalendarClock className="w-4 h-4" />, onClick: () => navigate('/messaging/calendar') },
+        { label: 'Cuentas de IA', icon: <Sparkles className="w-4 h-4" />, onClick: () => setAiAccountsOpen(true) },
+      ]}
+    />
+  );
+  const hasSubject = selected.length > 0;
+  /** Primer paso: qué se va a mostrar (todo lo demás se arma con eso). */
+  const onboarding = !hasSubject && !skipOnboarding ? (
+    <div className="w-full max-w-xl rounded-2xl bg-white border border-gray-200 shadow-xl p-6">
+      <h2 className="text-lg font-semibold text-gray-900">¿Qué vas a mostrar?</h2>
+      <p className="text-sm text-gray-500 mt-1">Elige y el estudio arma {isScenes ? 'el video' : 'la pieza'} con tus productos, sus fotos y tu marca. Todas las plantillas se adaptan.</p>
+      <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-2">
+        {START_OPTIONS.map((o) => {
+          const Icon = o.icon;
+          return (
+            <button key={o.value} type="button" onClick={() => { changeSource(o.value); setPanelReq((n) => n + 1); }}
+              className="flex items-start gap-3 rounded-xl border border-gray-200 p-3 text-left hover:border-app-300 hover:bg-app-50/40 transition-colors">
+              <span className="grid place-items-center w-9 h-9 rounded-lg bg-app-50 text-app-700 flex-shrink-0"><Icon className="w-5 h-5" /></span>
+              <span><span className="block text-sm font-medium text-gray-900">{o.label}</span><span className="block text-xs text-gray-500 mt-0.5">{o.hint}</span></span>
+            </button>
+          );
+        })}
+      </div>
+      <button type="button" onClick={() => setSkipOnboarding(true)} className="mt-4 text-sm text-app-700 hover:underline">Empezar sin producto (solo con plantillas y textos)</button>
+    </div>
+  ) : null;
+
+  if (isDesign || isScenes) {
+    return (
+      <>
+        {isDesign ? (
+          <DesignEditor
+            modeSwitch={modeSwitch} menu={studioMenu} onboarding={onboarding} hasSubject={hasSubject} panelReq={panelReq}
+            resolve={resolveFn} onMoveDesign={(zoneId, offset) => setZoneChoice(zoneId, { offset })}
+            design={design} onChange={setDesign} onTemplate={(d) => { designEdited.current = false; designReset(d, true); }} data={designData}
+            history={{ undo: designHist.undo, redo: designHist.redo, canUndo: designHist.canUndo, canRedo: designHist.canRedo }}
+            sourcePanel={sourcePanel} publishPanel={textsPanel} exportActions={exportButtons}
+            products={items.map(toSceneProduct)} photos={photos} onPhotos={setPhotos} onRatio={changeDesignRatio}
+            mockTemplates={mockTemplates} defaultMockTemplate={defaultMockTemplate} onGarment={() => setGarmentOpen(true)}
+          />
+        ) : (
+          <VideoEditor
+            modeSwitch={modeSwitch} menu={studioMenu} onboarding={onboarding} hasSubject={hasSubject} size={[W, H]} panelReq={panelReq}
+            palette={brand ? [
+              { label: 'Principal', hex: brand.primary }, { label: 'Acento', hex: brand.accent }, { label: 'Claro', hex: brand.paper },
+              ...(brand.secondary ? [{ label: 'Secundario', hex: brand.secondary }] : []), { label: 'Blanco', hex: '#FFFFFF' }, { label: 'Negro', hex: '#000000' },
+            ] : []}
+            preview={canvasEl} sourcePanel={sourcePanel} publishPanel={textsPanel} exportActions={exportButtons}
+            info={<>{W}×{H} · {(videoMime(!!music) ?? '').includes('mp4') ? 'MP4' : 'WEBM'}{music ? ' · con música' : ''}</>}
+            playing={playing} onTogglePlay={() => setPlaying((p) => !p)} timecodeRef={timecodeRef} timeRef={timeRef}
+            scenes={scenes} onChange={setScenes} selectedId={sceneSel} onSelect={setSceneSel}
+            endCard={endCard} onEndCard={setEndCard} logo={showLogo} onLogo={setShowLogo} ratio={ratio} onRatio={setRatio} stage={stage} onStage={setStage}
+            templates={templates3d} defaultTemplate={defaultTemplate} photoTemplates={photoTemplates} products={sceneProducts} story={story} onStoryboard={applyStoryboard}
+            playheadRef={playheadRef} onPreview={previewScene} onSeek={seek}
+            history={{ undo: sceneHist.undo, redo: sceneHist.redo, canUndo: sceneHist.canUndo, canRedo: sceneHist.canRedo }}
+            music={music} onMusic={setMusic} onAiScenes={() => writeWithAi(true)} aiBusy={writing === 'scenes'}
+            media={media} onMedia={setMedia}
+            sfxOn={sfxOn} onSfxOn={setSfxOn} sfxVolume={sfxVolume} onSfxVolume={setSfxVolume} onAskAdvice={askAdvice}
+            narration={narration} prompter={prompter}
+          />
+        )}
+        {studioExtras}
+      </>
+    );
+  }
+
   return (
-    <Page className={isScenes || isDesign ? 'max-w-[1720px] mx-auto' : 'max-w-7xl mx-auto'}>
+    <Page className="max-w-7xl mx-auto">
       <PageHeader
         icon={Wand2}
         title="Estudio de contenido"
@@ -1226,35 +1347,7 @@ export const StudioPage = () => {
         <p className="text-sm text-gray-500">{isScenes ? 'Reel, historia o post de video: elige el formato arriba en el editor.' : 'Post cuadrado, post vertical o historia: elige el formato arriba en el diseñador.'}</p>
       </div>
 
-      {isDesign ? (
-        <DesignEditor
-          resolve={resolveFn} onMoveDesign={(zoneId, offset) => setZoneChoice(zoneId, { offset })}
-          design={design} onChange={setDesign} onTemplate={(d) => { designEdited.current = false; designReset(d, true); }} data={designData}
-          history={{ undo: designHist.undo, redo: designHist.redo, canUndo: designHist.canUndo, canRedo: designHist.canRedo }}
-          sourcePanel={sourcePanel} publishPanel={textsPanel} exportActions={exportButtons}
-          products={items.map(toSceneProduct)} photos={photos} onPhotos={setPhotos} onRatio={changeDesignRatio}
-          mockTemplates={mockTemplates} defaultMockTemplate={defaultMockTemplate} onGarment={() => setGarmentOpen(true)}
-        />
-      ) : isScenes ? (
-        <VideoEditor
-          palette={brand ? [
-            { label: 'Principal', hex: brand.primary }, { label: 'Acento', hex: brand.accent }, { label: 'Claro', hex: brand.paper },
-            ...(brand.secondary ? [{ label: 'Secundario', hex: brand.secondary }] : []), { label: 'Blanco', hex: '#FFFFFF' }, { label: 'Negro', hex: '#000000' },
-          ] : []}
-          preview={canvasEl} sourcePanel={sourcePanel} publishPanel={textsPanel} exportActions={exportButtons}
-          info={<>{W}×{H} · {(videoMime(!!music) ?? '').includes('mp4') ? 'MP4' : 'WEBM'}{music ? ' · con música' : ''}</>}
-          playing={playing} onTogglePlay={() => setPlaying((p) => !p)} timecodeRef={timecodeRef} timeRef={timeRef}
-          scenes={scenes} onChange={setScenes} selectedId={sceneSel} onSelect={setSceneSel}
-          endCard={endCard} onEndCard={setEndCard} logo={showLogo} onLogo={setShowLogo} ratio={ratio} onRatio={setRatio} stage={stage} onStage={setStage}
-          templates={templates3d} defaultTemplate={defaultTemplate} photoTemplates={photoTemplates} products={sceneProducts} story={story} onStoryboard={applyStoryboard}
-          playheadRef={playheadRef} onPreview={previewScene} onSeek={seek}
-          history={{ undo: sceneHist.undo, redo: sceneHist.redo, canUndo: sceneHist.canUndo, canRedo: sceneHist.canRedo }}
-          music={music} onMusic={setMusic} onAiScenes={() => writeWithAi(true)} aiBusy={writing === 'scenes'}
-          media={media} onMedia={setMedia}
-          sfxOn={sfxOn} onSfxOn={setSfxOn} sfxVolume={sfxVolume} onSfxVolume={setSfxVolume} onAskAdvice={askAdvice}
-          narration={narration} prompter={prompter}
-        />
-      ) : (
+      {(
         <div className="grid grid-cols-1 xl:grid-cols-[320px_minmax(0,1fr)_360px] gap-5 items-start">
           <Card>
             <CardTitle>1. Qué promocionas</CardTitle>
@@ -1290,28 +1383,7 @@ export const StudioPage = () => {
         </div>
       )}
 
-      {mannequins}
-      {garmentOpen && (
-        <GarmentViewsDialog
-          onClose={() => setGarmentOpen(false)}
-          onUse={isDesign ? (views) => setPhotos((p) => [...views.map((v, i) => ({ id: -Date.now() - i, name: v.label, image: v.url })), ...p]) : undefined}
-          onTemplateCreated={reloadTemplates}
-        />
-      )}
-      {captureJob && captureArt && (
-        <div aria-hidden="true" style={{ position: 'fixed', left: -12000, top: 0, width: 800, height: 800, pointerEvents: 'none' }}>
-          <Suspense fallback={null}>
-            <Mannequin3D
-              key={captureJob.key} model={captureJob.model} color={captureJob.color} art={captureArt.art} frames={captureArt.frames}
-              focus={captureJob.view3d} still locked recordable handleRef={captureHandle} onReady={() => onCaptureReady(captureJob)}
-            />
-          </Suspense>
-        </div>
-      )}
-
-      <AiAccountsCard />
-
-      {publishFor && <PublishDialog creative={publishFor} caption={caption} hashtags={hashtags} onClose={() => setPublishFor(null)} onDone={() => { setPublishFor(null); navigate('/messaging/calendar'); }} />}
+      {studioExtras}
     </Page>
   );
 };

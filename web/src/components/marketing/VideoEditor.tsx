@@ -1,11 +1,10 @@
 /**
- * Estudio de edición del video por escenas, con la forma de un editor de video:
- * - barra de herramientas: deshacer/rehacer, agregar escena, textos con IA, formato y exportar;
- * - izquierda, la biblioteca: plantillas de video, qué se promociona, mis archivos (clips y fotos),
- *   audio (música con su volumen y desde qué segundo), ajustes del video y la publicación;
- * - centro, el monitor con los controles de reproducción y el tiempo;
+ * Editor de video por escenas, en el armazón del estudio (StudioShell):
+ * - barra: Post / Video, deshacer/rehacer, agregar escena, textos con IA, ayuda IA, formato y exportar;
+ * - riel: Producto (qué se muestra), Plantillas, Archivos (clips y fotos), Voz, Audio, Textos y Ajustes;
+ * - centro, el monitor (el diseño de la prenda se arrastra con el video en pausa);
  * - derecha, las propiedades de la escena elegida (SceneInspector);
- * - abajo, la línea de tiempo por pistas (EditorTimeline).
+ * - abajo, los controles de reproducción y la línea de tiempo por pistas (EditorTimeline).
  * Atajos: espacio reproduce o pausa, ← → mueven 0,1 s (con Mayús 1 s), Supr quita la escena,
  * Ctrl+D la duplica y Ctrl+Z / Ctrl+Y deshacen y rehacen.
  */
@@ -14,6 +13,7 @@ import {
   Box, Clapperboard, FolderOpen, Mic, Image as ImageIcon, LayoutTemplate, ShoppingBag, Music, Pause, Play, Plus, Redo2,
   Settings2, SkipBack, SkipForward, Sparkles, Trash2, Type, Undo2, Upload, Volume2, WandSparkles,
 } from 'lucide-react';
+import { FitBox, RatioSwitch, StudioShell, ToolbarSep, type RailItem } from './StudioShell';
 import { ActionMenu, Button, Checkbox, Dialog, FormActions, IconButton, RadioGroup, Spinner, Switch, toast } from '../ui';
 import { errorMessage } from '../../lib/http';
 import type { SourceProduct, VideoAdvice } from '../../services/marketing.service';
@@ -42,15 +42,15 @@ export interface StudioMusic {
 /** Archivo propio subido al editor: un clip de video o una foto. */
 export type MediaItem = { type: 'video'; clip: SceneClip } | { type: 'image'; product: SceneProduct };
 
-type BinTab = 'plantillas' | 'medios' | 'archivos' | 'voz' | 'audio' | 'ajustes' | 'publicar';
-const BIN_TABS: { value: BinTab; label: string; icon: typeof Box }[] = [
-  { value: 'plantillas', label: 'Plantillas', icon: LayoutTemplate },
-  { value: 'medios', label: 'Productos', icon: ShoppingBag },
-  { value: 'archivos', label: 'Mis archivos', icon: FolderOpen },
-  { value: 'voz', label: 'Voz', icon: Mic },
-  { value: 'audio', label: 'Audio', icon: Music },
-  { value: 'ajustes', label: 'Ajustes', icon: Settings2 },
-  { value: 'publicar', label: 'Publicación', icon: Type },
+type BinTab = 'medios' | 'plantillas' | 'archivos' | 'voz' | 'audio' | 'publicar' | 'ajustes';
+const RAIL: (RailItem & { id: BinTab; title: string })[] = [
+  { id: 'medios', label: 'Producto', title: 'Qué vas a mostrar', icon: ShoppingBag },
+  { id: 'plantillas', label: 'Plantillas', title: 'Plantillas de video', icon: LayoutTemplate },
+  { id: 'archivos', label: 'Archivos', title: 'Mis archivos', icon: FolderOpen },
+  { id: 'voz', label: 'Voz', title: 'Narrador', icon: Mic },
+  { id: 'audio', label: 'Audio', title: 'Música y sonidos', icon: Music },
+  { id: 'publicar', label: 'Textos', title: 'Textos y publicación', icon: Type },
+  { id: 'ajustes', label: 'Ajustes', title: 'Ajustes del video', icon: Settings2 },
 ];
 
 export function VideoEditor({
@@ -59,6 +59,7 @@ export function VideoEditor({
   scenes, onChange, selectedId, onSelect, endCard, onEndCard, logo, onLogo, ratio, onRatio, stage, onStage,
   templates, defaultTemplate, photoTemplates, products, story, onStoryboard, playheadRef, onPreview, onSeek,
   history, music, onMusic, onAiScenes, aiBusy, palette, media, onMedia, sfxOn, onSfxOn, sfxVolume, onSfxVolume, onAskAdvice, narration, prompter,
+  modeSwitch, menu, onboarding, hasSubject, size, panelReq = 0,
 }: {
   preview: ReactNode;
   sourcePanel: ReactNode;
@@ -112,12 +113,24 @@ export function VideoEditor({
   narration: NarrationControls;
   /** Grabando mi voz: cuenta regresiva y teleprompter sobre el monitor. */
   prompter: { countdown: number | null; active: boolean };
+  /** Interruptor Post / Video y menú (marca, calendario, cuentas de IA), en la barra. */
+  modeSwitch: ReactNode;
+  menu: ReactNode;
+  /** Primer paso sobre el monitor cuando aún no se eligió qué mostrar. */
+  onboarding: ReactNode;
+  hasSubject: boolean;
+  /** Tamaño del video (ancho, alto). */
+  size: [number, number];
+  /** Cada vez que cambia, se abre el panel de Producto (desde el primer paso). */
+  panelReq?: number;
 }) {
   const { starts, total } = layout(scenes, endCard);
   const idx = Math.max(0, scenes.findIndex((s) => s.id === selectedId));
   const sc = scenes[idx];
   const canAdd = scenes.length < MAX_SCENES;
-  const [bin, setBin] = useState<BinTab>('plantillas');
+  const [bin, setBin] = useState<BinTab | null>(() => (hasSubject ? 'plantillas' : 'medios'));
+  const [seenReq, setSeenReq] = useState(panelReq);
+  if (panelReq !== seenReq) { setSeenReq(panelReq); setBin('medios'); }
   const [section, setSection] = useState<InspectorSection>('escena');
   const clips = media.flatMap((m) => (m.type === 'video' ? [m.clip] : []));
   const userPhotos = media.flatMap((m) => (m.type === 'image' ? [m.product] : []));
@@ -321,10 +334,13 @@ export function VideoEditor({
     }
   };
 
-  const toolBtn = 'inline-flex items-center gap-1.5 rounded-lg px-2.5 h-9 text-sm text-gray-200 hover:bg-white/10 disabled:opacity-40 disabled:hover:bg-transparent';
+  const toolBtn = 'inline-flex items-center gap-1.5 rounded-lg px-2.5 h-9 text-sm text-gray-700 hover:bg-gray-100 disabled:opacity-40 disabled:hover:bg-transparent';
+
+  const secTitle = RAIL.find((r) => r.id === bin)?.title ?? '';
+  const rail = RAIL.map((r) => ({ ...r, dot: r.id === 'medios' && !hasSubject }));
 
   return (
-    <section className="rounded-2xl bg-gray-950 p-3 ring-1 ring-black/40 shadow-xl" aria-label="Editor de video">
+    <>
       {bgAi && sc && (
         <AiBackdropDialog
           designUrls={Array.from(new Set(scenes.flatMap((x) => (x.design?.image ? [x.design.image] : []))))} ratio={ratio}
@@ -335,54 +351,36 @@ export function VideoEditor({
           }}
         />
       )}
-      {/* Barra de herramientas */}
-      <div className="flex flex-wrap items-center gap-1 mb-3">
-        <button type="button" className={toolBtn} title="Deshacer (Ctrl+Z)" aria-label="Deshacer (Ctrl+Z)" onClick={history.undo} disabled={!history.canUndo}><Undo2 className="w-4 h-4" /></button>
-        <button type="button" className={toolBtn} title="Rehacer (Ctrl+Y)" aria-label="Rehacer (Ctrl+Y)" onClick={history.redo} disabled={!history.canRedo}><Redo2 className="w-4 h-4" /></button>
-        <span className="w-px h-6 bg-white/10 mx-1" />
-        <button type="button" className={toolBtn} onClick={() => setBin('plantillas')}><LayoutTemplate className="w-4 h-4" />Plantillas</button>
-        <ActionMenu
-          trigger={<button type="button" className={toolBtn} disabled={!canAdd}><Plus className="w-4 h-4" />Escena</button>}
-          items={[
-            { label: 'Prenda 3D', icon: <Box className="w-4 h-4" />, onClick: () => add('3d'), disabled: !templates.length },
-            { label: 'Foto de producto', icon: <ImageIcon className="w-4 h-4" />, onClick: () => add('foto') },
-            { label: 'Texto', icon: <Type className="w-4 h-4" />, onClick: () => add('texto') },
-            { label: 'Clip de video', icon: <Clapperboard className="w-4 h-4" />, onClick: () => add('clip') },
-          ]}
-        />
-        <button type="button" className={toolBtn} onClick={onAiScenes} disabled={aiBusy}>{aiBusy ? <Spinner /> : <Sparkles className="w-4 h-4" />}Textos con IA</button>
-        <button type="button" className={`${toolBtn} bg-app-600/90 hover:bg-app-600 text-white`} onClick={ask} disabled={asking}>{asking ? <Spinner /> : <WandSparkles className="w-4 h-4" />}Ayuda IA</button>
-        <span className="w-px h-6 bg-white/10 mx-1" />
-        <div className="flex rounded-lg bg-white/5 p-0.5" role="radiogroup" aria-label="Formato del video">
-          {VIDEO_RATIOS.map((r) => (
-            <button
-              key={r.value} type="button" role="radio" aria-checked={ratio === r.value} title={r.hint} onClick={() => onRatio(r.value)}
-              className={`px-2.5 h-8 rounded-md text-xs font-medium tabular-nums ${ratio === r.value ? 'bg-app-600 text-white' : 'text-gray-300 hover:bg-white/10'}`}
-            >
-              {r.value}
-            </button>
-          ))}
-        </div>
-        <div className="ml-auto flex flex-wrap items-center gap-2">{exportActions}</div>
-      </div>
-
-      <div className="grid grid-cols-1 xl:grid-cols-[300px_minmax(0,1fr)_370px] gap-3">
-        {/* Biblioteca */}
-        <aside className="rounded-xl bg-white overflow-hidden flex flex-col xl:max-h-[calc(min(62vh,640px)+64px)]">
-          <nav className="grid grid-cols-4 border-b border-gray-200" role="tablist" aria-label="Biblioteca">
-            {BIN_TABS.map((t) => {
-              const Icon = t.icon;
-              return (
-                <button
-                  key={t.value} type="button" role="tab" aria-selected={bin === t.value} title={t.label} onClick={() => setBin(t.value)}
-                  className={`flex flex-col items-center gap-0.5 py-2 text-[10px] font-medium border-b-2 ${bin === t.value ? 'border-app-600 text-app-700' : 'border-transparent text-gray-500 hover:text-gray-800'}`}
-                >
-                  <Icon className="w-4 h-4" />{t.label}
-                </button>
-              );
-            })}
-          </nav>
-          <div className="p-3 overflow-y-auto flex-1 min-h-0">
+      <StudioShell
+        label="Editor de video"
+        toolbar={(
+          <>
+            {modeSwitch}
+            <ToolbarSep />
+            <button type="button" className={toolBtn} title="Deshacer (Ctrl+Z)" aria-label="Deshacer (Ctrl+Z)" onClick={history.undo} disabled={!history.canUndo}><Undo2 className="w-4 h-4" /></button>
+            <button type="button" className={toolBtn} title="Rehacer (Ctrl+Y)" aria-label="Rehacer (Ctrl+Y)" onClick={history.redo} disabled={!history.canRedo}><Redo2 className="w-4 h-4" /></button>
+            <ToolbarSep />
+            <ActionMenu
+              trigger={<button type="button" className={toolBtn} disabled={!canAdd}><Plus className="w-4 h-4" />Escena</button>}
+              items={[
+                { label: 'Prenda 3D', icon: <Box className="w-4 h-4" />, onClick: () => add('3d'), disabled: !templates.length },
+                { label: 'Foto de producto', icon: <ImageIcon className="w-4 h-4" />, onClick: () => add('foto') },
+                { label: 'Texto', icon: <Type className="w-4 h-4" />, onClick: () => add('texto') },
+                { label: 'Clip de video', icon: <Clapperboard className="w-4 h-4" />, onClick: () => add('clip') },
+              ]}
+            />
+            <button type="button" className={toolBtn} onClick={onAiScenes} disabled={aiBusy}>{aiBusy ? <Spinner /> : <Sparkles className="w-4 h-4" />}Textos con IA</button>
+            <button type="button" className={`${toolBtn} bg-app-50 text-app-700 hover:bg-app-100`} onClick={ask} disabled={asking}>{asking ? <Spinner /> : <WandSparkles className="w-4 h-4" />}Ayuda IA</button>
+            <ToolbarSep />
+            <RatioSwitch label="Formato del video" value={ratio} onChange={onRatio} options={VIDEO_RATIOS.map((r) => ({ value: r.value, label: r.value, hint: r.hint }))} />
+          </>
+        )}
+        actions={<>{exportActions}{menu}</>}
+        rail={rail} active={bin} onActive={(id) => setBin(id as BinTab | null)}
+        panelTitle={secTitle}
+        panel={(
+          <>
+            {bin === 'medios' && sourcePanel}
             {bin === 'plantillas' && (
               <div className="space-y-4">
                 <p className="text-xs text-gray-500">Se arman con lo que eliges en Productos. Sirven para reels, historias y posts de video: el formato va arriba.</p>
@@ -427,12 +425,6 @@ export function VideoEditor({
                   <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-violet-500" />Clip</span>
                 </p>
               </div>
-            )}
-            {bin === 'medios' && (
-              <>
-                <p className="text-xs text-gray-500 mb-2">Elige los productos que salen en el video. La plantilla que escogiste se queda y se llena con ellos.</p>
-                {sourcePanel}
-              </>
             )}
             {bin === 'archivos' && (
               <div className="space-y-3">
@@ -525,6 +517,7 @@ export function VideoEditor({
                 </div>
               </div>
             )}
+            {bin === 'publicar' && publishPanel}
             {bin === 'ajustes' && (
               <div className="space-y-4">
                 <div className="space-y-1.5">
@@ -535,31 +528,44 @@ export function VideoEditor({
                 <Switch checked={endCard} onChange={onEndCard} label="Cierre con el logo" description="Al final, con el título, el subtítulo y el botón." />
               </div>
             )}
-            {bin === 'publicar' && publishPanel}
-          </div>
-        </aside>
-
-        {/* Monitor */}
-        <div className="min-w-0 flex flex-col">
-          <div className="relative flex-1 grid place-items-center rounded-xl bg-gray-900 ring-1 ring-white/10 p-3 min-h-[320px]">
-            {preview}
-            {prompter.countdown != null && (
-              <div className="absolute inset-0 grid place-items-center rounded-xl bg-black/60" aria-live="assertive">
-                <div className="text-center text-white">
-                  <p className="text-8xl font-black tabular-nums">{prompter.countdown}</p>
-                  <p className="mt-2 text-sm text-white/80">Prepárate: el video arranca y se graba tu voz</p>
-                </div>
+          </>
+        )}
+        stage={(
+          <>
+            <FitBox w={size[0]} h={size[1]}>
+              {preview}
+          {prompter.countdown != null && (
+            <div className="absolute inset-0 grid place-items-center rounded-xl bg-black/60" aria-live="assertive">
+              <div className="text-center text-white">
+                <p className="text-8xl font-black tabular-nums">{prompter.countdown}</p>
+                <p className="mt-2 text-sm text-white/80">Prepárate: el video arranca y se graba tu voz</p>
               </div>
-            )}
-            {prompter.active && (
-              <div className="absolute inset-x-3 bottom-3 rounded-xl bg-black/75 p-4 text-center" aria-live="polite">
-                <p className="flex items-center justify-center gap-2 text-xs font-semibold text-red-400"><span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />Grabando tu voz</p>
-                <p className="mt-1 text-2xl font-bold text-white leading-snug">{promptLine.now || '…'}</p>
-                {promptLine.next && <p className="mt-1 text-sm text-white/50">Sigue: {promptLine.next}</p>}
-              </div>
-            )}
-          </div>
-          <div className="mt-2 flex flex-wrap items-center justify-center gap-2 text-gray-300">
+            </div>
+          )}
+          {prompter.active && (
+            <div className="absolute inset-x-3 bottom-3 rounded-xl bg-black/75 p-4 text-center" aria-live="polite">
+              <p className="flex items-center justify-center gap-2 text-xs font-semibold text-red-400"><span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />Grabando tu voz</p>
+              <p className="mt-1 text-2xl font-bold text-white leading-snug">{promptLine.now || '…'}</p>
+              {promptLine.next && <p className="mt-1 text-sm text-white/50">Sigue: {promptLine.next}</p>}
+            </div>
+          )}
+            </FitBox>
+            {onboarding && <div className="absolute inset-0 z-10 grid place-items-center p-6 bg-gray-100/70 backdrop-blur-[2px]">{onboarding}</div>}
+          </>
+        )}
+        inspectorTitle={sc ? <span className="truncate">Escena {idx + 1} · {({ '3d': 'Prenda 3D', foto: 'Foto', texto: 'Texto', clip: 'Clip' })[sc.kind]}</span> : 'Escena'}
+        inspector={sc ? (
+            <SceneInspector
+              scene={sc} index={idx} count={scenes.length} endCard={endCard} patch={patch}
+              templates={templates} defaultTemplate={defaultTemplate} photoTemplates={photoTemplates} products={allProducts} clips={clips} canAdd={canAdd}
+              onMove={(d) => moveTo(idx, idx + d)} onDuplicate={duplicate} onRemove={remove} onApplyTransitionAll={applyTransitionAll} onApplyDesignAll={applyDesignAll}
+              bgPalette={palette} bgPhotos={bgPhotos} onBgAi={() => setBgAi(true)} onBgApplyAll={applyBgAll} onBgUpload={uploadBg}
+              section={section} onSection={setSection}
+            />
+        ) : <p className="text-sm text-gray-500">Agrega una escena para empezar.</p>}
+        bottom={(
+          <>
+            <div className="flex flex-wrap items-center justify-center gap-2 px-3 py-2 border-b border-gray-100">
             <button type="button" className={toolBtn} title="Escena anterior" aria-label="Escena anterior" onClick={() => jump(-1)}><SkipBack className="w-4 h-4" /></button>
             <button
               type="button" onClick={onTogglePlay} aria-label={playing ? 'Pausar' : 'Reproducir'} title="Espacio"
@@ -568,33 +574,18 @@ export function VideoEditor({
               {playing ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5 ml-0.5" />}
             </button>
             <button type="button" className={toolBtn} title="Escena siguiente" aria-label="Escena siguiente" onClick={() => jump(1)}><SkipForward className="w-4 h-4" /></button>
-            <span className="ml-2 font-mono text-sm tabular-nums text-white"><span ref={timecodeRef}>0:00.0</span><span className="text-gray-500"> / {Math.floor(total / 60)}:{(total % 60).toFixed(1).padStart(4, '0')}</span></span>
-            <span className="ml-3 text-xs text-gray-500">{info}</span>
-          </div>
-        </div>
-
-        {/* Propiedades */}
-        <aside className="rounded-xl bg-white p-3 overflow-y-auto xl:max-h-[calc(min(62vh,640px)+64px)]">
-          {sc ? (
-            <SceneInspector
-              scene={sc} index={idx} count={scenes.length} endCard={endCard} patch={patch}
-              templates={templates} defaultTemplate={defaultTemplate} photoTemplates={photoTemplates} products={allProducts} clips={clips} canAdd={canAdd}
-              onMove={(d) => moveTo(idx, idx + d)} onDuplicate={duplicate} onRemove={remove} onApplyTransitionAll={applyTransitionAll} onApplyDesignAll={applyDesignAll}
-              bgPalette={palette} bgPhotos={bgPhotos} onBgAi={() => setBgAi(true)} onBgApplyAll={applyBgAll} onBgUpload={uploadBg}
-              section={section} onSection={setSection}
+            <span className="ml-2 font-mono text-sm tabular-nums text-gray-900"><span ref={timecodeRef}>0:00.0</span><span className="text-gray-400"> / {Math.floor(total / 60)}:{(total % 60).toFixed(1).padStart(4, '0')}</span></span>
+            <span className="ml-3 text-xs text-gray-400">{info}</span>
+            </div>
+            <EditorTimeline
+              scenes={scenes} endCard={endCard} selectedId={sc?.id ?? null}
+              onSelect={(id, prev) => { onSelect(id); if (prev) onPreview(id); }}
+              onChange={onChange} onSeek={onSeek} playheadRef={playheadRef} music={music}
+              onTransition={(id) => { onSelect(id); setSection('transicion'); }}
             />
-          ) : <p className="text-sm text-gray-500">Agrega una escena para empezar.</p>}
-        </aside>
-      </div>
-
-      <div className="mt-3">
-        <EditorTimeline
-          scenes={scenes} endCard={endCard} selectedId={sc?.id ?? null}
-          onSelect={(id, prev) => { onSelect(id); if (prev) onPreview(id); }}
-          onChange={onChange} onSeek={onSeek} playheadRef={playheadRef} music={music}
-          onTransition={(id) => { onSelect(id); setSection('transicion'); }}
-        />
-      </div>
+          </>
+        )}
+      />
 
       {advice && (
         <Dialog
@@ -644,6 +635,6 @@ export function VideoEditor({
           </div>
         </Dialog>
       )}
-    </section>
+    </>
   );
 }

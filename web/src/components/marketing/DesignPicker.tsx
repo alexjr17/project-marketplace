@@ -57,10 +57,11 @@ export function DesignPicker({ value, onChange, idPrefix }: { value: SceneDesign
 
   return (
     <div className="space-y-2">
-      <div className="flex gap-2">
-        <div className="flex-1 min-w-0"><SearchInput value={q} onChange={setQ} placeholder="Buscar diseño…" /></div>
-        <Button variant="secondary" icon={<Upload className="w-4 h-4" />} onClick={() => fileRef.current?.click()}>Subir</Button>
-        <Button variant="secondary" icon={<Sparkles className="w-4 h-4" />} onClick={() => setAi(true)} aria-label="Crear diseño con IA" title="Crear diseño con IA">IA</Button>
+      {/* En columnas angostas (paneles del estudio) el buscador va arriba y los botones debajo. */}
+      <div className="grid grid-cols-2 gap-2">
+        <div className="col-span-2"><SearchInput value={q} onChange={setQ} placeholder="Buscar diseño…" /></div>
+        <Button size="sm" variant="secondary" icon={<Upload className="w-4 h-4" />} onClick={() => fileRef.current?.click()}>Subir</Button>
+        <Button size="sm" variant="secondary" icon={<Sparkles className="w-4 h-4" />} onClick={() => setAi(true)} title="Crear diseño con IA" aria-label="Crear diseño con IA">Con IA</Button>
         <input ref={fileRef} id={`${idPrefix}-upload`} type="file" accept="image/*" className="hidden" onChange={onUpload} aria-label="Subir imagen del diseño" />
       </div>
       <div className="grid grid-cols-4 gap-2 max-h-40 overflow-y-auto pr-1">
