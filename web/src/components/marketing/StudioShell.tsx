@@ -37,7 +37,7 @@ export function StudioShell({ label, toolbar, actions, rail, active, onActive, p
   fullHeight?: boolean;
 }) {
   return (
-    <section aria-label={label} className={`flex flex-col bg-gray-100 lg:overflow-hidden ${fullHeight ? 'h-[100dvh] overflow-y-auto' : 'lg:h-[calc(100dvh-4rem)]'}`}>
+    <section aria-label={label} className={`flex flex-col bg-gray-100 lg:overflow-hidden ${fullHeight ? 'min-h-[100dvh] lg:h-[100dvh]' : 'lg:h-[calc(100dvh-4rem)]'}`}>
       {/* Barra superior */}
       <header className="flex flex-wrap items-center gap-1.5 px-3 py-2 bg-white border-b border-gray-200 lg:h-14 lg:py-0">
         {toolbar}

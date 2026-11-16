@@ -2,11 +2,12 @@
  * Paneles del estudio (los 3 pasos): 1 Modelo, color y talla · 2 Tu diseño · 3 Resumen.
  * Solo pintan; los datos y acciones vienen de useCustomizer.
  */
-import { useEffect, useState, type ReactNode } from 'react';
+import { lazy, Suspense, useEffect, useState, type ReactNode } from 'react';
 import {
   AlertTriangle, ArrowUpToLine, Check, CheckCircle2, Copy, Crosshair, Download, Expand, ImagePlus,
-  Loader2, Pencil, Ruler, ShoppingCart, Trash2, Type,
+  Loader2, Pencil, Ruler, ShoppingCart, Trash2, Type, Wand2,
 } from 'lucide-react';
+import type { EditorData } from '../admin/designStudio/model';
 import { TextTools } from './TextTools';
 import { textLabel } from '../../lib/textArt';
 import { Alert, Badge, Button, FileDrop } from '../ui';
@@ -19,6 +20,9 @@ import { assetUrl } from '../../utils/assetUrl';
 import { ACCEPTED_TYPES, MAX_INPUT_MB } from './designImage';
 import { dpiLevel, estimateDpi, printSizeCm, printZonesOf, MIN_DESIGN_SIZE, type StudioDesign } from './customizerModel';
 import type { CustomizerApi } from './useCustomizer';
+
+// El editor de diseños se carga solo cuando el cliente lo abre.
+const DesignStudio = lazy(() => import('../admin/designStudio/DesignStudio').then((m) => ({ default: m.DesignStudio })));
 
 export function StepCard({ n, title, done, action, children }: { n: number; title: string; done?: boolean; action?: ReactNode; children: ReactNode }) {
   return (
@@ -216,7 +220,7 @@ const DPI_TEXT = {
   low: { tone: 'red' as const, text: 'Baja resolución: se verá borrosa' },
 };
 
-export function DesignTools({ api, design }: { api: CustomizerApi; design: StudioDesign }) {
+export function DesignTools({ api, design, onEdit }: { api: CustomizerApi; design: StudioDesign; onEdit?: () => void }) {
   const zone = api.zones.find((z) => z.id === design.templateZoneId);
   const dpi = estimateDpi(design);
   const level = dpiLevel(dpi);
@@ -238,6 +242,10 @@ export function DesignTools({ api, design }: { api: CustomizerApi; design: Studi
           <p className="text-xs text-gray-500">{zone?.name || design.zoneName} · aprox. {cm.width} × {cm.height} cm</p>
         </div>
       </div>
+
+      {onEdit && (
+        <Button size="sm" fullWidth icon={<Wand2 className="w-4 h-4" />} onClick={onEdit}>Abrir en el editor</Button>
+      )}
 
       {level !== 'unknown' && !design.text && !design.named && (
         <p className={`flex items-center gap-1.5 text-xs font-medium ${level === 'good' ? 'text-emerald-700' : level === 'fair' ? 'text-amber-700' : 'text-red-600'}`}>
@@ -284,8 +292,21 @@ export function DesignTools({ api, design }: { api: CustomizerApi; design: Studi
 export function DesignStep({ api }: { api: CustomizerApi }) {
   const selected = api.selected;
   const others = api.studio.designs;
+  // Editor de diseños: qué diseño se edita (null = uno nuevo) y con qué capas abre.
+  const [editor, setEditor] = useState<{ id: string | null; data: EditorData } | null>(null);
+  const [opening, setOpening] = useState(false);
+  const openEditor = async (d: StudioDesign | null) => {
+    setOpening(true);
+    try { setEditor({ id: d?.id ?? null, data: await api.studioFor(d) }); } finally { setOpening(false); }
+  };
   return (
     <StepCard n={2} title="Tu diseño" done={others.length > 0}>
+      {editor && (
+        <Suspense fallback={<div className="fixed inset-0 z-[90] grid place-items-center bg-white/80"><Loader2 className="w-6 h-6 animate-spin text-app-600" /></div>}>
+          <DesignStudio mode="cliente" design={null} initial={editor.data} onClose={() => setEditor(null)}
+            onApply={(r) => { api.applyStudio(editor.id, r); setEditor(null); }} />
+        </Suspense>
+      )}
       <div className="space-y-4">
         {api.views.length > 0 && api.activeZone ? (
           <FileDrop
@@ -301,9 +322,10 @@ export function DesignStep({ api }: { api: CustomizerApi }) {
           api.zonesReady && <Alert tone="warning">Este modelo aún no tiene zonas de diseño configuradas.</Alert>
         )}
         {api.views.length > 0 && api.activeZone && (
-          <Button variant="secondary" fullWidth icon={<Type className="w-4 h-4" />} onClick={() => void api.addText()}>
-            Agregar texto en {api.activeZone.name.toLowerCase()}
-          </Button>
+          <div className="grid grid-cols-2 gap-2">
+            <Button variant="secondary" icon={<Type className="w-4 h-4" />} onClick={() => void api.addText()}>Agregar texto</Button>
+            <Button variant="secondary" icon={<Wand2 className="w-4 h-4" />} isLoading={opening && !editor} onClick={() => void openEditor(null)}>Crear en el editor</Button>
+          </div>
         )}
 
         <DesignGallery api={api} onPick={(img) => api.addPreset(img)} disabled={api.processing || !api.activeZone} />
@@ -335,7 +357,7 @@ export function DesignStep({ api }: { api: CustomizerApi }) {
 
         {selected?.text && <TextTools api={api} design={selected} />}
         {selected?.named && <NamedTools api={api} design={selected} />}
-        {selected && <DesignTools api={api} design={selected} />}
+        {selected && <DesignTools api={api} design={selected} onEdit={() => void openEditor(selected)} />}
         {!others.length && api.activeZone && (
           <p className="flex items-start gap-2 text-xs text-gray-500">
             <ImagePlus className="w-4 h-4 flex-shrink-0 text-gray-400" />

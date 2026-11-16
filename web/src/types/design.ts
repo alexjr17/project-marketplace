@@ -1,6 +1,7 @@
 import type { ProductTypeSlug } from './product';
 import type { TextSpec } from '../lib/textArt';
 import type { NamedDesign } from '../lib/namedDesign';
+import type { EditorData } from '../components/admin/designStudio/model';
 
 /**
  * Diseño colocado sobre una vista del modelo. Posición y tamaño en % de la imagen de la
@@ -37,6 +38,8 @@ export interface Design {
   text?: TextSpec;
   /** Diseño de la galería con nombre editable: la imagen es el diseño con lo que escribió el cliente. */
   named?: NamedDesign;
+  /** Hecho en el editor de diseños: sus capas, para volver a abrirlo. */
+  studio?: EditorData;
 }
 
 /** Imágenes de producción (originales). */

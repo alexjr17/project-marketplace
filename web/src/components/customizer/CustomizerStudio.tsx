@@ -4,6 +4,7 @@
  * - Celular: lienzo arriba, pasos en pestañas debajo y una barra fija con el total y el botón.
  */
 import { useEffect, useRef, useState } from 'react';
+import { assetUrl } from '../../utils/assetUrl';
 import { Eye, EyeOff, Redo2, Undo2 } from 'lucide-react';
 import { useCurrency } from '../../hooks/useCurrency';
 import { getSizeChart } from '../../data/sizeCharts';
@@ -91,7 +92,9 @@ export function CustomizerStudio({ api }: { api: CustomizerApi }) {
             </div>
           </div>
 
-          <div className="rounded-xl bg-gradient-to-b from-gray-50 to-gray-100/80 px-4 pt-9 pb-4 md:px-8 md:pt-10 md:pb-6">
+          {/* El fondo de la plantilla (uno para todas las vistas): solo se muestra, no se imprime. */}
+          <div className={`rounded-xl px-4 pt-9 pb-4 md:px-8 md:pt-10 md:pb-6 ${api.template?.backdrop?.url ? 'bg-cover bg-center' : 'bg-gradient-to-b from-gray-50 to-gray-100/80'}`}
+            style={api.template?.backdrop?.url ? { backgroundImage: `url("${assetUrl(api.template.backdrop.url)}")` } : undefined}>
             <div className="[--stage-h:44vh] lg:[--stage-h:60vh]">
               {api.model3d
                 ? <Stage3D api={api} onRequestUpload={requestUpload} clean={clean} />

@@ -40,7 +40,7 @@ type Handle = 'nw' | 'ne' | 'sw' | 'se' | 'e' | 'w';
 const SNAP = 12;
 
 export function DesignEditor({
-  design, onChange, onTemplate, data, history, sourcePanel, publishPanel, exportActions, products, photos, onPhotos, onRatio, mockTemplates, defaultMockTemplate, onGarment, resolve, onMoveDesign,
+  design, onChange, onTemplate, data, history, sourcePanel, publishPanel, exportActions, products, photos, onPhotos, onRatio, mockTemplates, defaultMockTemplate, onGarment, resolve, onMoveDesign, backdrops = [],
   modeSwitch, menu, onboarding, hasSubject, panelReq = 0, content,
 }: {
   design: Design;
@@ -64,6 +64,8 @@ export function DesignEditor({
   onGarment: () => void;
   /** Adapta la plantilla a lo que se eligió (productos, sus fotos o la personalizable): solo para dibujar. */
   resolve?: (d: Design) => Design;
+  /** Fondos que traen los productos elegidos (Fondo en la tienda). */
+  backdrops?: { name: string; url: string }[];
   /** Mover el diseño de una zona de la personalizable (cuando la capa usa el diseño de "Qué se muestra"). */
   onMoveDesign?: (zoneId: number, offset: { x: number; y: number }) => void;
   /** Interruptor Post / Video y menú (marca, calendario, cuentas de IA), en la barra. */
@@ -440,6 +442,20 @@ export function DesignEditor({
             )}
             {tab === 'fondo' && (
               <div className="space-y-4">
+          {backdrops.length > 0 && (
+            <div>
+              <p className="text-sm font-medium text-gray-700 mb-1.5">Fondo del producto</p>
+              <div className="grid grid-cols-3 gap-1.5">
+                {backdrops.map((b) => (
+                  <button key={b.url} type="button" title={`Usar el fondo de ${b.name}`} aria-label={`Usar el fondo de ${b.name}`} onClick={() => setPhotoBackground(b.url)}
+                    className="aspect-square rounded-lg overflow-hidden border-2 border-gray-200 hover:border-app-400">
+                    <img src={b.url} alt="" className="w-full h-full object-cover" loading="lazy" />
+                  </button>
+                ))}
+              </div>
+              <p className="text-[11px] text-gray-500 mt-1">El que trae el producto. También puedes elegir otro abajo, subir uno o crearlo con IA.</p>
+            </div>
+          )}
           {data && (
             <div>
               <p className="text-sm font-medium text-gray-700 mb-1.5">Fondo</p>

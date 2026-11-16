@@ -11,6 +11,8 @@ export type CopyTone = 'cercano' | 'urgente' | 'elegante' | 'divertido' | 'inspi
 export interface SourceProduct {
   id: number;
   name: string;
+  /** Fondo que trae el producto (Fondo en la tienda), si tiene. */
+  backdrop?: string | null;
   description?: string | null;
   category?: string | null;
   tags?: string[];

@@ -1645,6 +1645,9 @@ export const StudioPage = () => {
     />
   );
   const hasSubject = selected.length > 0;
+  /** Fondos que traen los productos o la personalizable elegidos (Fondo en la tienda). */
+  const backdrops = Array.from(new Map([...(garment?.backdrop ? [garment] : []), ...items.filter((i) => i.backdrop)]
+    .map((p) => [p.backdrop!, { name: p.name, url: p.backdrop! }])).values());
   /** Qué se muestra (para recomendar sus plantillas). */
   const content: ContentKind | undefined = !hasSubject ? undefined
     : sourceType === 'plantilla' ? (family ? 'familia' : 'personalizable') : sourceType === 'producto' ? (items.length > 1 ? 'varios' : 'producto') : sourceType;
@@ -1694,7 +1697,7 @@ export const StudioPage = () => {
       <>
         {isDesign ? (
           <DesignEditor
-            modeSwitch={modeSwitch} menu={studioMenu} onboarding={onboarding} hasSubject={hasSubject} panelReq={panelReq} content={content}
+            modeSwitch={modeSwitch} menu={studioMenu} onboarding={onboarding} hasSubject={hasSubject} panelReq={panelReq} content={content} backdrops={backdrops}
             resolve={resolveFn} onMoveDesign={(zoneId, offset) => setZoneChoice(zoneId, { offset })}
             design={design} onChange={setDesign} onTemplate={(d) => { designEdited.current = false; designReset(layoutZones(d, subject), true); }} data={designData}
             history={{ undo: designHist.undo, redo: designHist.redo, canUndo: designHist.canUndo, canRedo: designHist.canRedo }}
@@ -1704,7 +1707,7 @@ export const StudioPage = () => {
           />
         ) : (
           <VideoEditor
-            modeSwitch={modeSwitch} menu={studioMenu} onboarding={onboarding} hasSubject={hasSubject} size={[W, H]} panelReq={panelReq} content={content}
+            modeSwitch={modeSwitch} menu={studioMenu} onboarding={onboarding} hasSubject={hasSubject} size={[W, H]} panelReq={panelReq} content={content} backdrops={backdrops}
             logoMoved={!!logoAt} onResetLogo={() => setLogoAt(null)}
             palette={brand ? [
               { label: 'Principal', hex: brand.primary }, { label: 'Acento', hex: brand.accent }, { label: 'Claro', hex: brand.paper },

@@ -19,6 +19,8 @@ import {
 import { initialStudioState, studioReducer, type DesignPatch } from './studioReducer';
 import { DEFAULT_TEXT, measureText, textImage, type TextSpec } from '../../lib/textArt';
 import { composeNamed, defaultValues, namedLabel, type NamedDesign } from '../../lib/namedDesign';
+import { fitBox, loadImg, newId as layerId, type DLayer, type EditorData } from '../admin/designStudio/model';
+import type { StudioResult } from '../admin/designStudio/DesignStudio';
 import { prepareGarment, renderMockup, silhouetteGarment, type Garment } from './garment';
 import { processDesignFile, type ProcessedDesignImage } from './designImage';
 import { assetUrl } from '../../utils/assetUrl';
@@ -505,6 +507,62 @@ export function useCustomizer() {
     }
   }, [template, color, size, canSubmit, blockers, buildPreviews, withPrintText, studio.designs, quote, views, editItem, updateCustomizedProduct, addCustomizedProduct, quantity, navigate]);
 
+  // ── Editor de diseños (el cliente ubica y agrega textos) ──
+  /** Capas para abrir un diseño de la prenda en el editor (o un lienzo vacío con la forma de la zona). */
+  const studioFor = useCallback(async (d: StudioDesign | null): Promise<EditorData> => {
+    const board = (aspect: number) => {
+      const w = Math.round(3000 * Math.min(1, aspect)), h = Math.round(3000 * Math.min(1, 1 / aspect));
+      return { key: 'zona', label: 'Tu diseño', w, h };
+    };
+    const base = { rot: 0, flipX: false, flipY: false };
+    if (!d) {
+      const z = activeZone;
+      return { v: 1, artboard: board(z ? (z.width * stageAspect) / Math.max(1, z.height) : 1), layers: [] };
+    }
+    if (d.studio) return d.studio;
+    const aspect = d.pixelWidth && d.pixelHeight ? d.pixelWidth / d.pixelHeight : (d.size.width * stageAspect) / Math.max(0.01, d.size.height);
+    const A = board(aspect);
+    if (d.text) return { v: 1, artboard: A, layers: [{ id: layerId(), name: 'Texto', kind: 'text', spec: d.text, editable: null, ...fitBox(A, aspect, 0.98), ...base }] };
+    if (d.named) {
+      // El diseño de la galería y cada nombre como texto que el cliente puede mover y cambiar.
+      let a = 1;
+      try { const im = await loadImg(d.named.base); a = im.naturalWidth / Math.max(1, im.naturalHeight); } catch { /* cuadrada */ }
+      const A2 = board(a);
+      const box = fitBox(A2, a, 1);
+      const layers: DLayer[] = [{ id: layerId(), name: d.named.name, kind: 'image', src: d.named.base, ...box, ...base }];
+      for (const f of d.named.fields) {
+        layers.push({
+          id: layerId(), name: f.label, kind: 'text', editable: null, ...base,
+          x: box.x + (f.box.x / 100) * box.w, y: box.y + (f.box.y / 100) * box.h, w: (f.box.w / 100) * box.w, h: (f.box.h / 100) * box.h,
+          spec: { ...DEFAULT_TEXT, ...f.style, text: d.named.values[f.key] ?? f.default },
+        });
+      }
+      return { v: 1, artboard: A2, layers };
+    }
+    // Una imagen: la original si se puede abrir aquí (subida o de la tienda); si no, la de la vista.
+    const orig = d.originalImageData;
+    const src = orig && (orig.startsWith('data:') || orig.includes('/uploads/')) ? orig : d.imageData;
+    return { v: 1, artboard: A, layers: [{ id: layerId(), name: d.originalFileName || 'Imagen', kind: 'image', src, ...fitBox(A, aspect, 1), ...base }] };
+  }, [activeZone, stageAspect]);
+
+  /** Lo hecho en el editor va a la prenda: reemplaza el diseño (mismo lugar y ancho) o se agrega. */
+  const applyStudio = useCallback((id: string | null, r: StudioResult) => {
+    const aspect = r.width / Math.max(1, r.height);
+    const d = id ? designsRef.current.find((x) => x.id === id) : null;
+    if (!d) {
+      addImage({ preview: r.preview, original: r.original, fileName: 'Mi diseño', fileSize: 0, width: r.width, height: r.height }, { studio: r.data });
+      return;
+    }
+    const width = d.size.width;
+    dispatch({
+      type: 'update', id: d.id, zone: zoneOf(d),
+      patch: {
+        imageData: r.preview, originalImageData: r.original, pixelWidth: r.width, pixelHeight: r.height, originalFileName: 'Mi diseño',
+        studio: r.data, text: undefined, named: undefined, size: { width, height: (width * stageAspect) / aspect },
+      },
+    });
+  }, [addImage, zoneOf, stageAspect]);
+
   // ── Pack familiar ──
   /** Vista y zona donde va el diseño de cada integrante (el frente; si no, la primera con zona). */
   const packPlace = useMemo(() => {
@@ -591,7 +649,7 @@ export function useCustomizer() {
     studio, selected, isEditMode, editItem, saving, exporting, canSubmit, blockers, missing,
     // acciones
     selectTemplate, setColorId, setSizeId, changeView, setQuantity, setActiveZone,
-    addImage, addFiles, addPreset, addText, setText, setNamedValues, addFamilyPack, packPlace, processing, update, fitToZone, center, duplicateTo, moveToZone, dispatch, submit, exportZip,
+    addImage, addFiles, addPreset, addText, setText, setNamedValues, addFamilyPack, packPlace, studioFor, applyStudio, processing, update, fitToZone, center, duplicateTo, moveToZone, dispatch, submit, exportZip,
     cancelEdit: () => navigate('/cart'),
   };
 }

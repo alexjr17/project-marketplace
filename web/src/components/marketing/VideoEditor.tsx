@@ -60,8 +60,9 @@ export function VideoEditor({
   scenes, onChange, selectedId, onSelect, endCard, onEndCard, logo, onLogo, ratio, onRatio, stage, onStage,
   templates, defaultTemplate, photoTemplates, products, story, onStoryboard, playheadRef, onPreview, onSeek,
   history, music, onMusic, onAiScenes, aiBusy, palette, media, onMedia, sfxOn, onSfxOn, sfxVolume, onSfxVolume, onAskAdvice, narration, prompter,
-  modeSwitch, menu, onboarding, hasSubject, size, panelReq = 0, logoMoved = false, onResetLogo, content,
-}: {
+  modeSwitch, menu, onboarding, hasSubject, size, panelReq = 0, logoMoved = false, onResetLogo, content, backdrops = [] }: {
+  /** Fondos que traen los productos elegidos (Fondo en la tienda). */
+  backdrops?: { name: string; url: string }[];
   preview: ReactNode;
   sourcePanel: ReactNode;
   publishPanel: ReactNode;
@@ -199,7 +200,7 @@ export function VideoEditor({
   /** El diseño de esta escena en todas las escenas de prenda (3D o personalizable con fotos). */
   const applyDesignAll = () => onChange(scenes.map((s) => (s.kind === '3d' || (s.kind === 'foto' && s.photoSource === 'plantilla') ? { ...s, design: sc.design, size: sc.size, offsetX: sc.offsetX, offsetY: sc.offsetY } : s)));
   /** Fotos para el fondo de una escena: tus archivos y las creadas con IA. */
-  const bgPhotos = media.flatMap((m) => (m.type === 'image' && m.product.image ? [{ name: m.product.name, url: m.product.image }] : []));
+  const bgPhotos = [...backdrops.map((b) => ({ name: `Fondo de ${b.name}`, url: b.url })), ...media.flatMap((m) => (m.type === 'image' && m.product.image ? [{ name: m.product.name, url: m.product.image }] : []))];
   const applyBgAll = () => onChange(scenes.map((s) => (s.kind === 'clip' ? s : { ...s, bg: sc.bg ? { ...sc.bg } : null })));
   const uploadBg = (f: File) => {
     if (!f.type.startsWith('image/')) { toast.error('Elige una foto'); return; }

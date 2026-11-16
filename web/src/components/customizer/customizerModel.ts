@@ -334,6 +334,8 @@ function toStoredDesign(d: StudioDesign): Design {
     opacity: d.opacity ?? 1,
     ...(d.text ? { text: d.text } : {}),
     ...(d.named ? { named: d.named } : {}),
+    // Las capas del editor solo si pesan poco (el carrito sin sesión vive en el navegador).
+    ...(d.studio && JSON.stringify(d.studio).length < 600_000 ? { studio: d.studio } : {}),
   };
 }
 

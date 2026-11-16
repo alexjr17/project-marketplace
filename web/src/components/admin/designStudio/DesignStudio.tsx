@@ -4,6 +4,9 @@
  * cliente" = nombre editable). Mover, escalar, girar, voltear, ordenar, duplicar, centrar y quitar el
  * fondo blanco. Al guardar: PNG en alta calidad para producción, miniatura y las capas para volver a
  * editarlo.
+ *
+ * Modo cliente (personalizador de la tienda): el mismo editor sin los datos del catálogo; "Usar en mi
+ * prenda" devuelve la imagen (vista y alta calidad) y las capas, sin guardar nada en la galería.
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent } from 'react';
 import {
@@ -49,22 +52,32 @@ function Range({ label, value, min, max, step = 1, suffix = '', onChange }: { la
   );
 }
 
-export function DesignStudio({ design, categories, seasons, onClose, onSaved }: {
+/** Lo que devuelve el editor en modo cliente. */
+export interface StudioResult { preview: string; original: string; width: number; height: number; data: EditorData }
+
+export function DesignStudio({ design, categories = [], seasons = [], onClose, onSaved, mode = 'admin', initial, onApply }: {
   design: DesignImage | null;
-  categories: string[];
-  seasons: string[];
+  categories?: string[];
+  seasons?: string[];
   onClose: () => void;
-  onSaved: () => void;
+  onSaved?: () => void;
+  /** 'cliente': en la tienda (sin datos del catálogo; devuelve el diseño con onApply). */
+  mode?: 'admin' | 'cliente';
+  /** Capas con las que abre (modo cliente). */
+  initial?: EditorData | null;
+  onApply?: (r: StudioResult) => void;
 }) {
+  const client = mode === 'cliente';
   const hist = useHistory<EditorData>(emptyData);
   const { value: data, set, reset } = hist;
   const [sel, setSel] = useState<string | null>(null);
-  const [tab, setTab] = useState<Tab | null>('agregar');
+  // En el celular abre con el lienzo a la vista (el panel se abre desde el riel).
+  const [tab, setTab] = useState<Tab | null>(() => (typeof window !== 'undefined' && window.innerWidth < 1024 ? null : 'agregar'));
   const [meta, setMeta] = useState({
     name: design?.name ?? '', category: design?.category ?? '', season: design?.season ?? '', tags: design?.tags?.join(', ') ?? '', isActive: design?.isActive ?? true,
   });
   const [saving, setSaving] = useState<string | null>(null);
-  const [ready, setReady] = useState(!design);
+  const [ready, setReady] = useState(!design && !initial);
   const [svgCode, setSvgCode] = useState('');
   const [tol, setTol] = useState(28);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -73,11 +86,13 @@ export function DesignStudio({ design, categories, seasons, onClose, onSaved }: 
 
   // Abrir: las capas guardadas o, si es un diseño viejo, su imagen y sus textos como capas.
   useEffect(() => {
+    if (initial) { reset(initial); setReady(true); return; }
     if (!design) return;
     let alive = true;
     const saved = (design as DesignImage & { editorData?: EditorData | null }).editorData;
     (saved?.layers ? Promise.resolve(saved) : fromDesign(design)).then((d) => { if (alive) { reset(d); setReady(true); } });
     return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [design, reset]);
 
   const A = data.artboard;
@@ -222,7 +237,22 @@ export function DesignStudio({ design, categories, seasons, onClose, onSaved }: 
   });
 
   // ── Guardar ──
+  const apply = async () => {
+    if (!data.layers.some((l) => !l.hidden)) { toast.error('Agrega al menos una imagen o un texto'); return; }
+    try {
+      setSaving('Preparando tu diseño…');
+      const [preview, original] = await Promise.all([exportPng(data, 900), exportPng(data, Math.max(A.w, A.h))]);
+      const k = Math.max(A.w, A.h);
+      onApply?.({ preview, original, width: Math.round((A.w / k) * 3000), height: Math.round((A.h / k) * 3000), data });
+    } catch {
+      toast.error('No se pudo preparar el diseño. Si usaste una imagen de otra página, súbela desde tu equipo.');
+    } finally {
+      setSaving(null);
+    }
+  };
+
   const save = async () => {
+    if (client) { await apply(); return; }
     if (!meta.name.trim()) { setTab('datos'); toast.error('Ponle un nombre al diseño'); return; }
     if (!data.layers.some((l) => !l.hidden)) { toast.error('Agrega al menos una imagen, un SVG o un texto'); return; }
     try {
@@ -247,7 +277,7 @@ export function DesignStudio({ design, categories, seasons, onClose, onSaved }: 
       if (design) await designImagesService.update(design.id, body);
       else await designImagesService.create(body);
       toast.success(design ? 'Diseño guardado' : 'Diseño creado');
-      onSaved();
+      onSaved?.();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'No se pudo guardar el diseño');
     } finally {
@@ -271,11 +301,17 @@ export function DesignStudio({ design, categories, seasons, onClose, onSaved }: 
             <span className="block mt-2 text-sm font-medium text-gray-900">Subir imagen o SVG</span>
             <span className="block text-xs text-gray-500">PNG, JPG, WEBP, GIF, AVIF… o SVG (sus colores se cambian aquí). También puedes arrastrarlos.</span>
           </button>
-          <div className="grid grid-cols-2 gap-2">
-            <Button variant="secondary" icon={<Type className="w-4 h-4" />} onClick={() => void addText(false)}>Texto</Button>
-            <Button variant="secondary" icon={<Wand2 className="w-4 h-4" />} onClick={() => void addText(true)}>Nombre editable</Button>
-          </div>
-          <p className="text-xs text-gray-500">El <b>nombre editable</b> lo cambia el cliente al personalizar (ej. su nombre en un diseño navideño). Los demás textos quedan fijos en el diseño.</p>
+          {client ? (
+            <Button variant="secondary" fullWidth icon={<Type className="w-4 h-4" />} onClick={() => void addText(false)}>Agregar texto</Button>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 gap-2">
+                <Button variant="secondary" icon={<Type className="w-4 h-4" />} onClick={() => void addText(false)}>Texto</Button>
+                <Button variant="secondary" icon={<Wand2 className="w-4 h-4" />} onClick={() => void addText(true)}>Nombre editable</Button>
+              </div>
+              <p className="text-xs text-gray-500">El <b>nombre editable</b> lo cambia el cliente al personalizar (ej. su nombre en un diseño navideño). Los demás textos quedan fijos en el diseño.</p>
+            </>
+          )}
           <div>
             <p className="text-xs font-medium text-gray-700 mb-1">Pegar código SVG</p>
             <textarea value={svgCode} onChange={(e) => setSvgCode(e.target.value)} rows={3} aria-label="Código SVG" placeholder="<svg …>…</svg>"
@@ -326,10 +362,10 @@ export function DesignStudio({ design, categories, seasons, onClose, onSaved }: 
 
   const inspector = !layer ? (
     <div className="space-y-3 text-sm text-gray-600">
-      <p>Lienzo de impresión de {A.w} × {A.h} px, fondo transparente.</p>
+      <p>{client ? 'Tu diseño sobre fondo transparente: lo que pongas aquí va en la prenda.' : `Lienzo de impresión de ${A.w} × ${A.h} px, fondo transparente.`}</p>
       <p>Haz clic en una capa para editarla: arrástrala para moverla, la esquina para cambiar su tamaño y el círculo de arriba para girarla.</p>
       <p className="text-xs text-gray-500">Atajos: flechas para mover (Mayús: más), Supr para quitar, Ctrl+Z / Ctrl+Y.</p>
-      <p className="text-xs text-amber-700">Para DTF: colores sólidos y contorno; evita sombras y transparencias a medias.</p>
+      {!client && <p className="text-xs text-amber-700">Para DTF: colores sólidos y contorno; evita sombras y transparencias a medias.</p>}
     </div>
   ) : (
     <div className="space-y-4">
@@ -393,7 +429,7 @@ export function DesignStudio({ design, categories, seasons, onClose, onSaved }: 
               onChange={(e) => void setText(layer, { text: e.target.value }, `texto:${layer.id}`)}
               className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-base focus:outline-none focus:ring-2 focus:ring-app-200 resize-none" />
           </label>
-          <div className="rounded-lg bg-gray-50 p-2.5 space-y-2">
+          {!client && <div className="rounded-lg bg-gray-50 p-2.5 space-y-2">
             <Switch checked={!!layer.editable} onChange={(v) => patch(layer.id, { editable: v ? { label: 'Nombre', maxLength: Math.max(layer.spec.text.length, 14) } : null, ...(v ? { rot: 0 } : {}) } as Partial<DLayer>)}
               label="Lo cambia el cliente" description="Ej. su nombre: el cliente lo escribe al personalizar." />
             {layer.editable && (
@@ -407,7 +443,7 @@ export function DesignStudio({ design, categories, seasons, onClose, onSaved }: 
               </div>
             )}
             {layer.editable && <p className="text-[11px] text-gray-500">El texto editable no se gira (el nombre del cliente se dibuja derecho dentro de su caja).</p>}
-          </div>
+          </div>}
           <TextStyleEditor spec={layer.spec} sample={layer.spec.text.split('\n')[0] || 'Texto'} onBegin={() => {}} onChange={(p) => void setText(layer, p)} multiLine={layer.spec.text.includes('\n')} />
         </div>
       )}
@@ -445,33 +481,33 @@ export function DesignStudio({ design, categories, seasons, onClose, onSaved }: 
   );
 
   return (
-    <div className="fixed inset-0 z-[90] bg-gray-100" role="dialog" aria-modal="true" aria-label="Editor de diseños">
+    <div className="fixed inset-0 z-[90] bg-gray-100 overflow-y-auto lg:overflow-hidden" role="dialog" aria-modal="true" aria-label="Editor de diseños">
       <StudioShell
         fullHeight
         label="Editor de diseños"
         toolbar={(
           <>
-            <span className="text-sm font-semibold text-gray-900 px-1">{design ? 'Editar diseño' : 'Nuevo diseño'}</span>
+            <span className="text-sm font-semibold text-gray-900 px-1">{client ? 'Edita tu diseño' : design ? 'Editar diseño' : 'Nuevo diseño'}</span>
             <ToolbarSep />
             <button type="button" title="Deshacer (Ctrl+Z)" aria-label="Deshacer" onClick={hist.undo} disabled={!hist.canUndo} className="grid place-items-center w-9 h-9 rounded-lg text-gray-600 hover:bg-gray-100 disabled:opacity-40"><Undo2 className="w-4 h-4" /></button>
             <button type="button" title="Rehacer (Ctrl+Y)" aria-label="Rehacer" onClick={hist.redo} disabled={!hist.canRedo} className="grid place-items-center w-9 h-9 rounded-lg text-gray-600 hover:bg-gray-100 disabled:opacity-40"><Redo2 className="w-4 h-4" /></button>
-            <ToolbarSep />
-            <div className="flex rounded-lg bg-gray-100 p-0.5" role="radiogroup" aria-label="Tamaño del lienzo">
+            {!client && <ToolbarSep />}
+            {!client && <div className="flex rounded-lg bg-gray-100 p-0.5" role="radiogroup" aria-label="Tamaño del lienzo">
               {ARTBOARDS.map((b) => (
                 <button key={b.key} type="button" role="radio" aria-checked={A.key === b.key} onClick={() => changeArtboard(b.key)}
                   className={`px-2.5 h-8 rounded-md text-xs ${A.key === b.key ? 'bg-white shadow-sm font-medium text-gray-900' : 'text-gray-600'}`}>{b.label}</button>
               ))}
-            </div>
+            </div>}
           </>
         )}
         actions={(
           <>
             {saving && <span className="text-xs text-gray-500">{saving}</span>}
             <Button variant="secondary" icon={<X className="w-4 h-4" />} onClick={onClose} disabled={!!saving}>Cancelar</Button>
-            <Button icon={<Save className="w-4 h-4" />} onClick={save} isLoading={!!saving} disabled={!ready}>Guardar</Button>
+            <Button icon={<Save className="w-4 h-4" />} onClick={save} isLoading={!!saving} disabled={!ready}>{client ? 'Usar en mi prenda' : 'Guardar'}</Button>
           </>
         )}
-        rail={RAIL.map((r) => ({ id: r.id, label: r.label, icon: r.icon }))} active={tab} onActive={(id) => setTab(id as Tab | null)}
+        rail={RAIL.filter((r) => !client || r.id !== 'datos').map((r) => ({ id: r.id, label: r.label, icon: r.icon }))} active={tab} onActive={(id) => setTab(id as Tab | null)}
         panelTitle={RAIL.find((r) => r.id === tab)?.title ?? ''} panel={panel}
         stage={ready ? stage : <div className="absolute inset-0 grid place-items-center text-sm text-gray-500">Abriendo el diseño…</div>}
         inspectorTitle={layer ? (layer.kind === 'text' ? (layer.editable ? 'Nombre editable' : 'Texto') : layer.kind === 'svg' ? 'SVG' : 'Imagen') : 'Lienzo'}

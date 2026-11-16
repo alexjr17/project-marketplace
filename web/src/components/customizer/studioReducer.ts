@@ -18,7 +18,7 @@ export interface StudioState {
 }
 
 /** Lo que se puede cambiar de un diseño (el texto vuelve a dibujar su imagen). */
-export type DesignPatch = Partial<Pick<StudioDesign, 'position' | 'size' | 'rotation' | 'opacity' | 'text' | 'named' | 'imageData' | 'originalImageData' | 'pixelWidth' | 'pixelHeight' | 'originalFileName'>>;
+export type DesignPatch = Partial<Pick<StudioDesign, 'position' | 'size' | 'rotation' | 'opacity' | 'text' | 'named' | 'studio' | 'imageData' | 'originalImageData' | 'pixelWidth' | 'pixelHeight' | 'originalFileName'>>;
 
 export type StudioAction =
   | { type: 'load'; designs: StudioDesign[] }

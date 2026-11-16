@@ -6,6 +6,7 @@ use App\Exceptions\BusinessRuleException;
 use App\Models\DesignImage;
 use App\Models\Discount;
 use App\Models\Product;
+use App\Services\Catalog\ProductBackdropService;
 use App\Services\Customizer\MannequinModelService;
 use App\Services\DiscountService;
 use App\Support\TemplateImages;
@@ -20,7 +21,7 @@ class MarketingSourceService
 {
     public const TYPES = ['producto', 'coleccion', 'promocion', 'diseno', 'plantilla'];
 
-    public function __construct(private DiscountService $discounts) {}
+    public function __construct(private DiscountService $discounts, private ProductBackdropService $backdrops) {}
 
     public function list(string $type, ?string $q): array
     {
@@ -51,6 +52,8 @@ class MarketingSourceService
             'discountPercent' => $sale < $base && $base > 0 ? (int) round((1 - $sale / $base) * 100) : 0,
             'image' => $images['front'] ?? null,
             'images' => array_values(array_filter([$images['front'] ?? null, $images['back'] ?? null, $images['side'] ?? null])),
+            // El fondo que trae el producto (Fondo en la tienda), para usarlo en las piezas.
+            'backdrop' => $this->backdrops->format($p)['url'] ?? null,
         ];
     }
 
@@ -151,6 +154,7 @@ class MarketingSourceService
                     'listPrice' => (float) $t->basePrice,
                     'discountPercent' => 0,
                     'model3d' => $t->model3d,
+                    'backdrop' => $this->backdrops->format($t)['url'] ?? null,
                     'image' => $images['front'] ?: ($gen['poster'] ?? null),
                     'colors' => ($colors = $t->productColors()->with('color:id,name,hexCode')->get()->filter(fn ($pc) => $pc->color?->hexCode)->values())->map(fn ($pc) => $pc->color->hexCode)->all(),
                     'colorNames' => $colors->map(fn ($pc) => $pc->color->name)->all(),
