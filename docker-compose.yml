@@ -1,6 +1,8 @@
-services:
+﻿services:
+  # Base de datos MariaDB
   db:
     image: mariadb:10.11
+    container_name: vexa-db
     restart: unless-stopped
     environment:
       MYSQL_ROOT_PASSWORD: root
@@ -17,139 +19,117 @@ services:
       test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
       interval: 10s
       timeout: 5s
-      retries: 10
+      retries: 5
 
-  api-init:
-    image: project-marketplace-api-dev
+  # API Laravel
+  api:
     build:
-      context: ./project-marketplace-api
+      context: ./api
       dockerfile: Dockerfile.dev
-    restart: "no"
-    environment: &api-environment
+    container_name: vexa-api
+    restart: unless-stopped
+    environment:
+      # Workers para que el servidor atienda peticiones concurrentes.
       PHP_CLI_SERVER_WORKERS: 10
+      # Límites de subida (videos del estudio de contenido): api/docker/php/uploads.ini
       PHP_INI_SCAN_DIR: ":/app/docker/php"
-      APP_ENV: local
-      APP_DEBUG: "true"
-      APP_URL: http://localhost:8000
-      DB_CONNECTION: mysql
-      DB_HOST: db
-      DB_PORT: "3306"
-      DB_DATABASE: marketplace
-      DB_USERNAME: marketplace
-      DB_PASSWORD: marketplace123
-      SESSION_DRIVER: file
-      CACHE_STORE: file
-      QUEUE_CONNECTION: sync
-      CORS_ALLOWED_ORIGINS: http://localhost:5173
+      # Dominio público de ngrok — el backend lo usa para reescribir URLs
+      # locales (/uploads/...) a URLs HTTPS públicas cuando publica fotos en
+      # Facebook/Instagram (Meta tiene que poder descargar la imagen).
       NGROK_DOMAIN: ${NGROK_DOMAIN:-}
+      # Asistente de IA del módulo de mensajería. Opciones: mock | groq.
       AI_PROVIDER: ${AI_PROVIDER:-mock}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
       GROQ_MODEL: ${GROQ_MODEL:-llama-3.1-8b-instant}
-    command:
-      - sh
-      - -c
-      - >-
-        if [ ! -f .env ]; then cp .env.example .env; fi;
-        if ! grep -Eq '^APP_KEY=base64:.+' .env; then php artisan key:generate --force; fi;
-        php artisan package:discover --ansi
-    volumes: &api-volumes
-      - ./project-marketplace-api:/app
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./api:/app
+      # vendor vive en un volumen propio de Docker (no en el bind-mount lento de Windows).
       - api_vendor:/app/vendor
-    networks:
-      - marketplace-network
-
-  migrate:
-    image: project-marketplace-api-dev
-    build:
-      context: ./project-marketplace-api
-      dockerfile: Dockerfile.dev
-    restart: "no"
-    environment: *api-environment
-    command: ["php", "artisan", "migrate", "--force"]
-    volumes: *api-volumes
     depends_on:
-      api-init:
-        condition: service_completed_successfully
       db:
         condition: service_healthy
     networks:
       - marketplace-network
 
-  api:
-    image: project-marketplace-api-dev
-    build:
-      context: ./project-marketplace-api
-      dockerfile: Dockerfile.dev
-    restart: unless-stopped
-    environment: *api-environment
-    ports:
-      - "8000:8000"
-    volumes: *api-volumes
-    depends_on:
-      migrate:
-        condition: service_completed_successfully
-    networks:
-      - marketplace-network
-
+  # Tareas programadas de la API (publicaciones programadas del estudio de contenido).
   scheduler:
-    image: project-marketplace-api-dev
     build:
-      context: ./project-marketplace-api
+      context: ./api
       dockerfile: Dockerfile.dev
+    container_name: vexa-scheduler
     restart: unless-stopped
     command: ["php", "artisan", "schedule:work"]
-    environment: *api-environment
-    volumes: *api-volumes
+    environment:
+      PHP_INI_SCAN_DIR: ":/app/docker/php"
+      NGROK_DOMAIN: ${NGROK_DOMAIN:-}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+    volumes:
+      - ./api:/app
+      - api_vendor:/app/vendor
     depends_on:
-      migrate:
-        condition: service_completed_successfully
+      db:
+        condition: service_healthy
     networks:
       - marketplace-network
 
+  # Frontend React
   frontend:
     build:
-      context: ./project-marketplace-web
+      context: ./web
       dockerfile: Dockerfile
+    container_name: vexa-frontend
     restart: unless-stopped
     environment:
+      # El frontend apunta directamente a la API de Laravel.
       VITE_API_URL: http://localhost:8000/api
+      # Polling para hot reload en Windows/Docker
       CHOKIDAR_USEPOLLING: "true"
     ports:
       - "5173:5174"
     volumes:
-      - ./project-marketplace-web/src:/app/src
-      - ./project-marketplace-web/public:/app/public
-      - ./project-marketplace-web/vite.config.ts:/app/vite.config.ts
-      - ./project-marketplace-web/tailwind.config.js:/app/tailwind.config.js
-      - ./project-marketplace-web/postcss.config.js:/app/postcss.config.js
-      - ./project-marketplace-web/index.html:/app/index.html
+      - ./web/src:/app/src
+      - ./web/public:/app/public
+      - ./web/vite.config.ts:/app/vite.config.ts
+      # Config de estilos y la página base: sin montarlos, el contenedor usa la copia de la imagen.
+      - ./web/tailwind.config.js:/app/tailwind.config.js
+      - ./web/postcss.config.js:/app/postcss.config.js
+      - ./web/index.html:/app/index.html
       - /app/node_modules
     depends_on:
       - api
     networks:
       - marketplace-network
 
+  # Túnel ngrok hacia el contenedor `api`.
+  # Expone localhost:8000 en una URL pública HTTPS para que Meta (Messenger)
+  # y otros webhooks puedan llegar al backend mientras desarrollas en local.
+  #
+  # Requisitos:
+  #   - Cuenta gratis en ngrok.com → copia tu authtoken del dashboard.
+  #   - En la raíz del proyecto crea un .env (o agrega a tu .env existente):
+  #         NGROK_AUTHTOKEN=tu_token
+  #         # Opcional: tu dominio estático gratuito (Cloud Edge → Domains en ngrok).
+  #         # Si lo defines, la URL no cambia entre reinicios — no toca repegar en Meta.
+  #         NGROK_DOMAIN=tu-app.ngrok-free.app
   ngrok:
     image: ngrok/ngrok:latest
+    container_name: vexa-ngrok
     restart: unless-stopped
-    profiles: ["tunnel"]
     environment:
       NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN:-}
       NGROK_DOMAIN: ${NGROK_DOMAIN:-}
+    # Sobrescribimos el entrypoint para poder elegir entre URL aleatoria o
+    # dominio estático según haya o no NGROK_DOMAIN.
     entrypoint: ["/bin/sh", "-c"]
+    # Config inline en /tmp porque ngrok v3 no acepta --web-addr como flag; hay
+    # que pasarlo por archivo de config. /tmp es escribible para el usuario no-root.
+    # `web_addr: 0.0.0.0:4040` expone el panel local al host (Windows).
     command:
-      - >-
-        printf 'version: "2"\nweb_addr: 0.0.0.0:4040\nlog: stdout\nlog_format: logfmt\nlog_level: info\n' > /tmp/ngrok.yml;
-        if [ -n "$$NGROK_AUTHTOKEN" ]; then
-          if [ -n "$$NGROK_DOMAIN" ]; then
-            exec ngrok --config=/tmp/ngrok.yml http --url=$$NGROK_DOMAIN api:8000;
-          else
-            exec ngrok --config=/tmp/ngrok.yml http api:8000;
-          fi;
-        else
-          echo 'Configura NGROK_AUTHTOKEN en .env para iniciar el túnel.';
-          exit 1;
-        fi
+      - 'printf "version: \"2\"\nweb_addr: 0.0.0.0:4040\nlog: stdout\nlog_format: logfmt\nlog_level: info\n" > /tmp/ngrok.yml; if [ -n "$$NGROK_DOMAIN" ]; then echo "[ngrok] Dominio estático $$NGROK_DOMAIN"; exec ngrok --config=/tmp/ngrok.yml http --url=$$NGROK_DOMAIN api:8000; else echo "[ngrok] URL aleatoria (vela en http://localhost:4040)"; exec ngrok --config=/tmp/ngrok.yml http api:8000; fi'
     ports:
+      # Panel web local de ngrok: http://localhost:4040 (ver URL pública, requests, etc.)
       - "4040:4040"
     depends_on:
       - api

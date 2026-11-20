@@ -40,7 +40,8 @@ export default function MessagingLayout({ children }: MessagingLayoutProps) {
   const isTabActive = (path: string) => location.pathname.startsWith(path);
   // Solo los módulos a los que el rol tiene permiso
   const visibleTabs = TABS.filter((t) => hasPermission(t.permission));
-  const siteName = settings.general?.siteName || 'Mi tienda';
+  const siteName = settings.general?.siteName || 'TOCLEX';
+  const logo = settings.general?.logo || '/brand/toclex-logo.png';
 
   const handleLogout = () => {
     logout();
@@ -77,8 +78,8 @@ export default function MessagingLayout({ children }: MessagingLayoutProps) {
       <header className="flex-shrink-0 bg-white border-b border-gray-200">
         <div className="flex h-16 items-center gap-3 px-3 md:px-4">
           <Link to="/messaging" className="flex items-center gap-2.5 min-w-0 flex-shrink-0">
-            {settings.general?.logo
-              ? <img src={settings.general.logo} alt="" className="w-9 h-9 rounded-lg object-contain flex-shrink-0" />
+            {logo
+              ? <img src={logo} alt={siteName} className="h-9 w-auto max-w-[180px] object-contain flex-shrink-0" />
               : <span className="w-9 h-9 rounded-lg bg-app-600 text-white flex items-center justify-center flex-shrink-0"><MessageSquare className="w-5 h-5" /></span>}
             <span className="hidden sm:block min-w-0">
               <span className="block truncate text-sm font-semibold text-gray-900 max-w-[10rem]">{siteName}</span>

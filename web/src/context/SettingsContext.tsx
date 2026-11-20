@@ -24,14 +24,16 @@ import { useAuth } from './AuthContext';
 // Mock data inicial
 const mockSettings: Settings = {
   general: {
-    siteName: 'StylePrint',
-    siteDescription: 'Tu marketplace de camisetas personalizadas',
-    slogan: 'Tu Estilo, Tu Diseño',
-    logo: '',
+    siteName: 'TOCLEX',
+    siteDescription: 'Prendas personalizadas con diseño propio',
+    slogan: 'Ropa que te representa',
+    logo: '/brand/toclex-logo.png',
+    logoOnDark: '/brand/toclex-logo-light.png',
+    favicon: '/brand/toclex-icon.png',
     brandColors: {
-      primary: '#7c3aed',   // violet-600
-      secondary: '#ec4899', // pink-500
-      accent: '#f59e0b',    // amber-500
+      primary: '#1F1D1E',
+      secondary: '#747474',
+      accent: '#ABD04C',
     },
     contactEmail: 'contacto@styleprint.com',
     contactPhone: '+57 300 123 4567',
@@ -53,15 +55,15 @@ const mockSettings: Settings = {
   },
   appearance: {
     brandColors: {
-      primary: '#7c3aed',
-      secondary: '#ec4899',
-      accent: '#f59e0b',
+      primary: '#1F1D1E',
+      secondary: '#747474',
+      accent: '#ABD04C',
     },
-    buttonColor: '#7c3aed',
-    headerBgColor: '#ffffff',
+    buttonColor: '#1F1D1E',
+    headerBgColor: '#F3F3EE',
     showSlogan: true,
     headerStyle: 'default',
-    footerBgColor: '#111827',
+    footerBgColor: '#1F1D1E',
     showSocialInFooter: true,
     showScheduleInFooter: true,
     useGradientHero: true,
