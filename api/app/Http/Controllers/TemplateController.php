@@ -8,6 +8,7 @@ use App\Models\ProductColor;
 use App\Models\ProductSize;
 use App\Models\ProductType;
 use App\Services\Catalog\ProductBackdropService;
+use App\Services\Customizer\TemplateViewsService;
 use App\Services\Customizer\MannequinModelService;
 use App\Services\VariantService;
 use App\Support\TemplateImages;
@@ -23,7 +24,7 @@ class TemplateController extends Controller
     public function __construct(private VariantService $variants) {}
 
     /** Maniquíes 3D del personalizador (web/src/components/mannequin/models.ts). Null = editor con fotos. */
-    public const MODELS_3D = ['basica', 'oversize'];
+    public const MODELS_3D = ['basica', 'oversize', 'taza', 'plancha'];
 
     /** Maniquíes que puede usar una plantilla: los del sistema y los publicados en Admin → Modelos 3D. */
     private function models3d(): array
@@ -261,6 +262,15 @@ class TemplateController extends Controller
         }
 
         return $this->success($this->format($template->fresh(self::RELATIONS)), 'Template actualizado exitosamente');
+    }
+
+    /** POST /templates/{id}/copy-views { fromId }: usa las fotos y zonas de otra plantilla (queda sin 3D). */
+    public function copyViews(Request $request, int $id, TemplateViewsService $views)
+    {
+        $data = $request->validate(['fromId' => 'required|integer']);
+        $r = $views->copyFrom($id, (int) $data['fromId']);
+
+        return $this->success($this->format(Product::with(self::RELATIONS)->find($id)) + ['copied' => $r], "Listo: {$r['views']} fotos y {$r['zones']} zonas acomodadas");
     }
 
     public function destroy(int $id)

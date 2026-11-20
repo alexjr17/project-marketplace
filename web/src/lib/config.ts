@@ -5,7 +5,11 @@
  */
 
 /** Base del API, p. ej. "http://localhost:8000/api" (sin "/" final). */
-export const API_URL: string = sameHost(String(import.meta.env.VITE_API_URL || 'http://localhost:8000/api').replace(/\/+$/, ''));
+const DEFAULT_API_URL = import.meta.env.PROD
+  ? 'https://api.toclex.com/api'
+  : 'http://localhost:8000/api';
+
+export const API_URL: string = sameHost(String(import.meta.env.VITE_API_URL || DEFAULT_API_URL).replace(/\/+$/, ''));
 
 /**
  * En desarrollo el API se configura como "localhost". Si la página se abre desde otro equipo

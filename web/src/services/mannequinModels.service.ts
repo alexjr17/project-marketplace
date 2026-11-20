@@ -19,6 +19,8 @@ export interface MannequinModel {
   prompt: string | null;
   quality: 'normal' | 'alta';
   inputImages: Partial<Record<MannequinView, string>>;
+  /** Frente y espalda que el visor proyecta sobre la forma (modelos generados desde vistas). */
+  photos?: { front: string; back?: string } | null;
   model: string | null;
   poster: string | null;
   config: GeneratedModelConfig;
@@ -90,6 +92,12 @@ export const mannequinModelsService = {
   update: (id: number, data: { name?: string; config?: GeneratedModelConfig; poster?: string; published?: boolean }) =>
     http.put<MannequinModel>(`/mannequin-models/${id}`, data),
   retry: (id: number) => http.post<MannequinModel>(`/mannequin-models/${id}/retry`),
+  /** Reemplaza el .glb por el mismo modelo optimizado (menos triángulos). */
+  replaceModel: (id: number, glb: Blob) => {
+    const form = new FormData();
+    form.append('model', glb, 'modelo.glb');
+    return http.upload<MannequinModel>(`/mannequin-models/${id}/model`, form);
+  },
   remove: (id: number) => http.delete<null>(`/mannequin-models/${id}`),
   edits: (id: number) => http.get<MannequinEdit[]>(`/mannequin-models/${id}/edits`),
   addEdit: (id: number, data: { prompt?: string; image?: string; fromEditId?: number }) => http.post<MannequinEdit>(`/mannequin-models/${id}/edits`, data),

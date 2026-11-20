@@ -129,6 +129,12 @@ class TemplatesService {
   }
 
   // Obtener template por ID
+  /** Usa las fotos y las zonas de otra plantilla (la plantilla queda sin 3D, con fotos). */
+  async copyViews(id: number, fromId: number): Promise<Template> {
+    const response = await api.post<Template>(`${this.baseUrl}/${id}/copy-views`, { fromId });
+    return response.data as Template;
+  }
+
   async getTemplateById(id: number): Promise<Template> {
     const response = await api.get<Template>(
       `${this.baseUrl}/${id}`

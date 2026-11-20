@@ -182,7 +182,7 @@ export function SceneInspector({
                   </div>
                   <ColorInput value={sc.color} onChange={(c) => patch({ color: c }, 'color')} />
                 </div>
-                <Field label="Movimiento de cámara" htmlFor="sc-motion" hint={motionInfo?.hint}>
+                <Field label="Animación" htmlFor="sc-motion" hint={motionInfo?.hint}>
                   <SelectInput id="sc-motion" value={sc.motion} onChange={(e) => setMotion(e.target.value as Scene['motion'])}>
                     {MOTIONS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
                   </SelectInput>

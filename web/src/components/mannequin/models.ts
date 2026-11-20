@@ -57,6 +57,11 @@ export interface ModelConfig {
   /** Altura del centro de la manga (fracción del alto), para medir qué tan afuera está. */
   sleeveY: number;
   /**
+   * Fotos de frente y espalda con las que se generó la forma: se proyectan sobre la malla (la tela,
+   * el cuello y las costuras de la foto, teñidos con el color elegido).
+   */
+  photos?: ModelPhotos;
+  /**
    * Modelo por piezas: el .glb trae la camiseta y el maniquí (con su base) como materiales
    * "camiseta" y "maniqui". La tela sale del material, sin reglas de altura ni recortes, y la base es
    * la del modelo. Las alturas de escote, ruedo y corte no se usan.
@@ -92,7 +97,18 @@ export interface ModelConfig {
   standardHead?: boolean;
   /** Giro del modelo (radianes) para que su frente mire al frente. */
   yaw?: number;
+  /** Objetos rígidos hechos en código: cerámica (taza) o metal (plancha). Sin tejido ni pliegues de tela. */
+  surface?: 'ceramica' | 'metal';
 }
+
+/** Objetos rígidos: todo es superficie imprimible, sin alturas de maniquí (cuello, ruedo, mangas). */
+const RIGID = {
+  headFrom: 2, bodyTop: 2, collarFront: 2, collarBack: 2, collarCurve: 1, hem: -1, cut: 0, sleeveY: 0.5,
+  parts: true, uv: true, object: true,
+} as const;
+
+/** Objetos sublimados hechos en código (web/scripts/build-hard-models.py): siempre están publicados. */
+export const CODE_MODELS_3D = ['taza', 'plancha'] as const;
 
 /** Maniquíes del sistema: siempre están, con sus ajustes finos en el código. */
 export const SYSTEM_MODELS_3D = ['basica', 'oversize'] as const;
@@ -123,6 +139,21 @@ export const MODELS_3D: Record<Model3D, ModelConfig> = {
     uv: true,
     pieces: { front: [33.5, 27.5, 33, 60], back: [32, 25, 35.2, 62.5], rightSleeve: [40.5, 27.8, 15.8, 31.8], leftSleeve: [46.8, 28, 15.5, 31.5] },
   },
+  // Objetos sublimados hechos en código (web/scripts/build-hard-models.py), no con IA.
+  taza: {
+    label: 'Taza 11 oz',
+    model: '/models/taza.glb',
+    poster: '/models/taza.png',
+    ...RIGID,
+    surface: 'ceramica',
+  },
+  plancha: {
+    label: 'Plancha de metal 20×30',
+    model: '/models/plancha-metal.glb',
+    poster: '/models/plancha-metal.png',
+    ...RIGID,
+    surface: 'metal',
+  },
 };
 
 export const isModel3D = (v: unknown): v is Model3D => typeof v === 'string' && Object.prototype.hasOwnProperty.call(MODELS_3D, v);
@@ -146,16 +177,20 @@ export interface GeneratedModelConfig {
   hem: number; cut: number; sleeveY: number;
 }
 
+/** Fotos de entrada de un modelo generado desde vistas. */
+export interface ModelPhotos { front: string; back?: string }
+
 /** Maniquí publicado tal como lo da `GET /mannequin-models/public`. */
-export interface PublishedModel3D { key: string; name: string; model: string; poster: string | null; config: GeneratedModelConfig }
+export interface PublishedModel3D { key: string; name: string; model: string; poster: string | null; config: GeneratedModelConfig; photos?: ModelPhotos | null }
 
 /** Config del motor 3D para un maniquí generado. */
-export function generatedConfig(name: string, model: string, poster: string | null, c: GeneratedModelConfig): ModelConfig {
+export function generatedConfig(name: string, model: string, poster: string | null, c: GeneratedModelConfig, photos?: ModelPhotos | null): ModelConfig {
   if (c.kind && c.kind !== 'maniqui') {
     // Alturas fuera de rango: nada es cabeza ni se recorta abajo; el maniquí y su base vienen en el
     // modelo. Cabeza y piernas separan tela y maniquí por `clothFrom`.
     return {
       label: name, model, poster: poster || MODELS_3D.basica.poster, object: true,
+      photos: c.kind === 'objeto' && photos?.front ? photos : undefined,
       clothFrom: c.kind === 'objeto' || c.split !== 'altura' ? undefined : c.clothFrom,
       lightFrom: c.kind !== 'objeto' && c.split !== 'altura' ? c.lightFrom : undefined,
       standardHead: c.kind === 'cabeza' && c.split !== 'altura',
@@ -174,7 +209,7 @@ export function generatedConfig(name: string, model: string, poster: string | nu
 export function registerModels3D(list: PublishedModel3D[]) {
   for (const m of list) {
     if ((SYSTEM_MODELS_3D as readonly string[]).includes(m.key)) continue;
-    MODELS_3D[m.key] = generatedConfig(m.name, m.model, m.poster, m.config);
+    MODELS_3D[m.key] = generatedConfig(m.name, m.model, m.poster, m.config, m.photos);
   }
 }
 

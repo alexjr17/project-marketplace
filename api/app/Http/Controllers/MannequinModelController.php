@@ -67,6 +67,14 @@ class MannequinModelController extends Controller
         return $this->success($this->models->update($id, $data), 'Modelo 3D guardado');
     }
 
+    /** POST /api/mannequin-models/{id}/model: el .glb optimizado (más liviano) reemplaza al generado. */
+    public function replaceModel(Request $request, int $id)
+    {
+        $data = $request->validate(['model' => 'required|file|max:'.(MannequinModelService::MAX_GLB_KB)]);
+
+        return $this->success($this->models->replaceGlb($id, $data['model']), 'Modelo 3D optimizado');
+    }
+
     /** POST /api/mannequin-models/{id}/retry */
     public function retry(int $id)
     {

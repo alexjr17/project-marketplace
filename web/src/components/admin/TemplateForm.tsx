@@ -2,18 +2,21 @@ import { useState, useEffect } from 'react';
 import { ProductBackdropCard } from './ProductBackdropCard';
 import type { ProductBackdrop } from '../../types/product';
 import { Box, Check, Eye, Info, Layers, Save, Tag, Trash2 } from 'lucide-react';
-import { isModel3D, MODELS_3D, type Model3D } from '../mannequin/models';
+import { isModel3D, MODELS_3D, SYSTEM_MODELS_3D, type Model3D } from '../mannequin/models';
 import { useModels3D } from '../mannequin/useModels3D';
-import type { Template } from '../../services/templates.service';
+import { templatesService, type Template } from '../../services/templates.service';
+import { errorMessage } from '../../lib/http';
 import { catalogsService } from '../../services/catalogs.service';
 import type { Color, Size, Category, ProductType as CatalogProductType } from '../../types/catalog';
 import {
   Alert, Button, Card, CardTitle, Field, FormActions, FormGrid, MoneyInput, SelectInput, Switch,
-  TextArea, TextInput,
+  TextArea, TextInput, toast, useConfirm,
 } from '../ui';
 
 interface TemplateFormProps {
   template?: Template;
+  /** Después de cambiar algo fuera del formulario (copiar fotos de otra plantilla): recargar. */
+  onChanged?: () => void;
   onSubmit: (data: TemplateFormData) => Promise<void>;
   onDelete?: () => void;
   /** Botón Cancelar del pie (si no se pasa, no se muestra). */
@@ -53,7 +56,7 @@ const getTemplateImages = (template?: Template): TemplateImages => {
 };
 
 /** Ficha del modelo personalizable: una tarjeta por tema y pie de botones fijo. */
-export const TemplateForm = ({ template, onSubmit, onDelete, onCancel }: TemplateFormProps) => {
+export const TemplateForm = ({ template, onSubmit, onDelete, onCancel, onChanged }: TemplateFormProps) => {
   const [formData, setFormData] = useState({
     name: template?.name || '',
     description: template?.description || '',
@@ -68,6 +71,34 @@ export const TemplateForm = ({ template, onSubmit, onDelete, onCancel }: Templat
     model3d: (template?.model3d || null) as Model3D | null,
   });
   const [saving, setSaving] = useState(false);
+  const confirm = useConfirm();
+  // Pasar a fotos con las de otra plantilla (frente, espalda, mangas) y sus zonas.
+  const [photoSources, setPhotoSources] = useState<Template[]>([]);
+  const [copyFrom, setCopyFrom] = useState<number | ''>('');
+  const [copying, setCopying] = useState(false);
+  useEffect(() => {
+    if (!template) return;
+    let alive = true;
+    templatesService.getAllTemplates()
+      .then((list) => { if (alive) setPhotoSources(list.filter((t) => t.id !== template.id && Object.values(t.zoneTypeImages ?? {}).some(Boolean))); })
+      .catch(() => { /* sin plantillas con fotos */ });
+    return () => { alive = false; };
+  }, [template]);
+  const copyViews = async () => {
+    if (!template || !copyFrom) return;
+    const from = photoSources.find((t) => t.id === copyFrom);
+    if (!(await confirm({ title: `¿Usar las fotos de "${from?.name}"?`, message: 'Las zonas se acomodan sobre esas fotos (los precios no cambian) y la plantilla queda sin 3D.', confirmText: 'Usar sus fotos' }))) return;
+    setCopying(true);
+    try {
+      await templatesService.copyViews(template.id, copyFrom);
+      toast.success('Listo: la plantilla ahora usa fotos');
+      onChanged?.();
+    } catch (e) {
+      toast.error(errorMessage(e, 'No se pudieron copiar las fotos'));
+    } finally {
+      setCopying(false);
+    }
+  };
   // Fondo de la foto en la tienda (se guarda al elegirlo, aparte del formulario).
   const [backdrop, setBackdrop] = useState<ProductBackdrop | null>(template?.backdrop ?? null);
   useModels3D();
@@ -260,17 +291,34 @@ export const TemplateForm = ({ template, onSubmit, onDelete, onCancel }: Templat
           <Card>
             <CardTitle icon={Box}>Personalizador</CardTitle>
             <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-4 items-start">
-              <Field label="Modelo 3D" htmlFor="tf-model3d" hint="Con maniquí 3D, el cliente ve la prenda girar y las zonas se dibujan sobre el maniquí (frente, espalda y mangas). Sin 3D se usan las imágenes de cada zona (se cargan en el editor de zonas).">
+              <Field label="Modelo 3D" htmlFor="tf-model3d" hint="Con modelo 3D, el cliente ve la prenda girar y las zonas se dibujan sobre ella (frente, espalda y mangas). Los modelos se crean y publican en Personalizador → Modelos 3D. Sin 3D se usan las imágenes de cada zona (se cargan en el editor de zonas).">
                 <SelectInput id="tf-model3d" value={formData.model3d ?? ''} onChange={(e) => setFormData({ ...formData, model3d: e.target.value || null })}>
                   <option value="">Sin 3D (editor con fotos)</option>
-                  {(Object.keys(MODELS_3D) as Model3D[]).map((m) => <option key={m} value={m}>Maniquí · {MODELS_3D[m].label}</option>)}
-                  {formData.model3d && !modelCfg && <option value={formData.model3d}>Maniquí no publicado ({formData.model3d})</option>}
+                  {/* Los maniquíes viejos del sistema quedan reemplazados por los generados desde fotos; solo se
+                      muestran si la plantilla todavía usa uno. */}
+                  {(Object.keys(MODELS_3D) as Model3D[])
+                    .filter((m) => !(SYSTEM_MODELS_3D as readonly string[]).includes(m) || m === formData.model3d)
+                    .map((m) => <option key={m} value={m}>{(SYSTEM_MODELS_3D as readonly string[]).includes(m) ? `${MODELS_3D[m].label} (anterior)` : MODELS_3D[m].label}</option>)}
+                  {formData.model3d && !modelCfg && <option value={formData.model3d}>Modelo no publicado ({formData.model3d})</option>}
                 </SelectInput>
               </Field>
               {modelCfg && (
-                <img src={modelCfg.poster} alt={`Maniquí ${modelCfg.label}`} className="w-28 h-28 object-contain rounded-xl bg-gray-50 ring-1 ring-gray-200" />
+                <img src={modelCfg.poster} alt={`Modelo 3D ${modelCfg.label}`} className="w-28 h-28 object-contain rounded-xl bg-gray-50 ring-1 ring-gray-200" />
               )}
             </div>
+            {template && photoSources.length > 0 && (
+              <div className="mt-4 rounded-lg bg-gray-50 p-3">
+                <p className="text-sm font-medium text-gray-800">Usar las fotos de otra plantilla</p>
+                <p className="text-xs text-gray-500 mt-0.5">Para que se vea con fotos reales: copia las fotos de cada vista (frente, espalda, mangas) y acomoda las zonas sobre ellas. Los precios de las zonas no cambian.</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <SelectInput value={copyFrom} onChange={(e) => setCopyFrom(e.target.value ? Number(e.target.value) : '')} aria-label="Plantilla con fotos" className="flex-1 min-w-[12rem]">
+                    <option value="">Elige la plantilla con fotos…</option>
+                    {photoSources.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                  </SelectInput>
+                  <Button type="button" variant="secondary" isLoading={copying} disabled={!copyFrom} onClick={copyViews}>Usar sus fotos</Button>
+                </div>
+              </div>
+            )}
           </Card>
 
           <ProductBackdropCard productId={template?.id} mainImage={template?.images?.front || (modelCfg?.poster ?? null)} value={backdrop} onChange={setBackdrop} />

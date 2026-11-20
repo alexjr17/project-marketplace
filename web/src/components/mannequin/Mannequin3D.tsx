@@ -61,7 +61,7 @@ export interface Mannequin3DProps {
   /** Escenario 3D de estudio (fondo curvo, piso y pedestal) para los videos: lienzo vertical, sin transparencia. */
   stage?: Stage3D;
   /** Movimiento manejado desde afuera (videos por escenas): giro desde el frente y acercamiento de la cámara. */
-  motionRef?: MutableRefObject<{ turn: number; zoom: number; lift?: number }>;
+  motionRef?: MutableRefObject<{ turn: number; zoom: number; lift?: number; rise?: number; tilt?: number }>;
 }
 
 /** Colores del escenario: `base` es el fondo y el piso, `accent` la luz de la marca. */
@@ -96,7 +96,7 @@ function useMannequin(cfg: ModelConfig) {
   const { scene: standardScene } = useGLTF(MODELS_3D.basica.model);
 
   return useMemo(() => {
-    if (cfg.parts) return partsMannequin(scene);
+    if (cfg.parts) return partsMannequin(scene, cfg);
     let src: THREE.BufferGeometry | null = null;
     let srcMap: THREE.Texture | null = null;
     scene.updateMatrixWorld(true);
@@ -155,14 +155,18 @@ function useMannequin(cfg: ModelConfig) {
     }
     const out = new Float32Array(keep.length * 9);
     const clothOut = new Float32Array(keep.length * 3).fill(1);
+    const uvSrc = g.attributes.uv;
+    const uvOut = uvSrc ? new Float32Array(keep.length * 6) : null;
     keep.forEach((t, j) => {
       for (let k = 0; k < 3; k++) {
         out.set([pos.getX(t + k), pos.getY(t + k), pos.getZ(t + k)], j * 9 + k * 3);
         if (byColor) clothOut[j * 3 + k] = byColor[t + k];
+        if (uvOut && uvSrc) uvOut.set([uvSrc.getX(t + k), uvSrc.getY(t + k)], j * 6 + k * 2);
       }
     });
     g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.BufferAttribute(out, 3));
+    if (uvOut) g.setAttribute('uv', new THREE.BufferAttribute(uvOut, 2));
     g.computeVertexNormals();
     g.boundingBox = box;
     g.setAttribute('aCloth', new THREE.BufferAttribute(clothOut, 1));
@@ -180,8 +184,13 @@ function useMannequin(cfg: ModelConfig) {
     const radii = ring.map((p) => Math.hypot(p.x - cx, p.z - cz)).sort((a, b) => a - b);
     const neckR = radii[Math.floor(radii.length * 0.5)] || size.y * 0.04;
     const collar = cfg.collarFromMesh ? measureCollar(out, box, size, cfg, cx, cz) : null;
+    // Lo más bajo que queda (sin piernas ni palo): el ruedo de la prenda.
+    let bottom = Infinity;
+    for (let i = 1; i < out.length; i += 3) bottom = Math.min(bottom, out[i]);
 
-    return { geometry: g, box, size, neck: { cx, cz, r: neckR }, collar };
+    // Prenda generada desde fotos (objeto): su textura trae la tela real (arrugas, costuras, cuello).
+    const photoMap = cfg.object && !cfg.standardHead && !byColor && g.attributes.uv ? srcMap as THREE.Texture | null : null;
+    return { geometry: g, box, size, neck: { cx, cz, r: neckR }, collar, bottom: Number.isFinite(bottom) ? bottom : box.min.y, photoMap };
   }, [scene, cfg, standardScene]);
 }
 
@@ -213,15 +222,19 @@ function largestPiece(g: THREE.BufferGeometry, cloth: Float32Array | null): { ge
   for (const [r, c] of count) if (c > bestN) { best = r; bestN = c; }
   const out = new Float32Array(bestN * 9);
   const outCloth = cloth ? new Float32Array(bestN * 3) : null;
+  const uvIn = g.attributes.uv?.array as Float32Array | undefined;
+  const outUv = uvIn ? new Float32Array(bestN * 6) : null;
   let j = 0;
   for (let t = 0; t < n; t += 3) {
     if (find(ids[t]) !== best) continue;
     out.set(p.subarray(t * 3, t * 3 + 9), j * 9);
     if (outCloth && cloth) outCloth.set(cloth.subarray(t, t + 3), j * 3);
+    if (outUv && uvIn) outUv.set(uvIn.subarray(t * 2, t * 2 + 6), j * 6);
     j++;
   }
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.BufferAttribute(out, 3));
+  if (outUv) geometry.setAttribute('uv', new THREE.BufferAttribute(outUv, 2));
   return { geometry, cloth: outCloth };
 }
 
@@ -416,7 +429,7 @@ function clothByColor(g: THREE.BufferGeometry, map: THREE.Texture | null, thresh
  * con el atributo `aCloth` (1 = material "camiseta", 0 = "maniqui"). Conserva las normales suaves del
  * archivo y su base; no recorta nada.
  */
-function partsMannequin(scene: THREE.Object3D) {
+function partsMannequin(scene: THREE.Object3D, cfg: ModelConfig) {
   scene.updateMatrixWorld(true);
   const pos: number[] = [], nor: number[] = [], cloth: number[] = [], uvs: number[] = [];
   let flat = false;
@@ -424,7 +437,8 @@ function partsMannequin(scene: THREE.Object3D) {
     const m = o as THREE.Mesh;
     if (!m.isMesh) return;
     const name = ((Array.isArray(m.material) ? m.material[0] : m.material)?.name || '').toLowerCase();
-    const isCloth = name.includes('camiseta') ? 1 : 0;
+    // "camiseta" en los maniquíes; "imprimible" en los objetos (taza, plancha): lo que se tiñe y se estampa.
+    const isCloth = name.includes('camiseta') || name.includes('imprimible') ? 1 : 0;
     // El .glb web viene comprimido (posiciones en enteros normalizados + escala del nodo): se lee cada
     // vértice ya en decimal y recién ahí se aplica la transformación (sobre el formato comprimido se desborda).
     const g = m.geometry.index ? m.geometry.toNonIndexed() : m.geometry;
@@ -451,13 +465,15 @@ function partsMannequin(scene: THREE.Object3D) {
   const size0 = g.boundingBox!.getSize(new THREE.Vector3());
   const center0 = g.boundingBox!.getCenter(new THREE.Vector3());
   g.translate(-center0.x, -center0.y, -center0.z);
-  g.scale(HEIGHT / size0.y, HEIGHT / size0.y, HEIGHT / size0.y);
+  // Objetos (taza, plancha): por la medida más grande, para que uno ancho no se salga del recuadro.
+  const fit = cfg.object ? (HEIGHT * 0.8) / Math.max(size0.x, size0.y, size0.z) : HEIGHT / size0.y;
+  g.scale(fit, fit, fit);
   g.computeBoundingBox();
   const box = g.boundingBox!.clone();
   const size = box.getSize(new THREE.Vector3());
   addSmoothSurface(g);
   // Con patrón (piezas en la UV): pliegues más suaves, el estampado se ve parejo al moverlo.
-  if (uvs.some((v) => v !== 0)) relaxFolds(g, size);
+  if (uvs.some((v) => v !== 0) && !cfg.surface) relaxFolds(g, size);
   return { geometry: g, box, size, neck: { cx: 0, cz: 0, r: size.y * 0.04 }, collar: null as Float32Array | null };
 }
 
@@ -554,7 +570,7 @@ function measureCollar(pos: Float32Array, box: THREE.Box3, size: THREE.Vector3, 
  * Material: tela mate del color elegido o maniquí satinado (por píxel). Cabeza: maniquí. Cuello:
  * maniquí cerca del eje del cuello, tela (el resorte) más afuera. Debajo del cuello: tela.
  */
-function useGarmentMaterial(box: THREE.Box3, size: THREE.Vector3, cfg: ModelConfig, neck: { cx: number; cz: number; r: number }, collar: Float32Array | null, byColor = false) {
+function useGarmentMaterial(box: THREE.Box3, size: THREE.Vector3, cfg: ModelConfig, neck: { cx: number; cz: number; r: number }, collar: Float32Array | null, byColor = false, photoMap: THREE.Texture | null = null) {
   const material = useMemo(() => {
     const uniforms = {
       uNeckC: { value: new THREE.Vector2(neck.cx, neck.cz) },
@@ -568,6 +584,9 @@ function useGarmentMaterial(box: THREE.Box3, size: THREE.Vector3, cfg: ModelConf
       uParts: { value: cfg.parts || byColor ? 1 : 0 },
       uPrint: { value: null as THREE.Texture | null },
       uUsePrint: { value: 0 },
+      // Superficie dura (taza de cerámica, plancha de metal): sin tejido ni pliegues de tela.
+      uHard: { value: cfg.surface ? 1 : 0 },
+      uHardRough: { value: cfg.surface === 'metal' ? 0.22 : 0.12 },
       uCollarH: { value: Array.from(collar ?? new Float32Array(COLLAR_BINS)) },
       uMin: { value: new THREE.Vector2(box.min.x, box.min.y) },
       uSize: { value: new THREE.Vector2(size.x, size.y) },
@@ -576,21 +595,49 @@ function useGarmentMaterial(box: THREE.Box3, size: THREE.Vector3, cfg: ModelConf
       uClothFrom: { value: cfg.clothFrom ?? -1 },
       uShirt: { value: new THREE.Color('#ffffff') },
       uDummy: { value: new THREE.Color(MANNEQUIN_COLOR) },
+      // Prendas: sin maniquí. Objetos sueltos (bolso, taza…): se dibujan completos.
+      uGhost: { value: cfg.object && !cfg.standardHead ? 0 : 1 },
+      uPhoto: { value: photoMap ? 1 : 0 },
+      // Fotos de frente y espalda proyectadas sobre la forma (ver usePhotoProjection).
+      uProj: { value: 0 },
+      uFront: { value: null as THREE.Texture | null },
+      uBack: { value: null as THREE.Texture | null },
+      uFrontBox: { value: new THREE.Vector4(0, 0, 1, 1) },
+      uBackBox: { value: new THREE.Vector4(0, 0, 1, 1) },
+      uHasBack: { value: 0 },
     };
-    const m = new THREE.MeshStandardMaterial({ roughness: 0.9, metalness: 0 });
+    // Tela: material físico con el brillo suave de la tela de punto (sheen). Solo la prenda: se ven las
+    // dos caras de la tela (por dentro, más oscura).
+    const m = cfg.surface
+      // Cerámica esmaltada o aluminio con recubrimiento para sublimar: brillo con barniz, sin brillo de tela.
+      ? new THREE.MeshPhysicalMaterial({
+        roughness: cfg.surface === 'metal' ? 0.22 : 0.12, metalness: cfg.surface === 'metal' ? 0.12 : 0,
+        clearcoat: 1, clearcoatRoughness: cfg.surface === 'metal' ? 0.12 : 0.05, side: THREE.DoubleSide,
+      })
+      : new THREE.MeshPhysicalMaterial({
+        roughness: 0.92, metalness: 0, side: THREE.DoubleSide, sheen: 0.7, sheenRoughness: 0.75, sheenColor: new THREE.Color('#ffffff'),
+      });
+    if (photoMap) {
+      const tex = photoMap.clone();
+      tex.colorSpace = THREE.SRGBColorSpace;
+      tex.needsUpdate = true;
+      m.map = tex;
+    }
     m.onBeforeCompile = (shader) => {
       Object.assign(shader.uniforms, uniforms);
       shader.vertexShader = shader.vertexShader
-        .replace('#include <common>', '#include <common>\nattribute float aCloth;\nvarying vec3 vObj;\nvarying float vCloth;\nvarying vec2 vPrintUv;')
-        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvObj = position;\nvCloth = aCloth;\nvPrintUv = uv;');
+        .replace('#include <common>', '#include <common>\nattribute float aCloth;\nattribute vec3 aSmoothN;\nvarying vec3 vObj;\nvarying float vCloth;\nvarying vec2 vPrintUv;\nvarying vec3 vObjN;\nvarying vec3 vSmN;\nvarying vec3 vSmV;')
+        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvObj = position;\nvCloth = aCloth;\nvPrintUv = uv;\nvObjN = normal;\nvSmN = aSmoothN;\nvSmV = normalMatrix * aSmoothN;');
       shader.fragmentShader = shader.fragmentShader
         .replace(
           '#include <common>',
-          '#include <common>\nvarying vec3 vObj;\nuniform vec2 uNeckC;\nuniform float uNeckR;\nuniform float uCut;\nuniform float uCollarFront;\nuniform float uCollarBack;\nuniform float uCollarCurve;\nuniform float uCollarSide;\nuniform float uCollarMesh;\nuniform float uCollarH[24];\nuniform float uParts;\nvarying float vCloth;\nvarying vec2 vPrintUv;\nuniform sampler2D uPrint;\nuniform float uUsePrint;\nuniform vec2 uMin;\nuniform vec2 uSize;\nuniform float uHeadFrom;\nuniform float uBodyTop;\nuniform float uClothFrom;\nuniform vec3 uShirt;\nuniform vec3 uDummy;',
+          '#include <common>\nvarying vec3 vObj;\nuniform vec2 uNeckC;\nuniform float uNeckR;\nuniform float uCut;\nuniform float uCollarFront;\nuniform float uCollarBack;\nuniform float uCollarCurve;\nuniform float uCollarSide;\nuniform float uCollarMesh;\nuniform float uCollarH[24];\nuniform float uParts;\nvarying float vCloth;\nvarying vec2 vPrintUv;\nuniform sampler2D uPrint;\nuniform float uUsePrint;\nuniform float uHard;\nuniform float uHardRough;\nuniform vec2 uMin;\nuniform vec2 uSize;\nuniform float uHeadFrom;\nuniform float uBodyTop;\nuniform float uClothFrom;\nuniform vec3 uShirt;\nuniform vec3 uDummy;\nuniform float uGhost;\nuniform float uPhoto;\nuniform float uProj;\nuniform sampler2D uFront;\nuniform sampler2D uBack;\nuniform vec4 uFrontBox;\nuniform vec4 uBackBox;\nuniform float uHasBack;\nvarying vec3 vObjN;\nvarying vec3 vSmN;\nvarying vec3 vSmV;\nfloat knitH(vec3 q) { return sin(q.x + 0.55 * sin(q.y * 2.0)) * sin(q.y * 1.35) * 0.6 + sin(q.z * 0.9 + q.y * 0.7) * 0.15; }',
         )
         .replace(
           '#include <color_fragment>',
           `#include <color_fragment>
+          // Con la textura de la foto: su luz y sombra (arrugas, costuras) tiñen el color elegido.
+          float photoL = clamp(dot(diffuseColor.rgb, vec3(0.299, 0.587, 0.114)) * 1.12, 0.0, 1.0);
           vec2 muv = (vObj.xy - uMin) / uSize;
           if (uParts < 0.5 && muv.y < uCut) discard;
           vec2 d = vObj.xz - uNeckC;
@@ -621,18 +668,123 @@ function useGarmentMaterial(box: THREE.Box3, size: THREE.Vector3, cfg: ModelConf
           if (uClothFrom >= 0.0) cloth = smoothstep(uClothFrom - aa, uClothFrom + aa, muv.y);
           // Modelo por piezas (v2): la tela es la pieza "camiseta" del archivo.
           if (uParts > 0.5) cloth = step(0.5, vCloth);
+          // Sin maniquí: lo que no es tela no se dibuja (queda la prenda sola).
+          if (uGhost > 0.5 && cloth < 0.5) discard;
           diffuseColor.rgb = mix(uDummy, uShirt, cloth);
+          if (uPhoto > 0.5) diffuseColor.rgb *= photoL;
+          // Fotos proyectadas: la silueta del modelo calza con la de la foto (la forma salió de ella).
+          // Frente y espalda se mezclan según hacia dónde mira la tela.
+          if (uProj > 0.5) {
+            vec2 q = (vObj.xy - uMin) / uSize;
+            vec3 fc = texture2D(uFront, uFrontBox.xy + q * uFrontBox.zw).rgb;
+            vec3 bc = texture2D(uBack, uBackBox.xy + vec2(1.0 - q.x, q.y) * uBackBox.zw).rgb;
+            float wf = uHasBack > 0.5 ? smoothstep(-0.35, 0.35, normalize(vObjN).z) : 1.0;
+            float lum = dot(mix(bc, fc, wf), vec3(0.299, 0.587, 0.114));
+            // La tela de la foto es casi blanca: su luz y sombra (arrugas, cuello, costuras) tiñen el color.
+            // Con piso: el contorno oscuro de la foto (borde de la manga) no mancha la tela si la silueta
+            // 3D no calza exacto; las arrugas de la foto no bajan de ese piso.
+            diffuseColor.rgb *= clamp(max(lum, 0.66) / 0.9, 0.0, 1.06);
+          }
+          // La tela por dentro (se ve por el cuello, las mangas y el ruedo) va en sombra.
+          if (!gl_FrontFacing) diffuseColor.rgb *= 0.58;
+          // Pliegues y arrugas: donde la tela se dobla queda en sombra (como en una foto de estudio).
+          float fold = 1.0 - clamp(dot(normalize(vObjN), normalize(vSmN)), 0.0, 1.0);
+          // Con fotos proyectadas las arrugas ya vienen en la foto: el pliegue de la malla casi no oscurece
+          // (los hoyuelos que deja la IA se verían como manchas).
+          if (uHard < 0.5) diffuseColor.rgb *= 1.0 - (uProj > 0.5 ? clamp(fold * 0.6, 0.0, 0.12) : clamp(fold * (uPhoto > 0.5 ? 1.2 : 3.0), 0.0, 0.5));
           // Modelos con patrón (v2): el estampado está pintado en la tela misma.
           vec4 printC = texture2D(uPrint, vPrintUv);
           diffuseColor.rgb = mix(diffuseColor.rgb, printC.rgb, printC.a * cloth * uUsePrint);`,
         )
-        .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(0.5, 0.92, cloth);');
+        .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = uHard > 0.5 ? uHardRough : mix(0.5, 0.92, cloth);')
+        .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+          // Con fotos proyectadas: luz con la superficie suavizada (las arrugas las pone la foto; los
+          // hoyuelos de la malla generada quedarían como manchas oscuras).
+          if (uProj > 0.5) normal = normalize(mix(normal, normalize(vSmV) * faceDirection, 0.75));
+          if (uHard < 0.5) {
+            vec3 kq = vObj * 520.0;
+            float kh = knitH(kq);
+            float kfade = 1.0 - smoothstep(0.7, 1.8, length(fwidth(kq)));
+            vec2 dH = vec2(dFdx(kh), dFdy(kh)) * 0.0022 * kfade;
+            vec3 sx = dFdx(-vViewPosition), sy = dFdy(-vViewPosition);
+            vec3 r1 = cross(sy, normal), r2 = cross(normal, sx);
+            float det = dot(sx, r1) * faceDirection;
+            normal = normalize(abs(det) * normal - sign(det) * (dH.x * r1 + dH.y * r2));
+          }`);
     };
     m.userData.uniforms = uniforms;
     return m;
-  }, [box, size, cfg, neck, collar, byColor]);
+  }, [box, size, cfg, neck, collar, byColor, photoMap]);
   useEffect(() => () => material.dispose(), [material]);
   return material;
+}
+
+/**
+ * Carga las fotos de frente y espalda y mide la silueta de la prenda en cada una (lo que no es fondo
+ * blanco), para proyectarlas sobre la malla: la caja de la malla calza con la caja de la silueta.
+ */
+function usePhotoProjection(material: THREE.Material, photos: ModelConfig['photos']) {
+  const front = photos?.front;
+  const back = photos?.back;
+  useEffect(() => {
+    if (!front) return;
+    const u = material.userData.uniforms;
+    let alive = true;
+    const textures: THREE.Texture[] = [];
+    const load = (src: string) => new Promise<{ tex: THREE.Texture; box: THREE.Vector4 }>((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        const tex = new THREE.Texture(img);
+        tex.colorSpace = THREE.SRGBColorSpace;
+        tex.anisotropy = 8;
+        tex.needsUpdate = true;
+        textures.push(tex);
+        resolve({ tex, box: silhouetteBox(img) });
+      };
+      img.onerror = reject;
+      img.src = src;
+    });
+    Promise.all([load(front), back ? load(back) : Promise.resolve(null)])
+      .then(([f, b]) => {
+        if (!alive) return;
+        u.uFront.value = f.tex;
+        u.uFrontBox.value = f.box;
+        u.uBack.value = (b ?? f).tex;
+        u.uBackBox.value = (b ?? f).box;
+        u.uHasBack.value = b ? 1 : 0;
+        u.uProj.value = 1;
+      })
+      .catch(() => { /* sin fotos: queda la tela lisa */ });
+    return () => {
+      alive = false;
+      u.uProj.value = 0;
+      textures.forEach((t) => t.dispose());
+    };
+  }, [material, front, back]);
+}
+
+/** Caja de la prenda en una foto con fondo blanco, en coordenadas de textura (x, y desde abajo, ancho, alto). */
+function silhouetteBox(img: HTMLImageElement): THREE.Vector4 {
+  const N = 256;
+  const c = document.createElement('canvas');
+  c.width = N;
+  c.height = N;
+  const ctx = c.getContext('2d', { willReadFrequently: true });
+  if (!ctx) return new THREE.Vector4(0, 0, 1, 1);
+  ctx.drawImage(img, 0, 0, N, N);
+  const d = ctx.getImageData(0, 0, N, N).data;
+  let x0 = N, y0 = N, x1 = -1, y1 = -1;
+  for (let y = 0; y < N; y++) {
+    for (let x = 0; x < N; x++) {
+      const i = (y * N + x) * 4;
+      if (d[i + 3] > 20 && Math.min(d[i], d[i + 1], d[i + 2]) < 246) {
+        x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y);
+      }
+    }
+  }
+  if (x1 < 0) return new THREE.Vector4(0, 0, 1, 1);
+  return new THREE.Vector4(x0 / N, 1 - (y1 + 1) / N, (x1 + 1 - x0) / N, (y1 + 1 - y0) / N);
 }
 
 type Angles = Record<View3D, number>;
@@ -1035,10 +1187,10 @@ function glowTexture() {
  * Escenario de los videos: fondo curvo, piso, pedestal con aro de luz del acento, halo en la pared y
  * cámara vertical con aire arriba (logo) y abajo (textos). El modelo queda parado sobre el pedestal.
  */
-function StudioStage({ stage, box, size, motionRef }: { stage: Stage3D; box: THREE.Box3; size: THREE.Vector3; motionRef?: MutableRefObject<{ turn: number; zoom: number; lift?: number }> }) {
+function StudioStage({ stage, box, size, motionRef, bottom }: { stage: Stage3D; box: THREE.Box3; size: THREE.Vector3; bottom?: number; motionRef?: MutableRefObject<{ turn: number; zoom: number; lift?: number; rise?: number; tilt?: number }> }) {
   const { camera } = useThree();
-  // La tapa del pedestal queda apenas debajo del modelo: la sombra de contacto no la toma como objeto.
-  const top = box.min.y - 0.012;
+  // La tapa del pedestal queda un poco debajo de la prenda (que flota sobre ella, sin maniquí).
+  const top = (bottom ?? box.min.y) - 0.11;
   const floorY = top - PEDESTAL_H;
   const r = pedestalRadius(size);
   const cyc = useMemo(() => cycloramaGeometry(), []);
@@ -1105,24 +1257,6 @@ function StudioStage({ stage, box, size, motionRef }: { stage: Stage3D; box: THR
       {/* Pozo de luz sobre el pedestal y contraluz del acento. */}
       <spotLight position={[0, floorY + 6, 2.5]} angle={0.42} penumbra={0.9} intensity={stage.dark ? 40 : 22} distance={14} decay={1.6} />
       <pointLight position={[0, (box.max.y + floorY) / 2 + 0.6, -2]} color={stage.accent} intensity={stage.dark ? 6 : 3} distance={6} />
-    </group>
-  );
-}
-
-function Stand({ box, size, hem }: { box: THREE.Box3; size: THREE.Vector3; hem: number }) {
-  const top = box.min.y + size.y * (hem + 0.08);
-  const bottom = box.min.y;
-  const poleH = top - bottom;
-  return (
-    <group>
-      <mesh position={[0, bottom + poleH / 2, 0]}>
-        <cylinderGeometry args={[0.035, 0.035, poleH, 24]} />
-        <meshStandardMaterial color={MANNEQUIN_COLOR} roughness={0.35} metalness={0.15} />
-      </mesh>
-      <mesh position={[0, bottom + 0.02, 0]}>
-        <cylinderGeometry args={[0.32, 0.34, 0.04, 48]} />
-        <meshStandardMaterial color={MANNEQUIN_COLOR} roughness={0.35} metalness={0.15} />
-      </mesh>
     </group>
   );
 }
@@ -1320,12 +1454,15 @@ function Garment({ model, color, art, artRef, frames, focus, locked = false, ani
   const group = useRef<THREE.Group>(null);
   const drag = useRef({ down: false, x: 0, offset: 0 });
   const { gl, scene, camera } = useThree();
-  const { geometry, box, size, neck, collar } = useMannequin(cfg);
-  const material = useGarmentMaterial(box, size, cfg, neck, collar, !!geometry.userData.clothByColor);
+  const { geometry, box, size, neck, collar, bottom, photoMap } = useMannequin(cfg) as ReturnType<typeof useMannequin> & { bottom?: number; photoMap?: THREE.Texture | null };
+  const material = useGarmentMaterial(box, size, cfg, neck, collar, !!geometry.userData.clothByColor, photoMap ?? null);
+  usePhotoProjection(material, cfg.photos);
   useEffect(() => { onReady?.(); }, [onReady]);
 
   useEffect(() => {
     (material.userData.uniforms.uShirt.value as THREE.Color).set(color);
+    // El brillo de la tela toma su color: en blanco no lava las prendas oscuras (negro gris, rojo rosado).
+    if (material instanceof THREE.MeshPhysicalMaterial && material.sheen > 0) material.sheenColor.set(color).lerp(new THREE.Color('#ffffff'), 0.2);
   }, [material, color]);
 
   const angles = useMemo(() => viewAngles(geometry, box, size, cfg), [geometry, box, size, cfg]);
@@ -1500,11 +1637,16 @@ function Garment({ model, color, art, artRef, frames, focus, locked = false, ani
     const g = group.current;
     if (g && motionRef) {
       g.rotation.y = angles.front + motionRef.current.turn;
+      // La prenda sola se anima: flota, rebota o se balancea.
+      g.position.y = motionRef.current.rise ?? 0;
+      g.rotation.z = motionRef.current.tilt ?? 0;
     } else if (g && spin) {
       g.rotation.y += delta * spin;
     } else if (g) {
       const t = frame.clock.elapsedTime;
       const idle = still || locked || drag.current.down ? 0 : Math.sin(t * 0.45) * 0.3;
+      // Sin maniquí la prenda flota suave en su lugar.
+      g.position.y = still || locked ? 0 : Math.sin(t * 1.3) * 0.018;
       const target = angles[focus] + drag.current.offset + idle;
       let diff = target - g.rotation.y;
       diff = Math.atan2(Math.sin(diff), Math.cos(diff));
@@ -1512,6 +1654,19 @@ function Garment({ model, color, art, artRef, frames, focus, locked = false, ani
     }
   });
 
+  // Ruedo de la prenda (sin maniquí, ahí termina lo que se ve).
+  const bottomY = useMemo(() => {
+    if (cfg.object && !cfg.standardHead) return box.min.y;
+    // Por piezas o tela por color: lo más bajo de la tela.
+    const cl = geometry.getAttribute('aCloth');
+    const pos = geometry.getAttribute('position');
+    if (cl && (cfg.parts || geometry.userData.clothByColor)) {
+      let m = Infinity;
+      for (let i = 0; i < pos.count; i++) if (cl.getX(i) >= 0.5) m = Math.min(m, pos.getY(i));
+      if (Number.isFinite(m)) return m;
+    }
+    return Math.max(box.min.y, bottom ?? box.min.y);
+  }, [geometry, box, cfg, bottom]);
   return (
     <>
       <group
@@ -1532,12 +1687,12 @@ function Garment({ model, color, art, artRef, frames, focus, locked = false, ani
         onPointerUp={() => { drag.current.down = false; }}
         onPointerLeave={() => { drag.current.down = false; }}
       >
-        <mesh geometry={geometry} material={material} />
+        {/* Con fotos proyectadas la sombra ya viene en la foto: la propia dejaría manchas en los pliegues hondos. */}
+        <mesh geometry={geometry} material={material} castShadow receiveShadow={!cfg.photos} />
         {!pattern && <mesh geometry={geometry} material={printMaterial} renderOrder={1} />}
-        {!cfg.parts && !cfg.object && <Stand box={box} size={size} hem={cfg.hem} />}
       </group>
-      {stage && <StudioStage stage={stage} box={box} size={size} motionRef={motionRef} />}
-      {!stage && <ContactShadows position={[0, box.min.y + 0.001, 0]} opacity={0.35} scale={3} blur={2.6} far={1.2} resolution={512} />}
+      {stage && <StudioStage stage={stage} box={box} size={size} motionRef={motionRef} bottom={bottomY} />}
+      {!stage && <ContactShadows position={[0, bottomY + 0.001, 0]} opacity={0.3} scale={3} blur={2.8} far={1.2} resolution={512} />}
     </>
   );
 }
@@ -1550,24 +1705,27 @@ export default function Mannequin3D({ active = true, ...props }: Mannequin3DProp
   const [ready, setReady] = useState(false);
   return (
     <Canvas
+      shadows
       frameloop={active ? 'always' : 'never'}
       dpr={props.stage ? 2 : [1, 2]}
       camera={{ position: [0, 0, CAMERA.distance], fov: CAMERA.fov }}
-      gl={{ antialias: true, alpha: true, preserveDrawingBuffer: !!props.recordable, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.05 }}
+      gl={{ antialias: true, alpha: true, preserveDrawingBuffer: !!props.recordable, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.32 }}
       onCreated={() => setReady(true)}
       style={{ touchAction: props.locked ? 'auto' : 'pan-y', cursor: props.locked ? 'default' : 'grab', opacity: ready ? 1 : 0, transition: 'opacity .4s' }}
       aria-hidden="true"
     >
       {props.stage && !props.stage.bare && <color attach="background" args={[props.stage.base]} />}
       {props.stage && !props.stage.bare && <fog attach="fog" args={[props.stage.base, 9, 22]} />}
-      <ambientLight intensity={0.35} />
-      <directionalLight position={[2.5, 4, 3.5]} intensity={1.6} />
+      <ambientLight intensity={0.22} />
+      <directionalLight position={[-2.2, 4.2, 3.4]} intensity={2.7} castShadow shadow-mapSize={[2048, 2048]} shadow-bias={-0.0004} shadow-normalBias={0.025}
+        shadow-camera-left={-2} shadow-camera-right={2} shadow-camera-top={2} shadow-camera-bottom={-2} />
+      <directionalLight position={[3, 1.5, -2.5]} intensity={0.6} />
       {/* Luz de estudio armada en la escena (sin descargar mapas de entorno). */}
       <Environment resolution={256}>
-        <Lightformer form="rect" intensity={2.2} position={[0, 2.5, 3]} scale={[4, 2, 1]} />
-        <Lightformer form="rect" intensity={1.2} position={[-3, 1, 1]} rotation-y={Math.PI / 2} scale={[3, 2, 1]} />
-        <Lightformer form="rect" intensity={1.4} position={[3, 1, -1]} rotation-y={-Math.PI / 2} scale={[3, 2, 1]} />
-        <Lightformer form="rect" intensity={0.6} position={[0, -2, 2]} rotation-x={-Math.PI / 2} scale={[4, 4, 1]} />
+        <Lightformer form="rect" intensity={1.6} position={[-1, 2.5, 3]} scale={[4, 2, 1]} />
+        <Lightformer form="rect" intensity={0.9} position={[-3, 1, 1]} rotation-y={Math.PI / 2} scale={[3, 2, 1]} />
+        <Lightformer form="rect" intensity={0.9} position={[3, 1, -1]} rotation-y={-Math.PI / 2} scale={[3, 2, 1]} />
+        <Lightformer form="rect" intensity={0.35} position={[0, -2, 2]} rotation-x={-Math.PI / 2} scale={[4, 4, 1]} />
       </Environment>
       <Suspense fallback={null}>
         <Garment key={props.model} {...props} />

@@ -15,6 +15,7 @@ import { errorMessage } from '../../lib/http';
 import { generatedConfig, VIEWS_3D, type GeneratedModelConfig, type ModelKind, type View3D } from '../../components/mannequin/models';
 import type { Mannequin3DHandle } from '../../components/mannequin/Mannequin3D';
 import { loadModels3D } from '../../components/mannequin/useModels3D';
+import { optimizeModel } from '../../components/mannequin/optimizeModel';
 import { mannequinModelsService, type MannequinModel } from '../../services/mannequinModels.service';
 import { duration, KIND_LABEL, KINDS, SOURCE, STATUS, viewLabels } from './mannequinUi';
 import { MannequinChat } from './MannequinChat';
@@ -98,8 +99,8 @@ export default function MannequinModelDetailPage() {
 
   // El visor pinta con los ajustes sin guardar (se rearma al cambiar un ajuste).
   const preview = useMemo(
-    () => (m?.model && shown ? generatedConfig(m.name, m.model, m.poster, shown) : null),
-    [m?.model, m?.name, m?.poster, shown],
+    () => (m?.model && shown ? generatedConfig(m.name, m.model, m.poster, shown, m.photos) : null),
+    [m?.model, m?.name, m?.poster, m?.photos, shown],
   );
   const viewerKey = preview && shown ? Object.values(shown).join(',') : '';
 
@@ -118,6 +119,11 @@ export default function MannequinModelDetailPage() {
           await new Promise((r) => window.setTimeout(r, 200));
         }
         poster = handle.current.capture('front', { type: 'image/webp', quality: 0.9 }) ?? undefined;
+      }
+      // Generados desde las vistas: más de un millón de triángulos. Se guarda la versión liviana.
+      if (m.model && published !== false) {
+        const light = await optimizeModel(m.model).catch(() => null);
+        if (light) await mannequinModelsService.replaceModel(m.id, light);
       }
       const r = await mannequinModelsService.update(m.id, { name: name.trim(), config, poster, published });
       apply(r);

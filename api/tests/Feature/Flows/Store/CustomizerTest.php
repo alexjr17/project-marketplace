@@ -367,6 +367,10 @@ class CustomizerTest extends TestCase
         // Las claves v2 ya no existen: los maniquíes con patrón son ahora 'basica' y 'oversize'.
         $this->putJson("/api/templates/{$tpl->id}", ['model3d' => 'basica_v2'])->assertUnprocessable();
         $this->putJson("/api/templates/{$tpl->id}", ['model3d' => 'oversize'])->assertOk()->assertJsonPath('data.model3d', 'oversize');
+        // Objetos sublimados hechos en código: taza y plancha de metal.
+        $this->putJson("/api/templates/{$tpl->id}", ['model3d' => 'taza'])->assertOk()->assertJsonPath('data.model3d', 'taza');
+        $this->putJson("/api/templates/{$tpl->id}", ['model3d' => 'plancha'])->assertOk()->assertJsonPath('data.model3d', 'plancha');
+        $this->putJson("/api/templates/{$tpl->id}", ['model3d' => 'oversize'])->assertOk();
 
         // La tienda (sin sesión) lo recibe en la plantilla y en la lista pública.
         $this->app['auth']->forgetGuards();

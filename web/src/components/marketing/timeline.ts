@@ -13,7 +13,8 @@
 
 export type SceneKind = '3d' | 'foto' | 'texto' | 'clip';
 export type Motion =
-  | 'giro' | 'giroRapido' | 'revelar' | 'orbita' | 'heroe' | 'frente' | 'espalda' | 'perfil' | 'vaiven' | 'acercar' | 'detalle';
+  | 'giro' | 'giroRapido' | 'revelar' | 'orbita' | 'heroe' | 'frente' | 'espalda' | 'perfil' | 'vaiven' | 'acercar' | 'detalle'
+  | 'flotar' | 'giroFlotando' | 'rebote' | 'balanceo' | 'caida' | 'pirueta';
 export type PhotoMove = 'acercar' | 'alejar' | 'paneo' | 'quieta';
 export type PhotoFit = 'tarjeta' | 'completa';
 export type TextAnim = 'subir' | 'pop' | 'deslizar' | 'escribir' | 'letras' | 'ninguna';
@@ -42,6 +43,12 @@ export const MOTIONS: { value: Motion; label: string; hint: string; speed?: bool
   { value: 'vaiven', label: 'Vaivén', hint: 'Se mueve de lado a lado', speed: true },
   { value: 'acercar', label: 'Acercar al diseño', hint: 'La cámara se acerca al pecho' },
   { value: 'detalle', label: 'Detalle', hint: 'Primer plano del diseño, recorriéndolo despacio' },
+  { value: 'flotar', label: 'Flotar', hint: 'La prenda flota suave en el aire, meciéndose', speed: true },
+  { value: 'giroFlotando', label: 'Giro flotando', hint: 'Da la vuelta mientras sube y baja suave', speed: true },
+  { value: 'rebote', label: 'Rebote', hint: 'Salta con energía y cae suave', speed: true },
+  { value: 'balanceo', label: 'Balanceo', hint: 'Se mece de lado a lado, como colgada de un gancho', speed: true },
+  { value: 'caida', label: 'Caída', hint: 'Entra cayendo desde arriba, rebota y queda flotando' },
+  { value: 'pirueta', label: 'Pirueta', hint: 'Una vuelta rápida con un saltito y queda de frente' },
 ];
 
 export const PHOTO_MOVES: { value: PhotoMove; label: string }[] = [
@@ -399,6 +406,10 @@ export interface MotionState {
   zoom: number;
   /** Altura de la cámara: -1 baja (mirando hacia arriba) .. 1 alta. */
   lift: number;
+  /** La prenda sube o baja (unidades de la escena; 0 = en su lugar). */
+  rise?: number;
+  /** La prenda se inclina de lado (radianes). */
+  tilt?: number;
 }
 
 /**
@@ -421,6 +432,28 @@ export function motionAt(motion: Motion, local: number, seconds: number, speed =
     case 'vaiven': return { turn: Math.sin(local * 1.4 * v) * 0.7, zoom: 1, lift: 0 };
     case 'acercar': return { turn: Math.sin(local * 0.5) * 0.1, zoom: 1 + 0.65 * ease(clamp01(p)), lift: 0 };
     case 'detalle': return { turn: -0.32 + 0.64 * ease(clamp01(p)) + Math.min(0, p) * 0.3, zoom: 2.05 + 0.15 * Math.max(0, p), lift: 0.05 };
+    // La prenda sola (sin maniquí) se anima en el aire.
+    case 'flotar': return { turn: Math.sin(local * 0.55 * v) * 0.35, zoom: 1.02, lift: 0, rise: Math.sin(local * 1.6 * v) * 0.06, tilt: Math.sin(local * 1.1 * v) * 0.045 };
+    case 'giroFlotando': return { turn: (Math.PI * 2 * local * v) / Math.max(len, 4), zoom: 1, lift: 0, rise: Math.sin(local * 1.8 * v) * 0.07, tilt: Math.sin(local * 0.9 * v) * 0.03 };
+    case 'rebote': {
+      const k = (local * 1.7 * v) % 1;
+      const hop = 4 * k * (1 - k);
+      return { turn: Math.sin(local * 0.7) * 0.2, zoom: 1, lift: 0, rise: hop * 0.16, tilt: Math.sin(local * 1.7 * v * Math.PI * 2) * 0.03 };
+    }
+    case 'balanceo': return { turn: Math.sin(local * 0.6 * v) * 0.18, zoom: 1.02, lift: 0, rise: -Math.abs(Math.sin(local * 1.8 * v)) * 0.02, tilt: Math.sin(local * 1.8 * v) * 0.16 };
+    case 'caida': {
+      // Cae (0..0.45 s), rebota dos veces y queda flotando.
+      const t = Math.max(0, local);
+      const fall = t < 0.45 ? 1.3 * (1 - (t / 0.45) ** 2) : 0;
+      const bounce = t >= 0.45 && t < 1.25 ? Math.abs(Math.sin(((t - 0.45) / 0.8) * Math.PI * 2)) * 0.12 * (1 - (t - 0.45) / 0.8) : 0;
+      const float = t >= 1.25 ? Math.sin((t - 1.25) * 1.6) * 0.05 : 0;
+      return { turn: Math.sin(t * 0.5) * 0.15, zoom: 1.02, lift: 0, rise: fall + bounce + float, tilt: t < 1.25 ? Math.sin(t * 9) * 0.05 * (1 - t / 1.25) : 0 };
+    }
+    case 'pirueta': {
+      // Una vuelta rápida con saltito (0.2..1.4 s) y luego de frente, flotando.
+      const q = clamp01((local - 0.2) / 1.2);
+      return { turn: Math.PI * 2 * ease(q), zoom: 1.02, lift: 0, rise: Math.sin(q * Math.PI) * 0.14 + (q >= 1 ? Math.sin((local - 1.4) * 1.6) * 0.04 : 0), tilt: Math.sin(q * Math.PI * 2) * 0.06 };
+    }
   }
 }
 

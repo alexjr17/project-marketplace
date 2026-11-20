@@ -309,6 +309,11 @@ export const TemplatesPage = () => {
             onSubmit={handleEditTemplate}
             onCancel={cancelEdit}
             onDelete={() => handleDeleteTemplate(selectedTemplate)}
+            onChanged={async () => {
+              await loadTemplates();
+              const fresh = await templatesService.getTemplateById(selectedTemplate.id).catch(() => null);
+              if (fresh) setSelectedTemplate(fresh);
+            }}
           />
         </div>
 

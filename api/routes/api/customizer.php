@@ -29,6 +29,7 @@ Route::prefix('templates')->group(function () {
         Route::post('/', [TemplateController::class, 'store']);
         Route::put('{id}', [TemplateController::class, 'update'])->whereNumber('id');
         Route::delete('{id}', [TemplateController::class, 'destroy'])->whereNumber('id');
+        Route::post('{id}/copy-views', [TemplateController::class, 'copyViews'])->whereNumber('id');
     });
 });
 
@@ -108,6 +109,8 @@ Route::prefix('mannequin-models')->group(function () {
         Route::get('{id}', [MannequinModelController::class, 'show'])->whereNumber('id');
         Route::post('/', [MannequinModelController::class, 'store'])->middleware('throttle:10,1');
         Route::put('{id}', [MannequinModelController::class, 'update'])->whereNumber('id');
+        // El mismo modelo, optimizado en el navegador (menos triángulos): reemplaza el .glb pesado.
+        Route::post('{id}/model', [MannequinModelController::class, 'replaceModel'])->whereNumber('id')->middleware('throttle:10,1');
         Route::post('{id}/retry', [MannequinModelController::class, 'retry'])->whereNumber('id')->middleware('throttle:10,1');
         Route::delete('{id}', [MannequinModelController::class, 'destroy'])->whereNumber('id');
         // Chat para pulir el modelo

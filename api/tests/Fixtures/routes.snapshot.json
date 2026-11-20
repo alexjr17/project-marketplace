@@ -1321,6 +1321,11 @@
         "permission:models3d.view",
         "throttle:10,1"
     ],
+    "POST api/mannequin-models/{id}/model": [
+        "auth:sanctum",
+        "permission:models3d.view",
+        "throttle:10,1"
+    ],
     "POST api/mannequin-models/{id}/retry": [
         "auth:sanctum",
         "permission:models3d.view",
@@ -1713,6 +1718,10 @@
         "permission:templates.view"
     ],
     "POST api/templates": [
+        "auth:sanctum",
+        "permission:templates.view"
+    ],
+    "POST api/templates/{id}/copy-views": [
         "auth:sanctum",
         "permission:templates.view"
     ],

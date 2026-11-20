@@ -255,6 +255,27 @@ class MannequinModelsTest extends TestCase
         $this->postJson("/api/mannequin-models/{$m['id']}/views/generate")->assertOk()->assertJsonPath('data.source', 'vistas');
         app(MannequinModelService::class)->generate($m['id']);
         $this->assertSame('tencent/Hunyuan3D-2mv', end($this->hf->calls)[0]);
+
+        // El visor proyecta las fotos de frente y espalda sobre la forma.
+        $r = $this->getJson("/api/mannequin-models/{$m['id']}")->assertOk()->json('data');
+        $this->assertSame(['front', 'back'], array_keys($r['photos']));
+        $this->assertSame($r['inputImages']['front'], $r['photos']['front']);
+
+        // El .glb optimizado en el navegador reemplaza al pesado: debe ser un .glb y más liviano.
+        $old = public_path(ltrim($r['model'], '/'));
+        $glb = fn (string $c) => \Illuminate\Http\UploadedFile::fake()->createWithContent('modelo.glb', $c);
+        $this->post("/api/mannequin-models/{$m['id']}/model", ['model' => $glb('nada')], ['Accept' => 'application/json'])->assertUnprocessable();
+        $this->post("/api/mannequin-models/{$m['id']}/model", ['model' => $glb('glTF'.str_repeat("\0", 40))], ['Accept' => 'application/json'])->assertUnprocessable();
+        $new = $this->post("/api/mannequin-models/{$m['id']}/model", ['model' => $glb('glTF'.str_repeat("\1", 8))], ['Accept' => 'application/json'])
+            ->assertOk()->json('data.model');
+        $this->assertNotSame($r['model'], $new);
+        $this->assertFileDoesNotExist($old);
+        $this->assertSame('glTF'.str_repeat("\1", 8), file_get_contents(public_path(ltrim($new, '/'))));
+        $this->post('/api/mannequin-models/999999/model', ['model' => $glb('glTF')], ['Accept' => 'application/json'])->assertNotFound();
+
+        // Sin el permiso del módulo, no.
+        $this->actingAsCliente();
+        $this->post("/api/mannequin-models/{$m['id']}/model", ['model' => $glb('glTF')], ['Accept' => 'application/json'])->assertForbidden();
     }
 
     public function test_genera_el_3d_con_la_cuenta_que_tiene_cuota(): void

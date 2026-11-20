@@ -77,6 +77,16 @@ describe('línea de tiempo del video por escenas', () => {
     expect(motionAt('acercar', 4, 4).zoom).toBeCloseTo(1.65, 5);
     expect(motionAt('heroe', 0, 4).lift).toBeLessThan(-0.5);
     expect(motionAt('detalle', 2, 4).zoom).toBeGreaterThan(2);
+    // La prenda sola se anima: flota, se balancea, cae desde arriba y termina en su lugar.
+    const floats = [0, 0.5, 1, 1.5, 2].map((t) => motionAt('flotar', t, 4).rise ?? 0);
+    expect(Math.max(...floats) - Math.min(...floats)).toBeGreaterThan(0.05);
+    expect(Math.abs(motionAt('balanceo', 0.4, 4).tilt ?? 0)).toBeGreaterThan(0.05);
+    expect(motionAt('caida', 0, 4).rise).toBeGreaterThan(1);
+    expect(Math.abs(motionAt('caida', 3, 4).rise ?? 0)).toBeLessThan(0.1);
+    expect(motionAt('pirueta', 2, 4).turn).toBeCloseTo(Math.PI * 2, 5);
+    expect(motionAt('rebote', 0.3, 4).rise).toBeGreaterThan(0);
+    // Los de cámara no mueven la prenda.
+    expect(motionAt('giro', 1, 4).rise ?? 0).toBe(0);
     // El giro rápido termina de frente (vueltas completas).
     expect(Math.cos(motionAt('giroRapido', 4, 4).turn)).toBeCloseTo(1, 5);
   });

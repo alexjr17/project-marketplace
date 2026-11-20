@@ -6,6 +6,7 @@ use App\Exceptions\BusinessRuleException;
 use App\Models\MannequinModel;
 use App\Models\Product;
 use App\Services\Settings\ImageUploadService;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Throwable;
@@ -75,6 +76,7 @@ class MannequinModelService
             'model' => $m->glbPath ? '/'.$m->glbPath : null,
             'poster' => $m->posterPath ? '/'.$m->posterPath : null,
             'config' => array_merge(self::DEFAULT_CONFIG, $m->config ?? []),
+            'photos' => $this->photos($m),
             'error' => $m->error,
             'account' => $m->account,
             'seconds' => $m->seconds,
@@ -113,7 +115,25 @@ class MannequinModelService
                 'key' => $m->key, 'name' => $m->name,
                 'model' => '/'.$m->glbPath, 'poster' => $m->posterPath ? '/'.$m->posterPath : null,
                 'config' => array_merge(self::DEFAULT_CONFIG, $m->config ?? []),
+                'photos' => $this->photos($m),
             ])->all();
+    }
+
+    /**
+     * Fotos de frente y espalda con las que se generó la forma (fuente "vistas"): el visor las proyecta
+     * sobre el modelo para que la tela, el cuello y las costuras queden iguales a las fotos.
+     */
+    public function photos(MannequinModel $m): ?array
+    {
+        $in = $m->inputImages ?? [];
+        if ($m->source !== 'vistas' || empty($in['front'])) {
+            return null;
+        }
+
+        return array_filter([
+            'front' => '/'.ltrim($in['front'], '/'),
+            'back' => empty($in['back']) ? null : '/'.ltrim($in['back'], '/'),
+        ]);
     }
 
     /** Claves que puede guardar products.model3d además de las del sistema. */
@@ -244,6 +264,38 @@ class MannequinModelService
         return $this->format($m->fresh());
     }
 
+    /** Peso máximo del .glb optimizado (KB). */
+    public const MAX_GLB_KB = 15360;
+
+    /**
+     * Reemplaza el .glb por el mismo modelo optimizado en el navegador (los generados desde vistas
+     * traen más de un millón de triángulos y pesan decenas de MB). Debe ser un .glb y más liviano.
+     */
+    public function replaceGlb(int $id, UploadedFile $file): array
+    {
+        $m = $this->find($id);
+        if (! in_array($m->status, [MannequinModel::REVIEW, MannequinModel::PUBLISHED], true) || ! $m->glbPath) {
+            throw new BusinessRuleException('El modelo todavía no está listo para revisar', 409);
+        }
+        $head = @file_get_contents($file->getRealPath(), false, null, 0, 4);
+        if ($head !== 'glTF') {
+            throw new BusinessRuleException('El archivo no es un modelo .glb', 422);
+        }
+        $current = is_file(public_path($m->glbPath)) ? filesize(public_path($m->glbPath)) : PHP_INT_MAX;
+        if ($file->getSize() >= $current) {
+            throw new BusinessRuleException('El modelo optimizado debe pesar menos que el actual', 422);
+        }
+        $this->ensureDir();
+        $rel = "uploads/models3d/{$m->key}-".time().'-opt.glb';
+        if (! @copy($file->getRealPath(), public_path($rel))) {
+            throw new BusinessRuleException('No se pudo guardar el modelo', 500);
+        }
+        $this->removeFile($m->glbPath);
+        $m->update(['glbPath' => $rel]);
+
+        return $this->format($m->fresh());
+    }
+
     public function delete(int $id): void
     {
         $m = $this->find($id);
@@ -293,14 +345,17 @@ class MannequinModelService
 
     private function runGeneration(MannequinModel $m): string
     {
-        $q = $m->quality === 'alta' ? ['steps' => 50, 'octree' => 384] : ['steps' => 30, 'octree' => 256];
-        $seed = random_int(1, 2_000_000_000);
+        $q = $m->quality === 'alta' ? ['steps' => 20, 'octree' => 384] : ['steps' => 12, 'octree' => 256];
+        // Los Spaces aceptan semillas hasta 10 millones (más grande, rechazan la petición sin decir por qué).
+        $seed = random_int(1, 9_999_999);
 
         if ($m->source === 'vistas') {
             $imgs = array_map(fn ($p) => ['__file' => public_path($p)], $m->inputImages);
             [$out, $account] = $this->hf->withAccount(self::GPU_SECONDS['views'], fn ($token) => $this->hf->run(
-                self::SPACE_VIEWS, '/generation_all',
-                [null, null, $imgs['front'], $imgs['back'], $imgs['left'], $imgs['right'], $q['steps'], 5.0, $seed, $q['octree'], true, 8000, false],
+                // Solo la forma: la textura de ese Space falla ("Unknown format for load: ply"); la tela
+                // la ponen las fotos de entrada (el visor las proyecta sobre la forma).
+                self::SPACE_VIEWS, '/shape_generation',
+                [null, null, $imgs['front'], $imgs['back'] ?? null, $imgs['left'] ?? null, $imgs['right'] ?? null, $q['steps'], 5.0, $seed, $q['octree'], true, 8000, false],
                 $token,
             ));
         } else {

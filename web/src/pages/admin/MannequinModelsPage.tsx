@@ -12,8 +12,9 @@ import {
   RadioGroup, TableCard, Table, TBody, Td, TextArea, TextInput, Th, THead, TableMessage, Thumb, Tr, toast, useConfirm,
 } from '../../components/ui';
 import { errorMessage } from '../../lib/http';
-import { MODELS_3D, SYSTEM_MODELS_3D, type ModelKind } from '../../components/mannequin/models';
+import { CODE_MODELS_3D, MODELS_3D, SYSTEM_MODELS_3D, type ModelKind } from '../../components/mannequin/models';
 import { mannequinModelsService, type HfAccounts, type MannequinModel } from '../../services/mannequinModels.service';
+import { templatesService } from '../../services/templates.service';
 import { duration, KIND_LABEL, KINDS, shrinkImage, STATUS } from './mannequinUi';
 
 const PLACEHOLDER: Record<ModelKind, string> = {
@@ -29,6 +30,20 @@ export default function MannequinModelsPage() {
   const navigate = useNavigate();
   const confirm = useConfirm();
   const [models, setModels] = useState<MannequinModel[]>([]);
+  // Plantillas que usan cada modelo del código (taza, plancha y los maniquíes anteriores).
+  const [usage, setUsage] = useState<Record<string, number>>({});
+  useEffect(() => {
+    let alive = true;
+    templatesService.getAllTemplates()
+      .then((list) => {
+        if (!alive) return;
+        const count: Record<string, number> = {};
+        for (const t of list) if (t.model3d) count[t.model3d] = (count[t.model3d] ?? 0) + 1;
+        setUsage(count);
+      })
+      .catch(() => { /* sin plantillas: no se listan */ });
+    return () => { alive = false; };
+  }, []);
   const [loading, setLoading] = useState(true);
   const [accounts, setAccounts] = useState<HfAccounts | null>(null);
   const [loadingAccounts, setLoadingAccounts] = useState(true);
@@ -169,12 +184,24 @@ export default function MannequinModelsPage() {
             <tr><Th>Modelo</Th><Th>Tipo</Th><Th align="center">Estado</Th><Th align="right">Plantillas</Th><Th>Creado</Th><Th align="right">Acciones</Th></tr>
           </THead>
           <TBody>
-            {SYSTEM_MODELS_3D.map((k) => (
+            {/* Hechos en código: siempre publicados (no se generan ni se editan aquí). */}
+            {CODE_MODELS_3D.map((k) => (
               <Tr key={k}>
                 <Td><div className="flex items-center gap-3"><Thumb src={MODELS_3D[k].poster} alt="" /><span className="font-medium text-gray-900">{MODELS_3D[k].label}</span></div></Td>
-                <Td className="text-gray-500">Prenda de arriba · del sistema</Td>
+                <Td className="text-gray-500">Objeto · {MODELS_3D[k].surface === 'metal' ? 'metal' : 'cerámica'}</Td>
                 <Td align="center"><Badge tone="green">Publicado</Badge></Td>
-                <Td align="right" className="text-gray-400">—</Td>
+                <Td align="right" className="tabular-nums">{usage[k] ?? 0}</Td>
+                <Td className="text-gray-400">—</Td>
+                <Td align="right" className="text-xs text-gray-400">Hecho en código</Td>
+              </Tr>
+            ))}
+            {/* Los maniquíes anteriores ya no se eligen en plantillas nuevas: solo si alguna los sigue usando. */}
+            {SYSTEM_MODELS_3D.filter((k) => (usage[k] ?? 0) > 0).map((k) => (
+              <Tr key={k}>
+                <Td><div className="flex items-center gap-3"><Thumb src={MODELS_3D[k].poster} alt="" /><span className="font-medium text-gray-900">{MODELS_3D[k].label}</span></div></Td>
+                <Td className="text-gray-500">Prenda de arriba · anterior (reemplázalo)</Td>
+                <Td align="center"><Badge tone="green">Publicado</Badge></Td>
+                <Td align="right" className="tabular-nums">{usage[k]}</Td>
                 <Td className="text-gray-400">—</Td>
                 <Td align="right" className="text-xs text-gray-400">Ajustado a mano</Td>
               </Tr>
