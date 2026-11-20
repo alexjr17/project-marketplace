@@ -46,8 +46,8 @@ RUN composer dump-autoload --optimize --no-dev \
     && php artisan package:discover --ansi \
     && chmod -R 775 storage bootstrap/cache
 
-# Arranque: aplica migraciones, siembra datos solo si la BD está vacía
-# (primer despliegue) y sirve en el puerto que asigne el host.
+# Arranque: aplica migraciones, carga una sola vez el catálogo productivo
+# inicial sin reiniciar la BD y sirve en el puerto que asigne el host.
 # $PORT lo inyecta Render/Railway; en local cae a 8000.
 # Se usa `php -S` con un router propio (server-router.php) en vez de
 # `php artisan serve` para poder añadir cabeceras CORS a /uploads (las

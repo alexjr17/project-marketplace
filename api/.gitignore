@@ -32,3 +32,6 @@ Thumbs.db
 # Imágenes subidas por usuarios (almacenamiento local)
 /public/uploads/*
 !/public/uploads/.gitkeep
+# Assets versionados de las plantillas iniciales del catálogo.
+!/public/uploads/templates/
+!/public/uploads/templates/*.png

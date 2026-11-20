@@ -57,3 +57,37 @@ If you discover a security vulnerability within Laravel, please send an e-mail t
 ## License
 
 The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+# Sincronizar identidad visual TOCLEX en una base existente
+
+Después de desplegar este código, el comando muestra primero los campos exactos que cambiaría y no escribe nada por defecto:
+
+```bash
+php artisan brand:sync-identity
+```
+
+Para aplicar nombre, eslogan, rutas de logos y colores en `general_settings`, `appearance_settings` y `store_settings.storeName`:
+
+```bash
+php artisan brand:sync-identity --apply
+```
+
+El comando conserva los demás campos (incluidos datos fiscales, contacto y pagos). Los archivos de logo deben estar incluidos en el despliegue del frontend dentro de `public/brand/`.
+
+## Carga inicial segura en producción
+
+El arranque ya no reinicia ni resembrará una base de producción por cambios de versión. Después de desplegar el backend y ejecutar las migraciones, carga el catálogo inicial una sola vez:
+
+```bash
+php artisan migrate --force
+php artisan app:seed-if-empty
+```
+
+También se puede ejecutar explícitamente:
+
+```bash
+php artisan db:seed --class="Database\\Seeders\\ProductionInitialSeeder" --force
+```
+
+La carga incluye la identidad TOCLEX, categorías/tipos base y el catálogo curado de `database/seeders/data/production_catalog.json`. No crea usuarios de demostración, pedidos, proveedores ni compras, y no copia ni modifica existencias. Los datos de administración existentes se conservan. Los seeders de demostración siguen disponibles solo para desarrollo local.
+
+Las imágenes de producto incrustadas viajan con el catálogo. Para las plantillas de camiseta también se deben desplegar los archivos de `public/uploads/templates/`.

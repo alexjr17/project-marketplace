@@ -4,71 +4,41 @@ namespace App\Console\Commands;
 
 use App\Models\Setting;
 use App\Models\User;
-use Database\Seeders\DatabaseSeeder;
+use Database\Seeders\ProductionInitialSeeder;
 use Illuminate\Console\Command;
 
 /**
- * Siembra la base de datos SOLO si está vacía.
- * Pensado para hosts sin acceso a shell (Render free): el primer despliegue
- * siembra los datos; los reinicios posteriores no tocan nada.
+ * Siembra el catálogo productivo una sola vez, sin reiniciar la base de datos.
+ * En desarrollo conserva el seed demo únicamente para una base sin usuarios.
  */
 class SeedIfEmpty extends Command
 {
     protected $signature = 'app:seed-if-empty';
 
-    protected $description = 'Siembra los datos iniciales solo si la base de datos está vacía.';
+    protected $description = 'Siembra los datos iniciales sin reiniciar la base de datos.';
 
     public function handle(): int
     {
-        if ($this->shouldFreshSeed()) {
-            $this->warn('Limpiando la base de datos y sembrando TODOS los datos por defecto...');
-            $this->call('migrate:fresh', ['--force' => true, '--seed' => true]);
-            $this->info('Listo: base reiniciada con catálogo, insumos, apariencia y usuarios por defecto.');
+        if ($this->laravel->environment('production')) {
+            if (Setting::where('key', ProductionInitialSeeder::MARKER_SETTING)->exists()) {
+                $this->info('Los datos iniciales de producción ya están cargados.');
+
+                return self::SUCCESS;
+            }
+
+            $this->info('Cargando catálogo inicial de producción sin modificar usuarios ni inventario existente...');
+
+            return $this->call('db:seed', ['--force' => true]);
+        }
+
+        if (User::query()->exists()) {
+            $this->info('La base de datos ya tiene usuarios — no se siembra.');
 
             return self::SUCCESS;
         }
 
-        try {
-            if (User::count() > 0) {
-                $this->info('La base de datos ya tiene datos — no se siembra.');
-
-                return self::SUCCESS;
-            }
-        } catch (\Throwable $e) {
-            // La tabla aún no existe: se continúa para sembrar.
-        }
-
         $this->info('Base de datos vacía — sembrando datos iniciales...');
-        $this->call('db:seed', ['--force' => true]);
 
-        return self::SUCCESS;
-    }
-
-    /**
-     * ¿Hay que limpiar y resembrar desde cero?
-     *  - Si FRESH_SEED está activo (forzado por variable de entorno), o
-     *  - Si la versión de datos sembrada NO coincide con DatabaseSeeder::SEED_VERSION
-     *    (se cambiaron los seeders). El reseed graba la versión nueva, así que el
-     *    reinicio siguiente ya NO vuelve a borrar la base hasta el próximo cambio.
-     *  Sólo aplica si ya hay datos; en una BD vacía se siembra normal (db:seed).
-     */
-    private function shouldFreshSeed(): bool
-    {
-        if (filter_var(getenv('FRESH_SEED'), FILTER_VALIDATE_BOOLEAN)) {
-            return true;
-        }
-
-        try {
-            if (User::count() === 0) {
-                return false; // BD vacía: se siembra normal, no hace falta limpiar
-            }
-            $stored = Setting::where('key', 'seedVersion')->value('value');
-            $current = is_array($stored) ? ($stored['v'] ?? null) : null;
-
-            return $current !== DatabaseSeeder::SEED_VERSION;
-        } catch (\Throwable $e) {
-            // Alguna tabla aún no existe (BD nueva): no hace falta limpiar.
-            return false;
-        }
+        return $this->call('db:seed', ['--force' => true]);
     }
 }
